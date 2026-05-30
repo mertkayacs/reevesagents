@@ -1,5 +1,5 @@
 import { Command } from 'commander'
 
 const program = new Command()
-program.name('reevesagents').description('local tmux-first run manager for AI CLI agents').version('0.2.0')
+program.name('reevesagents').description('local tmux-first run manager for AI CLI agents').version('0.3.0')
 program.parse(process.argv)
