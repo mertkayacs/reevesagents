@@ -1,0 +1,187 @@
+import { describe, it, expect } from 'vitest'
+import { buildCommand, helpCommand, missingHelpFeatures } from '../src/launcher/providers.js'
+import type { BuildCommandOptions } from '../src/launcher/providers.js'
+
+describe('providers', () => {
+  describe('buildCommand', () => {
+    it('cc with skip permissions includes --dangerously-skip-permissions', () => {
+      const opts: BuildCommandOptions = { provider: 'cc', permissions: 'skip', model: '' }
+      expect(buildCommand(opts)).toContain('--dangerously-skip-permissions')
+    })
+
+    it('cc with ask permissions does not include skip flag', () => {
+      const opts: BuildCommandOptions = { provider: 'cc', permissions: 'ask', model: '' }
+      expect(buildCommand(opts)).not.toContain('--dangerously-skip-permissions')
+    })
+
+    it('cc with model includes --model flag', () => {
+      const opts: BuildCommandOptions = { provider: 'cc', permissions: 'ask', model: 'opus' }
+      const cmd = buildCommand(opts)
+      expect(cmd).toContain('--model')
+      expect(cmd).toContain('opus')
+    })
+
+    it('cc with api-key auth includes --bare', () => {
+      const opts: BuildCommandOptions = { provider: 'cc', permissions: 'ask', model: '', auth_mode: 'api-key' }
+      expect(buildCommand(opts)).toContain('--bare')
+    })
+
+    it('cc with effort includes --effort', () => {
+      const opts: BuildCommandOptions = { provider: 'cc', permissions: 'ask', model: '', effort: 'high' }
+      const cmd = buildCommand(opts)
+      expect(cmd).toContain('--effort')
+      expect(cmd).toContain('high')
+    })
+
+    it('codex with skip permissions includes correct flag', () => {
+      const opts: BuildCommandOptions = { provider: 'codex', permissions: 'skip', model: '' }
+      expect(buildCommand(opts)).toContain('--dangerously-bypass-approvals-and-sandbox')
+    })
+
+    it('codex with ask permissions does not include skip flag', () => {
+      const opts: BuildCommandOptions = { provider: 'codex', permissions: 'ask', model: '' }
+      expect(buildCommand(opts)).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+    })
+
+    it('codex with rc_enabled does not add removed remote_control feature flag', () => {
+      const opts: BuildCommandOptions = { provider: 'codex', permissions: 'ask', model: '', rc_enabled: true }
+      const cmd = buildCommand(opts)
+      expect(cmd).toEqual(['codex'])
+    })
+
+    it('opencode with skip permissions does not add undocumented skip flags', () => {
+      const opts: BuildCommandOptions = { provider: 'opencode', permissions: 'skip', model: '' }
+      const cmd = buildCommand(opts)
+      expect(cmd).toEqual(['opencode'])
+    })
+
+    it('opencode with ask permissions does not include skip flags', () => {
+      const opts: BuildCommandOptions = { provider: 'opencode', permissions: 'ask', model: '' }
+      const cmd = buildCommand(opts)
+      expect(cmd).not.toContain('--yolo')
+      expect(cmd).not.toContain('--skip-trust')
+    })
+
+    it('opencode with model includes --model flag', () => {
+      const opts: BuildCommandOptions = { provider: 'opencode', permissions: 'ask', model: 'anthropic/claude-sonnet-4-5' }
+      const cmd = buildCommand(opts)
+      expect(cmd).toEqual(['opencode', '--model', 'anthropic/claude-sonnet-4-5'])
+    })
+
+    it('first element is the binary name', () => {
+      expect(buildCommand({ provider: 'cc', permissions: 'ask', model: '' })[0]).toBe('claude')
+      expect(buildCommand({ provider: 'codex', permissions: 'ask', model: '' })[0]).toBe('codex')
+      expect(buildCommand({ provider: 'opencode', permissions: 'ask', model: '' })[0]).toBe('opencode')
+      expect(buildCommand({ provider: 'hermes', permissions: 'ask', model: '' })[0]).toBe('hermes')
+    })
+
+    it('always returns an array for all providers', () => {
+      const providers = ['cc', 'codex', 'opencode', 'hermes'] as const
+      for (const provider of providers) {
+        const cmd = buildCommand({ provider, permissions: 'ask', model: '' })
+        expect(Array.isArray(cmd)).toBe(true)
+        expect(cmd.length).toBeGreaterThan(0)
+        expect(typeof cmd[0]).toBe('string')
+      }
+    })
+
+    it('every element is a string', () => {
+      const cmd = buildCommand({ provider: 'cc', permissions: 'skip', model: 'opus' })
+      for (const arg of cmd) {
+        expect(typeof arg).toBe('string')
+      }
+    })
+
+    it('rejects unsupported providers', () => {
+      expect(() => buildCommand({ provider: 'unknown' as never, permissions: 'ask', model: '' })).toThrow(/Unsupported provider/)
+    })
+
+    it('builds 4 commands for one of each provider without flag bleed', () => {
+      const ccCmd     = buildCommand({ provider: 'cc',     permissions: 'skip', model: 'sonnet', auth_mode: 'api-key', effort: 'high' })
+      const codexCmd  = buildCommand({ provider: 'codex',  permissions: 'skip', model: 'gpt-5',  rc_enabled: true })
+      const opencodeCmd = buildCommand({ provider: 'opencode', permissions: 'skip', model: 'pro' })
+      const hermesCmd = buildCommand({ provider: 'hermes', permissions: 'skip', model: 'haiku' })
+
+      // Each starts with its own binary
+      expect(ccCmd[0]).toBe('claude')
+      expect(codexCmd[0]).toBe('codex')
+      expect(opencodeCmd[0]).toBe('opencode')
+      expect(hermesCmd[0]).toBe('hermes')
+
+      // Each carries its own model
+      expect(ccCmd).toContain('sonnet')
+      expect(codexCmd).toContain('gpt-5')
+      expect(opencodeCmd).toContain('pro')
+      expect(hermesCmd).toContain('haiku')
+
+      // cc-only flags never appear elsewhere
+      expect(ccCmd).toContain('--bare')
+      expect(ccCmd).toContain('--effort')
+      expect(codexCmd).not.toContain('--bare')
+      expect(opencodeCmd).not.toContain('--bare')
+      expect(hermesCmd).not.toContain('--bare')
+      expect(codexCmd).not.toContain('--effort')
+      expect(opencodeCmd).not.toContain('--effort')
+
+      // codex-only flag never appears elsewhere
+      expect(codexCmd).toContain('--dangerously-bypass-approvals-and-sandbox')
+      expect(ccCmd).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+      expect(opencodeCmd).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+      expect(hermesCmd).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+
+      // cc-only skip flag never appears elsewhere
+      expect(ccCmd).toContain('--dangerously-skip-permissions')
+      expect(codexCmd).not.toContain('--dangerously-skip-permissions')
+      expect(opencodeCmd).not.toContain('--dangerously-skip-permissions')
+      expect(hermesCmd).not.toContain('--dangerously-skip-permissions')
+
+      // OpenCode has no documented trust-bypass launch flags here.
+      expect(opencodeCmd).not.toContain('--yolo')
+      expect(opencodeCmd).not.toContain('--skip-trust')
+      expect(ccCmd).not.toContain('--skip-trust')
+      expect(codexCmd).not.toContain('--skip-trust')
+      expect(hermesCmd).not.toContain('--skip-trust')
+
+      // hermes uses chat subcommand
+      expect(hermesCmd).toContain('chat')
+      expect(ccCmd).not.toContain('chat')
+      expect(codexCmd).not.toContain('chat')
+      expect(opencodeCmd).not.toContain('chat')
+
+      // Codex remote control is not a per-agent launch flag.
+      expect(codexCmd).not.toContain('remote_control')
+      expect(ccCmd).not.toContain('remote_control')
+      expect(opencodeCmd).not.toContain('remote_control')
+      expect(hermesCmd).not.toContain('remote_control')
+    })
+  })
+
+  describe('detectAvailable', () => {
+    it('returns object with supported provider keys', async () => {
+      const { detectAvailable } = await import('../src/launcher/providers.js')
+      const result = detectAvailable()
+      expect(typeof result.cc).toBe('boolean')
+      expect(typeof result.codex).toBe('boolean')
+      expect(typeof result.opencode).toBe('boolean')
+      expect(typeof result.hermes).toBe('boolean')
+      expect(Object.keys(result)).toEqual(['cc', 'codex', 'opencode', 'hermes'])
+    })
+  })
+
+  describe('provider compatibility helpers', () => {
+    it('uses hermes chat --help for compatibility inspection', () => {
+      expect(helpCommand('hermes')).toEqual(['hermes', 'chat', '--help'])
+      expect(helpCommand('opencode')).toEqual(['opencode', '--help'])
+    })
+
+    it('detects missing opencode prompt and model support', () => {
+      expect(missingHelpFeatures('opencode', 'Usage: opencode --prompt')).toEqual(['model selection'])
+      expect(missingHelpFeatures('opencode', 'Usage: opencode --prompt --model')).toEqual([])
+    })
+
+    it('detects missing hermes chat support details', () => {
+      expect(missingHelpFeatures('hermes', 'usage: hermes chat --model x')).toEqual(['skip permissions'])
+      expect(missingHelpFeatures('hermes', 'usage: hermes chat --model x --yolo')).toEqual([])
+    })
+  })
+})

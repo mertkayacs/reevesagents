@@ -2,6 +2,13 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
+## 0.7.0 - Run Management Polish
+
+### Added
+- Persistent Welcome main menu and Runs dashboard.
+- Run hub, agent list, output pages, approvals pages, add-worker flow, and stop-run confirmation.
+- Per-run tmux sessions with the local registry as source of truth.
+
 ## 0.6.0 - TUI Redesign
 
 ### Added

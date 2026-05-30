@@ -1,0 +1,262 @@
+// Renders active run/agent/approval scenarios with seeded state.
+// Visual aid only: run with --reporter=verbose to inspect the frames.
+
+import React from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { render } from 'ink-testing-library'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { RouterContext } from '../../src/router.js'
+import { ToastProvider } from '../../src/state/ToastContext.js'
+import { WizardProvider } from '../../src/state/WizardContext.js'
+import { WorkerDraftProvider } from '../../src/state/WorkerDraftContext.js'
+import { Welcome } from '../../src/screens/Welcome.js'
+import { Runs } from '../../src/screens/Runs.js'
+import { Run } from '../../src/screens/Run.js'
+import { RunAgents } from '../../src/screens/run/Agents.js'
+import { RunOutput } from '../../src/screens/run/Output.js'
+import { AgentDetail } from '../../src/screens/AgentDetail.js'
+import { AgentOutput } from '../../src/screens/run/agent/Output.js'
+import { AgentTask } from '../../src/screens/run/agent/Task.js'
+import { AgentKill } from '../../src/screens/run/agent/Kill.js'
+import { RunApprovals } from '../../src/screens/run/Approvals.js'
+import { Approvals } from '../../src/screens/Approvals.js'
+import { Approval } from '../../src/screens/Approval.js'
+import { ApprovalApprove } from '../../src/screens/approval/Approve.js'
+import { ApprovalDeny } from '../../src/screens/approval/Deny.js'
+import { AddWorker } from '../../src/screens/run/AddWorker.js'
+import { RunStop } from '../../src/screens/run/Stop.js'
+import { NewRun } from '../../src/screens/NewRun.js'
+import { NewRunPreset } from '../../src/screens/newrun/01Preset.js'
+import { NewRunBasics } from '../../src/screens/newrun/02Basics.js'
+import { NewRunRoot } from '../../src/screens/newrun/03Root.js'
+import { NewRunWorkers } from '../../src/screens/newrun/04Workers.js'
+import { NewRunReview } from '../../src/screens/newrun/05Review.js'
+import { Settings } from '../../src/screens/Settings.js'
+import { Reference } from '../../src/screens/Reference.js'
+import { Credits } from '../../src/screens/Credits.js'
+import {
+  createRunApproval,
+  writeAgent,
+  writeRun,
+} from '../../src/state/runs.js'
+import type {
+  AgentRecord,
+  RouterContextValue,
+  RunRecord,
+  ScreenName,
+} from '../../src/state/types.js'
+
+vi.mock('../../src/state/runs.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/state/runs.js')>('../../src/state/runs.js')
+  return {
+    ...actual,
+    autoCleanupRuns: vi.fn(() => ({ removed: [] })),
+    runHasLiveTmuxTarget: vi.fn(() => true),
+  }
+})
+
+vi.mock('../../src/launcher/runtime.js', () => ({
+  openAgent: vi.fn(),
+  openReeves: vi.fn(),
+  stopRun: vi.fn(),
+  killAgent: vi.fn(),
+  spawnWorker: vi.fn(),
+  startRun: vi.fn(),
+  peekAgent: vi.fn((agentId: string, lines = 5) =>
+    Array.from({ length: lines }, (_, idx) => `${agentId} output line ${idx + 1}`).join('\n')
+  ),
+}))
+
+const RUN_ID = 'scenario-run'
+const ROOT_ID = 'scenario-root'
+const WORKER_ID = 'scenario-worker-1'
+
+let registry = ''
+let selectedApprovalId = ''
+
+function makeRun(): RunRecord {
+  return {
+    id: RUN_ID,
+    name: 'scenario-run',
+    status: 'running',
+    tmux_session: 'reeves-scenario',
+    reeves_window_id: '@0',
+    reeves_pane_id: '%0',
+    root_agent_id: ROOT_ID,
+    working_dir: '/tmp/reeves-scenario',
+    preset_name: null,
+    started_at: '2026-05-24T10:00:00.000Z',
+    ended_at: null,
+  }
+}
+
+function makeAgent(patch: Partial<AgentRecord>): AgentRecord {
+  return {
+    id: ROOT_ID,
+    run_id: RUN_ID,
+    nickname: 'root',
+    provider: 'codex',
+    model: 'gpt-5-codex',
+    role: 'root',
+    working_dir: '/tmp/reeves-scenario',
+    task: 'Coordinate workers, check their status, and report progress.',
+    task_status: 'working',
+    task_note: 'monitoring workers',
+    tmux_session: 'reeves-scenario',
+    tmux_window_id: '@1',
+    tmux_pane_id: '%1',
+    rc_enabled: false,
+    permissions: 'ask',
+    inbox: [],
+    last_seen: Date.now() - 5000,
+    started_at: '2026-05-24T10:00:01.000Z',
+    ended_at: null,
+    ...patch,
+  }
+}
+
+function seedScenario(): void {
+  writeRun(makeRun())
+  writeAgent(makeAgent({}))
+  for (let i = 1; i <= 10; i++) {
+    writeAgent(makeAgent({
+      id: `scenario-worker-${i}`,
+      nickname: `worker-${i}`,
+      provider: i % 3 === 0 ? 'cc' : i % 3 === 1 ? 'codex' : 'hermes',
+      model: i % 2 === 0 ? 'default' : '',
+      role: 'worker',
+      task: `Investigate scenario ${i} and send findings to root.`,
+      task_status: i % 4 === 0 ? 'queued' : i % 4 === 1 ? 'working' : i % 4 === 2 ? 'blocked' : 'done',
+      task_note: i % 4 === 2 ? 'waiting for root input' : '',
+      tmux_window_id: `@${i + 1}`,
+      tmux_pane_id: `%${i + 1}`,
+      last_seen: Date.now() - (i * 3000),
+      started_at: `2026-05-24T10:${String(i + 1).padStart(2, '0')}:00.000Z`,
+    }))
+  }
+
+  for (let i = 1; i <= 12; i++) {
+    const approval = createRunApproval({
+      agent_id: WORKER_ID,
+      action: `run command ${i}`,
+      summary: `Worker asks to execute command ${i}.`,
+      details: { command: `echo scenario-${i}` },
+      risk: i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low',
+    })
+    if (i === 1) selectedApprovalId = approval.id
+  }
+}
+
+function makeContext(screen: ScreenName, patch: Partial<RouterContextValue> = {}): RouterContextValue {
+  return {
+    screen,
+    push: vi.fn(),
+    pop: vi.fn(),
+    forward: vi.fn(),
+    replace: vi.fn(),
+    resetStack: vi.fn(),
+    selectedRunId: RUN_ID,
+    setSelectedRunId: vi.fn(),
+    selectedAgentId: WORKER_ID,
+    setSelectedAgentId: vi.fn(),
+    selectedApprovalId,
+    setSelectedApprovalId: vi.fn(),
+    selectedCheckName: null,
+    setSelectedCheckName: vi.fn(),
+    selectedWorkerIdx: null,
+    setSelectedWorkerIdx: vi.fn(),
+    canBack: true,
+    canForward: false,
+    ...patch,
+  }
+}
+
+function Harness({
+  children,
+  screen,
+  context,
+}: {
+  children: React.ReactNode
+  screen: ScreenName
+  context?: Partial<RouterContextValue>
+}) {
+  return (
+    <RouterContext.Provider value={makeContext(screen, context)}>
+      <WizardProvider>
+        <WorkerDraftProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </WorkerDraftProvider>
+      </WizardProvider>
+    </RouterContext.Provider>
+  )
+}
+
+const scenarios: Array<{
+  name: string
+  screen: ScreenName
+  element: React.ReactNode
+  context?: Partial<RouterContextValue>
+}> = [
+  { name: 'Welcome main menu', screen: 'Welcome', element: <Welcome /> },
+  { name: 'Runs active list', screen: 'Runs', element: <Runs /> },
+  { name: 'Run hub', screen: 'Run', element: <Run /> },
+  { name: 'Run agents', screen: 'RunAgents', element: <RunAgents /> },
+  { name: 'Run output', screen: 'RunOutput', element: <RunOutput /> },
+  { name: 'Agent detail worker', screen: 'AgentDetail', element: <AgentDetail /> },
+  { name: 'Agent detail root', screen: 'AgentDetail', element: <AgentDetail />, context: { selectedAgentId: ROOT_ID } },
+  { name: 'Agent output', screen: 'AgentOutput', element: <AgentOutput /> },
+  { name: 'Agent task', screen: 'AgentTask', element: <AgentTask /> },
+  { name: 'Agent close', screen: 'AgentKill', element: <AgentKill /> },
+  { name: 'Run approvals', screen: 'RunApprovals', element: <RunApprovals /> },
+  { name: 'Global approvals', screen: 'Approvals', element: <Approvals /> },
+  { name: 'Approval detail', screen: 'Approval', element: <Approval /> },
+  { name: 'Approval approve', screen: 'ApprovalApprove', element: <ApprovalApprove /> },
+  { name: 'Approval deny', screen: 'ApprovalDeny', element: <ApprovalDeny /> },
+  { name: 'Add worker', screen: 'AddWorker', element: <AddWorker /> },
+  { name: 'Run stop', screen: 'RunStop', element: <RunStop /> },
+  { name: 'New run entry', screen: 'NewRun', element: <NewRun /> },
+  { name: 'New run preset', screen: 'NewRunPreset', element: <NewRunPreset /> },
+  { name: 'New run basics', screen: 'NewRunBasics', element: <NewRunBasics /> },
+  { name: 'New run root', screen: 'NewRunRoot', element: <NewRunRoot /> },
+  { name: 'New run workers', screen: 'NewRunWorkers', element: <NewRunWorkers /> },
+  { name: 'New run review', screen: 'NewRunReview', element: <NewRunReview /> },
+  { name: 'Settings', screen: 'Settings', element: <Settings /> },
+  { name: 'Reference', screen: 'Reference', element: <Reference /> },
+  { name: 'Credits', screen: 'Credits', element: <Credits /> },
+]
+
+describe('active scenario walk', () => {
+  beforeEach(() => {
+    registry = mkdtempSync(join(tmpdir(), 'reeves-scenario-'))
+    process.env.REEVES_REGISTRY = registry
+    process.env.REEVES_RUN_ID = RUN_ID
+    selectedApprovalId = ''
+    seedScenario()
+  })
+
+  afterEach(() => {
+    delete process.env.REEVES_REGISTRY
+    delete process.env.REEVES_RUN_ID
+    rmSync(registry, { recursive: true, force: true })
+    vi.clearAllMocks()
+  })
+
+  for (const scenario of scenarios) {
+    it(`renders ${scenario.name}`, () => {
+      const { lastFrame, unmount } = render(
+        <Harness screen={scenario.screen} context={scenario.context}>
+          {scenario.element}
+        </Harness>
+      )
+      const frame = lastFrame() ?? '(empty frame)'
+      // eslint-disable-next-line no-console
+      console.log(`\n========== ${scenario.name} ==========\n${frame}\n========================\n`)
+      expect(frame.length).toBeGreaterThan(0)
+      unmount()
+    })
+  }
+})
