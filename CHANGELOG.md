@@ -2,6 +2,13 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
+## 0.5.0 - CLI Operator Surface
+
+### Added
+- Operator commands for context, runs, open, peek, stop, kill, setup, doctor, mcp, and call.
+- JSON output and MCP-backed call support for scripts.
+- Destructive command gates with --yes or ALLOW_DESTRUCTIVE=1.
+
 ## 0.4.0 - MCP Control Plane
 
 ### Added
