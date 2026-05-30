@@ -1,6 +1,6 @@
 {
   "name": "reevesagents",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Local tmux-first run manager for AI CLI agents",
   "type": "module",
   "packageManager": "pnpm@11.1.0",

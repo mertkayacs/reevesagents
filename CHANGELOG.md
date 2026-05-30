@@ -2,6 +2,13 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
+## 0.8.0 - Verification And Release Docs
+
+### Added
+- pnpm verify for portable local verification.
+- MCP stdio smoke and CLI smoke tests with isolated temp state.
+- Release readiness, testing, MCP tool, and project handoff docs.
+
 ## 0.7.0 - Run Management Polish
 
 ### Added
