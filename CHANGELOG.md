@@ -2,6 +2,13 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
+## 0.4.0 - MCP Control Plane
+
+### Added
+- MCP tools for lifecycle, tmux control, coordination, approvals, and diagnostics.
+- Role-aware caller handling for operators, roots, workers, and headless roots.
+- Approval polling and inbox access for root-driven worker workflows.
+
 ## 0.3.0 - Tmux Runtime
 
 ### Added
