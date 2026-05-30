@@ -1,0 +1,221 @@
+// Settings page: single page showing providers, state paths, and setup actions.
+// Providers are selectable; actions manage setup and detection.
+
+import React, { useMemo, useState } from 'react'
+import { Box, Text, useInput } from 'ink'
+import { Frame } from '../components/Frame.js'
+import { Row } from '../components/Row.js'
+import { Section, SectionEnd } from '../components/Section.js'
+import { Spinner } from '../components/Spinner.js'
+import { useRouter } from '../router.js'
+import { colors } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
+import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
+import { providerColor } from '../utils/display.js'
+import { registerAll, isRegistered } from '../mcp-setup.js'
+import { runsDir, stateRoot } from '../state/runs.js'
+import { presetsDir } from '../state/store.js'
+import { configPath } from '../state/config.js'
+import { useToast } from '../state/ToastContext.js'
+
+const LABELS = {
+  cc: 'Claude Code',
+  codex: 'Codex CLI',
+  opencode: 'OpenCode CLI',
+  hermes: 'Hermes',
+} as const
+
+const CONFIG_PATHS = {
+  cc: '~/.claude/settings.json',
+  codex: '~/.codex/config.toml',
+  opencode: '~/.config/opencode/opencode.json',
+  hermes: '~/.hermes/config.yaml',
+}
+
+type RowType = 'provider' | 'statePath' | 'action'
+
+interface SettingsRow {
+  type: RowType
+  id: string
+  provider?: typeof PROVIDERS[number]
+  selectable: boolean
+}
+
+export function Settings() {
+  const { pop } = useRouter()
+  const { toast } = useToast()
+  const [selectedIdx, setSelectedIdx] = useState(0)
+  const [isSetupInProgress, setIsSetupInProgress] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const available = useMemo(() => detectAvailable(), [refreshKey])
+  const registered = useMemo(() => {
+    const result = {} as Record<typeof PROVIDERS[number], boolean>
+    for (const provider of PROVIDERS) {
+      result[provider] = isRegistered(provider)
+    }
+    return result
+  }, [refreshKey])
+
+  const rows: SettingsRow[] = [
+    ...PROVIDERS.map(p => ({ type: 'provider' as const, id: p, provider: p, selectable: true })),
+    { type: 'statePath' as const, id: 'state', selectable: false },
+    { type: 'statePath' as const, id: 'runs', selectable: false },
+    { type: 'statePath' as const, id: 'presets', selectable: false },
+    { type: 'action' as const, id: 'setupMCP', selectable: true },
+    { type: 'action' as const, id: 'recheck', selectable: true },
+    { type: 'action' as const, id: 'showConfig', selectable: true },
+    { type: 'action' as const, id: 'back', selectable: true },
+  ]
+
+  const selectableRows = rows.filter(r => r.selectable)
+  const selectableIdx = selectableRows.findIndex(r => r.id === rows[selectedIdx]?.id)
+  const currentIdx = selectableIdx === -1 ? 0 : selectableIdx
+
+  function moveSelection(delta: number) {
+    const newIdx = Math.max(0, Math.min(selectableRows.length - 1, currentIdx + delta))
+    const newRowIdx = rows.findIndex(r => r.id === selectableRows[newIdx]?.id)
+    setSelectedIdx(newRowIdx)
+  }
+
+  async function activate() {
+    const row = selectableRows[currentIdx]
+    if (!row) return
+
+    if (row.id === 'setupMCP') {
+      setIsSetupInProgress(true)
+      try {
+        // brief pause so the spinner is visible; registerAll is near-instant
+        await new Promise(resolve => setTimeout(resolve, 500))
+        registerAll()
+        setRefreshKey(k => k + 1)
+      } finally {
+        setIsSetupInProgress(false)
+      }
+      return
+    }
+    if (row.id === 'recheck') {
+      setRefreshKey(k => k + 1)
+      return
+    }
+    if (row.id === 'showConfig') {
+      toast(`Config: ${configPath()}`, 'info')
+      return
+    }
+    if (row.id === 'back') {
+      pop()
+      return
+    }
+  }
+
+  useInput((_input, key) => {
+    if (isSetupInProgress) return
+    if (key.escape || key.backspace) { pop(); return }
+    if (key.upArrow) { moveSelection(-1); return }
+    if (key.downArrow) { moveSelection(1); return }
+    if (key.return) { activate(); return }
+  })
+
+  const selectedRow = rows[selectedIdx]
+  const selectedProvider = selectedRow?.type === 'provider' ? selectedRow.provider : undefined
+
+  const installedCount = Object.values(available).filter(Boolean).length
+  const totalCount = PROVIDERS.length
+  const registeredCount = Object.values(registered).filter(Boolean).length
+
+  // Selected provider becomes a one-line StatusBar context.
+  const statusContext = selectedProvider
+    ? `${LABELS[selectedProvider]} · ${available[selectedProvider] ? 'installed' : 'not installed'} · config ${CONFIG_PATHS[selectedProvider]}`
+    : selectedRow?.id === 'showConfig'
+    ? configPath()
+    : undefined
+
+  return (
+    <Frame
+      breadcrumb={['ReevesAgents', 'Settings']}
+      meta={[
+        { label: 'providers', value: `${installedCount}/${totalCount}` },
+        { label: 'registered', value: String(registeredCount) },
+      ]}
+      tagline="Providers, MCP registration, and local state paths."
+      statusContext={statusContext}
+      statusKeys="↑↓ move · enter select · esc back"
+    >
+      <Box flexDirection="column">
+        {isSetupInProgress && (
+          <Box marginBottom={1}>
+            <Spinner />
+            <Text color={colors.text.dim}>  Setting up MCP...</Text>
+          </Box>
+        )}
+
+        <Section label="Providers" />
+        {PROVIDERS.map((provider, _idx) => {
+          const rowIdx = rows.findIndex(r => r.type === 'provider' && r.provider === provider)
+          const isSelected = selectedIdx === rowIdx
+          const isInstalled = available[provider]
+          const isReg = registered[provider]
+
+          return (
+            <Row
+              key={provider}
+              selected={isSelected}
+              glyph={{
+                char: isInstalled ? glyphs.status.ok : glyphs.status.fail,
+                color: isInstalled ? colors.status.ok : colors.text.faint,
+              }}
+              primary={LABELS[provider]}
+              badge={{
+                label: provider,
+                color: providerColor(provider),
+              }}
+              hint={isReg ? 'registered' : 'not registered'}
+            />
+          )
+        })}
+        <SectionEnd />
+
+        <Section label="State paths" />
+        <Row
+          selected={selectedIdx === rows.findIndex(r => r.id === 'state')}
+          primary="State"
+          trailing={stateRoot()}
+        />
+        <Row
+          selected={selectedIdx === rows.findIndex(r => r.id === 'runs')}
+          primary="Runs"
+          trailing={runsDir()}
+        />
+        <Row
+          selected={selectedIdx === rows.findIndex(r => r.id === 'presets')}
+          primary="Presets"
+          trailing={presetsDir()}
+        />
+        <SectionEnd />
+
+        <Section label="Actions" />
+        <Row
+          selected={selectedIdx === rows.findIndex(r => r.id === 'setupMCP')}
+          primary="Setup MCP"
+          hint="write MCP entries for detected providers"
+        />
+        <Row
+          selected={selectedIdx === rows.findIndex(r => r.id === 'recheck')}
+          primary="Recheck"
+          hint="re-detect installed providers"
+        />
+        <Row
+          selected={selectedIdx === rows.findIndex(r => r.id === 'showConfig')}
+          primary="Show Config"
+          hint="show config file path"
+        />
+        <Row
+          selected={selectedIdx === rows.findIndex(r => r.id === 'back')}
+          primary="Back"
+          hint="return to previous page"
+        />
+        <SectionEnd />
+      </Box>
+    </Frame>
+  )
+}

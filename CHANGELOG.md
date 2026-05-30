@@ -2,6 +2,13 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
+## 0.6.0 - TUI Redesign
+
+### Added
+- Ink-based TUI frame, header, rows, sections, dialogs, and responsive layout helpers.
+- Dark ReevesAgents visual system with provider colors and terminal-friendly wordmark/mascot rendering.
+- New Run wizard with preset, basics, root, workers, review, and starting steps.
+
 ## 0.5.0 - CLI Operator Surface
 
 ### Added

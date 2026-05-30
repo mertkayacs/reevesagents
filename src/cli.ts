@@ -5,7 +5,7 @@ import { runDoctor } from './launcher/doctor.js'
 import { listRuns } from './state/runs.js'
 
 const program = new Command()
-program.name('reevesagents').description('local tmux-first run manager for AI CLI agents').version('0.5.0')
+program.name('reevesagents').description('local tmux-first run manager for AI CLI agents').version('0.6.0')
 program.command('context').option('--json').action(async opts => {
   const result = await handleMcpTool('context', {}, null)
   const text = result.content[0]?.text ?? '{}'
