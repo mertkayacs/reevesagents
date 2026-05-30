@@ -1,0 +1,26 @@
+.claude/
+node_modules/
+.pnpm-store/
+dist/
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.coverage
+.DS_Store
+coverage/
+*.tmp
+*.bak
+*.bak.*
+.env
+*.tgz
+.superpowers/
+
+# private working notes, internal planning, debug artifacts — never public
+specs/
+assets/
+!src/brand/assets/
+!src/brand/assets/duck.svg
+.playwright-mcp/
+reevesagents-latestnotes.md
