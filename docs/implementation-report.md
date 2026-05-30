@@ -6,13 +6,18 @@ This is the current implementation note for the v1 rebuild. It records what chan
 
 ## Product Shape
 
-ReevesAgents is now a local tmux-first run manager for real AI CLI agents.
+ReevesAgents is now a local tmux-first workspace manager for real AI CLI terminals and agent teams.
+
+The product has two run modes:
+
+- Spawner mode: default, low-permission, multiple independent provider CLI terminals, no MCP config, no `REEVES_*` env injection, no root/worker startup note.
+- Orchestrator mode (BETA): connected root/worker agents with MCP tools, messages, approvals, and spawning.
 
 - Runs are tracked in local state. The registry is the source of truth; tmux sessions and windows are execution/view surfaces.
-- Each run owns a tmux session; each agent is one window inside that run session.
+- Each run owns a tmux session; each terminal or agent is one window inside that run session.
 - Agents are real provider CLIs: Claude Code, Codex CLI, OpenCode CLI, or Hermes.
 - TUI is the human dashboard.
-- MCP is the programmatic control plane for agents and operators.
+- MCP is the Orchestrator BETA programmatic control plane for agents and operators.
 - CLI is an operator surface: friendly commands for common actions plus `call` for direct access to MCP tools.
 
 ReevesAgents does not store provider credentials, proxy model traffic, embed a terminal emulator, or replace provider authentication.
@@ -23,7 +28,7 @@ Added the v1 runtime and state model:
 
 - `src/state/runs.ts`: run, agent, approval, inbox, and lock-managed JSON state under `~/.reeves/runs`.
 - `src/launcher/runtime.ts`: tmux runtime with one per-run session and one agent per window.
-- `src/launcher/provider-launch.ts`: provider launch helpers for initial tasks, MCP env injection, and shell-safe command construction.
+- `src/launcher/provider-launch.ts`: provider launch helpers for initial tasks, Orchestrator MCP env injection, and shell-safe command construction.
 - `src/mcp.ts`: v1 MCP tools with caller role enforcement.
 - `src/cli.ts`: compact CLI surface.
 
@@ -77,8 +82,8 @@ The UI no longer uses the same three-pane layout everywhere. Layouts vary by pag
 
 - Welcome is a small animated entry screen.
 - Runs is a compact dashboard with sectioned run rows and visible actions.
-- Run is a workspace view with rows for real root and worker agents. Reeves is a TUI anchor, not an agent node.
-- New Run and Add Worker use form layouts.
+- Run is a workspace view with rows for real Spawner terminals or Orchestrator root/worker agents. Reeves is a TUI anchor, not an agent node.
+- New Run asks for Spawner or Orchestrator BETA before the form flow. Add Terminal/Worker uses the same form layout with mode-specific copy.
 - Agent, Settings, Reference, Credits, and Doctor use inspector-style layouts.
 - Narrow terminals use shorter metrics, fewer row fields, and shorter footer text.
 
@@ -96,7 +101,7 @@ Visual sources and choices:
 - The duck mark is adapted from the `small-duck` entry in the CTAN `ducksay` manual.
 - Lottie was considered, but not added. Browser Lottie targets SVG, canvas, or HTML, while this app is an Ink terminal TUI. The implemented animation is terminal-native and dependency-free.
 
-## MCP
+## MCP (BETA)
 
 `reevesagents mcp` exposes 26 tools:
 
@@ -135,7 +140,7 @@ Caller roles:
 - Root agent: knows its current run, controls workers, spawns workers, stops the run, and resolves worker approvals in its run.
 - Worker agent: knows its current run, checks messages, updates itself, requests approval, and checks its own approvals.
 
-Agents also receive `REEVES_AGENT_ID`, `REEVES_RUN_ID`, `REEVES_ROLE`, and `REEVES_REGISTRY`.
+Orchestrator BETA agents also receive `REEVES_AGENT_ID`, `REEVES_RUN_ID`, `REEVES_ROLE`, and `REEVES_REGISTRY`. Spawner terminals receive none of those environment variables.
 
 ## CLI
 
@@ -145,11 +150,12 @@ Current CLI commands:
 reevesagents
 reevesagents runs
 reevesagents open <id>
-reevesagents peek <agent-id>
+reevesagents peek <terminal-or-agent-id>
 reevesagents stop <run-id>
-reevesagents kill <agent-id>
+reevesagents kill <terminal-or-agent-id>
 reevesagents doctor
-reevesagents setup
+reevesagents spawn [spec...]
+reevesagents orchestrator setup
 reevesagents mcp
 reevesagents call <tool> [json]
 ```

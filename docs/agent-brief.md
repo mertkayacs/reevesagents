@@ -4,12 +4,13 @@ Read this first when returning to ReevesAgents after a context break or on a lat
 
 ## TL;DR
 
-- ReevesAgents is a local tmux-first run manager for real AI CLI agents.
-- One run owns one tmux session. Each non-headless agent is one tmux window inside that run session.
+- ReevesAgents is a local tmux-first workspace manager for AI CLI terminals and agent teams.
+- Spawner mode is the default: one run owns one tmux session with multiple independent provider CLI terminals and no ReevesAgents injection.
+- Orchestrator mode is BETA: one run owns one tmux session with root/worker agents connected through MCP.
 - The local JSON registry is the source of truth. tmux is the execution and viewing surface.
 - The TUI, CLI, and MCP all use the same registry and runtime behavior.
 - The TUI is the human dashboard. The CLI is a human/script operator surface. MCP is the programmatic control plane.
-- The human remains the primary operator. Root agents and workers serve that workflow through scoped MCP tools.
+- The human remains the primary operator. Root agents and workers exist only in Orchestrator BETA and serve that workflow through scoped MCP tools.
 - Current product direction is strong inspection and control across many runs, with easier first-time TUI navigation.
 
 ## First Checks
@@ -58,7 +59,8 @@ The important invariant is:
 
 ```text
 run = one tmux session
-agent = one provider CLI window inside that run session
+spawner terminal = one independent provider CLI window inside that run session
+orchestrator agent = one provider CLI window with ReevesAgents context inside that run session
 registry = source of truth
 tmux = execution and viewing surface
 ```
@@ -68,20 +70,20 @@ Typical run layout:
 ```text
 tmux session: reeves_<run-name>_<id>
   window 0: reeves when tmux linking succeeds
-  window 1: root-<provider>
-  window 2: <worker-1>
-  window 3: <worker-2>
+  window 1: <provider-or-nickname>
+  window 2: <provider-or-nickname>
+  window 3: <provider-or-nickname>
 ```
 
 The `reeves` window is the TUI anchor for that run. It is not an agent and does not talk to a model.
 
-Root can also be headless. In that mode, `start_run` writes a root `AgentRecord` but does not create a root tmux window. The calling host CLI becomes the root by using that root agent id as `REEVES_SESSION_ID` or `REEVES_AGENT_ID`.
+In Orchestrator BETA, the windows are root/worker agents and can also include a headless root. In that mode, `start_run` writes a root `AgentRecord` but does not create a root tmux window. The calling host CLI becomes the root by using that root agent id as `REEVES_SESSION_ID` or `REEVES_AGENT_ID`.
 
 ## Surfaces
 
 TUI:
 
-- Best for first-time human use, visual run inspection, opening agents, approvals, and stopping runs.
+- Best for first-time human use, visual run inspection, opening terminals/agents, approvals, and stopping runs.
 - Starts on persistent Welcome.
 - Uses visible menus with arrows, Enter, Esc, and Backspace.
 - Uses "Open Agent" for switching into a provider CLI window.
@@ -92,9 +94,10 @@ CLI:
 - Friendly commands cover common work.
 - `reevesagents call <tool>` is the direct operator bridge into the MCP tool handler.
 
-MCP:
+MCP (BETA):
 
-- Full programmatic control plane for external operators, root agents, and worker agents.
+- Full programmatic control plane for external operators, root agents, and worker agents in Orchestrator mode.
+- Spawner terminals are not MCP callers and receive no ReevesAgents environment variables.
 - Caller role is inferred from `REEVES_SESSION_ID` or `REEVES_AGENT_ID`.
 - Operators can manage all local runs.
 - Roots can control their own run, spawn workers, drive workers, and resolve approvals.
@@ -104,10 +107,10 @@ MCP:
 
 - Source install and build path.
 - TUI run manager with Welcome, Runs, Run hub, Agent detail, New Run, Add Worker, Approvals, Settings, Doctor, Reference, and Credits pages.
-- Per-run tmux sessions with agent windows.
+- Per-run tmux sessions with independent Spawner terminals or Orchestrator BETA agent windows.
 - Local JSON registry under `~/.reeves/runs`.
 - Provider launch support for `cc`, `codex`, `opencode`, and `hermes`.
-- MCP v1 control plane with 26 tools.
+- MCP v1 Orchestrator BETA control plane with 26 tools.
 - CLI operator commands, including `context` and `call`.
 - Headless root pattern through `root_is_caller: true`.
 - Approval records, polling, resolving, and worker approval checks.
@@ -122,7 +125,7 @@ MCP:
 - Real provider smokes depend on local provider installation, auth, quota, and current provider CLI behavior.
 - Browser-style UI automation does not cover the Ink TUI. The TUI still needs a short manual terminal pass.
 - `specs/` contains local historical design notes, not release documentation.
-- Some internal symbol names still use older labels such as `OpenCLI`; visible UI copy should say "Open Agent".
+- Some internal symbol names still use older labels such as `Agent` or `OpenCLI`; visible Spawner UI copy should say terminal, and visible Orchestrator UI copy should say agent.
 
 ## Known Verification State
 

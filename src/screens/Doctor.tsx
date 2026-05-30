@@ -90,7 +90,7 @@ export function Doctor() {
         { label: 'warn', value: String(counts.warn) },
         { label: 'fail', value: String(counts.fail) },
       ]}
-      tagline="Setup and environment health. Doctor checks state only; it never stops agents."
+      tagline="Setup and environment health. Setup MCP is only for Orchestrator BETA."
       statusContext={selectedCheck ? `${selectedCheck.name}: ${selectedCheck.detail}` : ''}
     >
       <Primary>
@@ -131,7 +131,7 @@ export function Doctor() {
         <Box marginTop={1} />
         <Section label="Actions" />
         <Row selected={selectedIdx === actionOffset} primary="Recheck" hint="run doctor again" />
-        <Row selected={selectedIdx === actionOffset + 1} primary="Setup MCP" hint="write provider MCP entries" />
+        <Row selected={selectedIdx === actionOffset + 1} primary="Setup MCP (BETA)" hint="write Orchestrator MCP entries" />
         <Row selected={selectedIdx === actionOffset + 2} primary="Back" hint="return to previous page" />
         <SectionEnd />
       </Primary>

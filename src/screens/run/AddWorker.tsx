@@ -1,4 +1,4 @@
-// Add a worker to an existing run. Single screen, inline editing.
+// Add a terminal/worker to an existing run. Single screen, inline editing.
 // Same Field union + picker cycling pattern as NewRun's 04Worker.
 // On Add Worker, validates provider, model, and prompt, then calls spawnWorker.
 // On Cancel, resets the worker draft and pops back to Run hub.
@@ -21,7 +21,7 @@ const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
 
 type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions'
 type ActionId = 'add' | 'cancel'
-const ACTION_LABEL_WIDTH = Math.max('Add Worker'.length, 'Cancel'.length)
+const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Add Worker'.length, 'Cancel'.length)
 
 interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[] }
 interface TextFieldDef { kind: 'text'; id: FieldId; label: string; value: string; helpText: string; required: boolean }
@@ -38,18 +38,19 @@ export function AddWorker() {
   const { toast } = useToast()
   const { draft, update, reset } = useWorkerDraft()
   const run = selectedRunId ? safeReadRun(selectedRunId) : null
+  const isSpawner = run?.mode === 'spawner'
 
   const fields: Field[] = useMemo(() => [
     { kind: 'text', id: 'nickname', label: 'Nickname', value: draft.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
     { kind: 'picker', id: 'provider', label: 'Provider', current: draft.provider, values: PROVIDERS },
     { kind: 'text', id: 'model', label: 'Model', value: draft.model, helpText: 'e.g. claude-3-5-sonnet, gpt-4o, or empty for default', required: false },
-    { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: 'initial task for this worker · enter newline · esc done', required: true },
+    { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'initial task for this worker · enter newline · esc done', required: !isSpawner },
     { kind: 'text', id: 'workingDir', label: 'Working Dir', value: draft.workingDir, helpText: 'defaults to the run working dir', required: false },
     { kind: 'picker', id: 'permissions', label: 'Permissions', current: draft.permissions, values: PERMISSIONS_VALUES },
-  ], [draft])
+  ], [draft, isSpawner])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'add', label: 'Add Worker', hint: 'spawn into this run' },
+    { id: 'add', label: isSpawner ? 'Add Terminal' : 'Add Worker', hint: isSpawner ? 'spawn an independent CLI terminal' : 'spawn into this run' },
     { id: 'cancel', label: 'Cancel', hint: 'discard and return' },
   ]
 
@@ -75,11 +76,11 @@ export function AddWorker() {
   function handleAdd(): void {
     if (!selectedRunId) { toast('No run selected', 'error'); return }
     if (!draft.provider) { toast('Provider is required', 'error'); return }
-    if (!draft.prompt.trim()) { toast('Prompt is required', 'error'); return }
+    if (!isSpawner && !draft.prompt.trim()) { toast('Prompt is required', 'error'); return }
     try {
       spawnWorker({
         run_id: selectedRunId,
-        nickname: draft.nickname || 'worker',
+        nickname: draft.nickname || (isSpawner ? draft.provider : 'worker'),
         provider: draft.provider,
         model: draft.model,
         task: draft.prompt,
@@ -133,8 +134,10 @@ export function AddWorker() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Add Worker']}
-      tagline={`Configure a new worker for ${run.name}. Root will drive it via MCP.`}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Add Terminal' : 'Add Worker']}
+      tagline={isSpawner
+        ? `Configure an independent CLI terminal for ${run.name}. No MCP context is injected.`
+        : `Orchestrator mode is BETA. Configure a worker for ${run.name}; root will drive it via MCP.`}
       statusKeys="enter edit/newline · ←→ cycle picker · esc done/back"
     >
       {fields.map((field, fIdx) => {

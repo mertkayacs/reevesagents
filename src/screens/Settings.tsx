@@ -137,7 +137,7 @@ export function Settings() {
         { label: 'providers', value: `${installedCount}/${totalCount}` },
         { label: 'registered', value: String(registeredCount) },
       ]}
-      tagline="Providers, MCP registration, and local state paths."
+      tagline="Providers, local state paths, and Orchestrator BETA MCP registration."
       statusContext={statusContext}
       statusKeys="↑↓ move · enter select · esc back"
     >
@@ -145,7 +145,7 @@ export function Settings() {
         {isSetupInProgress && (
           <Box marginBottom={1}>
             <Spinner />
-            <Text color={colors.text.dim}>  Setting up MCP...</Text>
+          <Text color={colors.text.dim}>  Setting up Orchestrator BETA MCP...</Text>
           </Box>
         )}
 
@@ -196,8 +196,8 @@ export function Settings() {
         <Section label="Actions" />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'setupMCP')}
-          primary="Setup MCP"
-          hint="write MCP entries for detected providers"
+          primary="Setup MCP (BETA)"
+          hint="write MCP entries for Orchestrator mode"
         />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'recheck')}

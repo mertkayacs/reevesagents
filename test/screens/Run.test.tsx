@@ -134,7 +134,7 @@ describe('Run hub screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Manage this run')
+    expect(frame).toContain('Manage this Orchestrator BETA run')
     expect(frame).toContain('reeves-123')
     unmount()
   })

@@ -19,7 +19,7 @@ const CHROME_ROWS = 13
 const REFRESH_INTERVAL_MS = 5000
 
 type RowItem = 'agent' | '__section__' | 'pagination' | 'AddWorker' | 'Back'
-const ACTION_LABEL_WIDTH = Math.max('Add Worker'.length, 'Back'.length)
+const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Add Worker'.length, 'Back'.length)
 
 interface SelectableItem {
   type: 'agent' | 'pagination' | 'action'
@@ -48,6 +48,7 @@ export function RunAgents() {
   )
   const [selectedIdx, setSelectedIdx] = useState(() => (agents.length > 0 ? 0 : 1))
   const [page, setPage] = useState(1)
+  const isSpawner = run?.mode === 'spawner'
 
   const dataItems: SelectableItem[] = agents.map(agent => ({ type: 'agent' as const, agent }))
 
@@ -137,33 +138,35 @@ export function RunAgents() {
   }
 
   const isRunEnded = run.status === 'ended' || run.ended_at !== null
-  let statusContext = `${run.name} · ${agents.length} agents`
+  let statusContext = `${run.name} · ${agents.length} ${isSpawner ? 'terminals' : 'agents'}`
   if (selected?.type === 'pagination') statusContext = `page ${page} of ${totalPages} · ← → turn page`
-  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : 'spawn new worker'
+  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'spawn new worker'
   if (selected?.type === 'action' && selected.action === 'Back') statusContext = 'return to run hub'
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Agents']}
       meta={[
         { label: 'count', value: String(agents.length) },
         { label: 'status', value: run.status },
       ]}
-      tagline="Agents in this run. Each row is a real provider CLI agent."
+      tagline={isSpawner
+        ? 'Independent CLI terminals in this spawner run. They do not receive ReevesAgents context.'
+        : 'Agents in this Orchestrator BETA run. Each row is a real provider CLI agent.'}
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
       <Box flexDirection="column">
-        <Section label="Agents" />
+        <Section label={isSpawner ? 'Terminals' : 'Agents'} />
         {agents.length === 0 && (
-          <Row selected={false} primary="No agents" trailing="add a worker below" disabled />
+          <Row selected={false} primary={isSpawner ? 'No terminals' : 'No agents'} trailing={isSpawner ? 'add a terminal below' : 'add a worker below'} disabled />
         )}
         {pagedData.map((item, idx) => {
           const isSelected = selectedIdx === idx
 
           if (item.type === 'agent' && item.agent) {
             const agent = item.agent
-            const isRoot = agent.role === 'root'
+            const isRoot = !isSpawner && agent.role === 'root'
             return (
               <Row
                 key={agent.id}
@@ -195,9 +198,9 @@ export function RunAgents() {
 
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 1}
-          primary="Add Worker"
+          primary={isSpawner ? 'Add Terminal' : 'Add Worker'}
           primaryWidth={ACTION_LABEL_WIDTH}
-          hint={isRunEnded ? 'run is ended' : 'spawn new worker'}
+          hint={isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'spawn new worker'}
           disabled={isRunEnded}
         />
         <Row

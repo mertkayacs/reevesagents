@@ -52,6 +52,9 @@ describe('New Run keyboard flow', () => {
 
     await waitForFrame(lastFrame, '❯ │ [ New Run')
     await press(stdin, '\r') // Runs -> New Run
+    await waitForFrame(lastFrame, 'Run Mode')
+    await press(stdin, down)
+    await press(stdin, '\r') // Orchestrator BETA -> Preset
     await waitForFrame(lastFrame, '❯ │ [ Blank')
     await waitForInput()
 
@@ -114,6 +117,7 @@ describe('New Run keyboard flow', () => {
 
     expect(RuntimeModule.startRun).toHaveBeenCalledOnce()
     const request = vi.mocked(RuntimeModule.startRun).mock.calls[0]![0]
+    expect(request.mode).toBe('orchestrator')
     expect(request.name).toBe('tui-run')
     expect(request.root.task).toBe('root smoke task\nsecond line')
     const workers = request.workers ?? []

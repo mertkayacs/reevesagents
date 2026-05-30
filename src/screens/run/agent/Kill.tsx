@@ -37,7 +37,7 @@ export function AgentKill() {
       pop()
       return
     }
-    if (key.return && agent && agent.role === 'root') {
+    if (key.return && agent && run?.mode !== 'spawner' && agent.role === 'root') {
       handleBackClicked()
       return
     }
@@ -67,7 +67,9 @@ export function AgentKill() {
     )
   }
 
-  if (agent.role === 'root') {
+  const isSpawner = run.mode === 'spawner'
+
+  if (!isSpawner && agent.role === 'root') {
     return (
       <Frame
         breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, 'Close']}
@@ -89,12 +91,14 @@ export function AgentKill() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, 'Close']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Agents', agent.nickname, 'Close']}
       statusKeys="←→ switch · enter select · esc cancel"
     >
       <Dialog
         title={`Close ${agent.nickname}?`}
-        body="Closes this worker's tmux window and marks the agent ended. The root and other workers continue."
+        body={isSpawner
+          ? 'Closes this terminal window and marks it ended. Other terminals continue.'
+          : 'Closes this worker\'s tmux window and marks the agent ended. The root and other workers continue.'}
         intent="danger"
         confirmLabel="Close"
         cancelLabel="Cancel"

@@ -6,30 +6,33 @@ This file captures the current product shape and architecture. Local historical 
 
 ## TLDR
 
-ReevesAgents is a local, tmux-first workspace for real AI CLI agents.
+ReevesAgents is a local, tmux-first workspace for real AI CLI terminals and agent teams.
 
 - The human at the keyboard is the primary role.
 - TUI is the human's dashboard and control room.
-- MCP is the full programmatic control plane for root agents, workers, and external operator clients.
+- Spawner mode is the default: many independent provider CLI terminals, no MCP injection, no root/worker roles.
+- Orchestrator mode is BETA: root agents, workers, MCP tools, messages, approvals, and agent spawning.
+- MCP is the Orchestrator BETA programmatic control plane for root agents, workers, and external operator clients.
 - CLI is an optional human/script operator surface. It has friendly commands for common actions and `call` for direct access to MCP tools.
-- One run is one tmux session. Each agent is a tmux window inside that run.
+- One run is one tmux session. Each terminal or agent is a tmux window inside that run.
 - Window 0 of every run is a linked or placeholder `reeves` window when tmux can provide one.
 - Runtime state and presets are local JSON under `~/.reeves/`. This registry is the source of truth; tmux is the execution and viewing surface.
-- Users interact with agents by opening the real provider CLI window through tmux.
-- Agents interact with other agents through MCP tools.
+- Users interact with terminals or agents by opening the real provider CLI window through tmux.
+- Spawner terminals do not interact with ReevesAgents or each other; the human coordinates them manually.
+- Orchestrator agents interact with other agents through MCP tools.
 - Interaction model: visible menus with arrows, Enter, Esc/Backspace, and text entry inside fields. Pickers use Left/Right and Welcome also accepts `q` to quit. No slash commands, Tab-driven focus panes, or hidden command palette.
 - No embedded terminal emulator.
 
 ## Product Promise
 
-ReevesAgents helps a human run, observe, open, and control multiple AI CLI agents without losing track of them.
+ReevesAgents helps a human run, observe, open, and control multiple AI CLI terminals or agents without losing track of them.
 
 The product answers four questions quickly:
 
 - What runs are active?
-- Which agents are inside this run?
-- What is each agent doing?
-- How do I open or guide the right agent?
+- Which terminals or agents are inside this run?
+- What is each terminal or agent doing?
+- How do I open or guide the right terminal or agent?
 
 It does not try to be a desktop IDE, a terminal emulator, a policy platform, a logs product, or a workflow engine.
 
@@ -39,20 +42,29 @@ Run:
 
 - A user-facing work session.
 - Backed by one tmux session.
-- Contains a `reeves` window when available, one root agent or headless root record, and zero or more workers.
+- Contains a `reeves` window when available.
+- In Spawner mode, contains independent provider CLI terminals.
+- In Orchestrator BETA, contains one root agent or headless root record and zero or more workers.
+
+Terminal:
+
+- A real provider CLI running in a tmux window.
+- Backed by Codex, Claude Code, OpenCode, or Hermes.
+- Has no ReevesAgents context, no MCP config, no root/worker role, and no inbox or approval flow.
 
 Agent:
 
 - A real provider CLI running in a tmux window.
 - Backed by Codex, Claude Code, OpenCode, or Hermes.
 - Has a role: root or worker.
+- Exists only in Orchestrator BETA.
 
 Reeves window:
 
 - The ReevesAgents TUI window inside the run.
 - Window 0 when tmux linking succeeds; otherwise the registry keeps the stable Reeves target.
 - Shows the Run page for that run.
-- Lets the human inspect the run, open root, open workers, add workers, see approvals, and stop the run.
+- Lets the human inspect the run, open terminals/agents, add terminals/workers, see Orchestrator approvals, and stop the run.
 - It is not an agent. It does not talk to a model.
 
 Local state:
@@ -66,11 +78,26 @@ Preset:
 - Stores default provider, model, prompt, working directory, permissions, and worker list.
 - Not a script, automation graph, or hidden workflow.
 
-## Roles and Orchestration Model
+## Modes And Roles
+
+### Spawner mode
+
+Spawner mode is the default and the low-permission path. The human creates a tmux workspace with one or more independent provider CLI terminals. ReevesAgents stores metadata and can open, peek, close, and stop windows, but it does not connect those CLIs to ReevesAgents.
+
+Spawner launch must not:
+
+- write provider MCP config files
+- pass `REEVES_SESSION_ID`, `REEVES_AGENT_ID`, `REEVES_RUN_ID`, or `REEVES_ROLE`
+- generate Claude MCP config files
+- add Codex MCP overrides
+- paste root/worker capability notes
+- create approval or inbox expectations
+
+### Orchestrator mode (BETA)
 
 ReevesAgents has four roles. Three are programmatic (MCP callers); one is the human at the keyboard. The human is the primary role; the others serve the human.
 
-### The four roles
+### The four Orchestrator roles
 
 **Human (the boss).** Sits at the keyboard. Uses the TUI as a dashboard. Jumps into any agent's tmux window to type into that provider CLI directly. Approves or denies risky requests workers send up. Stops runs, kills workers, removes ended runs. Never locked out of any agent.
 
@@ -80,7 +107,9 @@ ReevesAgents has four roles. Three are programmatic (MCP callers); one is the hu
 
 **Operator.** Any MCP caller with no `REEVES_SESSION_ID` set. External clients, scripts, or a user's host CLI that has reevesagents MCP registered but is not yet inside a tree. Full access by default.
 
-### Two paths the human uses to plant a tree
+### Paths the human uses
+
+0. **Spawner from TUI or CLI.** Open `reevesagents`, choose New Run, choose Spawner, configure one or more provider CLI terminals, then start. Or run `reevesagents spawn codex cc:reviewer`. The spawned CLIs receive only their own prompt. The human coordinates manually through tmux.
 
 1. **From the TUI.** Open `reevesagents`, choose New Run, fill in root provider, model, prompt, plus optional workers, then start. The TUI calls the runtime directly. A new tmux session is created for the run with a `reeves` window at window 0 when linking succeeds, the spawned root after it, and workers after that. The human can watch from the TUI or attach to the run session.
 
@@ -109,10 +138,12 @@ The human moves between windows as tabs inside one run session. Window 0 is the 
 
 - tmux is required.
 - The human is the primary role. Programmatic roles serve the human.
-- A tree can be planted from the TUI, from the CLI, or from any host CLI that has reevesagents MCP installed.
-- ReevesAgents currently starts agents with a role-specific capability note plus the user task. Per-provider prompt templates are a future extension, not a current invariant.
-- Each run owns one tmux session. Each non-headless agent is one tmux window in that run session.
-- One run has one root agent and zero or more workers.
+- A Spawner run can be started from the TUI or `reevesagents spawn` without MCP setup.
+- An Orchestrator BETA tree can be planted from the TUI, from the CLI, or from any host CLI that has reevesagents MCP installed.
+- ReevesAgents starts Spawner terminals with only the user prompt.
+- ReevesAgents starts Orchestrator BETA agents with a role-specific capability note plus the user task.
+- Each run owns one tmux session. Each non-headless terminal or agent is one tmux window in that run session.
+- One Orchestrator run has one root agent and zero or more workers.
 - Window 0 is `reeves` when tmux linking succeeds; the registry still stores the stable Reeves window id.
 - Root has run-control and approval capability through ReevesAgents MCP.
 - Workers use the same MCP command but get limited behavior by role.
@@ -128,14 +159,14 @@ The human moves between windows as tabs inside one run session. Window 0 is the 
 - No slash commands, Tab-driven focus panes, or hidden command palette.
 - TUI does not include a prompt composer for provider conversations.
 - Users type into agents by opening the real CLI window.
-- Programmatic input control is MCP-only.
+- Programmatic input control is MCP-only and belongs to Orchestrator BETA.
 - Provider auth stays inside provider CLIs.
 - ReevesAgents does not store provider API keys, OAuth tokens, passwords, or subscription credentials.
 - Supported providers are Codex, Claude Code, OpenCode, and Hermes.
 - Presets stay as simple run templates.
 - Doctor is setup and environment health only.
 - Ended and stale runs auto-clean on every Runs refresh.
-- CLI stays compact but is not second-class: open, list, peek, stop, kill, setup, doctor, MCP server, and `call` for all MCP tools.
+- CLI stays compact but is not second-class: spawn, open, list, peek, stop, kill, doctor, Orchestrator setup, MCP server, and `call` for all MCP tools.
 
 ## Runtime Model
 
@@ -173,9 +204,9 @@ Window indexes can change. Stable tmux ids are used for open, peek, send text, s
 
 ## Reeves Window Model
 
-Every run tries to expose a `reeves` tmux window. In normal interactive use this is a linked ReevesAgents TUI window; if linking fails, the run still has registry state and agent windows.
+Every run tries to expose a `reeves` tmux window. In normal interactive use this is a linked ReevesAgents TUI window; if linking fails, the run still has registry state and terminal/agent windows.
 
-The `reeves` window is the human way back to the ReevesAgents TUI. The Run and Agents pages list root and workers; `reeves` is not listed as an agent row.
+The `reeves` window is the human way back to the ReevesAgents TUI. The Run pages list Spawner terminals or Orchestrator root/workers; `reeves` is not listed as a terminal/agent row.
 
 Rules:
 
@@ -374,47 +405,51 @@ Main page for one active run. This is what the user sees inside the `reeves` tmu
 
 Purpose:
 
-- Answer "who is in this run?"
-- Show root and workers in one simple list.
-- Open the real CLI window for the selected agent.
+- Answer "what is in this run?"
+- Show independent terminals for Spawner runs.
+- Show root and workers for Orchestrator BETA runs.
+- Open the real CLI window for the selected terminal or agent.
 - Make it obvious that ReevesAgents is still open in the `reeves` window.
-- Inspect an agent before opening it.
-- Add workers and open/close worker detail flows.
-- See pending approvals for this run.
+- Inspect a terminal or agent before opening it.
+- Add terminals/workers and open/close detail flows.
+- See pending approvals for Orchestrator BETA runs.
 
 Rows:
 
-- root agent
-- worker agents
+- Spawner terminal records.
+- Orchestrator BETA root agent.
+- Orchestrator BETA worker agents.
 
-Root and worker row fields:
+Row fields:
 
 - name
 - provider (with provider color from tokens)
-- role
+- role, only for Orchestrator BETA agents
 - task status
 - short status note
 - last seen or activity marker
 
 Actions:
 
-- Agents
+- Terminals or Agents
 - Output
-- View Agent from Agents
-- Add Worker
-- Approvals
+- View Terminal/Agent from the list
+- Add Terminal or Add Worker
+- Approvals, only for Orchestrator BETA
 - Stop Run
 - Back To Runs
 
 Behavior:
 
-- `reeves` is not an agent and is not shown as an agent row.
-- Root is visually distinct because it has run-control capability through MCP. It carries a `root` badge.
-- Opening an agent uses `tmux select-window` with the stored window id.
+- `reeves` is not an agent and is not shown as a terminal/agent row.
+- Spawner terminal rows have no root badge, no role, and no MCP affordance.
+- Orchestrator root is visually distinct because it has run-control capability through MCP. It carries a `root` badge.
+- Opening a terminal or agent uses `tmux select-window` with the stored window id.
 - Opening `reeves` uses the stored Reeves window id through `open_reeves` or `reevesagents open <run-id>`.
 - The UI says "Open", not "select tmux window".
-- Killing the root is shown as Stop Run.
-- Worker close is available from worker detail pages.
+- Closing the first Spawner terminal is allowed; it is just another terminal window.
+- Killing an Orchestrator root is shown as Stop Run.
+- Worker close is available from Orchestrator worker detail pages.
 - Back To Runs shows the global Runs page and keeps the current run alive.
 
 ### Agent Detail Page
@@ -457,44 +492,48 @@ Behavior:
 
 ### New Run Page
 
-Creates a run from scratch or from a preset.
+Creates a Spawner run from scratch or an Orchestrator BETA run from scratch or preset.
 
 Purpose:
 
-- Start a root agent quickly.
-- Reuse a saved preset.
-- Define workers before starting.
+- Start a low-permission Spawner workspace quickly.
+- Start an Orchestrator BETA root agent when coordination is needed.
+- Reuse a saved Orchestrator preset.
+- Define terminals/workers before starting.
 - Review the planned tmux windows before anything launches.
 - Optionally save current choices as a preset.
 
 Preset behavior:
 
-- Presets are selected via a chip strip at the top of New Run, not through a top-level page.
-- Viewing or removing presets happens from that chip strip or Settings.
+- Presets apply to Orchestrator BETA; Spawner starts with direct terminal setup.
+- Presets are selected from the Orchestrator preset step, not through a top-level page.
+- Viewing or removing presets happens from that step or Settings.
 - Presets stay simple JSON defaults.
 
 Steps:
 
-- choose blank or preset
+- choose Spawner or Orchestrator BETA
+- choose blank or preset for Orchestrator BETA
 - set run name
 - set working directory
-- choose root provider
-- set root model, prompt, and permissions
-- add workers
-- set worker provider, model, prompt, working directory, and permissions
+- choose first terminal/root provider
+- set model, prompt, and permissions
+- add terminals/workers
+- set provider, model, prompt, working directory, and permissions for each extra terminal/worker
 - optionally save as preset
 - review run
 - start run
 
-Required-field markers (`*`) appear on run name and root provider.
+Required-field markers (`*`) appear on run name and first provider. Spawner prompts are optional; Orchestrator prompts are required for root and workers.
 
 Review shows:
 
 - run name
 - working directory
 - tmux session name
-- planned agent windows: root and workers; the run session also carries the `reeves` anchor window when tmux can link it
-- root and worker providers
+- mode
+- planned windows: Spawner terminals or Orchestrator root/workers; the run session also carries the `reeves` anchor window when tmux can link it
+- terminal/root/worker providers
 - permissions
 - preset name when used
 
@@ -502,24 +541,25 @@ Start behavior:
 
 - create one tmux session for the run
 - create or link the `reeves` anchor window when tmux can provide one
-- create one root agent window
-- create worker windows
+- create one first terminal or root agent window
+- create additional terminal or worker windows
 - write JSON state with stable tmux window and pane ids
-- launch each provider CLI with the per-provider prompt template plus capability note
+- launch Spawner provider CLIs with only the user prompt and no ReevesAgents injection
+- launch Orchestrator provider CLIs with the per-provider prompt template plus capability note
 
-### Add Worker Page
+### Add Terminal/Worker Page
 
 Small form opened from the Run page.
 
 Purpose:
 
-- Add one worker to an existing run.
+- Add one terminal to an existing Spawner run or one worker to an existing Orchestrator BETA run.
 - Keep the root run alive.
 - Create one new tmux window in the same run session.
 
 Fields:
 
-- worker name
+- terminal/worker name
 - provider
 - model
 - prompt
@@ -528,14 +568,15 @@ Fields:
 
 Actions:
 
-- Start Worker
+- Add Terminal or Add Worker
 - Cancel
 
 Behavior:
 
 - Creates a tmux window inside the existing run session.
-- Writes one agent JSON file.
-- Gives the worker the same per-provider startup template, with worker-limited permissions.
+- Writes one terminal/agent JSON file.
+- For Spawner, launches a plain provider CLI with only the user prompt.
+- For Orchestrator BETA, gives the worker the same per-provider startup template, with worker-limited permissions.
 
 ### Approvals Page
 
@@ -587,7 +628,7 @@ Settings:
 
 Actions:
 
-- Setup MCP (registers reevesagents in each detected provider's config)
+- Setup MCP (BETA; registers reevesagents in each detected provider's config for Orchestrator mode)
 - Recheck
 - Show Config (shows the config path)
 - Back
@@ -622,7 +663,7 @@ Checks:
 Actions:
 
 - Recheck
-- Setup (calls the same MCP registration as Settings)
+- Setup MCP (BETA; calls the same Orchestrator MCP registration as Settings)
 - Back
 
 Behavior:
@@ -836,13 +877,14 @@ CLI is a compact operator surface:
 
 ```sh
 reevesagents
+reevesagents spawn [spec...]
 reevesagents runs
 reevesagents open <id>
-reevesagents peek <agent-id>
+reevesagents peek <terminal-or-agent-id>
 reevesagents stop <run-id>
-reevesagents kill <agent-id>
+reevesagents kill <terminal-or-agent-id>
 reevesagents doctor
-reevesagents setup
+reevesagents orchestrator setup
 reevesagents mcp
 reevesagents call <tool> [json]
 ```
@@ -850,15 +892,17 @@ reevesagents call <tool> [json]
 Command meanings:
 
 - `reevesagents`: open the TUI.
+- `reevesagents spawn [spec...]`: start a Spawner run with multiple independent provider CLI terminals.
 - `reevesagents runs`: print a small table of runs.
-- `reevesagents open <id>`: open a run's `reeves` window or an agent window.
-- `reevesagents peek <agent-id>`: print recent output for one agent.
+- `reevesagents open <id>`: open a run's `reeves` window or a terminal/agent window.
+- `reevesagents peek <terminal-or-agent-id>`: print recent output for one terminal/agent.
 - `reevesagents stop <run-id>`: stop a run after confirmation.
-- `reevesagents kill <agent-id>`: kill one agent after confirmation.
+- `reevesagents kill <terminal-or-agent-id>`: close one terminal/worker after confirmation.
 - `reevesagents doctor`: run setup checks.
-- `reevesagents setup`: install/register local ReevesAgents setup.
-- `reevesagents mcp`: start the MCP server.
-- `reevesagents call <tool> [json]`: invoke any MCP tool through the CLI. Arguments can be inline JSON, stdin JSON, or `--file <path>`.
+- `reevesagents orchestrator setup`: BETA, register local ReevesAgents MCP setup.
+- `reevesagents setup`: legacy alias for Orchestrator BETA MCP setup.
+- `reevesagents mcp`: BETA, start the MCP server.
+- `reevesagents call <tool> [json]`: BETA, invoke any MCP tool through the CLI. Arguments can be inline JSON, stdin JSON, or `--file <path>`.
 
 `reevesagents stop` and `reevesagents kill` require `-y` or `ALLOW_DESTRUCTIVE=1` to actually proceed.
 
@@ -890,7 +934,7 @@ TUI outside tmux:
 
 - `reevesagents` can still show the Runs page outside tmux.
 - Opening a run from outside tmux attaches to that run and lands on `reeves`.
-- Opening a specific agent from outside tmux attaches to the run and selects that agent window.
+- Opening a specific terminal/agent from outside tmux attaches to the run and selects that window.
 - Once inside the run, Open actions use tmux window selection.
 
 There is no hidden ReevesAgents back key inside provider CLIs because provider CLIs own keyboard input.
@@ -1015,7 +1059,7 @@ All user/model text is redacted on write via `redactSecrets` in `src/utils/displ
 
 ## MCP Registration in provider config files
 
-`reevesagents setup` (or Settings -> Setup MCP) writes an `mcpServers` entry into each detected provider's config file.
+`reevesagents orchestrator setup` (or Settings -> Setup MCP (BETA)) writes an `mcpServers` entry into each detected provider's config file. This is only for Orchestrator BETA; Spawner mode does not need MCP registration.
 
 | Provider | Config path | Format | Section |
 |---|---|---|---|
@@ -1026,7 +1070,7 @@ All user/model text is redacted on write via `redactSecrets` in `src/utils/displ
 
 Each entry has the same shape: `command = <reevesagents bin path>`, `args = ["mcp"]`. The path comes from `resolveReevesPath` in `src/mcp-setup.ts`, which guards against test-runner paths (vitest, jest workers) and version-manager paths (nvm, fnm, volta) leaking into user configs. For version-manager installs the fallback is the bare `reevesagents` binary name, which resolves via the shell PATH that the MCP host inherits.
 
-When an agent window is spawned, the runtime also writes per-run MCP env injection so the MCP server identifies that specific agent as the caller:
+When an Orchestrator BETA agent window is spawned, the runtime also writes per-run MCP env injection so the MCP server identifies that specific agent as the caller. Spawner terminals do not receive this injection:
 
 - Codex: TOML override via `-c mcp_servers.reevesagents.env={...}` in `src/launcher/provider-launch.ts`.
 - Claude Code: per-run JSON config at `~/.reeves/runs/<run-id>/mcp/<agent-id>-claude-mcp.json`, passed via `--mcp-config`.
@@ -1082,14 +1126,25 @@ ReevesAgents does not store provider credentials.
 
 First setup:
 
-- User runs `reevesagents setup`.
-- Setup checks tmux, provider CLIs, MCP config, and state directory.
+- User installs ReevesAgents and runs `reevesagents doctor`.
+- Doctor checks tmux, provider CLIs, optional Orchestrator MCP config, and state directory.
 - User runs `reevesagents`.
 - TUI opens on Welcome. The user selects Runs or another visible action.
+- If the user wants Orchestrator BETA, they explicitly run `reevesagents orchestrator setup`.
 
-Start one root:
+Start a Spawner workspace:
 
 - User chooses New Run.
+- User chooses Spawner.
+- User sets run name, working directory, and one or more terminal providers.
+- User reviews and starts.
+- ReevesAgents creates tmux session, `reeves` window, terminal windows, and JSON state.
+- Provider CLIs receive only their own optional prompt.
+
+Start one Orchestrator root:
+
+- User chooses New Run.
+- User chooses Orchestrator BETA.
 - User chooses blank or preset.
 - User sets provider, model, prompt, and working directory.
 - User reviews and starts.
@@ -1098,6 +1153,7 @@ Start one root:
 Start root with workers:
 
 - User chooses New Run.
+- User chooses Orchestrator BETA.
 - User configures root.
 - User adds workers.
 - Review shows the planned windows.
@@ -1111,12 +1167,12 @@ Spawn a tree from a host CLI:
 - ReevesAgents creates the tmux session, root, and workers.
 - User attaches to the new session to watch.
 
-Open an agent:
+Open a terminal or agent:
 
 - User opens Run.
-- User selects agent.
-- User opens Agents, selects an agent, and chooses Open Agent from the detail page.
-- ReevesAgents selects the agent window.
+- User selects Terminals for Spawner or Agents for Orchestrator BETA.
+- User selects a row and chooses Open Terminal or Open Agent from the detail page.
+- ReevesAgents selects the terminal/agent window.
 
 Root controls worker:
 

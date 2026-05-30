@@ -1,4 +1,4 @@
-// Step 1/5: pick a starting preset, or Blank for an empty form.
+// Orchestrator (BETA) step 1/5: pick a starting preset, or Blank for an empty form.
 // Enter on a preset row applies its defaults and advances to Basics directly.
 // Continue advances with the currently highlighted preset. Cancel pops to Runs.
 
@@ -47,7 +47,7 @@ export function NewRunPreset() {
   function applyPreset(option: PresetOption): void {
     if (option.preset) {
       const p = option.preset
-      update({ presetName: p.name, workingDir: p.root.working_dir || state.workingDir })
+      update({ mode: 'orchestrator', presetName: p.name, workingDir: p.root.working_dir || state.workingDir })
       updateRoot({
         provider: p.root.provider,
         model: p.root.model,
@@ -58,7 +58,7 @@ export function NewRunPreset() {
         workingDir: p.root.working_dir,
       })
     } else {
-      update({ presetName: null })
+      update({ mode: 'orchestrator', presetName: null })
     }
   }
 
@@ -89,7 +89,7 @@ export function NewRunPreset() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Preset']}
-      tagline="Pick a starting preset or Blank. Presets pre-fill provider, prompt, and working directory."
+      tagline="Orchestrator mode is BETA. Pick a preset or Blank for connected root/worker agents."
       statusContext={highlightedRow.description}
       statusKeys="enter select · ↑↓ move · esc back"
     >

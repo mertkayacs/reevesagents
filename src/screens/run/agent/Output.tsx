@@ -151,13 +151,14 @@ export function AgentOutput() {
   }
 
   const isHeadless = !!agent.headless
+  const isSpawner = run.mode === 'spawner'
   let statusContext = `${agent.nickname} · output`
   if (selected?.type === 'pagination') {
     statusContext = `output page ${activePage} of ${totalPages} · ← → turn page`
   } else if (selected?.type === 'action') {
     const actionLabels: Record<RowItem, string> = {
       RefreshNow: 'fetch output immediately',
-      OpenCLI: isHeadless ? 'headless root has no tmux window' : 'switch tmux to this agent window',
+      OpenCLI: isHeadless ? 'headless root has no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this agent window',
       Back: 'return to agent detail',
     }
     statusContext = actionLabels[selected.action]
@@ -168,12 +169,14 @@ export function AgentOutput() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, 'Output']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Agents', agent.nickname, 'Output']}
       meta={[
         { label: 'lines', value: outputLines.length === 0 ? '0' : `${shownStart}-${shownEnd}/${outputLines.length}` },
         { label: 'refresh', value: '5s' },
       ]}
-      tagline={isHeadless ? 'Headless root has no tmux pane output.' : 'Recent output from this agent\'s tmux pane. Refreshes every 5 seconds.'}
+      tagline={isSpawner
+        ? 'Recent output from this independent terminal. Refreshes every 5 seconds.'
+        : isHeadless ? 'Headless root has no tmux pane output.' : 'Recent output from this agent\'s tmux pane. Refreshes every 5 seconds.'}
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ output pages · enter select · esc back"
     >
@@ -214,13 +217,13 @@ export function AgentOutput() {
 
           const hints: Record<RowItem, string> = {
             RefreshNow: 'peek immediately',
-            OpenCLI: isHeadless ? 'headless root has no tmux window' : 'switch tmux to this agent window',
+            OpenCLI: isHeadless ? 'headless root has no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this agent window',
             Back: 'return to agent detail',
           }
 
           const labels: Record<RowItem, string> = {
             RefreshNow: 'Refresh now',
-            OpenCLI: 'Open Agent',
+            OpenCLI: isSpawner ? 'Open Terminal' : 'Open Agent',
             Back: 'Back',
           }
 

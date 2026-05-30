@@ -17,7 +17,7 @@ export function Credits() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'Credits']}
-      tagline="About this local tmux-first agent runner."
+      tagline="About this local tmux-first workspace manager."
       statusContext="ReevesAgents 0.9.0"
       statusKeys="enter back · esc back"
     >
@@ -25,12 +25,12 @@ export function Credits() {
         <Section label="About" />
         <Row selected={false} primary="Name" trailing="ReevesAgents" />
         <Row selected={false} primary="Version" trailing="0.9.0" />
-        <Row selected={false} primary="Purpose" trailing="Local tmux-first run manager for AI CLI agents" />
+        <Row selected={false} primary="Purpose" trailing="Local tmux-first workspace manager for AI CLI terminals" />
         <SectionEnd />
 
         <Box marginTop={1} />
         <Section label="Stack" />
-        <Row selected={false} primary="Interface" trailing="Ink TUI, CLI, MCP tools" />
+        <Row selected={false} primary="Interface" trailing="Ink TUI, CLI, MCP tools in Orchestrator BETA" />
         <Row selected={false} primary="Runtime" trailing="tmux sessions and provider CLI windows" />
         <Row selected={false} primary="Providers" trailing="Claude Code, Codex CLI, OpenCode, Hermes" />
         <SectionEnd />

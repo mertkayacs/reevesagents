@@ -13,7 +13,7 @@ describe('Reference screen', () => {
     expect(lastFrame() ?? '').toContain('TUI Pages')
     expect(lastFrame() ?? '').toContain('Back')
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 16; i++) {
       stdin.write('\u001B[B')
       await waitForInput()
     }

@@ -27,8 +27,8 @@ export function NewRunBasics() {
   ], [state.name, state.workingDir])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'continue', label: 'Continue', hint: 'to root config' },
-    { id: 'back', label: 'Back', hint: 'return to preset' },
+    { id: 'continue', label: 'Continue', hint: state.mode === 'spawner' ? 'to first terminal' : 'to root config' },
+    { id: 'back', label: 'Back', hint: state.mode === 'spawner' ? 'return to mode' : 'return to preset' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
 
@@ -74,7 +74,9 @@ export function NewRunBasics() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Basics']}
-      tagline="Set your run name and working directory."
+      tagline={state.mode === 'spawner'
+        ? 'Spawner mode creates a multi-terminal tmux workspace with no MCP injection.'
+        : 'Orchestrator mode is BETA and creates connected root/worker agents.'}
       statusKeys="enter edit · ↑↓ move · esc back"
     >
       <StepIndicator step={2} total={5} name="Basics" />
