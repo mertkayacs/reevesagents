@@ -161,8 +161,10 @@ function checkMcpRegistration(): CheckResult {
   const registered = PROVIDERS.filter(provider => isRegistered(provider))
   return {
     name: 'mcp config',
-    status: registered.length > 0 ? 'ok' : 'warn',
-    detail: registered.length > 0 ? registered.join(', ') : 'not registered; run reevesagents setup',
+    status: 'ok',
+    detail: registered.length > 0
+      ? registered.join(', ')
+      : 'not registered; only needed for Orchestrator BETA',
   }
 }
 

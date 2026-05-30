@@ -197,7 +197,9 @@ export function RunOutput() {
 
   const secondsAgo = Math.floor((Date.now() - lastPeekAt) / 1000)
   const lastPeekLabel = secondsAgo === 0 ? 'just now' : `${secondsAgo}s ago`
-  let statusContext = agents.length > 0 ? `${agents.length} agent${agents.length === 1 ? '' : 's'}` : 'no agents'
+  const isSpawner = run.mode === 'spawner'
+  const noun = isSpawner ? 'terminal' : 'agent'
+  let statusContext = agents.length > 0 ? `${agents.length} ${noun}${agents.length === 1 ? '' : 's'}` : `no ${noun}s`
   if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · enter opens detail`
   if (selected?.type === 'pagination') statusContext = `page ${activePage} of ${totalPages} · ← → turn page`
 
@@ -205,16 +207,18 @@ export function RunOutput() {
     <Frame
       breadcrumb={['ReevesAgents', 'Runs', run.name, 'Output']}
       meta={[
-        { label: 'agents', value: String(agents.length) },
+        { label: isSpawner ? 'terminals' : 'agents', value: String(agents.length) },
         { label: 'last peek', value: lastPeekLabel },
       ]}
-      tagline="Recent output from each agent in this run. Refreshes every 5 seconds."
+      tagline={isSpawner
+        ? 'Recent output from each independent terminal in this spawner run. Refreshes every 5 seconds.'
+        : 'Recent output from each agent in this Orchestrator BETA run. Refreshes every 5 seconds.'}
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ page · enter open/refresh · esc back"
     >
       <Box flexDirection="column">
         {agents.length === 0 ? (
-          <Text color={colors.text.dim}>No agents in this run.</Text>
+          <Text color={colors.text.dim}>No {noun}s in this run.</Text>
         ) : (
           pagedAgents.map((agent) => {
             const peek = peeks[agent.id] || ''

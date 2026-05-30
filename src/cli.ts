@@ -9,12 +9,12 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { Router } from './router.js'
 import { runDoctor } from './launcher/doctor.js'
-import { peekAgent, stopRun, killAgent } from './launcher/runtime.js'
+import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
 import { registerAll } from './mcp-setup.js'
 import { handleMcpTool, startMcpServer } from './mcp.js'
 import { listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
-import type { AgentRecord, RunRecord } from './state/types.js'
+import type { AgentRecord, Provider, RunRecord } from './state/types.js'
 
 process.on('uncaughtException', (err) => {
   process.stderr.write(`[FATAL] ${err.message}\n`)
@@ -25,7 +25,7 @@ const program = new Command()
 
 program
   .name('reevesagents')
-  .description('local tmux-first run manager for AI CLI agents')
+  .description('local tmux-first workspace manager for AI CLI terminals')
   .version('0.9.0')
 
 function age(startedAt: string): string {
@@ -244,6 +244,14 @@ function readJsonArgs(inlineJson: string | undefined, filePath: string | undefin
   return parsed as Record<string, unknown>
 }
 
+function parseTerminalSpec(spec: string): { provider: Provider; nickname?: string; model: string } {
+  const [providerRaw = '', nickname, model = ''] = spec.split(':')
+  if (providerRaw !== 'cc' && providerRaw !== 'codex' && providerRaw !== 'opencode' && providerRaw !== 'hermes') {
+    throw new Error(`terminal spec must start with cc, codex, opencode, or hermes: ${spec}`)
+  }
+  return { provider: providerRaw, nickname: nickname || undefined, model }
+}
+
 function printContext(payload: unknown): void {
   if (typeof payload !== 'object' || payload === null) {
     console.log(String(payload))
@@ -278,15 +286,49 @@ function printContext(payload: unknown): void {
 }
 
 program
+  .command('spawn [terminal...]')
+  .description('start a spawner run with independent provider CLI terminals')
+  .option('--name <name>', 'run name', 'spawner')
+  .option('--cwd <dir>', 'working directory', process.cwd())
+  .option('--prompt <text>', 'initial prompt pasted into each terminal', '')
+  .action((terminalSpecs: string[], opts) => {
+    try {
+      const specs = terminalSpecs.length > 0 ? terminalSpecs : ['codex']
+      const [first, ...rest] = specs.map(parseTerminalSpec)
+      const result = startRun({
+        mode: 'spawner',
+        name: opts.name,
+        working_dir: opts.cwd,
+        root: {
+          provider: first!.provider,
+          nickname: first!.nickname,
+          model: first!.model,
+          task: opts.prompt,
+        },
+        workers: rest.map(spec => ({
+          provider: spec.provider,
+          nickname: spec.nickname,
+          model: spec.model,
+          task: opts.prompt,
+        })),
+      })
+      console.log(`started ${result.run.id.slice(0, 8)}  ${result.run.name}  ${result.agents.length} terminals`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
   .command('mcp')
-  .description('start MCP server over stdio')
+  .description('start Orchestrator BETA MCP server over stdio')
   .action(async () => {
     await startMcpServer()
   })
 
 program
   .command('call <tool> [json]')
-  .description('call one MCP tool from the CLI using JSON arguments')
+  .description('BETA: call one Orchestrator MCP tool using JSON arguments')
   .option('--file <path>', 'read JSON arguments from a file')
   .option('--caller <agent-id>', 'act as a root or worker agent caller')
   .action(async (tool, json, opts) => {
@@ -302,7 +344,7 @@ program
 
 program
   .command('context')
-  .description('show caller role, current run, agents, approvals, and controls')
+  .description('show caller role, current run, terminals/agents, approvals, and controls')
   .option('--json', 'output JSON')
   .action(async (opts) => {
     try {
@@ -319,8 +361,8 @@ program
   })
 
 program
-  .command('setup')
-  .description('detect installed CLIs and register reevesagents as their MCP server')
+  .command('setup', { hidden: true })
+  .description('BETA: register reevesagents as an MCP server for Orchestrator mode')
   .option('--json', 'output JSON array')
   .action((opts) => {
     const results = registerAll()
@@ -328,6 +370,28 @@ program
       console.log(JSON.stringify(results, null, 2))
       return
     }
+    console.log('Orchestrator mode is BETA. This command writes MCP config entries.')
+    for (const result of results) {
+      const state = result.registered ? 'registered' : result.detected ? 'detected, not registered' : 'not found'
+      console.log(`${result.cli.padEnd(14)} ${state}${result.note ? ` (${result.note})` : ''}`)
+    }
+  })
+
+const orchestrator = program
+  .command('orchestrator')
+  .description('BETA: connected root/worker agent coordination')
+
+orchestrator
+  .command('setup')
+  .description('register MCP configs for Orchestrator BETA mode')
+  .option('--json', 'output JSON array')
+  .action((opts) => {
+    const results = registerAll()
+    if (opts.json) {
+      console.log(JSON.stringify(results, null, 2))
+      return
+    }
+    console.log('Orchestrator mode is BETA. This command writes MCP config entries.')
     for (const result of results) {
       const state = result.registered ? 'registered' : result.detected ? 'detected, not registered' : 'not found'
       console.log(`${result.cli.padEnd(14)} ${state}${result.note ? ` (${result.note})` : ''}`)
@@ -352,20 +416,22 @@ program
       const agents = listAgents(run.id)
       const root = agents.find(agent => agent.role === 'root')
       const note = agents.find(agent => agent.task_note.trim())?.task_note ?? ''
-      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  ${(root?.provider ?? '-').padEnd(8)}  ${String(agents.length).padStart(2)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
+      const mode = run.mode === 'spawner' ? 'spawn' : 'orch-beta'
+      const noun = run.mode === 'spawner' ? 'terminals' : 'agents'
+      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  ${mode.padEnd(9)}  ${(root?.provider ?? '-').padEnd(8)}  ${String(agents.length).padStart(2)} ${noun.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
     }
   })
 
 program
   .command('open <id>')
-  .description('open a run reeves window or an agent window')
+  .description('open a run reeves window or a terminal/agent window')
   .action((id) => {
     openTarget(id)
   })
 
 program
-  .command('peek <agent-id>')
-  .description('show recent output from one agent')
+  .command('peek <terminal-or-agent-id>')
+  .description('show recent output from one terminal/agent')
   .option('-n, --lines <n>', 'number of lines', '20')
   .option('--json', 'output JSON with lines array')
   .action((id, opts) => {
@@ -377,7 +443,7 @@ program
       return
     }
     if (!output) {
-      console.error(`no output for agent ${agent.id}`)
+      console.error(`no output for terminal/agent ${agent.id}`)
       process.exit(1)
     }
     console.log(output)
@@ -395,14 +461,14 @@ program
   })
 
 program
-  .command('kill <agent-id>')
-  .description('kill one worker agent')
-  .option('-y, --yes', 'confirm kill')
+  .command('kill <terminal-or-agent-id>')
+  .description('close one spawner terminal or Orchestrator worker')
+  .option('-y, --yes', 'confirm close')
   .action((id, opts) => {
-    requireDestructiveConfirmation(opts, 'kill agent')
+    requireDestructiveConfirmation(opts, 'close terminal/worker')
     const agent = resolveAgent(id)
     const killed = killAgent(agent.id)
-    console.log(`killed ${killed.id.slice(0, 8)}  ${killed.nickname}`)
+    console.log(`closed ${killed.id.slice(0, 8)}  ${killed.nickname}`)
   })
 
 program
@@ -426,7 +492,7 @@ const knownSubcommands = new Set(program.commands.map(command => command.name())
 const firstArg = process.argv[2]
 
 if (!firstArg || (!knownSubcommands.has(firstArg) && !firstArg.startsWith('--'))) {
-  // tmux is required: window-based agent navigation only works inside a tmux session.
+  // tmux is required: window-based terminal/agent navigation only works inside a tmux session.
   // If launched outside tmux on an interactive terminal, auto-wrap into a session
   // named "reeves" and re-exec ourselves there. Subsequent launches attach to the
   // same app-owned session and clear unrelated windows there. Set

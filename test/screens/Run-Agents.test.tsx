@@ -154,7 +154,7 @@ describe('Run › Agents list screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Agents in this run')
+    expect(frame).toContain('Agents in this Orchestrator BETA run')
     expect(frame).toContain('real provider CLI agent')
     unmount()
   })

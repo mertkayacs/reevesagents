@@ -137,6 +137,42 @@ describe('v1 runtime', () => {
     expect(launch).toContain(`REEVES_REGISTRY='${tmpDir}'`)
   })
 
+  it('starts spawner runs as independent terminals without MCP or Reeves context injection', async () => {
+    const driver = new FakeDriver()
+    const { startRun } = await import('../src/launcher/runtime.js')
+    const { readRun, listAgents } = await import('../src/state/runs.js')
+
+    const result = startRun({
+      mode: 'spawner',
+      name: 'manual team',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'build the thing', nickname: 'builder' },
+      workers: [
+        { provider: 'cc', model: '', task: 'review the thing', nickname: 'reviewer' },
+      ],
+    }, { driver, available })
+
+    const launchCommands = driver.calls
+      .filter(call => call.args[0] === 'new-window')
+      .map(call => call.args.at(-1) ?? '')
+      .join('\n')
+    const pasted = driver.calls
+      .filter(call => call.args[0] === 'load-buffer')
+      .map(call => call.input)
+
+    expect(readRun(result.run.id).mode).toBe('spawner')
+    expect(listAgents(result.run.id).map(agent => agent.nickname)).toEqual(['builder', 'reviewer'])
+    expect(launchCommands).not.toContain('REEVES_SESSION_ID')
+    expect(launchCommands).not.toContain('REEVES_AGENT_ID')
+    expect(launchCommands).not.toContain('REEVES_RUN_ID')
+    expect(launchCommands).not.toContain('--mcp-config')
+    expect(launchCommands).not.toContain('mcp_servers.reevesagents')
+    expect(pasted).toEqual(['build the thing', 'review the thing'])
+    expect(pasted.join('\n')).not.toContain('ReevesAgents context')
+    expect(pasted.join('\n')).not.toContain('You are the root agent')
+    expect(pasted.join('\n')).not.toContain('You are a worker agent')
+  })
+
   it('spawns a worker into an existing run session', async () => {
     const driver = new FakeDriver()
     const { startRun, spawnWorker } = await import('../src/launcher/runtime.js')

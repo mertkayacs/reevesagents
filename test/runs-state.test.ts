@@ -19,6 +19,7 @@ afterEach(() => {
 function makeRun(id: string, overrides: Partial<RunRecord> = {}): RunRecord {
   return {
     id,
+    mode: 'orchestrator',
     name: `run-${id}`,
     status: 'running',
     tmux_session: `reeves_${id}`,

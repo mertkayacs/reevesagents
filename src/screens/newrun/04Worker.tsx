@@ -1,5 +1,5 @@
-// Step 4b: Edit one worker slot. Reached from Workers (step 4) by Enter on a
-// worker row or via Add Worker. Same inline editing pattern as Root (step 3),
+// Step 4b: Edit one additional terminal/worker slot. Reached from step 4 by Enter.
+// Same inline editing pattern as Root (step 3),
 // with worker-specific fields (nickname, working dir) and a Remove action.
 
 import React, { useState, useMemo } from 'react'
@@ -34,6 +34,7 @@ function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
 export function NewRunWorker() {
   const { pop, selectedWorkerIdx } = useRouter()
   const { state, updateWorker, removeWorker } = useWizard()
+  const isSpawner = state.mode === 'spawner'
   const idx = selectedWorkerIdx ?? -1
   const worker: WorkerConfig | undefined = idx >= 0 ? state.workers[idx] : undefined
 
@@ -43,7 +44,7 @@ export function NewRunWorker() {
       { kind: 'text', id: 'nickname', label: 'Nickname', value: worker.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
       { kind: 'picker', id: 'provider', label: 'Provider', current: worker.provider, values: PROVIDERS },
       { kind: 'text', id: 'model', label: 'Model', value: worker.model, helpText: 'e.g. claude-3-5-sonnet, gpt-4o, or empty for default', required: false },
-      { kind: 'text', id: 'prompt', label: 'Prompt', value: worker.prompt, helpText: 'initial task for this worker · enter newline · esc done', required: true },
+      { kind: 'text', id: 'prompt', label: 'Prompt', value: worker.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'initial task for this worker · enter newline · esc done', required: !isSpawner },
       { kind: 'text', id: 'workingDir', label: 'Working Dir', value: worker.workingDir, helpText: 'optional, defaults to the run working dir', required: false },
       { kind: 'picker', id: 'permissions', label: 'Permissions', current: worker.permissions, values: PERMISSIONS_VALUES },
     ]
@@ -51,12 +52,12 @@ export function NewRunWorker() {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: worker.effort, values: EFFORT_VALUES })
     }
     return list
-  }, [worker])
+  }, [isSpawner, worker])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'save', label: 'Done', hint: 'return to workers' },
-    { id: 'remove', label: 'Remove This Worker', hint: 'delete and return' },
-    { id: 'cancel', label: 'Back', hint: 'return to workers' },
+    { id: 'save', label: 'Done', hint: isSpawner ? 'return to terminals' : 'return to workers' },
+    { id: 'remove', label: isSpawner ? 'Remove This Terminal' : 'Remove This Worker', hint: 'delete and return' },
+    { id: 'cancel', label: 'Back', hint: isSpawner ? 'return to terminals' : 'return to workers' },
   ]
 
   const totalRows = fields.length + actions.length
@@ -114,19 +115,21 @@ export function NewRunWorker() {
 
   if (!worker) {
     return (
-      <Frame breadcrumb={['ReevesAgents', 'New Run', 'Workers', 'Worker']}>
-        <Row selected={true} primary="Worker not found" hint="press Esc to go back" />
+      <Frame breadcrumb={['ReevesAgents', 'New Run', isSpawner ? 'Terminals' : 'Workers', isSpawner ? 'Terminal' : 'Worker']}>
+        <Row selected={true} primary={isSpawner ? 'Terminal not found' : 'Worker not found'} hint="press Esc to go back" />
       </Frame>
     )
   }
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'New Run', 'Workers', worker.nickname || `worker-${idx + 1}`]}
-      tagline="Configure this worker. Root drives it through MCP."
+      breadcrumb={['ReevesAgents', 'New Run', isSpawner ? 'Terminals' : 'Workers', worker.nickname || (isSpawner ? `terminal-${idx + 2}` : `worker-${idx + 1}`)]}
+      tagline={isSpawner
+        ? 'Configure this independent CLI terminal. It receives no ReevesAgents context.'
+        : 'Orchestrator mode is BETA. Configure this worker; root drives it through MCP.'}
       statusKeys="enter edit/newline · ←→ cycle picker · esc done/back"
     >
-      <StepIndicator step={4} total={5} name="Worker" />
+      <StepIndicator step={4} total={5} name={isSpawner ? 'Terminal' : 'Worker'} />
 
       {fields.map((field, fIdx) => {
         if (field.kind === 'text') {

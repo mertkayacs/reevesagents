@@ -19,7 +19,7 @@ import type { RunRecord } from '../state/types.js'
 const ACTIONS = ['NewRun', 'Main Menu', 'Quit'] as const
 const CHROME_ROWS = 17
 const ACTION_COPY: Record<typeof ACTIONS[number], { label: string; hint: string }> = {
-  NewRun: { label: 'New Run', hint: 'create root and workers' },
+  NewRun: { label: 'New Run', hint: 'create a spawner workspace or Orchestrator BETA run' },
   'Main Menu': { label: 'Main Menu', hint: 'settings, doctor, reference, credits' },
   Quit: { label: 'Quit', hint: 'exit the TUI' },
 }
@@ -145,7 +145,7 @@ export function Runs() {
   let statusContext = ''
   if (selectedRun) {
     const agents = listAgents(selectedRun.id)
-    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} agents · ${selectedRun.working_dir}`
+    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} ${selectedRun.mode === 'spawner' ? 'terminals' : 'agents'} · ${selectedRun.working_dir}`
   } else if (selected?.type === 'action' && selected.action && selected.action !== '__section__') {
     statusContext = ACTION_COPY[selected.action as typeof ACTIONS[number]]?.hint ?? selected.action
   } else if (selected?.type === 'pagination') {
@@ -160,7 +160,7 @@ export function Runs() {
         { label: 'running', value: String(runningCount) },
         { label: 'stale', value: String(staleCount) },
       ]}
-      tagline="Manage local agent runs. Each run opens real provider CLIs in its own tmux session."
+      tagline="Manage local tmux workspaces. Spawner runs are independent terminals; Orchestrator runs are BETA."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc main menu"
     >
@@ -177,14 +177,17 @@ export function Runs() {
           pagedRuns.map((run, idx) => {
             const agents = listAgents(run.id)
             const root = agents.find(a => a.role === 'root')
+            const isSpawner = run.mode === 'spawner'
             return (
               <Row
                 key={run.id}
                 selected={selectedIdx === idx}
                 primary={run.name}
                 glyph={statusGlyph(runStatus(run))}
-                badge={root ? { label: root.provider, color: providerColor(root.provider) } : undefined}
-                hint={`${agents.length} agents`}
+                badge={isSpawner
+                  ? { label: 'spawn', color: colors.accent.primary }
+                  : root ? { label: root.provider, color: providerColor(root.provider) } : undefined}
+                hint={`${agents.length} ${isSpawner ? 'terminals' : 'agents'}`}
               />
             )
           })

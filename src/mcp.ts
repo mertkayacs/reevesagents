@@ -68,6 +68,7 @@ function callerContext(callerAgentId: string | null): Caller {
   if (!callerAgentId) return { role: 'operator' }
   const agent = findAgent(callerAgentId)
   const run = readRun(agent.run_id)
+  if (run.mode === 'spawner') throw new Error('spawner terminals are not MCP callers')
   return { role: agent.role, agent, run }
 }
 
@@ -149,6 +150,7 @@ function parseStartRunArgs(a: Record<string, unknown>) {
     : parseWorkerConfig(rootRaw)
 
   return {
+    mode: a.mode === 'spawner' ? 'spawner' as const : 'orchestrator' as const,
     name: String(a.name ?? '').trim() || 'run',
     working_dir: String(a.working_dir ?? process.cwd()),
     root,
@@ -241,11 +243,12 @@ function markCallerActive(caller: Caller): Caller {
 export const TOOLS = [
   {
     name: 'start_run',
-    description: 'Start a ReevesAgents run. External operator only. Creates a per-run tmux session with a root agent and optional workers.',
+    description: 'BETA: start an Orchestrator run. External operator only. Creates a per-run tmux session with a root agent and optional workers.',
     inputSchema: {
       type: 'object',
       properties: {
         name: { type: 'string' },
+        mode: { type: 'string', enum: ['orchestrator', 'spawner'], description: 'Defaults to orchestrator. Spawner mode creates independent terminals without MCP caller context.' },
         working_dir: { type: 'string' },
         root: {
           type: 'object',
@@ -276,7 +279,7 @@ export const TOOLS = [
   },
   {
     name: 'context',
-    description: 'Return caller identity, current run, agents, approvals, and available control scope. Root and worker callers get their current run.',
+    description: 'Return caller identity, current run, agents, approvals, and available control scope. Orchestrator roots and workers get their current run.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -289,7 +292,7 @@ export const TOOLS = [
   },
   {
     name: 'tree',
-    description: 'Return run tree data with root and worker agent records.',
+    description: 'Return run tree data with root and worker agent records for Orchestrator runs.',
     inputSchema: {
       type: 'object',
       properties: { run_id: { type: 'string' } },
@@ -379,7 +382,7 @@ export const TOOLS = [
   },
   {
     name: 'spawn_worker',
-    description: 'Spawn one worker window inside an existing run session. Root callers may omit run_id to use their current run. Put the first assignment in task; wait and inspect the worker before follow-up text.',
+    description: 'BETA: spawn one worker window inside an Orchestrator run session. Root callers may omit run_id to use their current run.',
     inputSchema: {
       type: 'object',
       properties: {

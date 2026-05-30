@@ -19,6 +19,7 @@ import { AgentOutput } from './screens/run/agent/Output.js'
 import { AgentTask } from './screens/run/agent/Task.js'
 import { AgentKill } from './screens/run/agent/Kill.js'
 import { NewRun } from './screens/NewRun.js'
+import { NewRunMode } from './screens/newrun/00Mode.js'
 import { NewRunPreset } from './screens/newrun/01Preset.js'
 import { NewRunBasics } from './screens/newrun/02Basics.js'
 import { NewRunRoot } from './screens/newrun/03Root.js'
@@ -65,6 +66,7 @@ function renderScreen(screen: ScreenName) {
     case 'AgentTask':   return <AgentTask />
     case 'AgentKill':   return <AgentKill />
     case 'NewRun':      return <NewRun />
+    case 'NewRunMode':  return <NewRunMode />
     case 'NewRunPreset': return <NewRunPreset />
     case 'NewRunBasics': return <NewRunBasics />
     case 'NewRunRoot': return <NewRunRoot />

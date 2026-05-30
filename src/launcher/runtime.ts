@@ -1,6 +1,6 @@
 // V1 tmux runtime: the Reeves TUI stays in its own tmux session/window, and
-// each run owns a separate tmux session for its root and worker agent windows.
-// Inputs: run/worker configs. Outputs: run and agent JSON records plus tmux side effects.
+// each run owns a separate tmux session for its terminal/agent windows.
+// Inputs: run/terminal/worker configs. Outputs: run and agent JSON records plus tmux side effects.
 // Invariant: stored tmux targets use stable window/pane ids, never mutable indexes.
 
 import { execFileSync } from 'node:child_process'
@@ -15,6 +15,7 @@ import type {
   Effort,
   Permissions,
   Provider,
+  RunMode,
   RunRecord,
 } from '../state/types.js'
 import {
@@ -58,6 +59,7 @@ export interface AgentLaunchConfig {
 }
 
 export interface StartRunRequest {
+  mode?: RunMode
   name: string
   working_dir: string
   root: AgentLaunchConfig
@@ -160,7 +162,8 @@ function sanitizeName(raw: string): string {
   return cleaned || 'run'
 }
 
-function tmuxWindowName(role: AgentRole, provider: Provider, nickname: string): string {
+function tmuxWindowName(mode: RunMode, role: AgentRole, provider: Provider, nickname: string): string {
+  if (mode === 'spawner') return sanitizeName(nickname || provider).slice(0, 64)
   if (role === 'root') return `root-${provider}`.slice(0, 64)
   return sanitizeName(nickname || `${provider}-worker`).slice(0, 64)
 }
@@ -389,14 +392,35 @@ function agentShellCommand(
   return fullLaunchShellCommand(config.provider, envPrefix, launchCmd, task)
 }
 
+function terminalShellCommand(
+  config: AgentLaunchConfig,
+  permissions: Permissions,
+): string {
+  const cmd = buildCommand({
+    provider: config.provider,
+    permissions,
+    model: config.model,
+    auth_mode: config.auth_mode,
+    effort: config.effort,
+    rc_enabled: false,
+  })
+  return `exec ${cmd.map(shellQuote).join(' ')}`
+}
+
+function promptForMode(mode: RunMode, role: AgentRole, task: string): string {
+  if (mode === 'spawner') return task.trim()
+  return startupTask(role, task)
+}
+
 function sendDelayedStartupInput(
   driver: RuntimeDriver,
   agent: AgentRecord,
   config: AgentLaunchConfig,
   readyDelayMs: number,
+  mode: RunMode,
 ): void {
-  const task = startupTask(agent.role, config.task)
-  const shouldEnableRemoteControl = config.rc_enabled === true && config.provider === 'cc'
+  const task = promptForMode(mode, agent.role, config.task)
+  const shouldEnableRemoteControl = mode === 'orchestrator' && config.rc_enabled === true && config.provider === 'cc'
 
   function sendStartupTask(): void {
     pasteTextToPane(driver, agent.tmux_pane_id, task)
@@ -513,6 +537,7 @@ function createHeadlessRootAgent(
 function createAgentWindow(
   runId: string,
   tmuxSession: string,
+  mode: RunMode,
   role: AgentRole,
   config: AgentLaunchConfig,
   inheritedWorkingDir: string,
@@ -524,8 +549,10 @@ function createAgentWindow(
   const id = randomUUID()
   const workingDir = resolveWorkingDir(config.working_dir, inheritedWorkingDir)
   const permissions = config.permissions ?? cfg.global.default_permissions
-  const shellCommand = agentShellCommand(runId, id, role, config, permissions)
-  const nickname = config.nickname || (role === 'root' ? 'root' : `${config.provider}-worker`)
+  const shellCommand = mode === 'spawner'
+    ? terminalShellCommand(config, permissions)
+    : agentShellCommand(runId, id, role, config, permissions)
+  const nickname = config.nickname || (mode === 'spawner' ? config.provider : role === 'root' ? 'root' : `${config.provider}-worker`)
   const output = firstWindowInSession
     ? driver.tmux([
       'new-session',
@@ -536,7 +563,7 @@ function createAgentWindow(
       '-s',
       tmuxSession,
       '-n',
-      tmuxWindowName(role, config.provider, nickname),
+      tmuxWindowName(mode, role, config.provider, nickname),
       '-c',
       workingDir,
       shellCommand,
@@ -550,14 +577,14 @@ function createAgentWindow(
       '-t',
       `${tmuxSession}:`,
       '-n',
-      tmuxWindowName(role, config.provider, nickname),
+      tmuxWindowName(mode, role, config.provider, nickname),
       '-c',
       workingDir,
       shellCommand,
     ])
   const agent = newAgentRecord(id, runId, tmuxSession, role, config, workingDir, parseTmuxIds(output), permissions)
   writeAgent(agent)
-  sendDelayedStartupInput(driver, agent, config, readyDelayMs)
+  sendDelayedStartupInput(driver, agent, config, readyDelayMs, mode)
   return agent
 }
 
@@ -569,6 +596,8 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
   const cfg = loadConfig()
   const driver = options.driver ?? realDriver
   const available = options.available ?? detectAvailable()
+  const mode = request.mode ?? 'orchestrator'
+  if (mode === 'spawner' && request.root_is_caller) throw new Error('Spawner runs cannot use a headless root')
   const workers = request.workers ?? []
   validateAgents(request.root_is_caller ? workers : [request.root, ...workers], available)
 
@@ -589,10 +618,11 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
       // Headless root: the MCP caller acts as root, no tmux window for them.
       root = createHeadlessRootAgent(runId, tmuxSession, request.root, workingDir)
     } else {
-      root = createAgentWindow(runId, tmuxSession, 'root', request.root, workingDir, readyDelayMs, driver)
+      root = createAgentWindow(runId, tmuxSession, mode, 'root', request.root, workingDir, readyDelayMs, driver)
     }
     const run: RunRecord = {
       id: runId,
+      mode,
       name: request.name,
       status: 'running',
       tmux_session: tmuxSession,
@@ -607,7 +637,7 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
     }
     writeRun(run)
     const workerAgents = workers.map(worker => {
-      return createAgentWindow(runId, tmuxSession, 'worker', worker, workingDir, readyDelayMs, driver)
+      return createAgentWindow(runId, tmuxSession, mode, 'worker', worker, workingDir, readyDelayMs, driver)
     })
     return { run, agents: [root, ...workerAgents] }
   } catch (err) {
@@ -630,6 +660,7 @@ export function spawnWorker(request: SpawnWorkerRequest, options: RuntimeOptions
   return createAgentWindow(
     run.id,
     run.tmux_session,
+    run.mode ?? 'orchestrator',
     'worker',
     request,
     run.working_dir,
@@ -721,7 +752,8 @@ export function interrupt(agentId: string, options: RuntimeOptions = {}): void {
 export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentRecord {
   const driver = options.driver ?? realDriver
   const agent = findAgent(agentId)
-  if (agent.role === 'root') throw new Error('Root agent cannot be killed directly; stop the run instead')
+  const run = readRun(agent.run_id)
+  if (run.mode !== 'spawner' && agent.role === 'root') throw new Error('Root agent cannot be killed directly; stop the run instead')
   try {
     driver.tmux(['kill-window', '-t', agent.tmux_window_id])
   } catch {

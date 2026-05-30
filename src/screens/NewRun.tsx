@@ -1,4 +1,4 @@
-// Wizard entry point. Wraps the wizard subtree in WizardProvider and routes to step 1.
+// Wizard entry point. Wraps the wizard subtree in WizardProvider and routes to mode selection.
 
 import React, { useEffect } from 'react'
 import { Text } from 'ink'
@@ -10,7 +10,7 @@ function NewRunInner() {
   const { replace } = useRouter()
 
   useEffect(() => {
-    replace('NewRunPreset')
+    replace('NewRunMode')
   }, [replace])
 
   return (

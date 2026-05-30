@@ -6,13 +6,16 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 
 ### Added
 - Public prerelease package metadata, README, release readiness notes, and verification docs.
-- Release checks for typecheck, lint, unit tests, build, MCP smoke, and CLI smoke.
+- Release checks for typecheck, lint, unit tests, build, MCP smoke, CLI smoke, real tmux smoke, and package packing.
 - Opt-in real-provider approval smoke for end-to-end approval flows.
+- Spawner mode as the default low-permission multi-terminal run path.
+- Orchestrator mode labeling for BETA MCP-connected root/worker coordination.
 
 ### Changed
 - Set the package, CLI, MCP server, README, and Credits page version to `0.9.0`.
-- Cleaned up the main TUI pages with sectioned Runs, Run, Agents, and Agent Detail layouts.
+- Cleaned up the main TUI pages with sectioned Runs, Run, Terminals/Agents, and Detail layouts.
 - Reorganized the changelog around versioned internal milestones.
+- Clarified docs and TUI copy so MCP setup and agent coordination are explicit Orchestrator BETA actions, not install-time requirements.
 
 ## 0.8.0 - Verification And Release Docs
 
@@ -27,18 +30,18 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 ### Added
 - Persistent Welcome main menu with Current Run, Runs, Doctor, Settings, Approvals, Reference, Credits, and Quit.
 - Runs dashboard with automatic cleanup of ended and stale runs.
-- Run hub, agent list, output pages, approvals pages, add-worker flow, and stop-run confirmation.
+- Run hub, terminal/agent list, output pages, approvals pages, add-terminal/worker flow, and stop-run confirmation.
 
 ### Changed
 - Moved each run to its own tmux session while keeping the local registry as the source of truth.
-- Renamed visible TUI actions from Open CLI to Open Agent.
+- Renamed visible TUI actions from Open CLI to Open Terminal or Open Agent.
 
 ## 0.6.0 - TUI Redesign
 
 ### Added
 - Ink-based TUI frame, header, rows, sections, status bar, pagination, dialogs, and responsive layout helpers.
 - Dark ReevesAgents visual system with provider colors and terminal-friendly wordmark/mascot rendering.
-- New Run wizard with preset, basics, root, workers, review, and starting steps.
+- New Run wizard with mode, preset, basics, first terminal/root, terminals/workers, review, and starting steps.
 
 ### Removed
 - Legacy slash-command and hidden-help interaction patterns.
@@ -47,7 +50,7 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 ## 0.5.0 - CLI Operator Surface
 
 ### Added
-- `reevesagents context`, `runs`, `open`, `peek`, `stop`, `kill`, `setup`, `doctor`, `mcp`, and `call`.
+- `reevesagents spawn`, `context`, `runs`, `open`, `peek`, `stop`, `kill`, `orchestrator setup`, `doctor`, `mcp`, and `call`.
 - JSON output and MCP-backed `call` support for scripts and human operator workflows.
 - Destructive command gates with `--yes` or `ALLOW_DESTRUCTIVE=1`.
 
@@ -61,7 +64,7 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 ## 0.3.0 - Tmux Runtime
 
 ### Added
-- Runtime support for starting runs, spawning workers, opening agent windows, peeking output, sending text/keys, interrupting agents, killing workers, and stopping runs.
+- Runtime support for starting runs, spawning terminals/workers, opening terminal/agent windows, peeking output, sending text/keys, interrupting agents, closing terminals/workers, and stopping runs.
 - Provider launch helpers for Claude Code, Codex CLI, OpenCode CLI, and Hermes.
 - Startup prompts that give agents their role, run id, agent id, and MCP context.
 

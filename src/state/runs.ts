@@ -28,6 +28,7 @@ import type {
   Permissions,
   Provider,
   RunApproval,
+  RunMode,
   RunRecord,
   RunViewStatus,
   TaskStatus,
@@ -153,6 +154,10 @@ function normalizePermissions(value: unknown): Permissions {
   return value === 'skip' ? 'skip' : 'ask'
 }
 
+function normalizeRunMode(value: unknown): RunMode {
+  return value === 'spawner' ? 'spawner' : 'orchestrator'
+}
+
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
 }
@@ -194,6 +199,7 @@ function normalizeRun(raw: Record<string, unknown>): RunRecord {
   const id = asString(raw.id)
   const run: RunRecord = {
     id,
+    mode: normalizeRunMode(raw.mode),
     name: asString(raw.name).trim() || fallbackRunName(id),
     status: raw.status === 'ended' ? 'ended' : 'running',
     tmux_session: asString(raw.tmux_session),
@@ -534,6 +540,11 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
   const targetExists = options.targetExists ?? defaultTmuxTargetExists
   const sessionExists = options.sessionExists ?? defaultTmuxSessionExists
   const agents = listAgents(run.id).filter(agent => !agent.ended_at)
+  if (run.mode === 'spawner') {
+    const windowedAgents = agents.filter(agent => !agent.headless && agent.tmux_window_id)
+    if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id))
+    return sessionExists(run.tmux_session)
+  }
   const rootAgent = agents.find(agent => agent.role === 'root' && (!run.root_agent_id || agent.id === run.root_agent_id))
   if (!rootAgent) return false
   const windowedAgents = agents.filter(agent => !agent.headless && agent.tmux_window_id)

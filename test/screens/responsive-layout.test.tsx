@@ -144,7 +144,7 @@ describe('responsive layout', () => {
     await new Promise(resolve => setTimeout(resolve, 30))
     frame = lastFrame() ?? ''
     expect(frame).toContain('Main Menu')
-    expect(frame).not.toContain('create root and workers')
+    expect(frame).not.toContain('Spawner workspace or Orchestrator BETA')
     expect(frame).toContain('1-')
     assertFits(frame, 60)
 
@@ -152,7 +152,7 @@ describe('responsive layout', () => {
     rerender(content())
     await new Promise(resolve => setTimeout(resolve, 30))
     frame = lastFrame() ?? ''
-    expect(frame).toContain('create root and workers')
+    expect(frame).toContain('Spawner workspace or Orchestrator BETA')
     expect(new Set(menuSeparatorColumns(frame)).size).toBe(1)
     assertFits(frame, 120)
     expect(writeSpy).toHaveBeenCalledWith('\x1b[3J\x1b[2J\x1b[H')

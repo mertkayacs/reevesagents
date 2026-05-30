@@ -31,12 +31,12 @@ export function Welcome() {
   const mascotVariant = pickMascotVariant(contentColumns)
   const actions = useMemo(() => {
     const rows: Array<{ label: string; hint: string; screen?: ScreenName; quit?: boolean }> = [
-      { label: 'New Run', hint: 'create root and workers', screen: 'NewRun' },
+      { label: 'New Run', hint: 'Spawner workspace or Orchestrator BETA', screen: 'NewRun' },
       { label: 'Runs', hint: 'open active and recent runs', screen: 'Runs' },
       { label: 'Doctor', hint: 'check local setup', screen: 'Doctor' },
       { label: 'Settings', hint: 'providers and paths', screen: 'Settings' },
-      { label: 'Approvals', hint: 'review pending requests', screen: 'Approvals' },
-      { label: 'Reference', hint: 'TUI, CLI, MCP, and roles', screen: 'Reference' },
+      { label: 'Approvals', hint: 'Orchestrator BETA requests', screen: 'Approvals' },
+      { label: 'Reference', hint: 'Spawner, Orchestrator BETA, CLI, MCP', screen: 'Reference' },
       { label: 'Credits', hint: 'about ReevesAgents', screen: 'Credits' },
       { label: 'Quit', hint: 'exit the TUI', quit: true },
     ]
@@ -99,8 +99,8 @@ export function Welcome() {
         </Box>
 
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Local tmux-first run manager for AI CLI agents.</Text>
-          <Text color={colors.text.dim}>TUI · MCP · CLI</Text>
+          <Text color={colors.text.dim}>Local tmux-first workspace manager for AI CLI terminals.</Text>
+          <Text color={colors.text.dim}>Spawner default · Orchestrator BETA · TUI · CLI</Text>
         </Box>
 
         <Box flexDirection="column" marginTop={1}>

@@ -1,4 +1,4 @@
-// Step 3/5: Root configuration. Provider, model, prompt, permissions, plus
+// Step 3/5: First terminal or Orchestrator root configuration. Provider, model, prompt, permissions, plus
 // conditional auth mode (cc only) and effort (cc and codex only).
 // Pickers cycle inline with Left/Right. Text fields edit inline with Enter.
 
@@ -46,22 +46,23 @@ function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
 export function NewRunRoot() {
   const { push, pop } = useRouter()
   const { state, updateRoot, reset } = useWizard()
+  const isSpawner = state.mode === 'spawner'
 
   const fields: Field[] = useMemo(() => {
     const list: Field[] = [
       { kind: 'picker', id: 'provider', label: 'Provider', current: state.root.provider, values: PROVIDERS },
       { kind: 'text', id: 'model', label: 'Model', value: state.root.model, helpText: 'e.g. claude-3-5-sonnet, gpt-4o, or empty for provider default', required: false },
-      { kind: 'text', id: 'prompt', label: 'Prompt', value: state.root.prompt, helpText: 'initial task for the root · enter newline · esc done', required: true },
+      { kind: 'text', id: 'prompt', label: 'Prompt', value: state.root.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'initial task for the root · enter newline · esc done', required: !isSpawner },
       { kind: 'picker', id: 'permissions', label: 'Permissions', current: state.root.permissions, values: PERMISSIONS_VALUES },
     ]
     if (state.root.provider === 'cc' || state.root.provider === 'codex') {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: state.root.effort, values: EFFORT_VALUES })
     }
     return list
-  }, [state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.effort])
+  }, [isSpawner, state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.effort])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'continue', label: 'Continue', hint: 'to workers' },
+    { id: 'continue', label: 'Continue', hint: isSpawner ? 'to additional terminals' : 'to workers' },
     { id: 'back', label: 'Back', hint: 'return to basics' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
@@ -129,11 +130,13 @@ export function NewRunRoot() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'New Run', 'Root']}
-      tagline="Configure the root agent. The root drives workers and runs the user task."
+      breadcrumb={['ReevesAgents', 'New Run', isSpawner ? 'First Terminal' : 'Root']}
+      tagline={isSpawner
+        ? 'Configure the first independent CLI terminal. It receives no ReevesAgents context.'
+        : 'Orchestrator mode is BETA. Configure the root agent that drives workers through MCP.'}
       statusKeys="enter edit/newline · ←→ cycle picker · esc done/back"
     >
-      <StepIndicator step={3} total={5} name="Root" />
+      <StepIndicator step={3} total={5} name={isSpawner ? 'First Terminal' : 'Root'} />
 
       {fields.map((field, idx) => {
         if (field.kind === 'text') {

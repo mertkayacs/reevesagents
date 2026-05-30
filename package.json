@@ -1,7 +1,7 @@
 {
   "name": "reevesagents",
   "version": "0.9.0",
-  "description": "Local tmux-first run manager for AI CLI agents",
+  "description": "Local tmux-first workspace manager for AI CLI terminals",
   "type": "module",
   "packageManager": "pnpm@11.1.0",
   "bin": {
@@ -70,6 +70,7 @@
     "codex",
     "opencode",
     "tmux",
+    "spawner",
     "orchestrator",
     "cli",
     "ink"

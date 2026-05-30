@@ -77,7 +77,7 @@ describe('Runs screen', () => {
 
     stdin.write('\u001B')
     await waitForInput()
-    expect(lastFrame() ?? '').toContain('Local tmux-first run manager')
+    expect(lastFrame() ?? '').toContain('Local tmux-first workspace manager')
 
     unmount()
   })
@@ -94,7 +94,7 @@ describe('Runs screen', () => {
     stdin.write('\r')
     await waitForInput()
 
-    expect(lastFrame() ?? '').toContain('Preset')
+    expect(lastFrame() ?? '').toContain('Run Mode')
     unmount()
   })
 
@@ -119,7 +119,7 @@ describe('Runs screen', () => {
 
     expect(frame).toContain('ReevesAgents')
     expect(frame).toContain('Runs')
-    expect(frame).toContain('Manage local agent runs')
+    expect(frame).toContain('Manage local tmux workspaces')
     unmount()
   })
 })

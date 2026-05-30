@@ -1,6 +1,8 @@
-# MCP Tool Guide
+# MCP Tool Guide (BETA)
 
-`reevesagents mcp` is the programmatic control plane for agents and operator clients. It uses the same local JSON registry and tmux runtime as the TUI and CLI. The CLI can also call the same tools directly with `reevesagents call <tool>`.
+`reevesagents mcp` is the Orchestrator BETA programmatic control plane for agents and operator clients. It uses the same local JSON registry and tmux runtime as the TUI and CLI. The CLI can also call the same tools directly with `reevesagents call <tool>`.
+
+Spawner mode does not use this path. Spawner terminals receive no ReevesAgents environment variables, no MCP config, no root/worker role, and no inbox or approval instructions.
 
 ## Caller Identity
 
@@ -12,7 +14,7 @@ Caller role is inferred when the MCP server starts:
 | `REEVES_SESSION_ID=<root-agent-id>` or `REEVES_AGENT_ID=<root-agent-id>` | root agent | Can inspect its run, control workers in its run, spawn workers, stop its run, and resolve worker approvals. |
 | `REEVES_SESSION_ID=<worker-agent-id>` or `REEVES_AGENT_ID=<worker-agent-id>` | worker agent | Can inspect itself, read its inbox, update its task status, request approval, and check its own approvals. |
 
-Agents also receive `REEVES_AGENT_ID`, `REEVES_RUN_ID`, `REEVES_ROLE`, and `REEVES_REGISTRY` for compatibility and direct context.
+Orchestrator BETA agents also receive `REEVES_AGENT_ID`, `REEVES_RUN_ID`, `REEVES_ROLE`, and `REEVES_REGISTRY` for compatibility and direct context.
 
 ## Tool Groups
 
