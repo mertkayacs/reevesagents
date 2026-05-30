@@ -746,7 +746,7 @@ export async function startMcpServer(): Promise<void> {
   const callerAgentId = process.env.REEVES_SESSION_ID ?? process.env.REEVES_AGENT_ID ?? null
 
   const server = new Server(
-    { name: 'reevesagents', version: '0.7.0' },
+    { name: 'reevesagents', version: '0.8.0' },
     { capabilities: { tools: {} } },
   )
 
