@@ -2,54 +2,75 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
+## 0.9.0 - Initial Public Prerelease
+
+### Added
+- Public prerelease package metadata, README, release readiness notes, and verification docs.
+- Release checks for typecheck, lint, unit tests, build, MCP smoke, and CLI smoke.
+- Opt-in real-provider approval smoke for end-to-end approval flows.
+
+### Changed
+- Set the package, CLI, MCP server, README, and Credits page version to `0.9.0`.
+- Cleaned up the main TUI pages with sectioned Runs, Run, Agents, and Agent Detail layouts.
+- Reorganized the changelog around versioned internal milestones.
+
 ## 0.8.0 - Verification And Release Docs
 
 ### Added
-- pnpm verify for portable local verification.
+- `pnpm verify` for portable local verification.
 - MCP stdio smoke and CLI smoke tests with isolated temp state.
+- Real tmux and provider smoke scripts for release validation.
 - Release readiness, testing, MCP tool, and project handoff docs.
 
 ## 0.7.0 - Run Management Polish
 
 ### Added
-- Persistent Welcome main menu and Runs dashboard.
+- Persistent Welcome main menu with Current Run, Runs, Doctor, Settings, Approvals, Reference, Credits, and Quit.
+- Runs dashboard with automatic cleanup of ended and stale runs.
 - Run hub, agent list, output pages, approvals pages, add-worker flow, and stop-run confirmation.
-- Per-run tmux sessions with the local registry as source of truth.
+
+### Changed
+- Moved each run to its own tmux session while keeping the local registry as the source of truth.
+- Renamed visible TUI actions from Open CLI to Open Agent.
 
 ## 0.6.0 - TUI Redesign
 
 ### Added
-- Ink-based TUI frame, header, rows, sections, dialogs, and responsive layout helpers.
+- Ink-based TUI frame, header, rows, sections, status bar, pagination, dialogs, and responsive layout helpers.
 - Dark ReevesAgents visual system with provider colors and terminal-friendly wordmark/mascot rendering.
 - New Run wizard with preset, basics, root, workers, review, and starting steps.
+
+### Removed
+- Legacy slash-command and hidden-help interaction patterns.
+- Old multi-pane frame model in favor of visible menu pages.
 
 ## 0.5.0 - CLI Operator Surface
 
 ### Added
-- Operator commands for context, runs, open, peek, stop, kill, setup, doctor, mcp, and call.
-- JSON output and MCP-backed call support for scripts.
-- Destructive command gates with --yes or ALLOW_DESTRUCTIVE=1.
+- `reevesagents context`, `runs`, `open`, `peek`, `stop`, `kill`, `setup`, `doctor`, `mcp`, and `call`.
+- JSON output and MCP-backed `call` support for scripts and human operator workflows.
+- Destructive command gates with `--yes` or `ALLOW_DESTRUCTIVE=1`.
 
 ## 0.4.0 - MCP Control Plane
 
 ### Added
-- MCP tools for lifecycle, tmux control, coordination, approvals, and diagnostics.
-- Role-aware caller handling for operators, roots, workers, and headless roots.
+- MCP tools for run discovery, lifecycle, tmux window control, coordination, approvals, and diagnostics.
+- Role-aware caller handling for external operators, root agents, workers, and headless roots.
 - Approval polling and inbox access for root-driven worker workflows.
 
 ## 0.3.0 - Tmux Runtime
 
 ### Added
-- Runtime support for run and worker lifecycle operations.
+- Runtime support for starting runs, spawning workers, opening agent windows, peeking output, sending text/keys, interrupting agents, killing workers, and stopping runs.
 - Provider launch helpers for Claude Code, Codex CLI, OpenCode CLI, and Hermes.
-- Startup prompts for role, run id, agent id, and MCP context.
+- Startup prompts that give agents their role, run id, agent id, and MCP context.
 
 ## 0.2.0 - Local State
 
 ### Added
-- Local JSON registry under ~/.reeves.
+- Local JSON registry under `~/.reeves`.
 - Run, agent, approval, inbox, config, and preset state.
-- State redaction and isolated registry support.
+- State redaction and isolated registry support for tests and smoke runs.
 
 ## 0.1.0 - Project Scaffold
 
