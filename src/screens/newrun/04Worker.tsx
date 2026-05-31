@@ -51,7 +51,7 @@ export function NewRunWorker() {
         current: worker.model,
         values: modelValuesForProvider(worker.provider),
         display: modelDisplayName(worker.model),
-        hint: 'provider file · ← → cycle',
+        hint: 'optional · blank uses CLI default',
       },
       { kind: 'text', id: 'prompt', label: 'Prompt', value: worker.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
       { kind: 'text', id: 'workingDir', label: 'Working Dir', value: worker.workingDir, helpText: 'optional, defaults to the run working dir', required: false },

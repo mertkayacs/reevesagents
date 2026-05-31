@@ -1,25 +1,8 @@
-export const HERMES_MODEL_SOURCE = 'https://hermes-agent.nousresearch.com/docs/api/model-catalog.json'
+export const HERMES_MODEL_SOURCE = 'curated Hermes model ids'
 
 export const HERMES_MODELS = [
-  'openrouter:anthropic/claude-opus-4.8',
-  'openrouter:anthropic/claude-opus-4.8-fast',
-  'openrouter:anthropic/claude-sonnet-4.6',
-  'openrouter:anthropic/claude-haiku-4.5',
-  'openrouter:openai/gpt-5.5',
-  'openrouter:openai/gpt-5.5-pro',
-  'openrouter:openai/gpt-5.4-mini',
-  'openrouter:google/gemini-3-pro-preview',
-  'openrouter:google/gemini-3.1-pro-preview',
-  'openrouter:google/gemini-3.5-flash',
-  'openrouter:moonshotai/kimi-k2.6',
-  'openrouter:minimax/minimax-m2.7',
-  'openrouter:z-ai/glm-5.1',
-  'openrouter:deepseek/deepseek-v4-pro',
-  'nous:anthropic/claude-opus-4.8',
-  'nous:anthropic/claude-sonnet-4.6',
-  'nous:anthropic/claude-haiku-4.5',
-  'nous:openai/gpt-5.5',
-  'nous:openai/gpt-5.5-pro',
-  'nous:openai/gpt-5.4-mini',
-  'nous:moonshotai/kimi-k2.6',
+  'anthropic/claude-sonnet-4',
+  'anthropic/claude-opus-4',
+  'anthropic/claude-haiku-4-5',
+  'openai/gpt-5',
 ] as const

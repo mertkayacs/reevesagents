@@ -55,7 +55,7 @@ Install is passive: no postinstall, no provider config writes, no background ser
 | `opencode` | OpenCode CLI | `opencode` | Supports `--prompt` and `--model`; ReevesAgents does not add undocumented skip flags |
 | `hermes` | Hermes | `hermes chat` | Supports model and `--yolo` skip permissions |
 
-The TUI model picker is provider-scoped. The values live in `src/launcher/model-data/*.ts`, with one source file per provider. Choosing `provider default` leaves the provider CLI to use its own configured default. Hermes catalog entries use `provider:model` and launch as `hermes chat --provider <provider> --model <model>`.
+The TUI model picker is provider-scoped and intentionally small. Choosing `provider default` leaves the provider CLI to use its own configured default and ReevesAgents does not pass `--model`. The curated optional values live in `src/launcher/model-data/*.ts`, with one source file per provider.
 
 Default permissions are `ask`. Use `skip` only in trusted disposable workspaces.
 
@@ -125,6 +125,14 @@ Spawner mode can also start from the CLI:
 ```sh
 reevesagents spawn codex:builder cc:reviewer --name "release check" --prompt "Inspect the release state."
 ```
+
+Terminal specs can include an optional model as `provider:nickname:model`:
+
+```sh
+reevesagents spawn cc:planner:sonnet codex:builder:gpt-5-codex
+```
+
+Leave the model off to use the provider CLI default.
 
 ## TUI Pages
 

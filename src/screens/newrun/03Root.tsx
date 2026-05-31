@@ -62,7 +62,7 @@ export function NewRunRoot() {
         current: state.root.model,
         values: modelValuesForProvider(state.root.provider),
         display: modelDisplayName(state.root.model),
-        hint: 'provider file · ← → cycle',
+        hint: 'optional · blank uses CLI default',
       },
       { kind: 'text', id: 'prompt', label: 'Prompt', value: state.root.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
       { kind: 'picker', id: 'permissions', label: 'Permissions', current: state.root.permissions, values: PERMISSIONS_VALUES },
