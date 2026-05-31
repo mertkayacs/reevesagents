@@ -94,7 +94,7 @@ describe('Runs screen', () => {
     stdin.write('\r')
     await waitForInput()
 
-    expect(lastFrame() ?? '').toContain('Run Mode')
+    expect(lastFrame() ?? '').toContain('Run Name')
     unmount()
   })
 

@@ -5,8 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CheckResult } from '../state/types.js'
-import { detectAvailable, inspectProviderCompatibility, PROVIDERS } from './providers.js'
-import { isRegistered } from '../mcp-setup.js'
+import { detectAvailable, inspectProviderCompatibility } from './providers.js'
 import { listRuns, runsDir, stateRoot } from '../state/runs.js'
 
 export interface DoctorResult {
@@ -157,17 +156,6 @@ function checkRunsState(): CheckResult {
   }
 }
 
-function checkMcpRegistration(): CheckResult {
-  const registered = PROVIDERS.filter(provider => isRegistered(provider))
-  return {
-    name: 'mcp config',
-    status: 'ok',
-    detail: registered.length > 0
-      ? registered.join(', ')
-      : 'not registered; only needed for Orchestrator BETA',
-  }
-}
-
 export function runDoctor(): DoctorResult {
   return {
     checks: [
@@ -176,7 +164,6 @@ export function runDoctor(): DoctorResult {
       checkTmux(),
       checkProviders(),
       checkProviderCompatibility(),
-      checkMcpRegistration(),
       checkPathAccess('state dir', stateRoot()),
       checkPathAccess('runs dir', runsDir()),
       checkPathAccess('presets dir', join(stateRoot(), 'presets')),

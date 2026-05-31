@@ -28,8 +28,6 @@ describe('NewRunWorker', () => {
       setSelectedRunId: vi.fn(),
       selectedAgentId: null,
       setSelectedAgentId: vi.fn(),
-      selectedApprovalId: null,
-      setSelectedApprovalId: vi.fn(),
       selectedWorkerIdx: 0,
       setSelectedWorkerIdx: vi.fn(),
       canBack: false,
@@ -83,6 +81,6 @@ describe('NewRunWorker', () => {
     )
 
     const output = lastFrame()
-    expect(output).toContain('Worker')
+    expect(output).toContain('Terminal')
   })
 })

@@ -1,7 +1,4 @@
-// Agent task: read-only view of the agent's current task status and note.
-// Status is owned by the agent via the update_task MCP tool and monitored by
-// the root agent. No human-driven Set Working / Set Done / Set Blocked here;
-// those were removed because they bypass the source-of-truth (the agent itself).
+// Terminal prompt/status: read-only view of the saved initial prompt and status.
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
@@ -30,11 +27,11 @@ export function AgentTask() {
 
   if (!agent || !run) {
     return (
-      <Frame breadcrumb={['ReevesAgents', 'Runs']} statusContext="Agent not found">
+      <Frame breadcrumb={['ReevesAgents', 'Runs']} statusContext="Terminal not found">
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Agent not found.</Text>
+          <Text color={colors.text.dim}>Terminal not found.</Text>
           <Box marginTop={1}>
-            <Row selected={true} primary="Back" hint="return to agent detail" />
+            <Row selected={true} primary="Back" hint="return to terminal detail" />
           </Box>
         </Box>
       </Frame>
@@ -45,11 +42,11 @@ export function AgentTask() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Agents', agent.nickname, isSpawner ? 'Prompt' : 'Task']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries', agent.nickname, isSpawner ? 'Prompt' : 'Task']}
       meta={[{ label: 'status', value: agent.task_status }]}
       tagline={isSpawner
         ? 'Read-only. This terminal received only the initial prompt shown here.'
-        : 'Read-only. The agent updates this via update_task MCP. Root monitors it.'}
+        : 'Read-only. This run type is not managed by the spawner package.'}
       statusKeys="enter back · esc back"
     >
       <Box flexDirection="column">

@@ -1,4 +1,4 @@
-// Step 5/5: Review the full run config and start, edit, or cancel.
+// Step 4/4: Review the full run config and start, edit, or cancel.
 // Only the action rows are selectable; the summary above is read-only.
 
 import React, { useState } from 'react'
@@ -15,11 +15,10 @@ type ActionId = 'start' | 'back' | 'cancel'
 export function NewRunReview() {
   const { push, pop } = useRouter()
   const { state, reset } = useWizard()
-  const isSpawner = state.mode === 'spawner'
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'start', label: 'Start Run', hint: isSpawner ? 'launch independent tmux terminals' : 'launch tmux windows for the BETA orchestrator agents' },
-    { id: 'back', label: 'Back to Edit', hint: isSpawner ? 'return to terminals step' : 'return to workers step' },
+    { id: 'start', label: 'Start Run', hint: 'launch independent tmux terminals' },
+    { id: 'back', label: 'Back to Edit', hint: 'return to terminals step' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
 
@@ -49,20 +48,18 @@ export function NewRunReview() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Review']}
-      tagline={isSpawner
-        ? 'Review the independent CLI terminals, then start.'
-        : 'Review the Orchestrator BETA root/worker run, then start.'}
+      tagline="Review the independent CLI terminals, then start."
       statusKeys="enter select · ↑↓ move · esc back"
     >
-      <StepIndicator step={5} total={5} name="Review" />
+      <StepIndicator step={4} total={4} name="Review" />
 
       <Section label="Run" />
-      <Row selected={false} primary="Mode" trailing={isSpawner ? 'Spawner' : 'Orchestrator (BETA)'} />
+      <Row selected={false} primary="Mode" trailing="Spawner" />
       <Row selected={false} primary="Name" trailing={state.name || '(unset)'} />
       <Row selected={false} primary="Working Dir" trailing={state.workingDir} />
       <SectionEnd />
 
-      <Section label={isSpawner ? 'First Terminal' : 'Root (BETA)'} />
+      <Section label="First Terminal" />
       <Row selected={false} primary="Provider" trailing={state.root.provider} />
       <Row selected={false} primary="Model" trailing={state.root.model || '(default)'} />
       <Row selected={false} primary="Prompt" trailing={promptPreview || '(none)'} />
@@ -71,12 +68,12 @@ export function NewRunReview() {
 
       {state.workers.length > 0 && (
         <>
-          <Section label={`${isSpawner ? 'Additional Terminals' : 'Workers'} (${state.workers.length})`} />
+          <Section label={`Additional Terminals (${state.workers.length})`} />
           {state.workers.map((worker, idx) => (
             <Row
               key={`worker-${idx}`}
               selected={false}
-              primary={worker.nickname || (isSpawner ? `terminal-${idx + 2}` : `worker-${idx + 1}`)}
+              primary={worker.nickname || `terminal-${idx + 2}`}
               trailing={`${worker.provider} / ${worker.model || '(default)'} / ${worker.permissions}`}
             />
           ))}
@@ -85,13 +82,13 @@ export function NewRunReview() {
       )}
 
       <Section label="Planned Tmux Windows" />
-      <Row selected={false} primary={isSpawner ? 'terminal 1' : 'root'} trailing={isSpawner ? (state.root.nickname || state.root.provider) : `root-${state.root.provider}`} />
+      <Row selected={false} primary="terminal 1" trailing={state.root.nickname || state.root.provider} />
       {state.workers.map((worker, idx) => (
         <Row
           key={`tmux-${idx}`}
           selected={false}
-          primary={isSpawner ? `terminal ${idx + 2}` : `worker ${idx + 1}`}
-          trailing={worker.nickname || (isSpawner ? worker.provider : `${worker.provider}-worker-${idx + 1}`)}
+          primary={`terminal ${idx + 2}`}
+          trailing={worker.nickname || worker.provider}
         />
       ))}
       <SectionEnd />

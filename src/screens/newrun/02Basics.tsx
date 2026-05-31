@@ -1,4 +1,4 @@
-// Step 2/5: Basics. Run name + working directory.
+// Step 1/4: Basics. Run name + working directory.
 // One screen, inline editing. Enter on a field enters edit mode; Enter again commits.
 // Esc inside edit cancels back to list. Esc on list pops the wizard.
 
@@ -27,8 +27,8 @@ export function NewRunBasics() {
   ], [state.name, state.workingDir])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'continue', label: 'Continue', hint: state.mode === 'spawner' ? 'to first terminal' : 'to root config' },
-    { id: 'back', label: 'Back', hint: state.mode === 'spawner' ? 'return to mode' : 'return to preset' },
+    { id: 'continue', label: 'Continue', hint: 'to first terminal' },
+    { id: 'back', label: 'Back', hint: 'return to runs' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
 
@@ -74,12 +74,10 @@ export function NewRunBasics() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Basics']}
-      tagline={state.mode === 'spawner'
-        ? 'Spawner mode creates a multi-terminal tmux workspace with no MCP injection.'
-        : 'Orchestrator mode is BETA and creates connected root/worker agents.'}
+      tagline="Create a multi-terminal tmux workspace for independent CLI sessions."
       statusKeys="enter edit · ↑↓ move · esc back"
     >
-      <StepIndicator step={2} total={5} name="Basics" />
+      <StepIndicator step={1} total={4} name="Basics" />
 
       {fields.map((field, idx) => (
         <TextField

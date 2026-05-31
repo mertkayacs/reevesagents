@@ -134,15 +134,15 @@ export function AgentOutput() {
     return (
       <Frame
         breadcrumb={['ReevesAgents', 'Runs']}
-        statusContext="Agent not found"
+        statusContext="Terminal not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Agent not found.</Text>
+          <Text color={colors.text.dim}>Terminal not found.</Text>
           <Box marginTop={1}>
             <Row
               selected={true}
               primary="Back"
-              hint="return to agents list"
+              hint="return to terminals list"
             />
           </Box>
         </Box>
@@ -158,8 +158,8 @@ export function AgentOutput() {
   } else if (selected?.type === 'action') {
     const actionLabels: Record<RowItem, string> = {
       RefreshNow: 'fetch output immediately',
-      OpenCLI: isHeadless ? 'headless root has no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this agent window',
-      Back: 'return to agent detail',
+      OpenCLI: isHeadless ? 'no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this window',
+      Back: isSpawner ? 'return to terminal detail' : 'return to entry detail',
     }
     statusContext = actionLabels[selected.action]
   }
@@ -169,14 +169,14 @@ export function AgentOutput() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Agents', agent.nickname, 'Output']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries', agent.nickname, 'Output']}
       meta={[
         { label: 'lines', value: outputLines.length === 0 ? '0' : `${shownStart}-${shownEnd}/${outputLines.length}` },
         { label: 'refresh', value: '5s' },
       ]}
       tagline={isSpawner
         ? 'Recent output from this independent terminal. Refreshes every 5 seconds.'
-        : isHeadless ? 'Headless root has no tmux pane output.' : 'Recent output from this agent\'s tmux pane. Refreshes every 5 seconds.'}
+        : isHeadless ? 'This entry has no tmux pane output.' : 'Recent output from this tmux pane. Refreshes every 5 seconds.'}
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ output pages · enter select · esc back"
     >
@@ -217,13 +217,13 @@ export function AgentOutput() {
 
           const hints: Record<RowItem, string> = {
             RefreshNow: 'peek immediately',
-            OpenCLI: isHeadless ? 'headless root has no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this agent window',
-            Back: 'return to agent detail',
+            OpenCLI: isHeadless ? 'no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this window',
+            Back: isSpawner ? 'return to terminal detail' : 'return to entry detail',
           }
 
           const labels: Record<RowItem, string> = {
             RefreshNow: 'Refresh now',
-            OpenCLI: isSpawner ? 'Open Terminal' : 'Open Agent',
+            OpenCLI: isSpawner ? 'Open Terminal' : 'Open Window',
             Back: 'Back',
           }
 

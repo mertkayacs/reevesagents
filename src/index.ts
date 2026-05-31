@@ -1,4 +1,4 @@
-// Programmatic API: runtime, doctor, run state, and MCP surface.
+// Programmatic API: stable spawner runtime, doctor, and run state.
 // Inputs: function arguments. Outputs: typed return values.
 // Invariant: all exports are pure functions or constants; no side effects on import.
 
@@ -6,18 +6,22 @@ export { ErrorBoundary } from './components/ErrorBoundary.js'
 
 export {
   startRun,
-  spawnWorker,
   openReeves,
   openAgent,
   peekAgent,
-  sendText,
-  sendKey,
-  interrupt,
   killAgent,
   stopRun,
 } from './launcher/runtime.js'
 export { runDoctor } from './launcher/doctor.js'
 export { detectAvailable, buildCommand, BIN, PROVIDERS, isProvider } from './launcher/providers.js'
+export {
+  MODEL_CATALOG,
+  PROVIDER_DEFAULT_MODEL,
+  PROVIDER_DEFAULT_MODEL_LABEL,
+  modelDisplayName,
+  modelSourceForProvider,
+  modelValuesForProvider,
+} from './launcher/model-catalog.js'
 
 export {
   listRuns,
@@ -35,9 +39,6 @@ export {
   listSavedTrees, loadSavedTree, saveSavedTree, deleteSavedTree, presetsDir,
 } from './state/store.js'
 
-export { startMcpServer } from './mcp.js'
-export { registerAll, register, unregister, isRegistered } from './mcp-setup.js'
-
 export type {
   Provider,
   Permissions,
@@ -50,7 +51,6 @@ export type {
   Message,
   RunRecord,
   AgentRecord,
-  RunApproval,
   CheckResult,
   RouterContextValue,
 } from './state/types.js'

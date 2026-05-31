@@ -29,6 +29,7 @@ let registry = ''
 function makeRun(): RunRecord {
   return {
     id: RUN_ID,
+    mode: 'spawner',
     name: 'existing-run',
     status: 'running',
     tmux_session: 'reeves-existing',
@@ -54,8 +55,6 @@ function makeContext(patch: Partial<RouterContextValue> = {}): RouterContextValu
     setSelectedRunId: vi.fn(),
     selectedAgentId: null,
     setSelectedAgentId: vi.fn(),
-    selectedApprovalId: null,
-    setSelectedApprovalId: vi.fn(),
     selectedCheckName: null,
     setSelectedCheckName: vi.fn(),
     selectedWorkerIdx: null,
@@ -125,14 +124,17 @@ describe('AddWorker', () => {
     unmount()
   })
 
-  it('does not spawn when the prompt is empty', async () => {
-    const { stdin, lastFrame, unmount } = renderAddWorker()
+  it('allows spawning a terminal without an initial prompt', async () => {
+    const { stdin, unmount } = renderAddWorker()
 
     for (let i = 0; i < 6; i++) await press(stdin, down)
     await press(stdin, '\r')
 
-    expect(RuntimeModule.spawnWorker).not.toHaveBeenCalled()
-    expect(lastFrame() ?? '').toContain('Prompt is required')
+    expect(RuntimeModule.spawnWorker).toHaveBeenCalledOnce()
+    expect(vi.mocked(RuntimeModule.spawnWorker).mock.calls[0]![0]).toMatchObject({
+      run_id: RUN_ID,
+      task: '',
+    })
 
     unmount()
   })

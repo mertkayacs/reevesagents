@@ -1,17 +1,14 @@
 // CLI entry point. No args launches TUI; subcommands provide operator control.
 // Inputs: process.argv. Outputs: TUI render or stdout text/JSON.
-// Invariant: full control lives in TUI/MCP, not in CLI-only command trees.
+// Invariant: this package exposes the stable spawner surface only.
 
 import React from 'react'
 import { render } from 'ink'
 import { Command } from 'commander'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { Router } from './router.js'
 import { runDoctor } from './launcher/doctor.js'
 import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
-import { registerAll } from './mcp-setup.js'
-import { handleMcpTool, startMcpServer } from './mcp.js'
 import { listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
 import type { AgentRecord, Provider, RunRecord } from './state/types.js'
@@ -51,8 +48,8 @@ function resolveAgent(id: string): AgentRecord {
   if (exact) return exact
   const matches = agents.filter(agent => agent.id.startsWith(id) || agent.nickname.startsWith(id))
   if (matches.length === 1) return matches[0]!
-  if (matches.length > 1) throw new Error(`ambiguous agent id: ${matches.map(agent => agent.id).join(', ')}`)
-  throw new Error(`agent not found: ${id}`)
+  if (matches.length > 1) throw new Error(`ambiguous terminal id: ${matches.map(agent => agent.id).join(', ')}`)
+  throw new Error(`terminal not found: ${id}`)
 }
 
 function resolveOpenTarget(id: string): { run: RunRecord, session: string, windowId: string, label: string } {
@@ -198,91 +195,12 @@ function requireDestructiveConfirmation(opts: { yes?: boolean }, command: string
   throw new Error(`refusing to ${command} without --yes or ALLOW_DESTRUCTIVE=1`)
 }
 
-function callerAgentId(): string | null {
-  return process.env.REEVES_SESSION_ID ?? process.env.REEVES_AGENT_ID ?? null
-}
-
-function parseToolJson(result: Awaited<ReturnType<typeof handleMcpTool>>, tool: string): unknown {
-  const text = result.content[0]?.text ?? ''
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    parsed = text
-  }
-  if ('isError' in result && result.isError) {
-    const message = typeof parsed === 'object' && parsed !== null && 'error' in parsed
-      ? String((parsed as { error: unknown }).error)
-      : text
-    throw new Error(`${tool}: ${message}`)
-  }
-  return parsed
-}
-
-function printPayload(payload: unknown): void {
-  if (typeof payload === 'string') {
-    console.log(payload)
-    return
-  }
-  console.log(JSON.stringify(payload, null, 2))
-}
-
-function readJsonArgs(inlineJson: string | undefined, filePath: string | undefined): Record<string, unknown> {
-  const source = filePath
-    ? readFileSync(filePath, 'utf8')
-    : inlineJson !== undefined
-      ? inlineJson
-      : process.stdin.isTTY
-        ? '{}'
-        : readFileSync(0, 'utf8')
-  const trimmed = source.trim()
-  if (!trimmed) return {}
-  const parsed = JSON.parse(trimmed) as unknown
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('tool arguments must be a JSON object')
-  }
-  return parsed as Record<string, unknown>
-}
-
 function parseTerminalSpec(spec: string): { provider: Provider; nickname?: string; model: string } {
   const [providerRaw = '', nickname, model = ''] = spec.split(':')
   if (providerRaw !== 'cc' && providerRaw !== 'codex' && providerRaw !== 'opencode' && providerRaw !== 'hermes') {
     throw new Error(`terminal spec must start with cc, codex, opencode, or hermes: ${spec}`)
   }
   return { provider: providerRaw, nickname: nickname || undefined, model }
-}
-
-function printContext(payload: unknown): void {
-  if (typeof payload !== 'object' || payload === null) {
-    console.log(String(payload))
-    return
-  }
-
-  const data = payload as {
-    role?: string
-    agent?: Partial<AgentRecord>
-    run?: Partial<RunRecord>
-    root?: Partial<AgentRecord> | null
-    workers?: Array<Partial<AgentRecord>>
-    runs?: Array<Partial<RunRecord>>
-    approvals?: unknown[]
-    controls?: Record<string, unknown>
-  }
-
-  console.log(`role        ${data.role ?? 'unknown'}`)
-  if (data.agent) console.log(`agent       ${data.agent.id ?? '-'}  ${data.agent.nickname ?? '-'}  ${data.agent.task_status ?? '-'}`)
-  if (data.run) console.log(`run         ${data.run.id ?? '-'}  ${data.run.status ?? '-'}  ${data.run.name ?? '-'}`)
-  if (data.root) console.log(`root        ${data.root.id ?? '-'}  ${data.root.nickname ?? '-'}  ${data.root.task_status ?? '-'}`)
-  if (data.workers) console.log(`workers     ${data.workers.length}`)
-  if (data.approvals) console.log(`approvals   ${data.approvals.length}`)
-  if (data.runs) console.log(`runs        ${data.runs.length}`)
-  if (data.controls) {
-    const controls = Object.entries(data.controls)
-      .filter(([, enabled]) => enabled === true)
-      .map(([name]) => name)
-      .join(', ')
-    if (controls) console.log(`controls    ${controls}`)
-  }
 }
 
 program
@@ -320,85 +238,6 @@ program
   })
 
 program
-  .command('mcp')
-  .description('start Orchestrator BETA MCP server over stdio')
-  .action(async () => {
-    await startMcpServer()
-  })
-
-program
-  .command('call <tool> [json]')
-  .description('BETA: call one Orchestrator MCP tool using JSON arguments')
-  .option('--file <path>', 'read JSON arguments from a file')
-  .option('--caller <agent-id>', 'act as a root or worker agent caller')
-  .action(async (tool, json, opts) => {
-    try {
-      const args = readJsonArgs(json, opts.file)
-      const payload = parseToolJson(await handleMcpTool(tool, args, opts.caller ?? callerAgentId()), tool)
-      printPayload(payload)
-    } catch (err) {
-      console.error(err instanceof Error ? err.message : String(err))
-      process.exit(1)
-    }
-  })
-
-program
-  .command('context')
-  .description('show caller role, current run, terminals/agents, approvals, and controls')
-  .option('--json', 'output JSON')
-  .action(async (opts) => {
-    try {
-      const payload = parseToolJson(await handleMcpTool('context', {}, callerAgentId()), 'context')
-      if (opts.json) {
-        console.log(JSON.stringify(payload, null, 2))
-        return
-      }
-      printContext(payload)
-    } catch (err) {
-      console.error(err instanceof Error ? err.message : String(err))
-      process.exit(1)
-    }
-  })
-
-program
-  .command('setup', { hidden: true })
-  .description('BETA: register reevesagents as an MCP server for Orchestrator mode')
-  .option('--json', 'output JSON array')
-  .action((opts) => {
-    const results = registerAll()
-    if (opts.json) {
-      console.log(JSON.stringify(results, null, 2))
-      return
-    }
-    console.log('Orchestrator mode is BETA. This command writes MCP config entries.')
-    for (const result of results) {
-      const state = result.registered ? 'registered' : result.detected ? 'detected, not registered' : 'not found'
-      console.log(`${result.cli.padEnd(14)} ${state}${result.note ? ` (${result.note})` : ''}`)
-    }
-  })
-
-const orchestrator = program
-  .command('orchestrator')
-  .description('BETA: connected root/worker agent coordination')
-
-orchestrator
-  .command('setup')
-  .description('register MCP configs for Orchestrator BETA mode')
-  .option('--json', 'output JSON array')
-  .action((opts) => {
-    const results = registerAll()
-    if (opts.json) {
-      console.log(JSON.stringify(results, null, 2))
-      return
-    }
-    console.log('Orchestrator mode is BETA. This command writes MCP config entries.')
-    for (const result of results) {
-      const state = result.registered ? 'registered' : result.detected ? 'detected, not registered' : 'not found'
-      console.log(`${result.cli.padEnd(14)} ${state}${result.note ? ` (${result.note})` : ''}`)
-    }
-  })
-
-program
   .command('runs')
   .description('list runs')
   .option('--json', 'output JSON array')
@@ -416,22 +255,22 @@ program
       const agents = listAgents(run.id)
       const root = agents.find(agent => agent.role === 'root')
       const note = agents.find(agent => agent.task_note.trim())?.task_note ?? ''
-      const mode = run.mode === 'spawner' ? 'spawn' : 'orch-beta'
-      const noun = run.mode === 'spawner' ? 'terminals' : 'agents'
+      const mode = run.mode === 'spawner' ? 'spawn' : 'external'
+      const noun = run.mode === 'spawner' ? 'terminals' : 'entries'
       console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  ${mode.padEnd(9)}  ${(root?.provider ?? '-').padEnd(8)}  ${String(agents.length).padStart(2)} ${noun.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
     }
   })
 
 program
   .command('open <id>')
-  .description('open a run reeves window or a terminal/agent window')
+  .description('open a run reeves window or a terminal window')
   .action((id) => {
     openTarget(id)
   })
 
 program
-  .command('peek <terminal-or-agent-id>')
-  .description('show recent output from one terminal/agent')
+  .command('peek <terminal-id>')
+  .description('show recent output from one terminal')
   .option('-n, --lines <n>', 'number of lines', '20')
   .option('--json', 'output JSON with lines array')
   .action((id, opts) => {
@@ -443,7 +282,7 @@ program
       return
     }
     if (!output) {
-      console.error(`no output for terminal/agent ${agent.id}`)
+      console.error(`no output for terminal ${agent.id}`)
       process.exit(1)
     }
     console.log(output)
@@ -461,11 +300,11 @@ program
   })
 
 program
-  .command('kill <terminal-or-agent-id>')
-  .description('close one spawner terminal or Orchestrator worker')
+  .command('kill <terminal-id>')
+  .description('close one spawner terminal')
   .option('-y, --yes', 'confirm close')
   .action((id, opts) => {
-    requireDestructiveConfirmation(opts, 'close terminal/worker')
+    requireDestructiveConfirmation(opts, 'close terminal')
     const agent = resolveAgent(id)
     const killed = killAgent(agent.id)
     console.log(`closed ${killed.id.slice(0, 8)}  ${killed.nickname}`)
@@ -492,7 +331,7 @@ const knownSubcommands = new Set(program.commands.map(command => command.name())
 const firstArg = process.argv[2]
 
 if (!firstArg || (!knownSubcommands.has(firstArg) && !firstArg.startsWith('--'))) {
-  // tmux is required: window-based terminal/agent navigation only works inside a tmux session.
+  // tmux is required: window-based terminal navigation only works inside a tmux session.
   // If launched outside tmux on an interactive terminal, auto-wrap into a session
   // named "reeves" and re-exec ourselves there. Subsequent launches attach to the
   // same app-owned session and clear unrelated windows there. Set

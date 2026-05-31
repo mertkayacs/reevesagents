@@ -1,5 +1,5 @@
 // Setup and environment health list. Shows status glyphs, refresh actions.
-// Recheck and Setup MCP show a spinner during work. Enter on check navigates to detail page.
+// Recheck shows a spinner during work. Enter on check navigates to detail page.
 // Paginates check rows when the list exceeds available terminal height.
 
 import React, { useEffect, useMemo, useState } from 'react'
@@ -15,7 +15,6 @@ import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { runDoctor } from '../launcher/doctor.js'
-import { registerAll } from '../mcp-setup.js'
 
 const CHROME_ROWS = 17
 
@@ -50,18 +49,12 @@ export function Doctor() {
   const pagedChecks = checks.slice((page - 1) * pageSize, page * pageSize)
   const paginOffset = totalPages > 1 ? 1 : 0
   const actionOffset = pagedChecks.length + paginOffset
-  const totalItems = actionOffset + 3  // Recheck, Setup MCP, Back
+  const totalItems = actionOffset + 2  // Recheck, Back
 
   const selectedCheck = selectedIdx < pagedChecks.length ? pagedChecks[selectedIdx] : null
 
   const handleRecheck = () => {
     setIsSpinning(true)
-    setTimeout(() => { setRefreshKey(k => k + 1); setIsSpinning(false) }, 200)
-  }
-
-  const handleSetupMCP = () => {
-    setIsSpinning(true)
-    registerAll()
     setTimeout(() => { setRefreshKey(k => k + 1); setIsSpinning(false) }, 200)
   }
 
@@ -77,8 +70,7 @@ export function Doctor() {
       }
       if (selectedIdx === pagedChecks.length && totalPages > 1) return  // pagination row
       if (selectedIdx === actionOffset) { handleRecheck(); return }
-      if (selectedIdx === actionOffset + 1) { handleSetupMCP(); return }
-      if (selectedIdx === actionOffset + 2) { pop(); return }
+      if (selectedIdx === actionOffset + 1) { pop(); return }
     }
   })
 
@@ -90,7 +82,7 @@ export function Doctor() {
         { label: 'warn', value: String(counts.warn) },
         { label: 'fail', value: String(counts.fail) },
       ]}
-      tagline="Setup and environment health. Setup MCP is only for Orchestrator BETA."
+      tagline="Setup and environment health for the spawner TUI and CLI."
       statusContext={selectedCheck ? `${selectedCheck.name}: ${selectedCheck.detail}` : ''}
     >
       <Primary>
@@ -131,8 +123,7 @@ export function Doctor() {
         <Box marginTop={1} />
         <Section label="Actions" />
         <Row selected={selectedIdx === actionOffset} primary="Recheck" hint="run doctor again" />
-        <Row selected={selectedIdx === actionOffset + 1} primary="Setup MCP (BETA)" hint="write Orchestrator MCP entries" />
-        <Row selected={selectedIdx === actionOffset + 2} primary="Back" hint="return to previous page" />
+        <Row selected={selectedIdx === actionOffset + 1} primary="Back" hint="return to previous page" />
         <SectionEnd />
       </Primary>
     </Frame>

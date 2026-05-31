@@ -1,18 +1,16 @@
-// Settings page: single page showing providers, state paths, and setup actions.
-// Providers are selectable; actions manage setup and detection.
+// Settings page: single page showing providers, state paths, and local actions.
+// Providers are selectable; actions manage detection.
 
 import React, { useMemo, useState } from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, useInput } from 'ink'
 import { Frame } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
-import { Spinner } from '../components/Spinner.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
 import { providerColor } from '../utils/display.js'
-import { registerAll, isRegistered } from '../mcp-setup.js'
 import { runsDir, stateRoot } from '../state/runs.js'
 import { presetsDir } from '../state/store.js'
 import { configPath } from '../state/config.js'
@@ -45,24 +43,15 @@ export function Settings() {
   const { pop } = useRouter()
   const { toast } = useToast()
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const [isSetupInProgress, setIsSetupInProgress] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const available = useMemo(() => detectAvailable(), [refreshKey])
-  const registered = useMemo(() => {
-    const result = {} as Record<typeof PROVIDERS[number], boolean>
-    for (const provider of PROVIDERS) {
-      result[provider] = isRegistered(provider)
-    }
-    return result
-  }, [refreshKey])
 
   const rows: SettingsRow[] = [
     ...PROVIDERS.map(p => ({ type: 'provider' as const, id: p, provider: p, selectable: true })),
     { type: 'statePath' as const, id: 'state', selectable: false },
     { type: 'statePath' as const, id: 'runs', selectable: false },
     { type: 'statePath' as const, id: 'presets', selectable: false },
-    { type: 'action' as const, id: 'setupMCP', selectable: true },
     { type: 'action' as const, id: 'recheck', selectable: true },
     { type: 'action' as const, id: 'showConfig', selectable: true },
     { type: 'action' as const, id: 'back', selectable: true },
@@ -82,18 +71,6 @@ export function Settings() {
     const row = selectableRows[currentIdx]
     if (!row) return
 
-    if (row.id === 'setupMCP') {
-      setIsSetupInProgress(true)
-      try {
-        // brief pause so the spinner is visible; registerAll is near-instant
-        await new Promise(resolve => setTimeout(resolve, 500))
-        registerAll()
-        setRefreshKey(k => k + 1)
-      } finally {
-        setIsSetupInProgress(false)
-      }
-      return
-    }
     if (row.id === 'recheck') {
       setRefreshKey(k => k + 1)
       return
@@ -109,7 +86,6 @@ export function Settings() {
   }
 
   useInput((_input, key) => {
-    if (isSetupInProgress) return
     if (key.escape || key.backspace) { pop(); return }
     if (key.upArrow) { moveSelection(-1); return }
     if (key.downArrow) { moveSelection(1); return }
@@ -121,7 +97,6 @@ export function Settings() {
 
   const installedCount = Object.values(available).filter(Boolean).length
   const totalCount = PROVIDERS.length
-  const registeredCount = Object.values(registered).filter(Boolean).length
 
   // Selected provider becomes a one-line StatusBar context.
   const statusContext = selectedProvider
@@ -135,27 +110,17 @@ export function Settings() {
       breadcrumb={['ReevesAgents', 'Settings']}
       meta={[
         { label: 'providers', value: `${installedCount}/${totalCount}` },
-        { label: 'registered', value: String(registeredCount) },
       ]}
-      tagline="Providers, local state paths, and Orchestrator BETA MCP registration."
+      tagline="Providers, local state paths, and spawner configuration."
       statusContext={statusContext}
       statusKeys="↑↓ move · enter select · esc back"
     >
       <Box flexDirection="column">
-        {isSetupInProgress && (
-          <Box marginBottom={1}>
-            <Spinner />
-          <Text color={colors.text.dim}>  Setting up Orchestrator BETA MCP...</Text>
-          </Box>
-        )}
-
         <Section label="Providers" />
         {PROVIDERS.map((provider, _idx) => {
           const rowIdx = rows.findIndex(r => r.type === 'provider' && r.provider === provider)
           const isSelected = selectedIdx === rowIdx
           const isInstalled = available[provider]
-          const isReg = registered[provider]
-
           return (
             <Row
               key={provider}
@@ -169,7 +134,7 @@ export function Settings() {
                 label: provider,
                 color: providerColor(provider),
               }}
-              hint={isReg ? 'registered' : 'not registered'}
+              hint={isInstalled ? 'installed' : 'not installed'}
             />
           )
         })}
@@ -194,11 +159,6 @@ export function Settings() {
         <SectionEnd />
 
         <Section label="Actions" />
-        <Row
-          selected={selectedIdx === rows.findIndex(r => r.id === 'setupMCP')}
-          primary="Setup MCP (BETA)"
-          hint="write MCP entries for Orchestrator mode"
-        />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'recheck')}
           primary="Recheck"

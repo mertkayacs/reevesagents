@@ -1,11 +1,12 @@
-// Real MCP smoke. Starts reevesagents mcp in an isolated state root and
+// Real MCP smoke. Starts the orchestrator MCP server in an isolated state root and
 // checks the v1 tool surface without launching provider CLIs or tmux windows.
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const EXPECTED_TOOLS = [
   'start_run',
@@ -45,7 +46,8 @@ function fail(label, err) {
 async function main() {
   const tmpDir = mkdtempSync(join(tmpdir(), 'reeves-smoke-real-'))
   const reevesConfig = join(tmpDir, 'config.json')
-  const cliPath = resolve(new URL(import.meta.url).pathname, '..', '..', 'dist', 'cli.js')
+  const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+  const cliPath = join(packageRoot, 'dist', 'cli.js')
 
   console.log(`smoke dir: ${tmpDir}`)
   console.log(`cli:       ${cliPath}`)

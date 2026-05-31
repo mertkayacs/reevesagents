@@ -19,7 +19,7 @@ afterEach(() => {
 function makeRun(id: string, overrides: Partial<RunRecord> = {}): RunRecord {
   return {
     id,
-    mode: 'orchestrator',
+    mode: 'spawner',
     name: `run-${id}`,
     status: 'running',
     tmux_session: `reeves_${id}`,
@@ -169,51 +169,6 @@ describe('v1 run state', () => {
     expect(readAgent('r8', 'a3').inbox).toEqual([])
   })
 
-  it('creates, lists, and resolves approvals inside the run folder', async () => {
-    const {
-      writeRun,
-      writeAgent,
-      createRunApproval,
-      listRunApprovals,
-      resolveRunApproval,
-      readRunApproval,
-    } = await import('../src/state/runs.js')
-    writeRun(makeRun('r9'))
-    writeAgent(makeAgent('a4', 'r9'))
-
-    const approval = createRunApproval({
-      agent_id: 'a4',
-      action: 'deploy',
-      summary: 'deploy review app',
-      risk: 'high',
-    })
-
-    expect(approval.run_id).toBe('r9')
-    expect(existsSync(join(tmpDir, 'runs', 'r9', 'approvals', `${approval.id}.json`))).toBe(true)
-    expect(listRunApprovals('r9', 'pending')).toHaveLength(1)
-
-    const resolved = resolveRunApproval(approval.id, 'approved', 'ok')
-    expect(resolved.status).toBe('approved')
-    expect(resolved.decision_note).toBe('ok')
-    expect(readRunApproval('r9', approval.id).status).toBe('approved')
-  })
-
-  it('redacts approval text and details before writing', async () => {
-    const { writeRun, writeAgent, createRunApproval, readRunApproval } = await import('../src/state/runs.js')
-    writeRun(makeRun('r10'))
-    writeAgent(makeAgent('a5', 'r10'))
-    const approval = createRunApproval({
-      agent_id: 'a5',
-      action: 'use token',
-      summary: 'send sk-ant-api03-abcdefghij1234567890abcdef',
-      details: { token: 'sk-ant-api03-abcdefghij1234567890abcdef' },
-    })
-
-    const loaded = readRunApproval('r10', approval.id)
-    expect(loaded.summary).toContain('[REDACTED]')
-    expect(String(loaded.details.token)).toContain('[REDACTED]')
-  })
-
   it('normalizes malformed stored agents', async () => {
     const { writeRun, readAgent } = await import('../src/state/runs.js')
     writeRun(makeRun('r11'))
@@ -265,12 +220,12 @@ describe('v1 run state', () => {
       expect(existsSync(join(tmpDir, 'runs', 'alive'))).toBe(true)
     })
 
-    it('removes running runs with no root agent even when the tmux session is alive', async () => {
+    it('keeps spawner runs with no root agent when the tmux session is alive', async () => {
       const { writeRun, autoCleanupRuns } = await import('../src/state/runs.js')
       writeRun(makeRun('missing-root'))
       const result = autoCleanupRuns({ sessionExists: () => true })
-      expect(result.removed).toContain('missing-root')
-      expect(existsSync(join(tmpDir, 'runs', 'missing-root'))).toBe(false)
+      expect(result.removed).not.toContain('missing-root')
+      expect(existsSync(join(tmpDir, 'runs', 'missing-root'))).toBe(true)
     })
 
     it('removes running runs whose tmux session is gone (stale)', async () => {

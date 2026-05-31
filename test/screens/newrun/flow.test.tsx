@@ -52,13 +52,6 @@ describe('New Run keyboard flow', () => {
 
     await waitForFrame(lastFrame, '❯ │ [ New Run')
     await press(stdin, '\r') // Runs -> New Run
-    await waitForFrame(lastFrame, 'Run Mode')
-    await press(stdin, down)
-    await press(stdin, '\r') // Orchestrator BETA -> Preset
-    await waitForFrame(lastFrame, '❯ │ [ Blank')
-    await waitForInput()
-
-    await press(stdin, '\r') // Blank -> Basics
     await waitForFrame(lastFrame, 'Run Name')
 
     await press(stdin, '\r') // edit Run Name
@@ -67,8 +60,8 @@ describe('New Run keyboard flow', () => {
 
     await press(stdin, down)
     await press(stdin, down)
-    await press(stdin, '\r') // Continue -> Root
-    await waitForFrame(lastFrame, 'Root')
+    await press(stdin, '\r') // Continue -> First Terminal
+    await waitForFrame(lastFrame, 'First Terminal')
 
     await press(stdin, down)
     await press(stdin, down)
@@ -82,9 +75,9 @@ describe('New Run keyboard flow', () => {
     await press(stdin, down)
     await press(stdin, down)
     await press(stdin, '\r') // Continue -> Workers
-    await waitForFrame(lastFrame, 'Workers')
+    await waitForFrame(lastFrame, 'Terminals')
 
-    await press(stdin, '\r') // Add Worker
+    await press(stdin, '\r') // Add Terminal
     await waitForFrame(lastFrame, 'Nickname')
 
     await press(stdin, '\r') // edit worker nickname
@@ -117,7 +110,7 @@ describe('New Run keyboard flow', () => {
 
     expect(RuntimeModule.startRun).toHaveBeenCalledOnce()
     const request = vi.mocked(RuntimeModule.startRun).mock.calls[0]![0]
-    expect(request.mode).toBe('orchestrator')
+    expect(request.mode).toBe('spawner')
     expect(request.name).toBe('tui-run')
     expect(request.root.task).toBe('root smoke task\nsecond line')
     const workers = request.workers ?? []

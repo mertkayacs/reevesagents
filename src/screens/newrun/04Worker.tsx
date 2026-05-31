@@ -1,6 +1,5 @@
-// Step 4b: Edit one additional terminal/worker slot. Reached from step 4 by Enter.
-// Same inline editing pattern as Root (step 3),
-// with worker-specific fields (nickname, working dir) and a Remove action.
+// Step 3b: edit one additional terminal slot. Reached from step 3 by Enter.
+// Same inline editing pattern as the first-terminal step.
 
 import React, { useState, useMemo } from 'react'
 import { useInput } from 'ink'
@@ -13,6 +12,7 @@ import { useRouter } from '../../router.js'
 import { useWizard } from '../../state/WizardContext.js'
 import type { WorkerConfig } from '../../state/WizardContext.js'
 import { PROVIDERS } from '../../launcher/providers.js'
+import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
 import type { Permissions, Effort } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
@@ -21,12 +21,14 @@ const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'm
 type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'effort'
 type ActionId = 'save' | 'remove' | 'cancel'
 
-interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[] }
+interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[]; display?: string; hint?: string }
 interface TextFieldDef { kind: 'text'; id: FieldId; label: string; value: string; helpText: string; required: boolean }
 type Field = PickerField | TextFieldDef
 
 function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
+  if (values.length === 0) return current
   const idx = values.indexOf(current)
+  if (idx === -1) return values[dir === 1 ? 0 : values.length - 1]!
   const next = (idx + dir + values.length) % values.length
   return values[next]!
 }
@@ -34,7 +36,6 @@ function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
 export function NewRunWorker() {
   const { pop, selectedWorkerIdx } = useRouter()
   const { state, updateWorker, removeWorker } = useWizard()
-  const isSpawner = state.mode === 'spawner'
   const idx = selectedWorkerIdx ?? -1
   const worker: WorkerConfig | undefined = idx >= 0 ? state.workers[idx] : undefined
 
@@ -43,8 +44,16 @@ export function NewRunWorker() {
     const list: Field[] = [
       { kind: 'text', id: 'nickname', label: 'Nickname', value: worker.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
       { kind: 'picker', id: 'provider', label: 'Provider', current: worker.provider, values: PROVIDERS },
-      { kind: 'text', id: 'model', label: 'Model', value: worker.model, helpText: 'e.g. claude-3-5-sonnet, gpt-4o, or empty for default', required: false },
-      { kind: 'text', id: 'prompt', label: 'Prompt', value: worker.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'initial task for this worker · enter newline · esc done', required: !isSpawner },
+      {
+        kind: 'picker',
+        id: 'model',
+        label: 'Model',
+        current: worker.model,
+        values: modelValuesForProvider(worker.provider),
+        display: modelDisplayName(worker.model),
+        hint: 'provider file · ← → cycle',
+      },
+      { kind: 'text', id: 'prompt', label: 'Prompt', value: worker.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
       { kind: 'text', id: 'workingDir', label: 'Working Dir', value: worker.workingDir, helpText: 'optional, defaults to the run working dir', required: false },
       { kind: 'picker', id: 'permissions', label: 'Permissions', current: worker.permissions, values: PERMISSIONS_VALUES },
     ]
@@ -52,12 +61,12 @@ export function NewRunWorker() {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: worker.effort, values: EFFORT_VALUES })
     }
     return list
-  }, [isSpawner, worker])
+  }, [worker])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'save', label: 'Done', hint: isSpawner ? 'return to terminals' : 'return to workers' },
-    { id: 'remove', label: isSpawner ? 'Remove This Terminal' : 'Remove This Worker', hint: 'delete and return' },
-    { id: 'cancel', label: 'Back', hint: isSpawner ? 'return to terminals' : 'return to workers' },
+    { id: 'save', label: 'Done', hint: 'return to terminals' },
+    { id: 'remove', label: 'Remove This Terminal', hint: 'delete and return' },
+    { id: 'cancel', label: 'Back', hint: 'return to terminals' },
   ]
 
   const totalRows = fields.length + actions.length
@@ -74,14 +83,14 @@ export function NewRunWorker() {
   function commitText(id: FieldId, value: string): void {
     if (idx < 0) return
     if (id === 'nickname') updateWorker(idx, { nickname: value })
-    else if (id === 'model') updateWorker(idx, { model: value })
     else if (id === 'prompt') updateWorker(idx, { prompt: value })
     else if (id === 'workingDir') updateWorker(idx, { workingDir: value })
   }
 
   function cyclePicker(id: FieldId, dir: 1 | -1): void {
     if (!worker || idx < 0) return
-    if (id === 'provider') updateWorker(idx, { provider: cycle(PROVIDERS, worker.provider, dir) })
+    if (id === 'provider') updateWorker(idx, { provider: cycle(PROVIDERS, worker.provider, dir), model: '' })
+    else if (id === 'model') updateWorker(idx, { model: cycle(modelValuesForProvider(worker.provider), worker.model, dir) })
     else if (id === 'permissions') updateWorker(idx, { permissions: cycle(PERMISSIONS_VALUES, worker.permissions, dir) })
     else if (id === 'effort') updateWorker(idx, { effort: cycle(EFFORT_VALUES, worker.effort, dir) })
   }
@@ -115,21 +124,19 @@ export function NewRunWorker() {
 
   if (!worker) {
     return (
-      <Frame breadcrumb={['ReevesAgents', 'New Run', isSpawner ? 'Terminals' : 'Workers', isSpawner ? 'Terminal' : 'Worker']}>
-        <Row selected={true} primary={isSpawner ? 'Terminal not found' : 'Worker not found'} hint="press Esc to go back" />
+      <Frame breadcrumb={['ReevesAgents', 'New Run', 'Terminals', 'Terminal']}>
+        <Row selected={true} primary="Terminal not found" hint="press Esc to go back" />
       </Frame>
     )
   }
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'New Run', isSpawner ? 'Terminals' : 'Workers', worker.nickname || (isSpawner ? `terminal-${idx + 2}` : `worker-${idx + 1}`)]}
-      tagline={isSpawner
-        ? 'Configure this independent CLI terminal. It receives no ReevesAgents context.'
-        : 'Orchestrator mode is BETA. Configure this worker; root drives it through MCP.'}
+      breadcrumb={['ReevesAgents', 'New Run', 'Terminals', worker.nickname || `terminal-${idx + 2}`]}
+      tagline="Configure this independent CLI terminal."
       statusKeys="enter edit/newline · ←→ cycle picker · esc done/back"
     >
-      <StepIndicator step={4} total={5} name={isSpawner ? 'Terminal' : 'Worker'} />
+      <StepIndicator step={3} total={4} name="Terminal" />
 
       {fields.map((field, fIdx) => {
         if (field.kind === 'text') {
@@ -154,8 +161,8 @@ export function NewRunWorker() {
             key={field.id}
             selected={selectedIdx === fIdx}
             primary={field.label}
-            trailing={`‹ ${field.current} ›`}
-            hint={selectedIdx === fIdx ? '← → cycle' : undefined}
+            trailing={`‹ ${field.display ?? field.current} ›`}
+            hint={selectedIdx === fIdx ? field.hint ?? '← → cycle' : undefined}
           />
         )
       })}

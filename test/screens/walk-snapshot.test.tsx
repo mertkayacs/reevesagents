@@ -14,7 +14,6 @@ const SCREENS: ScreenName[] = [
   'AgentDetail',
   'NewRun',
   'AddWorker',
-  'Approvals',
   'Doctor',
   'Settings',
   'Reference',

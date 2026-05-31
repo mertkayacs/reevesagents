@@ -1,4 +1,4 @@
-// V1 run registry: one run folder, one run.json, and per-run agent/approval JSON.
+// V1 run registry: one run folder, one run.json, and per-run agent JSON.
 // Storage: REEVES_REGISTRY/runs for isolated tests, otherwise ~/.reeves/runs.
 // Invariant: all user/model text fields are redacted before writing.
 
@@ -22,26 +22,15 @@ import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import type {
   AgentRecord,
-  ApprovalRisk,
-  ApprovalStatus,
   Message,
   Permissions,
   Provider,
-  RunApproval,
   RunMode,
   RunRecord,
   RunViewStatus,
   TaskStatus,
 } from './types.js'
 import { redactSecrets } from '../utils/display.js'
-
-export interface CreateRunApprovalInput {
-  agent_id: string
-  action: string
-  summary: string
-  details?: Record<string, unknown>
-  risk?: ApprovalRisk
-}
 
 export function stateRoot(): string {
   return process.env.REEVES_REGISTRY || join(homedir(), '.reeves')
@@ -59,20 +48,12 @@ export function agentsDir(runId: string): string {
   return join(runDir(runId), 'agents')
 }
 
-export function runApprovalsDir(runId: string): string {
-  return join(runDir(runId), 'approvals')
-}
-
 export function runPath(runId: string): string {
   return join(runDir(runId), 'run.json')
 }
 
 export function agentPath(runId: string, agentId: string): string {
   return join(agentsDir(runId), `${agentId}.json`)
-}
-
-export function runApprovalPath(runId: string, approvalId: string): string {
-  return join(runApprovalsDir(runId), `${approvalId}.json`)
 }
 
 export function nowIso(): string {
@@ -140,22 +121,12 @@ function normalizeTaskStatus(value: unknown): TaskStatus {
   return 'queued'
 }
 
-function normalizeApprovalStatus(value: unknown): ApprovalStatus {
-  if (value === 'pending' || value === 'approved' || value === 'denied' || value === 'expired') return value
-  return 'pending'
-}
-
-function normalizeRisk(value: unknown): ApprovalRisk {
-  if (value === 'low' || value === 'medium' || value === 'high') return value
-  return 'medium'
-}
-
 function normalizePermissions(value: unknown): Permissions {
   return value === 'skip' ? 'skip' : 'ask'
 }
 
-function normalizeRunMode(value: unknown): RunMode {
-  return value === 'spawner' ? 'spawner' : 'orchestrator'
+function normalizeRunMode(value: unknown): RunMode | undefined {
+  return value === 'spawner' ? 'spawner' : undefined
 }
 
 function asString(value: unknown, fallback = ''): string {
@@ -168,18 +139,6 @@ function fallbackRunName(id: string): string {
 
 function asNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
-}
-
-function redactValue(value: unknown): unknown {
-  if (typeof value === 'string') return redactSecrets(value)
-  if (Array.isArray(value)) return value.map(redactValue)
-  if (typeof value === 'object' && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .map(([key, item]) => [key, redactValue(item)]),
-    )
-  }
-  return value
 }
 
 function normalizeInbox(value: unknown): Message[] {
@@ -199,7 +158,6 @@ function normalizeRun(raw: Record<string, unknown>): RunRecord {
   const id = asString(raw.id)
   const run: RunRecord = {
     id,
-    mode: normalizeRunMode(raw.mode),
     name: asString(raw.name).trim() || fallbackRunName(id),
     status: raw.status === 'ended' ? 'ended' : 'running',
     tmux_session: asString(raw.tmux_session),
@@ -211,6 +169,8 @@ function normalizeRun(raw: Record<string, unknown>): RunRecord {
     started_at: asString(raw.started_at, nowIso()),
     ended_at: asNullableString(raw.ended_at),
   }
+  const mode = normalizeRunMode(raw.mode)
+  if (mode) run.mode = mode
   const reevesSession = asString(raw.reeves_session)
   if (reevesSession) run.reeves_session = reevesSession
   return run
@@ -242,38 +202,12 @@ function normalizeAgent(raw: Record<string, unknown>): AgentRecord {
   }
 }
 
-function normalizeApproval(raw: Record<string, unknown>): RunApproval {
-  return {
-    id: asString(raw.id),
-    run_id: asString(raw.run_id),
-    agent_id: asString(raw.agent_id),
-    action: asString(raw.action),
-    summary: asString(raw.summary),
-    details: typeof raw.details === 'object' && raw.details !== null ? raw.details as Record<string, unknown> : {},
-    risk: normalizeRisk(raw.risk),
-    status: normalizeApprovalStatus(raw.status),
-    decision_note: asString(raw.decision_note),
-    requested_at: asString(raw.requested_at, nowIso()),
-    resolved_at: asNullableString(raw.resolved_at),
-  }
-}
-
 function redactAgent(agent: AgentRecord): AgentRecord {
   return {
     ...agent,
     task: redactSecrets(agent.task),
     task_note: redactSecrets(agent.task_note),
     inbox: agent.inbox.map(message => ({ ...message, text: redactSecrets(message.text) })),
-  }
-}
-
-function redactApproval(approval: RunApproval): RunApproval {
-  return {
-    ...approval,
-    action: redactSecrets(approval.action),
-    summary: redactSecrets(approval.summary),
-    details: redactValue(approval.details) as Record<string, unknown>,
-    decision_note: redactSecrets(approval.decision_note),
   }
 }
 
@@ -295,16 +229,6 @@ function writeAgentUnlocked(agent: AgentRecord): string {
 
 function readAgentUnlocked(runId: string, agentId: string): AgentRecord {
   return normalizeAgent(JSON.parse(readFileSync(agentPath(runId, agentId), 'utf-8')) as Record<string, unknown>)
-}
-
-function writeApprovalUnlocked(approval: RunApproval): string {
-  const path = runApprovalPath(approval.run_id, approval.id)
-  atomicWriteJson(path, redactApproval(approval))
-  return path
-}
-
-function readApprovalUnlocked(runId: string, approvalId: string): RunApproval {
-  return normalizeApproval(JSON.parse(readFileSync(runApprovalPath(runId, approvalId), 'utf-8')) as Record<string, unknown>)
 }
 
 export function writeRun(run: RunRecord): string {
@@ -424,79 +348,6 @@ export function readAgentInbox(runId: string, agentId: string): Message[] {
     agent.inbox = []
     writeAgentUnlocked(agent)
     return messages
-  })
-}
-
-export function createRunApproval(input: CreateRunApprovalInput): RunApproval {
-  return withRunsLock(() => {
-    const agent = findAgent(input.agent_id)
-    const approval: RunApproval = {
-      id: randomUUID(),
-      run_id: agent.run_id,
-      agent_id: agent.id,
-      action: input.action,
-      summary: input.summary,
-      details: input.details ?? {},
-      risk: input.risk ?? 'medium',
-      status: 'pending',
-      decision_note: '',
-      requested_at: nowIso(),
-      resolved_at: null,
-    }
-    writeApprovalUnlocked(approval)
-    return approval
-  })
-}
-
-export function readRunApproval(runId: string, approvalId: string): RunApproval {
-  return readApprovalUnlocked(runId, approvalId)
-}
-
-export function listRunApprovals(runId?: string, status?: ApprovalStatus): RunApproval[] {
-  const runIds = runId ? [runId] : listRuns().map(run => run.id)
-  const approvals: RunApproval[] = []
-
-  for (const id of runIds) {
-    let files: string[]
-    try {
-      files = readdirSync(runApprovalsDir(id))
-    } catch {
-      continue
-    }
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue
-      try {
-        approvals.push(readApprovalUnlocked(id, file.slice(0, -5)))
-      } catch {
-        // skip malformed approval records
-      }
-    }
-  }
-
-  return approvals
-    .filter(approval => !status || approval.status === status)
-    .sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime())
-}
-
-export function resolveRunApproval(approvalId: string, decision: 'approved' | 'denied', note = ''): RunApproval {
-  return withRunsLock(() => {
-    const approval = listRunApprovals().find(item => item.id === approvalId)
-    if (!approval) throw new Error(`Approval not found: ${approvalId}`)
-    if (approval.status !== 'pending') return approval
-    const updated: RunApproval = {
-      ...approval,
-      status: decision,
-      decision_note: note,
-      resolved_at: nowIso(),
-    }
-    writeApprovalUnlocked(updated)
-    return updated
-  })
-}
-
-export function removeRunApproval(runId: string, approvalId: string): void {
-  withRunsLock(() => {
-    try { unlinkSync(runApprovalPath(runId, approvalId)) } catch { /* already gone */ }
   })
 }
 

@@ -45,8 +45,8 @@ describe('Welcome', () => {
     const { lastFrame } = render(<Welcome />)
     const output = lastFrame()
     expect(output).toContain('Local tmux-first workspace manager for AI CLI terminals')
-    expect(output).toContain('Spawner default')
-    expect(output).toContain('Orchestrator BETA')
+    expect(output).toContain('Spawner')
+    expect(output).toContain('TUI')
   })
 
   it('renders the main menu actions', () => {
@@ -57,7 +57,6 @@ describe('Welcome', () => {
     expect(output).toContain('Runs')
     expect(output).toContain('Doctor')
     expect(output).toContain('Settings')
-    expect(output).toContain('Approvals')
     expect(output).toContain('Reference')
     expect(output).toContain('Credits')
   })

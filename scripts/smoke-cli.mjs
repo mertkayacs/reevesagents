@@ -1,5 +1,5 @@
-// Isolated CLI smoke. Runs the built CLI with fake provider binaries and a
-// temp setup home so setup, doctor, and runs commands never touch real state.
+// Isolated CLI smoke. Runs the built spawner CLI with fake provider binaries
+// and temp state so doctor and runs commands never touch real state.
 
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -80,13 +80,11 @@ async function main() {
   const binDir = join(tmpDir, 'bin')
   const registry = join(tmpDir, 'registry')
   const config = join(tmpDir, 'config.json')
-  const home = join(tmpDir, 'home')
   const env = {
     ...process.env,
     PATH: `${binDir}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
     REEVES_REGISTRY: registry,
     REEVES_CONFIG: config,
-    REEVES_SETUP_HOME: home,
     REEVES_DOCTOR_SKIP_PROVIDER_COMPAT: '0',
   }
 
@@ -104,27 +102,9 @@ async function main() {
     assert(Array.isArray(runsJson) && runsJson.length === 0, 'runs --json should return []')
     ok('runs --json returns [] on empty isolated state')
 
-    const contextJson = parseJson(runCli(['context', '--json'], env), 'context --json')
-    assert(contextJson.role === 'operator' && Array.isArray(contextJson.runs) && contextJson.runs.length === 0, 'context --json should describe empty operator scope')
-    ok('context --json returns operator scope')
-
-    const callContextJson = parseJson(runCli(['call', 'context'], env), 'call context')
-    assert(callContextJson.role === 'operator' && Array.isArray(callContextJson.runs) && callContextJson.runs.length === 0, 'call context should describe empty operator scope')
-    ok('call context reaches MCP tools through CLI')
-
-    const callRunsJson = parseJson(runCli(['call', 'list_runs', '{}'], env), 'call list_runs')
-    assert(Array.isArray(callRunsJson) && callRunsJson.length === 0, 'call list_runs should return []')
-    ok('call list_runs accepts inline JSON arguments')
-
-    const setup = parseJson(runCli(['setup', '--json'], env), 'setup --json')
-    assert(Array.isArray(setup) && setup.length === 4, 'setup should report four providers')
-    assert(setup.every(item => item.detected === true && item.registered === true), 'all fake providers should be registered')
-    ok('setup registers only temp MCP configs')
-
     const doctor = parseJson(runCli(['doctor', '--json'], env), 'doctor --json')
     assert(doctor.ok === true, 'doctor should have no fail checks with fake tmux/providers')
     assert(Array.isArray(doctor.checks), 'doctor should return checks array')
-    assert(doctor.checks.some(check => check.name === 'mcp config' && check.status === 'ok'), 'doctor should see temp MCP config')
     ok('doctor --json reports healthy isolated setup')
   } finally {
     rmSync(tmpDir, { recursive: true, force: true })

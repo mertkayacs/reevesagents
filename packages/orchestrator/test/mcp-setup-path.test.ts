@@ -19,13 +19,13 @@ describe('mcp-setup resolveReevesPath', () => {
   })
 
   it('accepts a normal reevesagents dist path', () => {
-    const good = '/Users/x/dev/reevesagents/dist/cli.js'
+    const good = '/Users/x/dev/reevesagents-orchestrator/dist/cli.js'
     expect(isSuspiciousReevesPath(good)).toBe(false)
     expect(resolveReevesPath(good)).toBe(good)
   })
 
   it('accepts a globally installed bin path', () => {
-    const good = '/opt/homebrew/bin/reevesagents'
+    const good = '/opt/homebrew/bin/reevesagents-orchestrator'
     expect(isSuspiciousReevesPath(good)).toBe(false)
     expect(resolveReevesPath(good)).toBe(good)
   })
@@ -41,19 +41,19 @@ describe('mcp-setup resolveReevesPath', () => {
 
   it('falls back to a cli.js path when argv1 is undefined', () => {
     const resolved = resolveReevesPath(undefined)
-    expect(resolved.endsWith('cli.js') || resolved === 'reevesagents').toBe(true)
+    expect(resolved.endsWith('cli.js') || resolved === 'reevesagents-orchestrator').toBe(true)
   })
 
   it('does not write nvm-versioned paths into MCP config', () => {
-    const nvmPath = '/Users/x/.nvm/versions/node/v22.5.0/lib/node_modules/reevesagents/dist/cli.js'
+    const nvmPath = '/Users/x/.nvm/versions/node/v22.5.0/lib/node_modules/reevesagents-orchestrator/dist/cli.js'
     const resolved = resolveReevesPath(nvmPath)
     expect(resolved).not.toBe(nvmPath)
-    expect(resolved.endsWith('cli.js') || resolved === 'reevesagents').toBe(true)
+    expect(resolved.endsWith('cli.js') || resolved === 'reevesagents-orchestrator').toBe(true)
   })
 
   it('does not write fnm or volta versioned paths into MCP config', () => {
-    const fnmPath = '/Users/x/.fnm/node-versions/v22.5.0/installation/bin/reevesagents'
-    const voltaPath = '/Users/x/.volta/bin/reevesagents'
+    const fnmPath = '/Users/x/.fnm/node-versions/v22.5.0/installation/bin/reevesagents-orchestrator'
+    const voltaPath = '/Users/x/.volta/bin/reevesagents-orchestrator'
     expect(resolveReevesPath(fnmPath)).not.toBe(fnmPath)
     expect(resolveReevesPath(voltaPath)).not.toBe(voltaPath)
   })

@@ -1,23 +1,23 @@
 # reevesagents
 
-Local tmux-first workspace manager for AI CLI terminals and agent teams.
+Local tmux-first workspace manager for AI CLI terminals.
 
-ReevesAgents has two modes:
+The main `reevesagents` package is the stable spawner install:
 
-- **Spawner mode:** the default. Start one tmux workspace with multiple independent provider CLI terminals. The human coordinates them. No MCP setup, no ReevesAgents environment injection, no root/worker roles.
-- **Orchestrator mode (BETA):** connected root/worker agents with MCP tools, messages, approvals, and agent spawning. This mode can write provider MCP config entries when you explicitly run setup.
+- Start one tmux workspace with multiple independent provider CLI terminals.
+- Keep the human in charge of coordination.
+- Do not write provider config, inject ReevesAgents environment variables, or create root/worker roles.
 
-ReevesAgents tracks each run in local state and opens every terminal or agent in its own tmux window. The registry is the source of truth; tmux is the execution and viewing surface. The TUI stays in the current or fallback `reeves` session, while each run gets its own tmux session to keep tabs uncluttered.
+The Orchestrator work is PRE-BETA test code under `packages/orchestrator`. It is not installed by the main package, not included in the root workspace install, and not part of the stable TUI or CLI.
+
+ReevesAgents tracks each run in local state and opens every terminal in its own tmux window. The registry is the source of truth; tmux is the execution and viewing surface. The TUI stays in the current or fallback `reeves` session, while each run gets its own tmux session to keep tabs uncluttered.
 
 ## What It Does
 
 - Shows active, ended, and stale runs in a visible-menu TUI.
-- Starts multiple independent provider CLI terminals in Spawner mode.
-- Starts root and worker agents in Orchestrator mode (BETA).
-- Opens the real provider CLI window for each terminal or agent.
-- Lets Orchestrator agents and humans coordinate through MCP tools, CLI calls, and the TUI using run and agent ids.
+- Starts multiple independent provider CLI terminals.
+- Opens the real provider CLI window for each terminal.
 - Stores local JSON state under `~/.reeves/runs`.
-- Registers ReevesAgents as an MCP server only when Orchestrator setup is explicitly run.
 - Uses a small animated Welcome screen, page-specific TUI layouts, and a static Runs dashboard to reduce terminal flicker.
 
 ReevesAgents does not store provider credentials, proxy model traffic, embed a terminal emulator, or replace provider authentication.
@@ -36,16 +36,13 @@ Provider runtime:
 - At least one provider CLI for the provider you launch: `claude`, `codex`, `opencode`, or `hermes`
 - Provider authentication handled by that provider CLI
 
-Mode-specific requirements:
-
-- Spawner mode needs only the core runtime plus the provider CLIs you launch.
-- Orchestrator BETA needs the same runtime, plus explicit MCP registration with `reevesagents orchestrator setup` if you want provider CLIs or host agents to call ReevesAgents tools.
+Spawner mode needs only the core runtime plus the provider CLIs you launch.
 
 Not required:
 
 - Provider API keys in ReevesAgents config
 - Database, Docker, browser runtime, background service, or daemon
-- MCP setup for Spawner mode
+- Orchestration setup for Spawner mode
 
 Install is passive: no postinstall, no provider config writes, no background service.
 
@@ -53,10 +50,12 @@ Install is passive: no postinstall, no provider config writes, no background ser
 
 | Key | CLI | Launch | Notes |
 | --- | --- | --- | --- |
-| `cc` | Claude Code | `claude` | Supports model, API-key auth mode, effort, skip permissions, and Orchestrator BETA `/remote-control` startup injection |
+| `cc` | Claude Code | `claude` | Supports model, API-key auth mode, effort, and skip permissions |
 | `codex` | Codex CLI | `codex` | Supports model and skip permissions; Codex app-server remote control is managed outside agent launches |
 | `opencode` | OpenCode CLI | `opencode` | Supports `--prompt` and `--model`; ReevesAgents does not add undocumented skip flags |
 | `hermes` | Hermes | `hermes chat` | Supports model and `--yolo` skip permissions |
+
+The TUI model picker is provider-scoped. The values live in `src/launcher/model-data/*.ts`, with one source file per provider. Choosing `provider default` leaves the provider CLI to use its own configured default. Hermes catalog entries use `provider:model` and launch as `hermes chat --provider <provider> --model <model>`.
 
 Default permissions are `ask`. Use `skip` only in trusted disposable workspaces.
 
@@ -84,7 +83,7 @@ reevesagents doctor
 reevesagents
 ```
 
-The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Approvals, Reference, Credits, or Quit. New Run first asks for Spawner or Orchestrator BETA. When launched with run context, Welcome also shows Current Run. Runs auto-cleans ended and stale entries on refresh.
+The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Reference, Credits, or Quit. New Run starts the spawner wizard directly. When launched with run context, Welcome also shows Current Run. Runs auto-cleans ended and stale entries on refresh.
 
 Spawner mode can also start from the CLI:
 
@@ -92,23 +91,16 @@ Spawner mode can also start from the CLI:
 reevesagents spawn codex:builder cc:reviewer --name "release check" --prompt "Inspect the release state."
 ```
 
-Orchestrator setup is explicit and BETA:
-
-```sh
-reevesagents orchestrator setup
-```
-
 ## TUI Pages
 
 - Welcome: animated `REEVES AGENTS` block logo, chafa-rendered blocky duck mascot, and persistent main menu.
 - Runs: list all running, ended, and stale runs. Ended and stale runs auto-clean on refresh.
-- Run hub: show terminals for Spawner runs or root/workers for Orchestrator BETA runs.
-- Terminal/agent detail: inspect provider, status, working directory, tmux ids, recent output, prompt/task, open window, and close window.
-- New Run wizard: choose Spawner or Orchestrator BETA, then configure providers, prompts, and windows.
-- Approvals: approve or deny Orchestrator BETA requests.
-- Settings: provider detection, Orchestrator BETA MCP registration, and state paths.
+- Run hub: show terminals, output, add-terminal, stop, and back actions.
+- Terminal detail: inspect provider, status, working directory, tmux ids, recent output, prompt, open window, and close window.
+- New Run wizard: configure providers, prompts, and windows.
+- Settings: provider detection and state paths.
 - Doctor: setup and environment health checks only.
-- Reference: compact in-app map of the TUI, CLI, MCP tools, and roles.
+- Reference: compact in-app map of the TUI, CLI, and tmux workflow.
 - Credits: package metadata, stack, providers, license, and repository.
 
 The TUI is visible-menu first: arrows navigate, Enter selects, and Esc/Backspace goes back. Text fields accept normal typing, picker fields use Left/Right, and Welcome also accepts `q` to quit. There are no slash commands, Tab-driven focus panes, hidden command palette, or embedded terminal.
@@ -126,67 +118,13 @@ The TUI is visible-menu first: arrows navigate, Enter selects, and Esc/Backspace
 ```sh
 reevesagents                 # open TUI
 reevesagents spawn [spec...] # start a low-permission multi-terminal spawner run
-reevesagents context         # show caller role, current run, and controls
 reevesagents runs            # list runs
-reevesagents open <id>       # open a run's reeves window or a terminal/agent window
-reevesagents peek <terminal-or-agent-id> # print recent terminal/agent output
+reevesagents open <id>       # open a run's reeves window or a terminal window
+reevesagents peek <terminal-id> # print recent terminal output
 reevesagents stop <run-id>   # stop one run, requires --yes or ALLOW_DESTRUCTIVE=1
-reevesagents kill <terminal-or-agent-id> # close one terminal/worker, requires --yes or ALLOW_DESTRUCTIVE=1
+reevesagents kill <terminal-id> # close one terminal, requires --yes or ALLOW_DESTRUCTIVE=1
 reevesagents doctor          # setup checks
-reevesagents orchestrator setup # BETA: register MCP configs
-reevesagents mcp             # BETA: start MCP server over stdio
-reevesagents call <tool>     # BETA: call any MCP tool from the CLI with JSON args
 ```
-
-`call` gives the CLI the same control plane as MCP without adding a separate implementation. Arguments can be inline JSON, stdin JSON, or `--file <path>`:
-
-```sh
-reevesagents call context
-reevesagents call get_run '{"run_id":"<run-id>"}'
-printf '%s' '{"run_id":"<run-id>"}' | reevesagents call tree
-reevesagents call spawn_worker --caller <root-agent-id> --file worker.json
-```
-
-## MCP Tools (BETA)
-
-`reevesagents mcp` exposes the Orchestrator BETA control plane. Spawner terminals do not receive MCP environment variables and are not MCP callers.
-
-```text
-start_run
-list_runs
-context
-list_agents
-tree
-get_run
-open_reeves
-open_agent
-peek
-wait
-send_text
-send_key
-interrupt
-spawn_worker
-kill_agent
-stop_run
-update_task
-send_message
-check_messages
-request_approval
-check_approval
-list_approvals
-resolve_approval
-poll_approval
-get_inbox
-doctor
-```
-
-Caller role is inferred from environment:
-
-- no `REEVES_SESSION_ID` or `REEVES_AGENT_ID`: external operator
-- root agent: knows its current run, controls workers, spawns workers, stops the run, and resolves approvals
-- worker agent: knows its current run, updates itself, checks messages, requests approval, and opens Reeves
-
-See [docs/mcp-tools.md](docs/mcp-tools.md) for caller roles, tool groups, and agent usage rules.
 
 ## State Layout
 
@@ -199,24 +137,20 @@ See [docs/mcp-tools.md](docs/mcp-tools.md) for caller roles, tool groups, and ag
       run.json
       agents/
         <agent-id>.json
-      approvals/
-        <approval-id>.json
-      mcp/
-        <agent-id>-claude-mcp.json
 ```
 
 `REEVES_REGISTRY` can point at an isolated state root for tests and smoke runs.
 
-## MCP Config Paths (BETA)
+## Orchestrator PRE-BETA
 
-`reevesagents orchestrator setup` writes only the ReevesAgents MCP entry:
+`packages/orchestrator` contains experimental MCP coordination code for testing root/worker agent flows. It is intentionally separate from the main app:
 
-- Claude Code: `~/.claude/settings.json`
-- Codex CLI: `~/.codex/config.toml`
-- OpenCode CLI: `~/.config/opencode/opencode.json`
-- Hermes: `~/.hermes/config.yaml`
+- Root `pnpm install` installs only the spawner app.
+- The root CLI exposes no orchestrator, MCP, approval, or setup commands.
+- The root npm tarball does not include `packages/orchestrator`.
+- The PRE-BETA package can change or break without a main-app semver promise.
 
-No API keys or provider credentials are written.
+Use it only when explicitly testing orchestration. The stable app users should install and run `reevesagents`.
 
 ## Development
 
@@ -234,21 +168,6 @@ Portable verification:
 pnpm verify
 ```
 
-Real tmux verification:
-
-```sh
-pnpm verify:real
-```
-
-Opt-in real-provider approval drill:
-
-```sh
-pnpm smoke:approval-real
-REEVES_REAL_PROVIDER=codex pnpm smoke:approval-real
-```
-
-The default real approval drill targets Claude Code when installed. Use `REEVES_REAL_PROVIDER` to try another provider.
-
 See [docs/testing.md](docs/testing.md) for the isolated test matrix and manual TUI check.
 
 See [docs/use-cases.md](docs/use-cases.md) for the product surface map used for careful refactors.
@@ -261,7 +180,7 @@ See [docs/implementation-report.md](docs/implementation-report.md) for the end-t
 
 ## Status
 
-The TUI was redesigned in May 2026 with Spawner mode as the default low-permission path, Orchestrator BETA for MCP-connected agent teams, a unified color system, responsive frame component, focused pages, auto-cleanup of ended runs, and a visible-menu interaction model. The current source of truth is this README plus [REEVESAGENTS_DESIGN.md](REEVESAGENTS_DESIGN.md).
+The TUI was redesigned in May 2026 with Spawner as the default low-permission path, a unified color system, responsive frame component, focused pages, auto-cleanup of ended runs, and a visible-menu interaction model. The current source of truth is this README plus [REEVESAGENTS_DESIGN.md](REEVESAGENTS_DESIGN.md).
 
 - Version: `0.9.0`
 - npm package: not published yet

@@ -31,8 +31,6 @@ describe('NewRunStarting', () => {
       setSelectedRunId: vi.fn(),
       selectedAgentId: null,
       setSelectedAgentId: vi.fn(),
-      selectedApprovalId: null,
-      setSelectedApprovalId: vi.fn(),
       selectedWorkerIdx: null,
       setSelectedWorkerIdx: vi.fn(),
       canBack: false,

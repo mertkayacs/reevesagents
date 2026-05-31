@@ -1,4 +1,4 @@
-// Step 3/5: First terminal or Orchestrator root configuration. Provider, model, prompt, permissions, plus
+// Step 2/4: First terminal configuration. Provider, model, prompt, permissions, plus
 // conditional auth mode (cc only) and effort (cc and codex only).
 // Pickers cycle inline with Left/Right. Text fields edit inline with Enter.
 
@@ -12,6 +12,7 @@ import { TextField } from '../../components/TextField.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../state/WizardContext.js'
 import { PROVIDERS } from '../../launcher/providers.js'
+import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
 import type { Permissions, Effort } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
@@ -26,6 +27,8 @@ interface PickerField {
   label: string
   current: string
   values: readonly string[]
+  display?: string
+  hint?: string
 }
 interface TextFieldDef {
   kind: 'text'
@@ -38,7 +41,9 @@ interface TextFieldDef {
 type Field = PickerField | TextFieldDef
 
 function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
+  if (values.length === 0) return current
   const idx = values.indexOf(current)
+  if (idx === -1) return values[dir === 1 ? 0 : values.length - 1]!
   const next = (idx + dir + values.length) % values.length
   return values[next]!
 }
@@ -46,23 +51,30 @@ function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
 export function NewRunRoot() {
   const { push, pop } = useRouter()
   const { state, updateRoot, reset } = useWizard()
-  const isSpawner = state.mode === 'spawner'
 
   const fields: Field[] = useMemo(() => {
     const list: Field[] = [
       { kind: 'picker', id: 'provider', label: 'Provider', current: state.root.provider, values: PROVIDERS },
-      { kind: 'text', id: 'model', label: 'Model', value: state.root.model, helpText: 'e.g. claude-3-5-sonnet, gpt-4o, or empty for provider default', required: false },
-      { kind: 'text', id: 'prompt', label: 'Prompt', value: state.root.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'initial task for the root · enter newline · esc done', required: !isSpawner },
+      {
+        kind: 'picker',
+        id: 'model',
+        label: 'Model',
+        current: state.root.model,
+        values: modelValuesForProvider(state.root.provider),
+        display: modelDisplayName(state.root.model),
+        hint: 'provider file · ← → cycle',
+      },
+      { kind: 'text', id: 'prompt', label: 'Prompt', value: state.root.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
       { kind: 'picker', id: 'permissions', label: 'Permissions', current: state.root.permissions, values: PERMISSIONS_VALUES },
     ]
     if (state.root.provider === 'cc' || state.root.provider === 'codex') {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: state.root.effort, values: EFFORT_VALUES })
     }
     return list
-  }, [isSpawner, state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.effort])
+  }, [state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.effort])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'continue', label: 'Continue', hint: isSpawner ? 'to additional terminals' : 'to workers' },
+    { id: 'continue', label: 'Continue', hint: 'to additional terminals' },
     { id: 'back', label: 'Back', hint: 'return to basics' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
@@ -80,14 +92,15 @@ export function NewRunRoot() {
   function moveDown(): void { setSelectedIdx(i => Math.min(totalRows - 1, i + 1)) }
 
   function commitText(id: FieldId, value: string): void {
-    if (id === 'model') updateRoot({ model: value })
-    else if (id === 'prompt') updateRoot({ prompt: value })
+    if (id === 'prompt') updateRoot({ prompt: value })
   }
 
   function cyclePicker(id: FieldId, dir: 1 | -1): void {
     if (id === 'provider') {
       const next = cycle(PROVIDERS, state.root.provider, dir)
-      updateRoot({ provider: next })
+      updateRoot({ provider: next, model: '' })
+    } else if (id === 'model') {
+      updateRoot({ model: cycle(modelValuesForProvider(state.root.provider), state.root.model, dir) })
     } else if (id === 'permissions') {
       updateRoot({ permissions: cycle(PERMISSIONS_VALUES, state.root.permissions, dir) })
     } else if (id === 'effort') {
@@ -130,13 +143,11 @@ export function NewRunRoot() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'New Run', isSpawner ? 'First Terminal' : 'Root']}
-      tagline={isSpawner
-        ? 'Configure the first independent CLI terminal. It receives no ReevesAgents context.'
-        : 'Orchestrator mode is BETA. Configure the root agent that drives workers through MCP.'}
+      breadcrumb={['ReevesAgents', 'New Run', 'First Terminal']}
+      tagline="Configure the first independent CLI terminal."
       statusKeys="enter edit/newline · ←→ cycle picker · esc done/back"
     >
-      <StepIndicator step={3} total={5} name={isSpawner ? 'First Terminal' : 'Root'} />
+      <StepIndicator step={2} total={4} name="First Terminal" />
 
       {fields.map((field, idx) => {
         if (field.kind === 'text') {
@@ -161,8 +172,8 @@ export function NewRunRoot() {
             key={field.id}
             selected={selectedIdx === idx}
             primary={field.label}
-            trailing={`‹ ${field.current} ›`}
-            hint={selectedIdx === idx ? '← → cycle' : undefined}
+            trailing={`‹ ${field.display ?? field.current} ›`}
+            hint={selectedIdx === idx ? field.hint ?? '← → cycle' : undefined}
           />
         )
       })}

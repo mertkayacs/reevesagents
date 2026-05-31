@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, RunRecord } from '../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../../../src/state/types.js'
 
 let tmpDir: string
 
@@ -59,7 +59,7 @@ function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = 
 }
 
 async function seedRun() {
-  const { writeRun, writeAgent } = await import('../src/state/runs.js')
+  const { writeRun, writeAgent } = await import('../../../src/state/runs.js')
   const run = makeRun('run1', { root_agent_id: 'root' })
   const root = makeAgent('root', 'run1', { role: 'root', nickname: 'lead', provider: 'codex', tmux_window_id: '@1', tmux_pane_id: '%1' })
   const worker = makeAgent('worker', 'run1', { role: 'worker', nickname: 'reviewer', provider: 'opencode', tmux_window_id: '@2', tmux_pane_id: '%2' })
@@ -200,7 +200,7 @@ describe('mcp tools', () => {
 
   it('marks queued agent callers working when they use MCP', async () => {
     const { handleMcpTool } = await import('../src/mcp.js')
-    const { readAgent } = await import('../src/state/runs.js')
+    const { readAgent } = await import('../../../src/state/runs.js')
     const { worker } = await seedRun()
 
     await handleMcpTool('list_runs', {}, worker.id)
@@ -211,7 +211,7 @@ describe('mcp tools', () => {
 
   it('update_task allows workers to update themselves only', async () => {
     const { handleMcpTool } = await import('../src/mcp.js')
-    const { readAgent } = await import('../src/state/runs.js')
+    const { readAgent } = await import('../../../src/state/runs.js')
     const { root, worker } = await seedRun()
 
     await handleMcpTool('update_task', { agent_id: worker.id, status: 'working', note: 'phase 1' }, worker.id)

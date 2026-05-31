@@ -7,8 +7,8 @@ import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import type { Provider } from './state/types.js'
-import { PROVIDERS } from './launcher/providers.js'
+import type { Provider } from '../../../src/state/types.js'
+import { PROVIDERS } from '../../../src/launcher/providers.js'
 
 export interface CliRegistration {
   provider: Provider
@@ -76,7 +76,7 @@ export function resolveReevesPath(argv1: string | undefined = process.argv[1]): 
   }
   // Final fallback: bare binary name, relies on shell PATH at MCP launch time.
   // More stable than a versioned absolute path that breaks on Node upgrade.
-  return 'reevesagents'
+  return 'reevesagents-orchestrator'
 }
 
 function reevesPath(): string {

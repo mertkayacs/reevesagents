@@ -198,7 +198,7 @@ export function RunOutput() {
   const secondsAgo = Math.floor((Date.now() - lastPeekAt) / 1000)
   const lastPeekLabel = secondsAgo === 0 ? 'just now' : `${secondsAgo}s ago`
   const isSpawner = run.mode === 'spawner'
-  const noun = isSpawner ? 'terminal' : 'agent'
+  const noun = isSpawner ? 'terminal' : 'entry'
   let statusContext = agents.length > 0 ? `${agents.length} ${noun}${agents.length === 1 ? '' : 's'}` : `no ${noun}s`
   if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · enter opens detail`
   if (selected?.type === 'pagination') statusContext = `page ${activePage} of ${totalPages} · ← → turn page`
@@ -207,12 +207,12 @@ export function RunOutput() {
     <Frame
       breadcrumb={['ReevesAgents', 'Runs', run.name, 'Output']}
       meta={[
-        { label: isSpawner ? 'terminals' : 'agents', value: String(agents.length) },
+        { label: isSpawner ? 'terminals' : 'entries', value: String(agents.length) },
         { label: 'last peek', value: lastPeekLabel },
       ]}
       tagline={isSpawner
         ? 'Recent output from each independent terminal in this spawner run. Refreshes every 5 seconds.'
-        : 'Recent output from each agent in this Orchestrator BETA run. Refreshes every 5 seconds.'}
+        : 'Recent output from each entry. Refreshes every 5 seconds.'}
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ page · enter open/refresh · esc back"
     >
@@ -269,7 +269,7 @@ export function RunOutput() {
         {['Refresh', 'Back'].map((action, idx) => {
           const actionRowIdx = pagedAgents.length + paginOffset + 1 + idx
           const isSelected = selectedIdx === actionRowIdx
-          const hint = action === 'Refresh' ? 'peek all agents now' : 'return to run hub'
+          const hint = action === 'Refresh' ? `peek all ${isSpawner ? 'terminals' : 'entries'} now` : 'return to run hub'
 
           return (
             <Row

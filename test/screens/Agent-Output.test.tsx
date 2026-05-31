@@ -67,7 +67,7 @@ describe('AgentOutput screen', () => {
     vi.useRealTimers()
   })
 
-  it('shows agent not found message when findAgent throws', () => {
+  it('shows terminal not found message when findAgent throws', () => {
     vi.mocked(runsState.findAgent).mockImplementation(() => {
       throw new Error('not found')
     })
@@ -77,11 +77,11 @@ describe('AgentOutput screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Agent not found')
+    expect(frame).toContain('Terminal not found')
     unmount()
   })
 
-  it('shows agent not found when readRun throws', () => {
+  it('shows terminal not found when readRun throws', () => {
     vi.mocked(runsState.readRun).mockImplementation(() => {
       throw new Error('not found')
     })
@@ -91,7 +91,7 @@ describe('AgentOutput screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Agent not found')
+    expect(frame).toContain('Terminal not found')
     unmount()
   })
 

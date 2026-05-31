@@ -12,13 +12,8 @@ vi.mock('../../src/launcher/doctor.js', () => ({
       { name: 'node', status: 'ok' as const, detail: '20.19.0' },
       { name: 'tmux', status: 'ok' as const, detail: 'tmux 3.2' },
       { name: 'providers', status: 'warn' as const, detail: 'cc:ok codex:missing' },
-      { name: 'mcp config', status: 'fail' as const, detail: 'not registered' },
     ],
   }),
-}))
-
-vi.mock('../../src/mcp-setup.js', () => ({
-  registerAll: vi.fn(() => []),
 }))
 
 describe('Doctor', () => {
@@ -35,7 +30,7 @@ describe('Doctor', () => {
     const { lastFrame, stdin, unmount } = render(<Router initialScreen="Doctor" />)
 
     await waitForInput()
-    for (let idx = 0; idx < 4; idx++) {
+    for (let idx = 0; idx < 3; idx++) {
       stdin.write('\u001B[B')
       await waitForInput()
     }

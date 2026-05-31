@@ -11,8 +11,8 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const cliPath = join(repoRoot, 'dist', 'cli.js')
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const cliPath = join(packageRoot, 'dist', 'cli.js')
 const pathSep = process.platform === 'win32' ? ';' : ':'
 
 function ok(label) { console.log(`  ok  ${label}`) }
