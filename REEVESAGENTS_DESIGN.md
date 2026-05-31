@@ -161,7 +161,7 @@ Doctor must not write provider config files or ask for provider secrets.
 
 Connected agent coordination is intentionally outside the main install, workspace, and release package. The main package should not depend on it and should not expose setup for it in normal flows.
 
-`packages/orchestrator` may exist in the repository as PRE-BETA test code for MCP-connected root/worker flows. It is not the product a new user installs, it is not included by root `pnpm install`, and it is not included in the root npm tarball.
+`packages/orchestrator` may exist in the repository as PRE-BETA test code for MCP-connected root/worker flows. It is not the product a new user installs, it is not included by root `pnpm install`, and it is not included in npm, pnpm, one-off runner, Homebrew, GitHub Release tarball, or source install paths for the stable app.
 
 Acceptable main-package references:
 

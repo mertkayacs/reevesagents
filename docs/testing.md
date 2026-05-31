@@ -63,6 +63,29 @@ HOME="$tmp/home" pnpm add /tmp/reevesagents-0.9.0.tgz
 REEVES_REGISTRY="$tmp/registry" REEVES_CONFIG="$tmp/config.json" ./node_modules/.bin/reevesagents doctor --json
 ```
 
+Use this broader install-surface check before publishing:
+
+```sh
+tmp=$(mktemp -d)
+pnpm pack --pack-destination "$tmp"
+npm pack --dry-run
+mkdir -p "$tmp/npm-home" "$tmp/npm-registry" "$tmp/pnpm-home" "$tmp/pnpm-registry"
+cd "$tmp"
+mkdir npm-check pnpm-check
+cd npm-check
+npm init -y
+HOME="$tmp/npm-home" npm install "$tmp/reevesagents-0.9.0.tgz"
+./node_modules/.bin/reevesagents --version
+REEVES_REGISTRY="$tmp/npm-registry" REEVES_CONFIG="$tmp/npm-config.json" ./node_modules/.bin/reevesagents doctor --json
+cd ../pnpm-check
+pnpm init
+HOME="$tmp/pnpm-home" pnpm add "$tmp/reevesagents-0.9.0.tgz"
+./node_modules/.bin/reevesagents --version
+REEVES_REGISTRY="$tmp/pnpm-registry" REEVES_CONFIG="$tmp/pnpm-config.json" ./node_modules/.bin/reevesagents doctor --json
+```
+
+When the Homebrew tap exists, inspect the formula and run it against the same root tarball. The formula must install only `reevesagents`, not `reevesagents-orchestrator`.
+
 ## PRE-BETA Orchestrator Checks
 
 The stable release check is root `pnpm verify`. The Orchestrator package under `packages/orchestrator` is PRE-BETA test code and is not part of the root install. Run its checks only when changing that directory:
@@ -99,6 +122,7 @@ pnpm test
 pnpm build
 pnpm smoke:cli
 pnpm pack --dry-run
+npm pack --dry-run
 ```
 
 Observed results:
@@ -109,6 +133,6 @@ Observed results:
 - Vitest passed with 63 files and 474 tests.
 - Build passed.
 - CLI smoke passed against isolated fake setup.
-- Root package dry-run contained only `dist`, README, changelog, license, and package metadata.
-- Clean tarball install in a temp project returned version `0.9.0` and `doctor --json` returned `ok: true` with fake `HOME`, `REEVES_REGISTRY`, and `REEVES_CONFIG`.
+- Root `pnpm pack --dry-run` and `npm pack --dry-run` contained only `dist`, README, changelog, license, and package metadata.
+- Clean npm and pnpm tarball installs in temp projects returned version `0.9.0` and `doctor --json` returned `ok: true` with fake `HOME`, `REEVES_REGISTRY`, and `REEVES_CONFIG`.
 - PRE-BETA orchestrator check passed separately with 6 files and 73 tests.
