@@ -54,8 +54,13 @@ Supported providers:
 - `codex`: Codex CLI through `codex`
 - `opencode`: OpenCode CLI through `opencode`
 - `hermes`: Hermes through `hermes chat`
+- `kimi`: Kimi Code through `kimi`
+- `deepseek`: DeepSeek CLI through `deepseek`
+- `pi`: Pi through `pi`
+- `qwen`: Qwen Code through `qwen`
+- `aider`: Aider through `aider`
 
-Gemini support was removed from v1. OpenCode was added and uses documented prompt/model flags only.
+The main package launches only real provider CLIs. Optional model values remain curated and provider-scoped; blank model keeps each CLI's configured default.
 
 ## TUI
 

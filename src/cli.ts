@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { Router } from './router.js'
 import { runDoctor } from './launcher/doctor.js'
 import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
+import { isProvider, PROVIDERS } from './launcher/providers.js'
 import { listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
 import type { AgentRecord, Provider, RunRecord } from './state/types.js'
@@ -197,8 +198,8 @@ function requireDestructiveConfirmation(opts: { yes?: boolean }, command: string
 
 function parseTerminalSpec(spec: string): { provider: Provider; nickname?: string; model: string } {
   const [providerRaw = '', nickname, model = ''] = spec.split(':')
-  if (providerRaw !== 'cc' && providerRaw !== 'codex' && providerRaw !== 'opencode' && providerRaw !== 'hermes') {
-    throw new Error(`terminal spec must start with cc, codex, opencode, or hermes: ${spec}`)
+  if (!isProvider(providerRaw)) {
+    throw new Error(`terminal spec must start with ${PROVIDERS.join(', ')}: ${spec}`)
   }
   return { provider: providerRaw, nickname: nickname || undefined, model }
 }

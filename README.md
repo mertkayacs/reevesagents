@@ -33,7 +33,7 @@ Core runtime:
 
 Provider runtime:
 
-- At least one provider CLI for the provider you launch: `claude`, `codex`, `opencode`, or `hermes`
+- At least one provider CLI for the provider you launch: `claude`, `codex`, `opencode`, `hermes`, `kimi`, `deepseek`, `pi`, `qwen`, or `aider`
 - Provider authentication handled by that provider CLI
 
 Spawner mode needs only the core runtime plus the provider CLIs you launch.
@@ -54,6 +54,11 @@ Install is passive: no postinstall, no provider config writes, no background ser
 | `codex` | Codex CLI | `codex` | Supports model and skip permissions; Codex app-server remote control is managed outside agent launches |
 | `opencode` | OpenCode CLI | `opencode` | Supports `--prompt` and `--model`; ReevesAgents does not add undocumented skip flags |
 | `hermes` | Hermes | `hermes chat` | Supports model and `--yolo` skip permissions |
+| `kimi` | Kimi Code | `kimi` | Supports model and `--yolo` skip permissions |
+| `deepseek` | DeepSeek CLI | `deepseek` | Supports model; ReevesAgents does not add undocumented skip flags |
+| `pi` | Pi | `pi` | Supports model; ReevesAgents does not add undocumented skip flags |
+| `qwen` | Qwen Code | `qwen` | Supports model and `--approval-mode yolo` skip permissions |
+| `aider` | Aider | `aider` | Supports model and `--yes-always` skip confirmations |
 
 The TUI model picker is provider-scoped and intentionally small. Choosing `provider default` leaves the provider CLI to use its own configured default and ReevesAgents does not pass `--model`. The curated optional values live in `src/launcher/model-data/*.ts`, with one source file per provider.
 

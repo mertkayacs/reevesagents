@@ -19,6 +19,11 @@ export const BIN: Record<Provider, string> = {
   codex: 'codex',
   opencode: 'opencode',
   hermes: 'hermes',
+  kimi: 'kimi',
+  deepseek: 'deepseek',
+  pi: 'pi',
+  qwen: 'qwen',
+  aider: 'aider',
 }
 
 export const PROVIDERS = Object.keys(BIN) as Provider[]
@@ -32,8 +37,6 @@ const HERMES_PROVIDER_PREFIXES = new Set([
   'copilot-acp',
   'copilot',
   'anthropic',
-  'gemini',
-  'google-gemini-cli',
   'huggingface',
   'novita',
   'zai',
@@ -92,6 +95,24 @@ const HELP_REQUIREMENTS: Record<Provider, HelpRequirement[]> = {
     { feature: 'chat launch', tokens: ['--model'] },
     { feature: 'skip permissions', tokens: ['--yolo'] },
   ],
+  kimi: [
+    { feature: 'model selection', tokens: ['--model'] },
+    { feature: 'skip permissions', tokens: ['--yolo'] },
+  ],
+  deepseek: [
+    { feature: 'model selection', tokens: ['--model'] },
+  ],
+  pi: [
+    { feature: 'model selection', tokens: ['--model'] },
+  ],
+  qwen: [
+    { feature: 'model selection', tokens: ['--model'] },
+    { feature: 'skip permissions', tokens: ['--approval-mode'] },
+  ],
+  aider: [
+    { feature: 'model selection', tokens: ['--model'] },
+    { feature: 'skip confirmations', tokens: ['--yes-always'] },
+  ],
 }
 
 export function isProvider(value: unknown): value is Provider {
@@ -134,6 +155,34 @@ export function buildCommand(opts: BuildCommandOptions): string[] {
       if (parsed.provider) cmd.push('--provider', parsed.provider)
       cmd.push('--model', parsed.model)
     }
+    return cmd
+  }
+
+  if (provider === 'kimi') {
+    if (permissions === 'skip') cmd.push('--yolo')
+    if (model) cmd.push('--model', model)
+    return cmd
+  }
+
+  if (provider === 'deepseek') {
+    if (model) cmd.push('--model', model)
+    return cmd
+  }
+
+  if (provider === 'pi') {
+    if (model) cmd.push('--model', model)
+    return cmd
+  }
+
+  if (provider === 'qwen') {
+    if (permissions === 'skip') cmd.push('--approval-mode', 'yolo')
+    if (model) cmd.push('--model', model)
+    return cmd
+  }
+
+  if (provider === 'aider') {
+    if (permissions === 'skip') cmd.push('--yes-always')
+    if (model) cmd.push('--model', model)
     return cmd
   }
 

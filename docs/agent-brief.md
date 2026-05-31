@@ -93,7 +93,7 @@ CLI:
 - TUI run manager with Welcome, Runs, Run hub, Terminal detail, New Run, Add Terminal, Settings, Doctor, Reference, and Credits pages.
 - Per-run tmux sessions with independent provider terminals.
 - Local JSON registry under `~/.reeves/runs`.
-- Provider launch support for `cc`, `codex`, `opencode`, and `hermes`.
+- Provider launch support for `cc`, `codex`, `opencode`, `hermes`, `kimi`, `deepseek`, `pi`, `qwen`, and `aider`.
 - Spawner CLI operator commands.
 - Fake-provider unit and smoke coverage.
 

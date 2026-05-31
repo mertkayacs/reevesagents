@@ -24,13 +24,13 @@ import type {
   AgentRecord,
   Message,
   Permissions,
-  Provider,
   RunMode,
   RunRecord,
   RunViewStatus,
   TaskStatus,
 } from './types.js'
 import { redactSecrets } from '../utils/display.js'
+import { isProvider } from '../launcher/providers.js'
 
 export function stateRoot(): string {
   return process.env.REEVES_REGISTRY || join(homedir(), '.reeves')
@@ -110,10 +110,6 @@ function atomicWriteJson(path: string, data: unknown): void {
   writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
   chmodSync(tmpPath, 0o600)
   renameSync(tmpPath, path)
-}
-
-function isProvider(value: unknown): value is Provider {
-  return value === 'cc' || value === 'codex' || value === 'opencode' || value === 'hermes'
 }
 
 function normalizeTaskStatus(value: unknown): TaskStatus {

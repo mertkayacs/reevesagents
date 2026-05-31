@@ -124,15 +124,20 @@ describe('store', () => {
         { nickname_template: 'codex-w',  provider: 'codex',  model: 'gpt-5',    auth_mode: 'default', effort: 'default', initial_prompt: 'codex prompt', working_dir: '/tmp', permissions: 'ask', rc_enabled: true  },
         { nickname_template: 'opencode-w', provider: 'opencode', model: 'pro',      auth_mode: 'default', effort: 'default', initial_prompt: 'opencode prompt',working_dir: '/tmp', permissions: 'skip',rc_enabled: false },
         { nickname_template: 'hermes-w', provider: 'hermes', model: 'haiku',    auth_mode: 'default', effort: 'default', initial_prompt: 'hermes prompt',working_dir: '/tmp', permissions: 'ask', rc_enabled: false },
+        { nickname_template: 'kimi-w', provider: 'kimi', model: 'kimi-code/kimi-for-coding', auth_mode: 'default', effort: 'default', initial_prompt: 'kimi prompt', working_dir: '/tmp', permissions: 'ask', rc_enabled: false },
+        { nickname_template: 'deepseek-w', provider: 'deepseek', model: 'deepseek-coder:6.7b', auth_mode: 'default', effort: 'default', initial_prompt: 'deepseek prompt', working_dir: '/tmp', permissions: 'ask', rc_enabled: false },
+        { nickname_template: 'pi-w', provider: 'pi', model: 'sonnet', auth_mode: 'default', effort: 'default', initial_prompt: 'pi prompt', working_dir: '/tmp', permissions: 'ask', rc_enabled: false },
+        { nickname_template: 'qwen-w', provider: 'qwen', model: 'qwen3-coder-plus', auth_mode: 'default', effort: 'default', initial_prompt: 'qwen prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'aider-w', provider: 'aider', model: 'deepseek/deepseek-chat', auth_mode: 'default', effort: 'default', initial_prompt: 'aider prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
       ],
     })
     saveSavedTree(tree)
     const loaded = loadSavedTree(testName)
-    expect(loaded?.workers).toHaveLength(4)
-    expect(loaded?.workers.map(w => w.provider)).toEqual(['cc', 'codex', 'opencode', 'hermes'])
-    expect(loaded?.workers.map(w => w.nickname_template)).toEqual(['claude-w', 'codex-w', 'opencode-w', 'hermes-w'])
-    expect(loaded?.workers.map(w => w.initial_prompt)).toEqual(['cc prompt', 'codex prompt', 'opencode prompt', 'hermes prompt'])
-    expect(loaded?.workers.map(w => w.model)).toEqual(['sonnet', 'gpt-5', 'pro', 'haiku'])
+    expect(loaded?.workers).toHaveLength(9)
+    expect(loaded?.workers.map(w => w.provider)).toEqual(['cc', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider'])
+    expect(loaded?.workers.map(w => w.nickname_template)).toEqual(['claude-w', 'codex-w', 'opencode-w', 'hermes-w', 'kimi-w', 'deepseek-w', 'pi-w', 'qwen-w', 'aider-w'])
+    expect(loaded?.workers.map(w => w.initial_prompt)).toEqual(['cc prompt', 'codex prompt', 'opencode prompt', 'hermes prompt', 'kimi prompt', 'deepseek prompt', 'pi prompt', 'qwen prompt', 'aider prompt'])
+    expect(loaded?.workers.map(w => w.model)).toEqual(['sonnet', 'gpt-5', 'pro', 'haiku', 'kimi-code/kimi-for-coding', 'deepseek-coder:6.7b', 'sonnet', 'qwen3-coder-plus', 'deepseek/deepseek-chat'])
     // permissions/rc per-worker should not leak between slots
     expect(loaded?.workers[2]?.permissions).toBe('skip')
     expect(loaded?.workers[0]?.rc_enabled).toBe(true)

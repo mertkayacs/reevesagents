@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync, rename
 import { join, dirname } from 'node:path'
 import type { SavedTree, SavedTreeSlot } from './types.js'
 import { stateRoot } from './runs.js'
+import { isProvider } from '../launcher/providers.js'
 
 function stateDir(): string {
   return stateRoot()
@@ -42,7 +43,7 @@ function normalizeSlot(raw: Record<string, unknown>, fallbackDir = ''): SavedTre
     : ''
   return {
     nickname_template: typeof raw.nickname_template === 'string' ? raw.nickname_template : 'agent',
-    provider: raw.provider === 'codex' || raw.provider === 'opencode' || raw.provider === 'hermes' || raw.provider === 'cc' ? raw.provider : 'cc',
+    provider: isProvider(raw.provider) ? raw.provider : 'cc',
     model: typeof raw.model === 'string' ? raw.model : '',
     auth_mode: raw.auth_mode === 'api-key' ? 'api-key' : 'default',
     effort: isEffort(raw.effort) ? raw.effort : 'default',
