@@ -59,7 +59,42 @@ The TUI model picker is provider-scoped. The values live in `src/launcher/model-
 
 Default permissions are `ask`. Use `skip` only in trusted disposable workspaces.
 
-## Install From Source
+## Install
+
+The supported install surfaces all install the main spawner app only. They do not install `packages/orchestrator`, do not register MCP config, and do not add approval or orchestration commands.
+
+After npm publish:
+
+```sh
+npm install -g reevesagents
+reevesagents doctor
+```
+
+Other npm-registry clients consume the same package:
+
+```sh
+pnpm add -g reevesagents
+npx reevesagents doctor
+pnpm dlx reevesagents doctor
+yarn dlx reevesagents doctor
+bunx reevesagents doctor
+```
+
+After the Homebrew tap exists:
+
+```sh
+brew install mertkayacs/tap/reevesagents
+reevesagents doctor
+```
+
+From a GitHub Release tarball:
+
+```sh
+npm install -g ./reevesagents-0.9.0.tgz
+reevesagents doctor
+```
+
+From source:
 
 ```sh
 git clone https://github.com/mertkayacs/reevesagents.git
@@ -150,7 +185,7 @@ reevesagents doctor          # setup checks
 - The root npm tarball does not include `packages/orchestrator`.
 - The PRE-BETA package can change or break without a main-app semver promise.
 
-Use it only when explicitly testing orchestration. The stable app users should install and run `reevesagents`.
+Do not publish or install the orchestrator package as a normal user path yet. Use it only when explicitly testing orchestration. Stable app users should install and run `reevesagents`.
 
 ## Development
 

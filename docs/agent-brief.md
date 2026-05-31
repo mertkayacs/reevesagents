@@ -101,6 +101,7 @@ CLI:
 
 - npm package publication is not available yet.
 - Homebrew installation is not available yet.
+- All future stable install paths must install the root spawner package only: npm, pnpm, one-off runners, GitHub Release tarballs, Homebrew, and source.
 - Real provider checks depend on local provider installation, auth, quota, and current provider CLI behavior.
 - Browser-style UI automation does not cover the Ink TUI. The TUI still needs a short manual terminal pass.
 - `specs/` contains local historical design notes, not release documentation.

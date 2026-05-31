@@ -9,6 +9,7 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 - Release checks for typecheck, lint, unit tests, build, CLI smoke, and package packing.
 - Spawner mode as the default low-permission multi-terminal run path.
 - PRE-BETA orchestrator test package kept outside the default install path.
+- Install surface policy for npm, pnpm, one-off runners, GitHub release tarballs, Homebrew, and source.
 
 ### Changed
 - Set the package, CLI, README, and Credits page version to `0.9.0`.

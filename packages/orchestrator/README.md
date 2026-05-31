@@ -9,6 +9,7 @@ Current boundaries:
 - Root `pnpm install` does not install this package.
 - The root `reevesagents` CLI exposes no MCP, setup, approval, or orchestration commands.
 - The root npm tarball does not include this directory.
+- npm, pnpm, one-off runner, Homebrew, GitHub Release tarball, and source installs for `reevesagents` are stable spawner installs only.
 - This package may change or break before it becomes stable.
 
 Test it only when you intentionally want provider CLIs or host agents to call the ReevesAgents MCP control plane.
