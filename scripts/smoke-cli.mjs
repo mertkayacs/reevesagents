@@ -29,6 +29,11 @@ function providerHelp(name) {
   if (name === 'claude') return '--dangerously-skip-permissions --model --effort'
   if (name === 'codex') return '--dangerously-bypass-approvals-and-sandbox --model --enable'
   if (name === 'opencode') return '--prompt --model'
+  if (name === 'kimi') return '--model --yolo'
+  if (name === 'deepseek') return '--model'
+  if (name === 'pi') return '--model'
+  if (name === 'qwen') return '--model --approval-mode --yolo'
+  if (name === 'aider') return '--model --yes-always'
   return 'chat --model --yolo'
 }
 
@@ -41,7 +46,7 @@ function installFakeBins(binDir) {
     '',
   ].join('\n'))
 
-  for (const bin of ['claude', 'codex', 'opencode', 'hermes']) {
+  for (const bin of ['claude', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider']) {
     writeExecutable(join(binDir, bin), [
       '#!/bin/sh',
       'for arg in "$@"; do',

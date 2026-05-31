@@ -32,7 +32,7 @@ export function Credits() {
         <Section label="Stack" />
         <Row selected={false} primary="Interface" trailing="Ink TUI and spawner CLI" />
         <Row selected={false} primary="Runtime" trailing="tmux sessions and provider CLI windows" />
-        <Row selected={false} primary="Providers" trailing="Claude Code, Codex CLI, OpenCode, Hermes" />
+        <Row selected={false} primary="Providers" trailing="Claude Code, Codex CLI, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider" />
         <SectionEnd />
 
         <Box marginTop={1} />

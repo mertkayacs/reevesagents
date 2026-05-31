@@ -21,6 +21,11 @@ const LABELS = {
   codex: 'Codex CLI',
   opencode: 'OpenCode CLI',
   hermes: 'Hermes',
+  kimi: 'Kimi Code',
+  deepseek: 'DeepSeek CLI',
+  pi: 'Pi',
+  qwen: 'Qwen Code',
+  aider: 'Aider',
 } as const
 
 const CONFIG_PATHS = {
@@ -28,6 +33,11 @@ const CONFIG_PATHS = {
   codex: '~/.codex/config.toml',
   opencode: '~/.config/opencode/opencode.json',
   hermes: '~/.hermes/config.yaml',
+  kimi: '~/.kimi-code/config.toml',
+  deepseek: 'DEEPSEEK_MODEL / .env',
+  pi: '~/.pi',
+  qwen: '~/.qwen/settings.json',
+  aider: '~/.aider.conf.yml',
 }
 
 type RowType = 'provider' | 'statePath' | 'action'

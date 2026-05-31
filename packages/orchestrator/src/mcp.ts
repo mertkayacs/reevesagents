@@ -7,7 +7,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
-import { PROVIDERS } from '../../../src/launcher/providers.js'
+import { isProvider } from '../../../src/launcher/providers.js'
 import {
   interrupt,
   killAgent,
@@ -54,6 +54,8 @@ import {
 type Caller =
   | { role: 'operator' }
   | { role: 'root' | 'worker', agent: AgentRecord, run: RunRecord }
+
+const ORCHESTRATOR_PROVIDERS = ['cc', 'codex', 'opencode', 'hermes'] as const satisfies readonly Provider[]
 
 function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] }
@@ -104,12 +106,12 @@ function parsePermissions(value: unknown): Permissions | undefined {
 }
 
 function parseProvider(value: unknown): Provider {
-  if (value === 'cc' || value === 'codex' || value === 'opencode' || value === 'hermes') return value
+  if (isProvider(value) && (ORCHESTRATOR_PROVIDERS as readonly string[]).includes(value)) return value
   throw new Error(`Unsupported provider: ${String(value)}`)
 }
 
 function parseOptionalProvider(value: unknown): Provider {
-  if (value === 'cc' || value === 'codex' || value === 'opencode' || value === 'hermes') return value
+  if (isProvider(value) && (ORCHESTRATOR_PROVIDERS as readonly string[]).includes(value)) return value
   return 'cc'
 }
 
@@ -255,7 +257,7 @@ export const TOOLS = [
         root: {
           type: 'object',
           properties: {
-            provider: { type: 'string', enum: PROVIDERS },
+            provider: { type: 'string', enum: ORCHESTRATOR_PROVIDERS },
             model: { type: 'string' },
             task: { type: 'string' },
             nickname: { type: 'string' },
@@ -389,7 +391,7 @@ export const TOOLS = [
       type: 'object',
       properties: {
         run_id: { type: 'string' },
-        provider: { type: 'string', enum: PROVIDERS },
+        provider: { type: 'string', enum: ORCHESTRATOR_PROVIDERS },
         model: { type: 'string' },
         task: { type: 'string' },
         nickname: { type: 'string' },

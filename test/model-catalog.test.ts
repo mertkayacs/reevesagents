@@ -6,13 +6,11 @@ import {
   modelSourceForProvider,
   modelValuesForProvider,
 } from '../src/launcher/model-catalog.js'
-import type { Provider } from '../src/state/types.js'
+import { PROVIDERS } from '../src/launcher/providers.js'
 
 describe('model catalog', () => {
   it('adds provider default before provider model files', () => {
-    const providers: Provider[] = ['cc', 'codex', 'opencode', 'hermes']
-
-    for (const provider of providers) {
+    for (const provider of PROVIDERS) {
       const values = modelValuesForProvider(provider)
       expect(values[0]).toBe('')
       expect(values.length).toBeGreaterThan(1)
@@ -25,6 +23,11 @@ describe('model catalog', () => {
     expect(MODEL_CATALOG.codex.models).toEqual(['gpt-5-codex', 'gpt-5'])
     expect(MODEL_CATALOG.opencode.models).toContain('anthropic/claude-sonnet-4-5')
     expect(MODEL_CATALOG.hermes.models).toContain('anthropic/claude-sonnet-4')
+    expect(MODEL_CATALOG.kimi.models).toEqual(['kimi-code/kimi-for-coding'])
+    expect(MODEL_CATALOG.deepseek.models).toContain('deepseek-coder:6.7b')
+    expect(MODEL_CATALOG.pi.models).toContain('sonnet')
+    expect(MODEL_CATALOG.qwen.models).toContain('qwen3-coder-plus')
+    expect(MODEL_CATALOG.aider.models).toContain('deepseek/deepseek-chat')
   })
 
   it('renders an empty model as the provider default label', () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { PROVIDERS } from '../src/launcher/providers.js'
 import type { Provider } from '../src/state/types.js'
 
 describe('display utilities', () => {
@@ -25,8 +26,7 @@ describe('display utilities', () => {
 
     it('always returns a non-empty string', async () => {
       const { providerColor } = await import('../src/utils/display.js')
-      const providers: Provider[] = ['cc', 'codex', 'opencode', 'hermes']
-      for (const p of providers) {
+      for (const p of PROVIDERS) {
         expect(providerColor(p).length).toBeGreaterThan(0)
       }
     })

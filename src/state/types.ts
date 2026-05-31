@@ -1,6 +1,6 @@
 // Core type definitions for spawner run state, presets, and TUI routing.
 
-export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes'
+export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes' | 'kimi' | 'deepseek' | 'pi' | 'qwen' | 'aider'
 
 export type Permissions = 'skip' | 'ask'
 

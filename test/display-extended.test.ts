@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Provider } from '../src/state/types.js'
+import { PROVIDERS } from '../src/launcher/providers.js'
 
 describe('providerColor — extended providers', () => {
   it('hermes returns muted rose hex', async () => {
@@ -9,16 +9,14 @@ describe('providerColor — extended providers', () => {
 
   it('all focused providers return distinct colors', async () => {
     const { providerColor } = await import('../src/utils/display.js')
-    const providers: Provider[] = ['cc', 'codex', 'opencode', 'hermes']
-    const colors = providers.map(providerColor)
+    const colors = PROVIDERS.map(providerColor)
     const unique = new Set(colors)
-    expect(unique.size).toBe(providers.length)
+    expect(unique.size).toBe(PROVIDERS.length)
   })
 
   it('all focused providers return non-empty strings', async () => {
     const { providerColor } = await import('../src/utils/display.js')
-    const providers: Provider[] = ['cc', 'codex', 'opencode', 'hermes']
-    for (const p of providers) {
+    for (const p of PROVIDERS) {
       const color = providerColor(p)
       expect(typeof color).toBe('string')
       expect(color.length).toBeGreaterThan(0)

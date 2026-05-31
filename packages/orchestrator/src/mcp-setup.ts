@@ -8,7 +8,8 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import type { Provider } from '../../../src/state/types.js'
-import { PROVIDERS } from '../../../src/launcher/providers.js'
+
+const ORCHESTRATOR_MCP_PROVIDERS = ['cc', 'codex', 'opencode', 'hermes'] as const satisfies readonly Provider[]
 
 export interface CliRegistration {
   provider: Provider
@@ -340,7 +341,7 @@ export function unregister(provider: Provider): CliRegistration {
 }
 
 export function isRegistered(providerOrPath: Provider | string): boolean {
-  if (PROVIDERS.includes(providerOrPath as Provider)) {
+  if ((ORCHESTRATOR_MCP_PROVIDERS as readonly string[]).includes(providerOrPath)) {
     const provider = providerOrPath as Provider
     const path = configPath(provider)
     if (provider === 'cc') return isJsonRegistered(path)
@@ -353,5 +354,5 @@ export function isRegistered(providerOrPath: Provider | string): boolean {
 }
 
 export function registerAll(): CliRegistration[] {
-  return PROVIDERS.map(provider => register(provider))
+  return ORCHESTRATOR_MCP_PROVIDERS.map(provider => register(provider))
 }

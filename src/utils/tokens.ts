@@ -40,6 +40,11 @@ export const colors = {
     codex:    '#7aa8c4',  // cool teal-blue
     opencode: '#a890d1',  // muted purple
     hermes:   '#c97b9b',  // muted rose
+    kimi:     '#b6a45d',  // muted gold
+    deepseek: '#6fb0a8',  // muted cyan
+    pi:       '#86a76b',  // muted olive
+    qwen:     '#c58c63',  // muted copper
+    aider:    '#8fa6d4',  // muted periwinkle
   },
 } as const
 

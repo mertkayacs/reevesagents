@@ -23,7 +23,7 @@ function slot(overrides: Partial<SavedTreeSlot>): SavedTreeSlot {
   }
 }
 
-// Preset 1: hermes-led implementation team using all four providers.
+// Preset 1: hermes-led implementation team using the original provider mix.
 function makeResearchTeam(createdAt: string): SavedTree {
   return {
     name: 'research-team',
