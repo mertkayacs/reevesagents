@@ -53,7 +53,7 @@ export function AddWorker() {
       current: draft.model,
       values: modelValuesForProvider(draft.provider),
       display: modelDisplayName(draft.model),
-      hint: 'provider file · ← → cycle',
+      hint: 'optional · blank uses CLI default',
     },
     { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'not available for this run type', required: !isSpawner },
     { kind: 'text', id: 'workingDir', label: 'Working Dir', value: draft.workingDir, helpText: 'defaults to the run working dir', required: false },

@@ -26,7 +26,7 @@ Current main-package runtime and state model:
 - `src/launcher/runtime.ts`: spawner-only tmux runtime with one per-run session and one terminal per window.
 - `src/launcher/provider-launch.ts`: spawner launch helpers for working directories and shell-safe command construction.
 - `src/launcher/providers.ts`: provider command detection and flag construction.
-- `src/launcher/model-data/*.ts`: provider-scoped model catalog files used by the TUI picker.
+- `src/launcher/model-data/*.ts`: curated provider-scoped model choices used by the TUI picker. Blank model keeps the provider CLI default.
 - `src/cli.ts`: compact CLI surface.
 
 State layout:

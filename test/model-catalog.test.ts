@@ -16,19 +16,19 @@ describe('model catalog', () => {
       const values = modelValuesForProvider(provider)
       expect(values[0]).toBe('')
       expect(values.length).toBeGreaterThan(1)
-      expect(modelSourceForProvider(provider)).toMatch(/^https:\/\//)
+      expect(modelSourceForProvider(provider)).toMatch(/^curated /)
     }
   })
 
-  it('keeps provider-specific direct model IDs', () => {
-    expect(MODEL_CATALOG.cc.models).toContain('claude-sonnet-4-6')
-    expect(MODEL_CATALOG.codex.models).toContain('gpt-5.3-codex')
-    expect(MODEL_CATALOG.opencode.models).toContain('openai/gpt-5.3-codex')
-    expect(MODEL_CATALOG.hermes.models).toContain('openrouter:anthropic/claude-sonnet-4.6')
+  it('keeps provider-specific curated model IDs', () => {
+    expect(MODEL_CATALOG.cc.models).toEqual(['sonnet', 'opus', 'haiku'])
+    expect(MODEL_CATALOG.codex.models).toEqual(['gpt-5-codex', 'gpt-5'])
+    expect(MODEL_CATALOG.opencode.models).toContain('anthropic/claude-sonnet-4-5')
+    expect(MODEL_CATALOG.hermes.models).toContain('anthropic/claude-sonnet-4')
   })
 
   it('renders an empty model as the provider default label', () => {
     expect(modelDisplayName('')).toBe(PROVIDER_DEFAULT_MODEL_LABEL)
-    expect(modelDisplayName('gpt-5.3-codex')).toBe('gpt-5.3-codex')
+    expect(modelDisplayName('gpt-5-codex')).toBe('gpt-5-codex')
   })
 })
