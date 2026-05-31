@@ -2,7 +2,7 @@
 // Each provider has a different binary, permission flags, and model args.
 // RC (remote control) is provider-specific: CC uses send-keys injection.
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import type { Provider, Permissions, AuthMode, Effort } from '../state/types.js'
 
 export interface BuildCommandOptions {
@@ -254,11 +254,16 @@ export function inspectProviderCompatibility(): Record<Provider, ProviderCompati
         continue
       }
       const [bin, ...args] = helpCommand(provider)
-      const help = execFileSync(bin, args, {
+      const inspected = spawnSync(bin, args, {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: Math.min(HELP_INSPECT_TIMEOUT_MS, remaining),
       })
+      if (inspected.error) throw inspected.error
+      const help = `${inspected.stdout ?? ''}\n${inspected.stderr ?? ''}`
+      if (inspected.status !== 0 && help.trim().length === 0) {
+        throw new Error(`help exited ${inspected.status}`)
+      }
       const missing = missingHelpFeatures(provider, help)
       result[provider] = {
         provider,
