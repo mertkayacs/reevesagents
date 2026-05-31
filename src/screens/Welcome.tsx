@@ -31,12 +31,11 @@ export function Welcome() {
   const mascotVariant = pickMascotVariant(contentColumns)
   const actions = useMemo(() => {
     const rows: Array<{ label: string; hint: string; screen?: ScreenName; quit?: boolean }> = [
-      { label: 'New Run', hint: 'Spawner workspace or Orchestrator BETA', screen: 'NewRun' },
+      { label: 'New Run', hint: 'start a spawner workspace', screen: 'NewRun' },
       { label: 'Runs', hint: 'open active and recent runs', screen: 'Runs' },
       { label: 'Doctor', hint: 'check local setup', screen: 'Doctor' },
       { label: 'Settings', hint: 'providers and paths', screen: 'Settings' },
-      { label: 'Approvals', hint: 'Orchestrator BETA requests', screen: 'Approvals' },
-      { label: 'Reference', hint: 'Spawner, Orchestrator BETA, CLI, MCP', screen: 'Reference' },
+      { label: 'Reference', hint: 'Spawner, TUI, CLI, tmux', screen: 'Reference' },
       { label: 'Credits', hint: 'about ReevesAgents', screen: 'Credits' },
       { label: 'Quit', hint: 'exit the TUI', quit: true },
     ]
@@ -100,7 +99,7 @@ export function Welcome() {
 
         <Box flexDirection="column">
           <Text color={colors.text.dim}>Local tmux-first workspace manager for AI CLI terminals.</Text>
-          <Text color={colors.text.dim}>Spawner default · Orchestrator BETA · TUI · CLI</Text>
+          <Text color={colors.text.dim}>Spawner · TUI · CLI · tmux</Text>
         </Box>
 
         <Box flexDirection="column" marginTop={1}>

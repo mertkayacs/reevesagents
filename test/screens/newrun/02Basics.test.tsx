@@ -28,7 +28,7 @@ describe('NewRunBasics', () => {
     const output = lastFrame()
     expect(output).toContain('ReevesAgents')
     expect(output).toContain('New Run')
-    expect(output).toContain('2 / 5')
+    expect(output).toContain('1 / 4')
     expect(output).toContain('Basics')
   })
 

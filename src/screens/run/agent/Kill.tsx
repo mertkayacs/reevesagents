@@ -1,5 +1,4 @@
-// Agent close: confirm dialog to close a worker window. Root agent cannot be closed alone.
-// Shows error message for root; shows Dialog for workers.
+// Terminal close: confirm dialog before closing a spawner terminal window.
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
@@ -37,7 +36,7 @@ export function AgentKill() {
       pop()
       return
     }
-    if (key.return && agent && run?.mode !== 'spawner' && agent.role === 'root') {
+    if (key.return && agent && run?.mode !== 'spawner') {
       handleBackClicked()
       return
     }
@@ -51,15 +50,15 @@ export function AgentKill() {
     return (
       <Frame
         breadcrumb={['ReevesAgents', 'Runs']}
-        statusContext="Agent not found"
+        statusContext="Terminal not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Agent not found.</Text>
+          <Text color={colors.text.dim}>Terminal not found.</Text>
           <Box marginTop={1}>
             <Row
               selected={true}
               primary="Back"
-              hint="return to agent detail"
+              hint="return to terminal detail"
             />
           </Box>
         </Box>
@@ -69,19 +68,19 @@ export function AgentKill() {
 
   const isSpawner = run.mode === 'spawner'
 
-  if (!isSpawner && agent.role === 'root') {
+  if (!isSpawner) {
     return (
       <Frame
-        breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, 'Close']}
+        breadcrumb={['ReevesAgents', 'Runs', run.name, 'Entries', agent.nickname, 'Close']}
         statusKeys="enter back · esc cancel"
       >
         <Box flexDirection="column">
-          <Text color={colors.status.warn}>Cannot close root agent alone. Use Return & Stop Run instead.</Text>
+          <Text color={colors.status.warn}>This run type is not managed by the spawner package.</Text>
           <Box marginTop={2}>
             <Row
               selected={true}
               primary="Back"
-              hint="return to agent detail"
+              hint="return to entry detail"
             />
           </Box>
         </Box>
@@ -91,14 +90,14 @@ export function AgentKill() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Agents', agent.nickname, 'Close']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries', agent.nickname, 'Close']}
       statusKeys="←→ switch · enter select · esc cancel"
     >
       <Dialog
         title={`Close ${agent.nickname}?`}
         body={isSpawner
           ? 'Closes this terminal window and marks it ended. Other terminals continue.'
-          : 'Closes this worker\'s tmux window and marks the agent ended. The root and other workers continue.'}
+          : 'This run type is not managed by the spawner package.'}
         intent="danger"
         confirmLabel="Close"
         cancelLabel="Cancel"

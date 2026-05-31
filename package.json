@@ -23,17 +23,11 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src test",
-    "smoke:mcp": "node scripts/smoke-real.mjs",
     "smoke:cli": "node scripts/smoke-cli.mjs",
-    "smoke:tmux": "node scripts/smoke-tmux-run.mjs",
-    "smoke:providers-real": "node scripts/smoke-providers-real.mjs",
-    "smoke:approval-real": "node scripts/smoke-approval-real.mjs",
     "render-mascot": "node scripts/render-mascot.mjs",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:mcp && pnpm smoke:cli",
-    "verify:real": "pnpm verify && pnpm smoke:tmux && pnpm smoke:providers-real"
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
     "ink": "^7.0.2",
@@ -71,7 +65,6 @@
     "opencode",
     "tmux",
     "spawner",
-    "orchestrator",
     "cli",
     "ink"
   ]

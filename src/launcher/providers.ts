@@ -24,6 +24,45 @@ export const BIN: Record<Provider, string> = {
 export const PROVIDERS = Object.keys(BIN) as Provider[]
 const HELP_INSPECT_TIMEOUT_MS = 3000
 const HELP_INSPECT_TOTAL_BUDGET_MS = 8000
+const HERMES_PROVIDER_PREFIXES = new Set([
+  'auto',
+  'openrouter',
+  'nous',
+  'openai-codex',
+  'copilot-acp',
+  'copilot',
+  'anthropic',
+  'gemini',
+  'google-gemini-cli',
+  'huggingface',
+  'novita',
+  'zai',
+  'kimi-coding',
+  'kimi-coding-cn',
+  'minimax',
+  'minimax-cn',
+  'minimax-oauth',
+  'kilocode',
+  'xiaomi',
+  'arcee',
+  'gmi',
+  'alibaba',
+  'alibaba-coding-plan',
+  'deepseek',
+  'nvidia',
+  'ollama-cloud',
+  'xai',
+  'xai-oauth',
+  'qwen-oauth',
+  'bedrock',
+  'opencode-zen',
+  'opencode-go',
+  'azure-foundry',
+  'lmstudio',
+  'stepfun',
+  'tencent-tokenhub',
+  'custom',
+])
 
 interface HelpRequirement {
   feature: string
@@ -90,11 +129,26 @@ export function buildCommand(opts: BuildCommandOptions): string[] {
   if (provider === 'hermes') {
     cmd.push('chat')
     if (permissions === 'skip') cmd.push('--yolo')
-    if (model) cmd.push('--model', model)
+    if (model) {
+      const parsed = parseHermesModel(model)
+      if (parsed.provider) cmd.push('--provider', parsed.provider)
+      cmd.push('--model', parsed.model)
+    }
     return cmd
   }
 
   return cmd
+}
+
+function parseHermesModel(value: string): { provider?: string; model: string } {
+  const separator = value.indexOf(':')
+  if (separator <= 0) return { model: value }
+
+  const provider = value.slice(0, separator).trim()
+  const model = value.slice(separator + 1).trim()
+  if (!provider || !model || !HERMES_PROVIDER_PREFIXES.has(provider)) return { model: value }
+
+  return { provider, model }
 }
 
 export function detectAvailable(): Record<Provider, boolean> {

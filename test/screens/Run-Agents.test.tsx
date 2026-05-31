@@ -13,6 +13,7 @@ vi.mock('../../src/state/runs.js', async () => {
     ...actual,
     readRun: vi.fn(() => ({
       id: 'run-1',
+      mode: 'spawner',
       name: 'test-run',
       status: 'running',
       tmux_session: 'reeves-123',
@@ -81,7 +82,7 @@ describe('Run › Agents list screen', () => {
     delete process.env.REEVES_RUN_ID
   })
 
-  it('renders breadcrumb with run name and Agents', () => {
+  it('renders breadcrumb with run name and Terminals', () => {
     const { lastFrame, unmount } = render(
       <Router initialScreen="RunAgents" />
     )
@@ -90,7 +91,7 @@ describe('Run › Agents list screen', () => {
     expect(frame).toContain('ReevesAgents')
     expect(frame).toContain('Runs')
     expect(frame).toContain('test-run')
-    expect(frame).toContain('Agents')
+    expect(frame).toContain('Terminals')
     unmount()
   })
 
@@ -126,13 +127,13 @@ describe('Run › Agents list screen', () => {
     unmount()
   })
 
-  it('includes action rows for Add Worker and Back', () => {
+  it('includes action rows for Add Terminal and Back', () => {
     const { lastFrame, unmount } = render(
       <Router initialScreen="RunAgents" />
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Add Worker')
+    expect(frame).toContain('Add Terminal')
     expect(frame).toContain('Back')
     unmount()
   })
@@ -148,18 +149,17 @@ describe('Run › Agents list screen', () => {
     unmount()
   })
 
-  it('shows tagline about agents in this run', () => {
+  it('shows tagline about terminals in this run', () => {
     const { lastFrame, unmount } = render(
       <Router initialScreen="RunAgents" />
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Agents in this Orchestrator BETA run')
-    expect(frame).toContain('real provider CLI agent')
+    expect(frame).toContain('Independent CLI terminals in this spawner run')
     unmount()
   })
 
-  it('shows agent nickname in list when selected', () => {
+  it('shows terminal nickname in list when selected', () => {
     const { lastFrame, unmount } = render(
       <Router initialScreen="RunAgents" />
     )

@@ -13,6 +13,7 @@ vi.mock('../../src/state/runs.js', async () => {
     ...actual,
     readRun: vi.fn(() => ({
       id: 'run-1',
+      mode: 'spawner',
       name: 'test-run',
       status: 'running',
       tmux_session: 'reeves-123',
@@ -68,7 +69,6 @@ vi.mock('../../src/state/runs.js', async () => {
         ended_at: null,
       } as AgentRecord,
     ]),
-    listRunApprovals: vi.fn(() => []),
   }
 })
 
@@ -111,9 +111,9 @@ describe('Run hub screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Agents')
+    expect(frame).toContain('Terminals')
     expect(frame).toContain('Output')
-    expect(frame).toContain('Add Worker')
+    expect(frame).toContain('Add Terminal')
     unmount()
   })
 
@@ -134,7 +134,7 @@ describe('Run hub screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Manage this Orchestrator BETA run')
+    expect(frame).toContain('Manage this spawner run')
     expect(frame).toContain('reeves-123')
     unmount()
   })
@@ -145,9 +145,9 @@ describe('Run hub screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    // B12: right Detail pane dropped; the summary line carries agent count
-    // and session id; the header meta carries status + agents.
-    expect(frame).toContain('agents')
+    // B12: right Detail pane dropped; the summary line carries terminal count
+    // and session id; the header meta carries status + terminals.
+    expect(frame).toContain('terminals')
     expect(frame).toContain('session')
     expect(frame).toContain('reeves-123')
     unmount()

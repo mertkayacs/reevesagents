@@ -60,8 +60,6 @@ function routerContext(patch: Partial<RouterContextValue> = {}): RouterContextVa
     setSelectedRunId: vi.fn(),
     selectedAgentId: null,
     setSelectedAgentId: vi.fn(),
-    selectedApprovalId: null,
-    setSelectedApprovalId: vi.fn(),
     selectedCheckName: null,
     setSelectedCheckName: vi.fn(),
     selectedWorkerIdx: null,
@@ -84,7 +82,7 @@ describe('responsive layout', () => {
     const frame = lastFrame() ?? ''
     expect(frame).toContain('Main Menu')
     expect(frame).toContain('New Run')
-    expect(frame).toContain('1-4 of 9')
+    expect(frame).toContain('1-4 of 8')
     assertFits(frame, 60)
     unmount()
   })
@@ -144,7 +142,7 @@ describe('responsive layout', () => {
     await new Promise(resolve => setTimeout(resolve, 30))
     frame = lastFrame() ?? ''
     expect(frame).toContain('Main Menu')
-    expect(frame).not.toContain('Spawner workspace or Orchestrator BETA')
+    expect(frame).not.toContain('start a spawner workspace')
     expect(frame).toContain('1-')
     assertFits(frame, 60)
 
@@ -152,7 +150,7 @@ describe('responsive layout', () => {
     rerender(content())
     await new Promise(resolve => setTimeout(resolve, 30))
     frame = lastFrame() ?? ''
-    expect(frame).toContain('Spawner workspace or Orchestrator BETA')
+    expect(frame).toContain('start a spawner workspace')
     expect(new Set(menuSeparatorColumns(frame)).size).toBe(1)
     assertFits(frame, 120)
     expect(writeSpy).toHaveBeenCalledWith('\x1b[3J\x1b[2J\x1b[H')

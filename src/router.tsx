@@ -19,8 +19,6 @@ import { AgentOutput } from './screens/run/agent/Output.js'
 import { AgentTask } from './screens/run/agent/Task.js'
 import { AgentKill } from './screens/run/agent/Kill.js'
 import { NewRun } from './screens/NewRun.js'
-import { NewRunMode } from './screens/newrun/00Mode.js'
-import { NewRunPreset } from './screens/newrun/01Preset.js'
 import { NewRunBasics } from './screens/newrun/02Basics.js'
 import { NewRunRoot } from './screens/newrun/03Root.js'
 import { NewRunWorkers } from './screens/newrun/04Workers.js'
@@ -32,11 +30,6 @@ import { RunStop } from './screens/run/Stop.js'
 import { Settings } from './screens/Settings.js'
 import { Reference } from './screens/Reference.js'
 import { Credits } from './screens/Credits.js'
-import { Approvals } from './screens/Approvals.js'
-import { RunApprovals } from './screens/run/Approvals.js'
-import { Approval } from './screens/Approval.js'
-import { ApprovalApprove } from './screens/approval/Approve.js'
-import { ApprovalDeny } from './screens/approval/Deny.js'
 import { Doctor } from './screens/Doctor.js'
 import { DoctorCheck } from './screens/doctor/Check.js'
 import { readTuiOpenToken } from './state/tui-open.js'
@@ -66,8 +59,6 @@ function renderScreen(screen: ScreenName) {
     case 'AgentTask':   return <AgentTask />
     case 'AgentKill':   return <AgentKill />
     case 'NewRun':      return <NewRun />
-    case 'NewRunMode':  return <NewRunMode />
-    case 'NewRunPreset': return <NewRunPreset />
     case 'NewRunBasics': return <NewRunBasics />
     case 'NewRunRoot': return <NewRunRoot />
     case 'NewRunWorkers': return <NewRunWorkers />
@@ -78,11 +69,6 @@ function renderScreen(screen: ScreenName) {
     case 'Settings':    return <Settings />
     case 'Reference':   return <Reference />
     case 'Credits':     return <Credits />
-    case 'Approvals':   return <Approvals />
-    case 'RunApprovals': return <RunApprovals />
-    case 'Approval':    return <Approval />
-    case 'ApprovalApprove': return <ApprovalApprove />
-    case 'ApprovalDeny':    return <ApprovalDeny />
     case 'Doctor':      return <Doctor />
     case 'DoctorCheck': return <DoctorCheck />
     default:            return <Runs />
@@ -122,7 +108,6 @@ export function Router({ initialScreen }: RouterProps = {}) {
   const openTokenRef = useRef(readTuiOpenToken())
   const [selectedRunId, setSelectedRunId] = useState<string | null>(envRunId)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
-  const [selectedApprovalId, setSelectedApprovalId] = useState<string | null>(null)
   const [selectedCheckName, setSelectedCheckName] = useState<string | null>(null)
   const [selectedWorkerIdx, setSelectedWorkerIdx] = useState<number | null>(null)
   const [history, setHistory] = useState<HistoryState>(() => ({
@@ -137,7 +122,6 @@ export function Router({ initialScreen }: RouterProps = {}) {
       if (!token || token === openTokenRef.current) return
       openTokenRef.current = token
       setSelectedAgentId(null)
-      setSelectedApprovalId(null)
       setSelectedCheckName(null)
       setSelectedWorkerIdx(null)
       setHistory({ entries: ['Welcome'], index: 0 })
@@ -193,8 +177,6 @@ export function Router({ initialScreen }: RouterProps = {}) {
       setSelectedRunId,
       selectedAgentId,
       setSelectedAgentId,
-      selectedApprovalId,
-      setSelectedApprovalId,
       selectedCheckName,
       setSelectedCheckName,
       selectedWorkerIdx,

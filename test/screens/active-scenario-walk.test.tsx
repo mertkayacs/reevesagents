@@ -1,4 +1,4 @@
-// Renders active run/agent/approval scenarios with seeded state.
+// Renders active run/agent scenarios with seeded state.
 // Visual aid only: run with --reporter=verbose to inspect the frames.
 
 import React from 'react'
@@ -20,15 +20,9 @@ import { AgentDetail } from '../../src/screens/AgentDetail.js'
 import { AgentOutput } from '../../src/screens/run/agent/Output.js'
 import { AgentTask } from '../../src/screens/run/agent/Task.js'
 import { AgentKill } from '../../src/screens/run/agent/Kill.js'
-import { RunApprovals } from '../../src/screens/run/Approvals.js'
-import { Approvals } from '../../src/screens/Approvals.js'
-import { Approval } from '../../src/screens/Approval.js'
-import { ApprovalApprove } from '../../src/screens/approval/Approve.js'
-import { ApprovalDeny } from '../../src/screens/approval/Deny.js'
 import { AddWorker } from '../../src/screens/run/AddWorker.js'
 import { RunStop } from '../../src/screens/run/Stop.js'
 import { NewRun } from '../../src/screens/NewRun.js'
-import { NewRunPreset } from '../../src/screens/newrun/01Preset.js'
 import { NewRunBasics } from '../../src/screens/newrun/02Basics.js'
 import { NewRunRoot } from '../../src/screens/newrun/03Root.js'
 import { NewRunWorkers } from '../../src/screens/newrun/04Workers.js'
@@ -36,11 +30,7 @@ import { NewRunReview } from '../../src/screens/newrun/05Review.js'
 import { Settings } from '../../src/screens/Settings.js'
 import { Reference } from '../../src/screens/Reference.js'
 import { Credits } from '../../src/screens/Credits.js'
-import {
-  createRunApproval,
-  writeAgent,
-  writeRun,
-} from '../../src/state/runs.js'
+import { writeAgent, writeRun } from '../../src/state/runs.js'
 import type {
   AgentRecord,
   RouterContextValue,
@@ -74,7 +64,6 @@ const ROOT_ID = 'scenario-root'
 const WORKER_ID = 'scenario-worker-1'
 
 let registry = ''
-let selectedApprovalId = ''
 
 function makeRun(): RunRecord {
   return {
@@ -136,17 +125,6 @@ function seedScenario(): void {
       started_at: `2026-05-24T10:${String(i + 1).padStart(2, '0')}:00.000Z`,
     }))
   }
-
-  for (let i = 1; i <= 12; i++) {
-    const approval = createRunApproval({
-      agent_id: WORKER_ID,
-      action: `run command ${i}`,
-      summary: `Worker asks to execute command ${i}.`,
-      details: { command: `echo scenario-${i}` },
-      risk: i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low',
-    })
-    if (i === 1) selectedApprovalId = approval.id
-  }
 }
 
 function makeContext(screen: ScreenName, patch: Partial<RouterContextValue> = {}): RouterContextValue {
@@ -161,8 +139,6 @@ function makeContext(screen: ScreenName, patch: Partial<RouterContextValue> = {}
     setSelectedRunId: vi.fn(),
     selectedAgentId: WORKER_ID,
     setSelectedAgentId: vi.fn(),
-    selectedApprovalId,
-    setSelectedApprovalId: vi.fn(),
     selectedCheckName: null,
     setSelectedCheckName: vi.fn(),
     selectedWorkerIdx: null,
@@ -211,15 +187,9 @@ const scenarios: Array<{
   { name: 'Agent output', screen: 'AgentOutput', element: <AgentOutput /> },
   { name: 'Agent task', screen: 'AgentTask', element: <AgentTask /> },
   { name: 'Agent close', screen: 'AgentKill', element: <AgentKill /> },
-  { name: 'Run approvals', screen: 'RunApprovals', element: <RunApprovals /> },
-  { name: 'Global approvals', screen: 'Approvals', element: <Approvals /> },
-  { name: 'Approval detail', screen: 'Approval', element: <Approval /> },
-  { name: 'Approval approve', screen: 'ApprovalApprove', element: <ApprovalApprove /> },
-  { name: 'Approval deny', screen: 'ApprovalDeny', element: <ApprovalDeny /> },
   { name: 'Add worker', screen: 'AddWorker', element: <AddWorker /> },
   { name: 'Run stop', screen: 'RunStop', element: <RunStop /> },
   { name: 'New run entry', screen: 'NewRun', element: <NewRun /> },
-  { name: 'New run preset', screen: 'NewRunPreset', element: <NewRunPreset /> },
   { name: 'New run basics', screen: 'NewRunBasics', element: <NewRunBasics /> },
   { name: 'New run root', screen: 'NewRunRoot', element: <NewRunRoot /> },
   { name: 'New run workers', screen: 'NewRunWorkers', element: <NewRunWorkers /> },
@@ -234,7 +204,6 @@ describe('active scenario walk', () => {
     registry = mkdtempSync(join(tmpdir(), 'reeves-scenario-'))
     process.env.REEVES_REGISTRY = registry
     process.env.REEVES_RUN_ID = RUN_ID
-    selectedApprovalId = ''
     seedScenario()
   })
 

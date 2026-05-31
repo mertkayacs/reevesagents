@@ -1,6 +1,6 @@
-// Add a terminal/worker to an existing run. Single screen, inline editing.
+// Add a terminal to an existing spawner run. Single screen, inline editing.
 // Same Field union + picker cycling pattern as NewRun's 04Worker.
-// On Add Worker, validates provider, model, and prompt, then calls spawnWorker.
+// On Add Terminal, validates provider and model, then calls spawnWorker.
 // On Cancel, resets the worker draft and pops back to Run hub.
 
 import React, { useState, useMemo } from 'react'
@@ -15,6 +15,7 @@ import { useWorkerDraft } from '../../state/WorkerDraftContext.js'
 import { readRun } from '../../state/runs.js'
 import { spawnWorker } from '../../launcher/runtime.js'
 import { PROVIDERS } from '../../launcher/providers.js'
+import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
 import type { Permissions } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
@@ -23,12 +24,14 @@ type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'pe
 type ActionId = 'add' | 'cancel'
 const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Add Worker'.length, 'Cancel'.length)
 
-interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[] }
+interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[]; display?: string; hint?: string }
 interface TextFieldDef { kind: 'text'; id: FieldId; label: string; value: string; helpText: string; required: boolean }
 type Field = PickerField | TextFieldDef
 
 function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
+  if (values.length === 0) return current
   const idx = values.indexOf(current)
+  if (idx === -1) return values[dir === 1 ? 0 : values.length - 1]!
   const next = (idx + dir + values.length) % values.length
   return values[next]!
 }
@@ -43,14 +46,22 @@ export function AddWorker() {
   const fields: Field[] = useMemo(() => [
     { kind: 'text', id: 'nickname', label: 'Nickname', value: draft.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
     { kind: 'picker', id: 'provider', label: 'Provider', current: draft.provider, values: PROVIDERS },
-    { kind: 'text', id: 'model', label: 'Model', value: draft.model, helpText: 'e.g. claude-3-5-sonnet, gpt-4o, or empty for default', required: false },
-    { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'initial task for this worker · enter newline · esc done', required: !isSpawner },
+    {
+      kind: 'picker',
+      id: 'model',
+      label: 'Model',
+      current: draft.model,
+      values: modelValuesForProvider(draft.provider),
+      display: modelDisplayName(draft.model),
+      hint: 'provider file · ← → cycle',
+    },
+    { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'not available for this run type', required: !isSpawner },
     { kind: 'text', id: 'workingDir', label: 'Working Dir', value: draft.workingDir, helpText: 'defaults to the run working dir', required: false },
     { kind: 'picker', id: 'permissions', label: 'Permissions', current: draft.permissions, values: PERMISSIONS_VALUES },
   ], [draft, isSpawner])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'add', label: isSpawner ? 'Add Terminal' : 'Add Worker', hint: isSpawner ? 'spawn an independent CLI terminal' : 'spawn into this run' },
+    { id: 'add', label: isSpawner ? 'Add Terminal' : 'Add Worker', hint: isSpawner ? 'spawn an independent CLI terminal' : 'not available in spawner package' },
     { id: 'cancel', label: 'Cancel', hint: 'discard and return' },
   ]
 
@@ -63,18 +74,19 @@ export function AddWorker() {
 
   function commitText(id: FieldId, value: string): void {
     if (id === 'nickname') update({ nickname: value })
-    else if (id === 'model') update({ model: value })
     else if (id === 'prompt') update({ prompt: value })
     else if (id === 'workingDir') update({ workingDir: value })
   }
 
   function cyclePicker(id: FieldId, dir: 1 | -1): void {
-    if (id === 'provider') update({ provider: cycle(PROVIDERS, draft.provider, dir) })
+    if (id === 'provider') update({ provider: cycle(PROVIDERS, draft.provider, dir), model: '' })
+    else if (id === 'model') update({ model: cycle(modelValuesForProvider(draft.provider), draft.model, dir) })
     else if (id === 'permissions') update({ permissions: cycle(PERMISSIONS_VALUES, draft.permissions, dir) })
   }
 
   function handleAdd(): void {
     if (!selectedRunId) { toast('No run selected', 'error'); return }
+    if (!isSpawner) { toast('This run type cannot add terminals here', 'error'); return }
     if (!draft.provider) { toast('Provider is required', 'error'); return }
     if (!isSpawner && !draft.prompt.trim()) { toast('Prompt is required', 'error'); return }
     try {
@@ -136,8 +148,8 @@ export function AddWorker() {
     <Frame
       breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Add Terminal' : 'Add Worker']}
       tagline={isSpawner
-        ? `Configure an independent CLI terminal for ${run.name}. No MCP context is injected.`
-        : `Orchestrator mode is BETA. Configure a worker for ${run.name}; root will drive it via MCP.`}
+        ? `Configure an independent CLI terminal for ${run.name}.`
+        : 'This run type is not managed by the spawner package.'}
       statusKeys="enter edit/newline · ←→ cycle picker · esc done/back"
     >
       {fields.map((field, fIdx) => {
@@ -163,8 +175,8 @@ export function AddWorker() {
             key={field.id}
             selected={selectedIdx === fIdx}
             primary={field.label}
-            trailing={`‹ ${field.current} ›`}
-            hint={selectedIdx === fIdx ? '← → cycle' : undefined}
+            trailing={`‹ ${field.display ?? field.current} ›`}
+            hint={selectedIdx === fIdx ? field.hint ?? '← → cycle' : undefined}
           />
         )
       })}

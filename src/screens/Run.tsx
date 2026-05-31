@@ -13,12 +13,11 @@ import type { RunRecord } from '../state/types.js'
 
 const REFRESH_INTERVAL_MS = 5000
 
-type RowItem = 'Agents' | 'Output' | 'Approvals' | 'AddWorker' | '__section__' | 'StopRun' | 'Back'
-const ORCHESTRATOR_LABELS: Record<RowItem, string> = {
-  Agents: 'Agents',
+type RowItem = 'Agents' | 'Output' | 'AddWorker' | '__section__' | 'StopRun' | 'Back'
+const OTHER_LABELS: Record<RowItem, string> = {
+  Agents: 'Entries',
   Output: 'Output',
-  Approvals: 'Approvals',
-  AddWorker: 'Add Worker',
+  AddWorker: 'Add Terminal',
   StopRun: 'Return & Stop Run',
   Back: 'Back',
   '__section__': '',
@@ -26,14 +25,13 @@ const ORCHESTRATOR_LABELS: Record<RowItem, string> = {
 const SPAWNER_LABELS: Record<RowItem, string> = {
   Agents: 'Terminals',
   Output: 'Output',
-  Approvals: 'Approvals',
   AddWorker: 'Add Terminal',
   StopRun: 'Return & Stop Run',
   Back: 'Back',
   '__section__': '',
 }
 const ACTION_LABEL_WIDTH = Math.max(
-  ...Object.values(ORCHESTRATOR_LABELS).map(label => label.length),
+  ...Object.values(OTHER_LABELS).map(label => label.length),
   ...Object.values(SPAWNER_LABELS).map(label => label.length),
 )
 
@@ -51,7 +49,7 @@ export function Run() {
 
   const agents = run ? listAgents(run.id) : []
   const isSpawner = run?.mode === 'spawner'
-  const labels = isSpawner ? SPAWNER_LABELS : ORCHESTRATOR_LABELS
+  const labels = isSpawner ? SPAWNER_LABELS : OTHER_LABELS
 
   useEffect(() => {
     if (!selectedRunId) return
@@ -66,7 +64,6 @@ export function Run() {
   const items: SelectableItem[] = [
     { type: 'action', action: 'Agents' },
     { type: 'action', action: 'Output' },
-    ...(isSpawner ? [] : [{ type: 'action' as const, action: 'Approvals' as const }]),
     { type: 'action', action: 'AddWorker' },
     { type: 'action', action: '__section__' },
     { type: 'action', action: 'StopRun' },
@@ -84,9 +81,6 @@ export function Run() {
         break
       case 'Output':
         push('RunOutput')
-        break
-      case 'Approvals':
-        push('RunApprovals')
         break
       case 'AddWorker':
         if (run.status === 'ended' || run.ended_at !== null) return
@@ -154,19 +148,18 @@ export function Run() {
   const rootAgent = agents.find(a => a.role === 'root')
   const isRunEnded = run.status === 'ended' || run.ended_at !== null
   const summaryParts: string[] = []
-  if (!isSpawner && rootAgent) summaryParts.push(`root ${rootAgent.provider}`)
-  summaryParts.push(`${agents.length} ${isSpawner ? 'terminals' : 'agents'}`)
+  if (!isSpawner && rootAgent) summaryParts.push(`first ${rootAgent.provider}`)
+  summaryParts.push(`${agents.length} ${isSpawner ? 'terminals' : 'entries'}`)
   if (run.tmux_session) summaryParts.push(`session ${run.tmux_session}`)
   summaryParts.push(`workdir ${run.working_dir}`)
   const summaryLine = summaryParts.join(' · ')
 
-  let statusContext = `${run.name} · ${run.status} · ${agents.length} ${isSpawner ? 'terminals' : 'agents'}`
+  let statusContext = `${run.name} · ${run.status} · ${agents.length} ${isSpawner ? 'terminals' : 'entries'}`
   if (selected && selected.action !== '__section__') {
     const actionLabels: Record<string, string> = {
-      Agents: isSpawner ? 'view terminals' : 'view agents',
-      Output: isSpawner ? 'peek across terminals' : 'peek across agents',
-      Approvals: 'pending approvals for this run',
-      AddWorker: isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'spawn new worker',
+      Agents: isSpawner ? 'view terminals' : 'view entries',
+      Output: isSpawner ? 'peek across terminals' : 'peek across entries',
+      AddWorker: isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'not available for this run type',
       StopRun: isRunEnded ? 'run is ended' : 'return to Reeves and close run windows',
       Back: 'return to runs',
     }
@@ -178,11 +171,11 @@ export function Run() {
       breadcrumb={['ReevesAgents', 'Runs', run.name]}
       meta={[
         { label: 'status', value: run.status },
-        { label: isSpawner ? 'terminals' : 'agents', value: String(agents.length) },
+        { label: isSpawner ? 'terminals' : 'entries', value: String(agents.length) },
       ]}
       tagline={isSpawner
-        ? 'Manage this spawner run. Terminals are independent provider CLIs with no MCP injection.'
-        : 'Manage this Orchestrator BETA run. Agents live in this run\'s own tmux session.'}
+        ? 'Manage this spawner run. Terminals are independent provider CLIs.'
+        : 'This run type is not managed by the spawner package.'}
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
@@ -204,13 +197,12 @@ export function Run() {
           }
 
           const isDisabledStop = item.action === 'StopRun' && isRunEnded
-          const isDisabledAddWorker = item.action === 'AddWorker' && isRunEnded
+          const isDisabledAddWorker = item.action === 'AddWorker' && (isRunEnded || !isSpawner)
 
           const hints: Record<RowItem, string> = {
-            Agents: `${agents.length} ${isSpawner ? 'terminals' : 'agents'}`,
-            Output: isSpawner ? 'peek across all terminals' : 'peek across all agents',
-            Approvals: 'pending approvals for this run',
-            AddWorker: isRunEnded ? 'run is ended' : isSpawner ? 'launch another independent terminal' : 'launch another worker in this run',
+            Agents: `${agents.length} ${isSpawner ? 'terminals' : 'entries'}`,
+            Output: isSpawner ? 'peek across all terminals' : 'peek across entries',
+            AddWorker: isRunEnded ? 'run is ended' : isSpawner ? 'launch another independent terminal' : 'not available for this run type',
             StopRun: isRunEnded ? 'run is ended' : 'return to Reeves and close this run session',
             Back: 'return to all runs',
             '__section__': '',

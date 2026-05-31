@@ -19,7 +19,7 @@ import type { RunRecord } from '../state/types.js'
 const ACTIONS = ['NewRun', 'Main Menu', 'Quit'] as const
 const CHROME_ROWS = 17
 const ACTION_COPY: Record<typeof ACTIONS[number], { label: string; hint: string }> = {
-  NewRun: { label: 'New Run', hint: 'create a spawner workspace or Orchestrator BETA run' },
+  NewRun: { label: 'New Run', hint: 'create a spawner workspace' },
   'Main Menu': { label: 'Main Menu', hint: 'settings, doctor, reference, credits' },
   Quit: { label: 'Quit', hint: 'exit the TUI' },
 }
@@ -145,7 +145,7 @@ export function Runs() {
   let statusContext = ''
   if (selectedRun) {
     const agents = listAgents(selectedRun.id)
-    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} ${selectedRun.mode === 'spawner' ? 'terminals' : 'agents'} · ${selectedRun.working_dir}`
+    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} ${selectedRun.mode === 'spawner' ? 'terminals' : 'entries'} · ${selectedRun.working_dir}`
   } else if (selected?.type === 'action' && selected.action && selected.action !== '__section__') {
     statusContext = ACTION_COPY[selected.action as typeof ACTIONS[number]]?.hint ?? selected.action
   } else if (selected?.type === 'pagination') {
@@ -160,7 +160,7 @@ export function Runs() {
         { label: 'running', value: String(runningCount) },
         { label: 'stale', value: String(staleCount) },
       ]}
-      tagline="Manage local tmux workspaces. Spawner runs are independent terminals; Orchestrator runs are BETA."
+      tagline="Manage local tmux workspaces. Spawner runs are independent provider CLI terminals."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc main menu"
     >
@@ -187,7 +187,7 @@ export function Runs() {
                 badge={isSpawner
                   ? { label: 'spawn', color: colors.accent.primary }
                   : root ? { label: root.provider, color: providerColor(root.provider) } : undefined}
-                hint={`${agents.length} ${isSpawner ? 'terminals' : 'agents'}`}
+                hint={`${agents.length} ${isSpawner ? 'terminals' : 'entries'}`}
               />
             )
           })

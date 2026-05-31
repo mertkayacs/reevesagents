@@ -20,7 +20,6 @@ function statusGlyph(status: 'ok' | 'warn' | 'fail'): { char: string; color: str
 function findFixHint(check: { name: string; detail: string }): string | null {
   if (check.name === 'tmux' && check.detail.includes('not on PATH')) return 'Install tmux and make sure it is on PATH.'
   if (check.name === 'providers' && check.detail.includes('missing')) return 'Install at least one supported provider CLI and make sure it is on PATH.'
-  if (check.name === 'mcp config') return 'Run reevesagents orchestrator setup.'
   if (check.name.endsWith('dir') && check.detail.includes('not readable/writable')) return 'Fix directory permissions or set REEVES_REGISTRY to a writable path.'
   return null
 }

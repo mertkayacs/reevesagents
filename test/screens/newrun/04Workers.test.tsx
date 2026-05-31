@@ -28,8 +28,6 @@ describe('NewRunWorkers', () => {
       setSelectedRunId: vi.fn(),
       selectedAgentId: null,
       setSelectedAgentId: vi.fn(),
-      selectedApprovalId: null,
-      setSelectedApprovalId: vi.fn(),
       selectedWorkerIdx: null,
       setSelectedWorkerIdx: vi.fn(),
       canBack: false,
@@ -39,6 +37,7 @@ describe('NewRunWorkers', () => {
     vi.spyOn(WizardModule, 'useWizard').mockReturnValue({
       state: {
         name: 'test-run',
+        mode: 'spawner',
         workingDir: '/tmp',
         presetName: null,
         root: {
@@ -72,6 +71,6 @@ describe('NewRunWorkers', () => {
     )
 
     const output = lastFrame()
-    expect(output).toContain('Workers')
+    expect(output).toContain('Terminals')
   })
 })

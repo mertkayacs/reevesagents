@@ -7,7 +7,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
-import { PROVIDERS } from './launcher/providers.js'
+import { PROVIDERS } from '../../../src/launcher/providers.js'
 import {
   interrupt,
   killAgent,
@@ -20,34 +20,36 @@ import {
   startRun,
   stopRun,
   type AllowedKey,
-} from './launcher/runtime.js'
-import { runDoctor } from './launcher/doctor.js'
+} from './runtime.js'
+import { runDoctor } from '../../../src/launcher/doctor.js'
 import {
   appendAgentInbox,
-  createRunApproval,
   findAgent,
   listAgents,
-  listRunApprovals,
   listRuns,
   readAgentInbox,
   readRun,
-  readRunApproval,
-  resolveRunApproval,
   updateAgent,
   computeRunStatus,
   runHasLiveTmuxTarget,
-} from './state/runs.js'
+} from '../../../src/state/runs.js'
 import type {
   AgentRecord,
-  ApprovalRisk,
-  ApprovalStatus,
   Effort,
   Message,
   Permissions,
   Provider,
   RunRecord,
   TaskStatus,
-} from './state/types.js'
+} from '../../../src/state/types.js'
+import {
+  createRunApproval,
+  listRunApprovals,
+  readRunApproval,
+  resolveRunApproval,
+  type ApprovalRisk,
+  type ApprovalStatus,
+} from './approvals.js'
 
 type Caller =
   | { role: 'operator' }
@@ -243,7 +245,7 @@ function markCallerActive(caller: Caller): Caller {
 export const TOOLS = [
   {
     name: 'start_run',
-    description: 'BETA: start an Orchestrator run. External operator only. Creates a per-run tmux session with a root agent and optional workers.',
+    description: 'PRE-BETA: start an Orchestrator run. External operator only. Creates a per-run tmux session with a root agent and optional workers.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -382,7 +384,7 @@ export const TOOLS = [
   },
   {
     name: 'spawn_worker',
-    description: 'BETA: spawn one worker window inside an Orchestrator run session. Root callers may omit run_id to use their current run.',
+    description: 'PRE-BETA: spawn one worker window inside an Orchestrator run session. Root callers may omit run_id to use their current run.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -749,7 +751,7 @@ export async function startMcpServer(): Promise<void> {
   const callerAgentId = process.env.REEVES_SESSION_ID ?? process.env.REEVES_AGENT_ID ?? null
 
   const server = new Server(
-    { name: 'reevesagents', version: '0.9.0' },
+    { name: 'reevesagents-orchestrator', version: '0.9.0' },
     { capabilities: { tools: {} } },
   )
 

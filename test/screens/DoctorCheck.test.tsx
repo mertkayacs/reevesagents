@@ -15,10 +15,6 @@ vi.mock('../../src/launcher/doctor.js', () => ({
   }),
 }))
 
-vi.mock('../../src/mcp-setup.js', () => ({
-  registerAll: vi.fn(() => []),
-}))
-
 describe('DoctorCheck', () => {
   it('exports DoctorCheck as a React component function', () => {
     expect(typeof DoctorCheck).toBe('function')

@@ -1,0 +1,50 @@
+{
+  "name": "reevesagents-orchestrator",
+  "version": "0.9.0",
+  "description": "PRE-BETA MCP orchestration package for ReevesAgents",
+  "type": "module",
+  "bin": {
+    "reevesagents-orchestrator": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run -c vitest.config.ts",
+    "smoke:mcp": "node scripts/smoke-real.mjs",
+    "smoke:tmux": "node scripts/smoke-tmux-run.mjs",
+    "smoke:providers-real": "node scripts/smoke-providers-real.mjs",
+    "smoke:approval-real": "node scripts/smoke-approval-real.mjs",
+    "verify": "pnpm typecheck && pnpm test && pnpm build",
+    "verify:real": "pnpm verify && pnpm smoke:tmux && pnpm smoke:providers-real"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "commander": "^14.0.3",
+    "strip-ansi": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mertkayacs/reevesagents.git",
+    "directory": "packages/orchestrator"
+  },
+  "keywords": [
+    "ai",
+    "mcp",
+    "tmux",
+    "orchestrator",
+    "pre-beta"
+  ]
+}

@@ -1,6 +1,5 @@
-// Run › Agents list: displays only real agents in this run.
-// Frame + List template with root first, then workers.
-// Paginates agent rows when the list exceeds available terminal height.
+// Run terminal list: displays tmux-backed entries in this run.
+// Paginates rows when the list exceeds available terminal height.
 
 import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput, useWindowSize } from 'ink'
@@ -19,7 +18,7 @@ const CHROME_ROWS = 13
 const REFRESH_INTERVAL_MS = 5000
 
 type RowItem = 'agent' | '__section__' | 'pagination' | 'AddWorker' | 'Back'
-const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Add Worker'.length, 'Back'.length)
+const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Add Entry'.length, 'Back'.length)
 
 interface SelectableItem {
   type: 'agent' | 'pagination' | 'action'
@@ -95,7 +94,7 @@ export function RunAgents() {
     if (selected.type === 'action') {
       switch (selected.action) {
         case 'AddWorker':
-          if (run?.status === 'ended' || run?.ended_at !== null) return
+          if (!isSpawner || run?.status === 'ended' || run?.ended_at !== null) return
           push('AddWorker')
           break
         case 'Back': pop(); break
@@ -138,28 +137,28 @@ export function RunAgents() {
   }
 
   const isRunEnded = run.status === 'ended' || run.ended_at !== null
-  let statusContext = `${run.name} · ${agents.length} ${isSpawner ? 'terminals' : 'agents'}`
+  let statusContext = `${run.name} · ${agents.length} ${isSpawner ? 'terminals' : 'entries'}`
   if (selected?.type === 'pagination') statusContext = `page ${page} of ${totalPages} · ← → turn page`
-  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'spawn new worker'
+  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'not available for this run type'
   if (selected?.type === 'action' && selected.action === 'Back') statusContext = 'return to run hub'
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Agents']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries']}
       meta={[
         { label: 'count', value: String(agents.length) },
         { label: 'status', value: run.status },
       ]}
       tagline={isSpawner
-        ? 'Independent CLI terminals in this spawner run. They do not receive ReevesAgents context.'
-        : 'Agents in this Orchestrator BETA run. Each row is a real provider CLI agent.'}
+        ? 'Independent CLI terminals in this spawner run.'
+        : 'This run type is read-only in the spawner package.'}
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
       <Box flexDirection="column">
-        <Section label={isSpawner ? 'Terminals' : 'Agents'} />
+        <Section label={isSpawner ? 'Terminals' : 'Entries'} />
         {agents.length === 0 && (
-          <Row selected={false} primary={isSpawner ? 'No terminals' : 'No agents'} trailing={isSpawner ? 'add a terminal below' : 'add a worker below'} disabled />
+          <Row selected={false} primary={isSpawner ? 'No terminals' : 'No entries'} trailing={isSpawner ? 'add a terminal below' : 'not managed here'} disabled />
         )}
         {pagedData.map((item, idx) => {
           const isSelected = selectedIdx === idx
@@ -198,10 +197,10 @@ export function RunAgents() {
 
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 1}
-          primary={isSpawner ? 'Add Terminal' : 'Add Worker'}
+          primary={isSpawner ? 'Add Terminal' : 'Add Entry'}
           primaryWidth={ACTION_LABEL_WIDTH}
-          hint={isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'spawn new worker'}
-          disabled={isRunEnded}
+          hint={isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'not available for this run type'}
+          disabled={isRunEnded || !isSpawner}
         />
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 2}

@@ -1,6 +1,6 @@
-# MCP Tool Guide (BETA)
+# MCP Tool Guide (PRE-BETA)
 
-`reevesagents mcp` is the Orchestrator BETA programmatic control plane for agents and operator clients. It uses the same local JSON registry and tmux runtime as the TUI and CLI. The CLI can also call the same tools directly with `reevesagents call <tool>`.
+`reevesagents-orchestrator mcp` is the PRE-BETA programmatic control plane for agents and operator clients. It uses the same local JSON registry and tmux runtime as the spawner TUI and CLI. The add-on CLI can also call the same tools directly with `reevesagents-orchestrator call <tool>`.
 
 Spawner mode does not use this path. Spawner terminals receive no ReevesAgents environment variables, no MCP config, no root/worker role, and no inbox or approval instructions.
 
@@ -14,7 +14,7 @@ Caller role is inferred when the MCP server starts:
 | `REEVES_SESSION_ID=<root-agent-id>` or `REEVES_AGENT_ID=<root-agent-id>` | root agent | Can inspect its run, control workers in its run, spawn workers, stop its run, and resolve worker approvals. |
 | `REEVES_SESSION_ID=<worker-agent-id>` or `REEVES_AGENT_ID=<worker-agent-id>` | worker agent | Can inspect itself, read its inbox, update its task status, request approval, and check its own approvals. |
 
-Orchestrator BETA agents also receive `REEVES_AGENT_ID`, `REEVES_RUN_ID`, `REEVES_ROLE`, and `REEVES_REGISTRY` for compatibility and direct context.
+Orchestrator PRE-BETA agents also receive `REEVES_AGENT_ID`, `REEVES_RUN_ID`, `REEVES_ROLE`, and `REEVES_REGISTRY` for compatibility and direct context.
 
 ## Tool Groups
 
@@ -76,10 +76,10 @@ Diagnostics:
 The CLI `call` command is a thin wrapper over this same MCP tool handler. It is useful for scripts and human operator workflows that do not need the full TUI:
 
 ```sh
-reevesagents call context
-reevesagents call get_run '{"run_id":"<run-id>"}'
-printf '%s' '{"agent_id":"<worker-id>","text":"status?"}' | reevesagents call send_message
-reevesagents call spawn_worker --caller <root-agent-id> --file worker.json
+reevesagents-orchestrator call context
+reevesagents-orchestrator call get_run '{"run_id":"<run-id>"}'
+printf '%s' '{"agent_id":"<worker-id>","text":"status?"}' | reevesagents-orchestrator call send_message
+reevesagents-orchestrator call spawn_worker --caller <root-agent-id> --file worker.json
 ```
 
 With no `--caller`, the command acts as an external operator unless `REEVES_SESSION_ID` or `REEVES_AGENT_ID` is already set. With `--caller <agent-id>`, it uses that root or worker scope.

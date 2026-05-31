@@ -17,6 +17,16 @@ describe('buildCommand — extended providers', () => {
       expect(cmd).toContain('claude-opus-4')
     })
 
+    it('splits provider-prefixed model catalog values', () => {
+      const cmd = buildCommand({ provider: 'hermes', permissions: 'ask', model: 'openrouter:anthropic/claude-sonnet-4.6' })
+      expect(cmd).toEqual(['hermes', 'chat', '--provider', 'openrouter', '--model', 'anthropic/claude-sonnet-4.6'])
+    })
+
+    it('does not split plain model ids that contain colons', () => {
+      const cmd = buildCommand({ provider: 'hermes', permissions: 'ask', model: 'gpt-oss:120b' })
+      expect(cmd).toEqual(['hermes', 'chat', '--model', 'gpt-oss:120b'])
+    })
+
     it('skip permissions includes --yolo', () => {
       const cmd = buildCommand({ provider: 'hermes', permissions: 'skip', model: '' })
       expect(cmd).toContain('--yolo')

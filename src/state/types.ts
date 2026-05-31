@@ -1,14 +1,10 @@
-// Core type definitions for run state, presets, MCP, and TUI routing.
+// Core type definitions for spawner run state, presets, and TUI routing.
 
 export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes'
 
 export type Permissions = 'skip' | 'ask'
 
 export type TaskStatus = 'queued' | 'working' | 'done' | 'failed' | 'blocked'
-
-export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired'
-
-export type ApprovalRisk = 'low' | 'medium' | 'high'
 
 export type AuthMode = 'default' | 'api-key'
 
@@ -20,7 +16,7 @@ export type RunStatus = 'running' | 'ended'
 
 export type RunViewStatus = RunStatus | 'stale'
 
-export type RunMode = 'spawner' | 'orchestrator'
+export type RunMode = 'spawner'
 
 export type ScreenName =
   | 'Welcome'
@@ -34,8 +30,6 @@ export type ScreenName =
   | 'AgentTask'
   | 'AgentKill'
   | 'NewRun'
-  | 'NewRunMode'
-  | 'NewRunPreset'
   | 'NewRunBasics'
   | 'NewRunRoot'
   | 'NewRunWorkers'
@@ -46,11 +40,6 @@ export type ScreenName =
   | 'Settings'
   | 'Reference'
   | 'Credits'
-  | 'Approvals'
-  | 'RunApprovals'
-  | 'Approval'
-  | 'ApprovalApprove'
-  | 'ApprovalDeny'
   | 'Doctor'
   | 'DoctorCheck'
 
@@ -65,7 +54,7 @@ export interface Message {
 // ~/.reeves/runs/<run-id>/run.json
 export interface RunRecord {
   id: string
-  mode?: RunMode
+  mode?: string
   name: string
   status: RunStatus
   tmux_session: string
@@ -96,26 +85,11 @@ export interface AgentRecord {
   tmux_pane_id: string
   rc_enabled: boolean
   permissions: Permissions
-  headless?: boolean        // true when root is the MCP caller — no tmux window exists
+  headless?: boolean        // true for add-on caller records with no tmux window
   inbox: Message[]
   last_seen: number
   started_at: string
   ended_at: string | null
-}
-
-// ~/.reeves/runs/<run-id>/approvals/<approval-id>.json
-export interface RunApproval {
-  id: string
-  run_id: string
-  agent_id: string
-  action: string
-  summary: string
-  details: Record<string, unknown>
-  risk: ApprovalRisk
-  status: ApprovalStatus
-  decision_note: string
-  requested_at: string
-  resolved_at: string | null
 }
 
 // Per-slot config inside a saved preset.
@@ -161,8 +135,6 @@ export interface RouterContextValue {
   setSelectedRunId: (_runId: string | null) => void
   selectedAgentId: string | null
   setSelectedAgentId: (_agentId: string | null) => void
-  selectedApprovalId: string | null
-  setSelectedApprovalId: (_approvalId: string | null) => void
   selectedCheckName: string | null
   setSelectedCheckName: (_name: string | null) => void
   selectedWorkerIdx: number | null

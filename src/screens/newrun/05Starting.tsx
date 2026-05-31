@@ -25,7 +25,7 @@ export function NewRunStarting() {
 
   useEffect(() => {
     const req: StartRunRequest = {
-      mode: state.mode,
+      mode: 'spawner',
       name: state.name,
       working_dir: state.workingDir,
       root: {
@@ -116,9 +116,7 @@ export function NewRunStarting() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Starting']}
-      tagline={state.mode === 'spawner'
-        ? 'Creating the tmux workspace and launching independent CLI terminals.'
-        : 'Creating the Orchestrator BETA tmux session and launching connected agents.'}
+      tagline="Creating the tmux workspace and launching independent CLI terminals."
     >
       <Box flexDirection="row" marginY={1}>
         <Spinner />

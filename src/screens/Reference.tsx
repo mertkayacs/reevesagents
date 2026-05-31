@@ -1,4 +1,4 @@
-// Compact in-app reference for Spawner, Orchestrator BETA, CLI, and roles.
+// Compact in-app reference for Spawner, CLI, and local roles.
 
 import React, { useState } from 'react'
 import { useInput, useWindowSize } from 'ink'
@@ -14,35 +14,22 @@ type ReferenceItem =
 const CONTENT: ReferenceItem[] = [
   { type: 'section', label: 'TUI Pages' },
   { type: 'row', primary: 'Welcome', trailing: 'main menu, current run, reference, credits' },
-  { type: 'row', primary: 'New Run', trailing: 'choose Spawner or Orchestrator BETA' },
+  { type: 'row', primary: 'New Run', trailing: 'create a multi-terminal tmux workspace' },
   { type: 'row', primary: 'Spawner', trailing: 'multiple independent CLI terminals; human coordinates' },
-  { type: 'row', primary: 'Orchestrator BETA', trailing: 'connected root/worker agents through MCP' },
-  { type: 'row', primary: 'Runs / Run', trailing: 'dashboard, lifecycle, terminals/agents, output' },
-  { type: 'row', primary: 'Approvals', trailing: 'Orchestrator BETA requests only' },
+  { type: 'row', primary: 'Runs / Run', trailing: 'dashboard, lifecycle, terminals, output' },
   { type: 'row', primary: 'Settings / Doctor', trailing: 'provider setup, paths, health checks' },
   { type: 'section', label: 'CLI' },
   { type: 'row', primary: 'reevesagents', trailing: 'open the visible-menu TUI' },
   { type: 'row', primary: 'spawn', trailing: 'start a low-permission multi-terminal workspace' },
   { type: 'row', primary: 'runs / open / peek', trailing: 'list runs, jump windows, read output' },
-  { type: 'row', primary: 'stop / kill', trailing: 'confirmed run and worker cleanup' },
+  { type: 'row', primary: 'stop / kill', trailing: 'confirmed run and terminal cleanup' },
   { type: 'row', primary: 'doctor', trailing: 'check local health without writing provider configs' },
-  { type: 'row', primary: 'orchestrator setup', trailing: 'BETA: register MCP configs' },
-  { type: 'row', primary: 'context / call', trailing: 'BETA: inspect or invoke MCP tools' },
-  { type: 'section', label: 'MCP (BETA)' },
-  { type: 'row', primary: 'context / tree / get_run', trailing: 'discover runs, agents, approvals' },
-  { type: 'row', primary: 'start_run / spawn_worker', trailing: 'create tmux-backed agent runs' },
-  { type: 'row', primary: 'kill_agent / stop_run', trailing: 'close workers or whole runs' },
-  { type: 'row', primary: 'peek / send_text / wait', trailing: 'observe and drive workers' },
-  { type: 'row', primary: 'messages / approvals', trailing: 'coordinate work and risky actions' },
   { type: 'section', label: 'Roles' },
   { type: 'row', primary: 'Human', trailing: 'uses TUI/tmux and remains in charge' },
-  { type: 'row', primary: 'Operator', trailing: 'starts runs and controls local state' },
-  { type: 'row', primary: 'Root', trailing: 'controls workers in one run through MCP' },
-  { type: 'row', primary: 'Worker', trailing: 'checks messages, reports status, asks approval' },
+  { type: 'row', primary: 'Terminal', trailing: 'independent provider CLI inside the run session' },
   { type: 'section', label: 'OSS' },
   { type: 'row', primary: 'npm / Homebrew', trailing: 'planned public install channels' },
   { type: 'row', primary: 'GitHub Releases', trailing: 'tags, changelog, known limitations' },
-  { type: 'row', primary: 'MCP Registry', trailing: 'public discovery for MCP clients' },
 ]
 
 export function Reference() {
@@ -84,7 +71,7 @@ export function Reference() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'Reference']}
-      tagline="Quick map of Spawner mode, Orchestrator BETA, command line, MCP tools, and roles."
+      tagline="Quick map of Spawner mode, command line, tmux workflow, and roles."
       statusContext={statusContext}
       statusKeys={maxScroll > 0 ? '↑↓ scroll · enter back · esc back' : 'enter back · esc back'}
     >

@@ -54,7 +54,7 @@ export function RunStop() {
         title={`Return and stop "${run.name}"?`}
         body={isSpawner
           ? 'Switches back to Reeves, closes this run\'s tmux session and terminal windows, then marks every terminal ended. Local JSON state is preserved.'
-          : 'Switches back to Reeves, closes this run\'s tmux session and agent windows, then marks every agent ended. Local JSON state is preserved.'}
+          : 'Switches back to Reeves, closes this run\'s tmux session and windows, then marks every entry ended. Local JSON state is preserved.'}
         intent="danger"
         confirmLabel="Return & Stop"
         cancelLabel="Cancel"

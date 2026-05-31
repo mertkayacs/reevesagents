@@ -1,4 +1,4 @@
-// Step 4/5: additional terminals/workers list. Empty is valid.
+// Step 3/4: additional terminals list. Empty is valid.
 // Selecting a row and pressing Enter opens it for inline editing in step 4b.
 
 import React, { useState } from 'react'
@@ -16,13 +16,12 @@ type ActionId = 'add' | 'continue' | 'back' | 'cancel'
 export function NewRunWorkers() {
   const { push, pop, setSelectedWorkerIdx } = useRouter()
   const { state, addWorker, reset } = useWizard()
-  const isSpawner = state.mode === 'spawner'
 
   const workers = state.workers
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'add', label: isSpawner ? 'Add Terminal' : 'Add Worker', hint: isSpawner ? 'create another independent CLI terminal' : 'create a worker slot' },
+    { id: 'add', label: 'Add Terminal', hint: 'create another independent CLI terminal' },
     { id: 'continue', label: 'Continue', hint: 'to review' },
-    { id: 'back', label: 'Back', hint: 'return to root config' },
+    { id: 'back', label: 'Back', hint: 'return to first terminal' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
 
@@ -64,22 +63,20 @@ export function NewRunWorkers() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'New Run', 'Workers']}
-      tagline={isSpawner
-        ? 'Add zero or more independent CLI terminals. The human coordinates them manually.'
-        : 'Orchestrator mode is BETA. Add zero or more worker agents for the root.'}
+      breadcrumb={['ReevesAgents', 'New Run', 'Terminals']}
+      tagline="Add zero or more independent CLI terminals. The human coordinates them manually."
       statusKeys="enter select · ↑↓ move · esc back"
     >
-      <StepIndicator step={4} total={5} name={isSpawner ? 'Terminals' : 'Workers'} />
+      <StepIndicator step={3} total={4} name="Terminals" />
 
       {workers.length === 0 ? (
-        <Row selected={false} primary={isSpawner ? 'No extra terminals yet.' : 'No workers yet.'} trailing={isSpawner ? 'choose Add Terminal below' : 'choose Add Worker below'} disabled />
+        <Row selected={false} primary="No extra terminals yet." trailing="choose Add Terminal below" disabled />
       ) : (
         workers.map((worker, idx) => (
           <Row
             key={`worker-${idx}`}
             selected={selectedIdx === idx}
-            primary={worker.nickname || (isSpawner ? `terminal-${idx + 2}` : `worker-${idx + 1}`)}
+            primary={worker.nickname || `terminal-${idx + 2}`}
             badge={{ label: worker.provider, color: providerColor(worker.provider) }}
             hint={worker.prompt ? worker.prompt.slice(0, 40) : '(no prompt set)'}
           />
