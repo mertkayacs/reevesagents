@@ -151,7 +151,7 @@ Leave the model off to use the provider CLI default.
 - Reference: compact in-app map of the TUI, CLI, and tmux workflow.
 - Credits: package metadata, stack, providers, license, and repository.
 
-The TUI is visible-menu first: arrows navigate, Enter selects, and Esc/Backspace goes back. Text fields accept normal typing, picker fields use Left/Right, and Welcome also accepts `q` to quit. There are no slash commands, Tab-driven focus panes, hidden command palette, or embedded terminal.
+The TUI is visible-menu first: arrows navigate, Enter selects, and Esc/Backspace goes back. Text fields accept normal typing, non-model pickers use Left/Right, and model fields open a selectable model list with Enter. Welcome also accepts `q` to quit. There are no slash commands, Tab-driven focus panes, hidden command palette, or embedded terminal.
 
 ## Visual Design
 

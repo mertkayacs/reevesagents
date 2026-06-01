@@ -7,6 +7,7 @@ import React, { useState, useMemo } from 'react'
 import { useInput } from 'ink'
 import { Frame } from '../../components/Frame.js'
 import { Row } from '../../components/Row.js'
+import { ModelOptionList } from '../../components/ModelOptionList.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { TextField } from '../../components/TextField.js'
 import { useRouter } from '../../router.js'
@@ -69,9 +70,29 @@ export function AddWorker() {
   const totalRows = fields.length + actions.length
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [editingFieldId, setEditingFieldId] = useState<FieldId | null>(null)
+  const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const [modelPickerIdx, setModelPickerIdx] = useState(0)
 
   function moveUp(): void { setSelectedIdx(i => Math.max(0, i - 1)) }
   function moveDown(): void { setSelectedIdx(i => Math.min(totalRows - 1, i + 1)) }
+
+  function openModelPicker(): void {
+    const values = modelValuesForProvider(draft.provider)
+    const idx = values.indexOf(draft.model)
+    setModelPickerIdx(idx >= 0 ? idx : 0)
+    setModelPickerOpen(true)
+  }
+
+  function moveModelPicker(delta: 1 | -1): void {
+    const values = modelValuesForProvider(draft.provider)
+    setModelPickerIdx(idx => (idx + delta + values.length) % values.length)
+  }
+
+  function selectModel(): void {
+    const values = modelValuesForProvider(draft.provider)
+    update({ model: values[modelPickerIdx] ?? '' })
+    setModelPickerOpen(false)
+  }
 
   function commitText(id: FieldId, value: string): void {
     if (id === 'nickname') update({ nickname: value })
@@ -117,6 +138,13 @@ export function AddWorker() {
       if (key.escape || key.backspace || key.return) pop()
       return
     }
+    if (modelPickerOpen) {
+      if (key.upArrow) { moveModelPicker(-1); return }
+      if (key.downArrow) { moveModelPicker(1); return }
+      if (key.return) { selectModel(); return }
+      if (key.escape || key.backspace) { setModelPickerOpen(false); return }
+      return
+    }
     if (editingFieldId) return
     if (key.upArrow) { moveUp(); return }
     if (key.downArrow) { moveDown(); return }
@@ -130,6 +158,7 @@ export function AddWorker() {
       if (selectedIdx < fields.length) {
         const f = fields[selectedIdx]!
         if (f.kind === 'text') setEditingFieldId(f.id)
+        else if (f.id === 'model') openModelPicker()
         else cyclePicker(f.id, 1)
       } else {
         handleAction(actions[selectedIdx - fields.length]!.id)
@@ -151,7 +180,7 @@ export function AddWorker() {
       tagline={isSpawner
         ? `Configure an independent CLI terminal for ${run.name}.`
         : 'This run type is not managed by the spawner package.'}
-      statusKeys="enter edit/newline · ←→ cycle picker · esc done/back"
+      statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
       {fields.map((field, fIdx) => {
         if (field.kind === 'text') {
@@ -183,6 +212,15 @@ export function AddWorker() {
           />
         )
       })}
+
+      {modelPickerOpen && (
+        <ModelOptionList
+          provider={draft.provider}
+          values={modelValuesForProvider(draft.provider)}
+          current={draft.model}
+          selectedIdx={modelPickerIdx}
+        />
+      )}
 
       <Section label="Actions" />
 
