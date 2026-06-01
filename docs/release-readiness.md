@@ -8,7 +8,7 @@ This is the practical checklist for taking the main `reevesagents` package from 
 - Package metadata exists in `package.json`: bin, exports, engines, repository, bugs, homepage, license, and publish workflow.
 - Install is passive. It does not write provider configs or start background services.
 - Spawner is the only stable mode in the main package: tmux, local state, and provider CLIs only.
-- Orchestrator exists only as PRE-BETA test code under `packages/orchestrator`; npm, pnpm, one-off runners, Homebrew, release tarballs, and source install should not install it as part of the main app.
+- Stable installs must include only the root spawner package.
 - `pnpm publish` is the preferred publish command, but the public package destination is still the npm registry.
 - Portable verification is `pnpm verify`.
 - npm publication and Homebrew installation are not available yet.
@@ -27,7 +27,7 @@ Defer these unless users ask for them:
 - Docker Hub, because ReevesAgents depends on local tmux and local provider CLIs.
 - Nix, AUR, Scoop, and WinGet, because each adds maintainer load.
 - `homebrew/core`, until the tap formula is stable and the project has real usage.
-- Any registry or marketplace entry for the PRE-BETA orchestrator package.
+- Any registry or marketplace entry for non-root experimental packages.
 
 ## Install Surface Policy
 
@@ -42,7 +42,7 @@ Every stable install path must land on the same spawner-only root package:
 | Homebrew tap | `brew install mertkayacs/tap/reevesagents` | Add after npm tarball URL and checksum are known. |
 | source | `pnpm install && pnpm build && pnpm link --global` | Root workspace only. |
 
-None of these surfaces should install or advertise `reevesagents-orchestrator`. Keep that package PRE-BETA and test-only until it has its own explicit release decision.
+None of these surfaces should install or advertise non-root experimental packages.
 
 ## First Public Release Gate
 
@@ -54,7 +54,7 @@ None of these surfaces should install or advertise `reevesagents-orchestrator`. 
 - Run the manual TUI pass from `docs/testing.md`.
 - Run `pnpm check:package` and `pnpm pack --dry-run` to inspect the package contents.
 - Confirm the README clearly presents the stable spawner package as the default install.
-- Confirm Orchestrator is described only as PRE-BETA test code and is absent from root CLI help and the packed root tarball.
+- Confirm non-root packages are absent from root CLI help and the packed root tarball.
 - Confirm npm provenance publishing works with the GitHub `publish` workflow and `NPM_TOKEN`.
 - Tag with `v<version>` only after the release commit is verified.
 - Create the GitHub Release from the verified tag.
@@ -67,8 +67,8 @@ None of these surfaces should install or advertise `reevesagents-orchestrator`. 
 - Keep `0.9.0` as the first public pre-1.0 version unless the release scope changes.
 - Keep release-facing docs independent from local `specs/` working notes.
 - Keep the main package install passive and low-permission.
-- Keep `packages/orchestrator` out of the root workspace install and root npm package.
-- Keep `reevesagents-orchestrator` unpublished from npm, Homebrew, and release artifacts unless the release explicitly targets PRE-BETA testers.
+- Keep non-root packages out of the root workspace install and root npm package.
+- Keep non-root packages unpublished from npm, Homebrew, and release artifacts unless a release explicitly targets them.
 - Add a small issue template and security policy before inviting external users.
 - Add at least one screenshot or terminal recording to the README once the TUI visual pass is stable.
 

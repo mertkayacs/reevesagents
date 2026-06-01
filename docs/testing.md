@@ -86,15 +86,7 @@ HOME="$tmp/pnpm-home" pnpm add "$tmp/reevesagents-0.9.0.tgz"
 REEVES_REGISTRY="$tmp/pnpm-registry" REEVES_CONFIG="$tmp/pnpm-config.json" ./node_modules/.bin/reevesagents doctor --json
 ```
 
-When the Homebrew tap exists, inspect the formula and run it against the same root tarball. The formula must install only `reevesagents`, not `reevesagents-orchestrator`.
-
-## PRE-BETA Orchestrator Checks
-
-The stable release check is root `pnpm verify`. The Orchestrator package under `packages/orchestrator` is PRE-BETA test code and is not part of the root install. Run its checks only when changing that directory:
-
-```sh
-pnpm --dir packages/orchestrator verify
-```
+When the Homebrew tap exists, inspect the formula and run it against the same root tarball. The formula must install only `reevesagents`.
 
 ## Manual TUI Check
 
@@ -136,7 +128,6 @@ Observed results:
 - Root Vitest passed with 57 files and 415 tests.
 - Build passed.
 - CLI smoke passed against isolated fake setup.
-- Package content check passed with 12 files and no orchestrator paths.
+- Package content check passed with 12 files and only root package paths.
 - Root `pnpm pack --dry-run` and `npm pack --dry-run` contained only `dist`, README, changelog, license, and package metadata.
 - Clean npm and pnpm tarball installs in temp projects returned version `0.9.0` and `doctor --json` returned `ok: true` with fake `HOME`, `REEVES_REGISTRY`, and `REEVES_CONFIG`.
-- PRE-BETA orchestrator check passed separately with 6 files and 73 tests.

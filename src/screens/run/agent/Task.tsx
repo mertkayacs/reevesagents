@@ -15,7 +15,7 @@ export function AgentTask() {
   const [agent] = useState<AgentRecord | null>(() =>
     selectedAgentId ? (() => { try { return findAgent(selectedAgentId) } catch { return null } })() : null
   )
-  const [run] = useState<{ name: string; mode?: string } | null>(() =>
+  const [run] = useState<{ name: string } | null>(() =>
     agent ? (() => { try { return readRun(agent.run_id) } catch { return null } })() : null
   )
 
@@ -38,19 +38,15 @@ export function AgentTask() {
     )
   }
 
-  const isSpawner = run.mode === 'spawner'
-
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries', agent.nickname, isSpawner ? 'Prompt' : 'Task']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname, 'Prompt']}
       meta={[{ label: 'status', value: agent.task_status }]}
-      tagline={isSpawner
-        ? 'Read-only. This terminal received only the initial prompt shown here.'
-        : 'Read-only. This run type is not managed by the spawner package.'}
+      tagline="Read-only. This terminal received only the initial prompt shown here."
       statusKeys="enter back · esc back"
     >
       <Box flexDirection="column">
-        <Section label={isSpawner ? 'Prompt' : 'Task'} />
+        <Section label="Prompt" />
         <Row selected={false} primary="Prompt" trailing={agent.task || '(no task)'} />
         <Row selected={false} primary="Status" trailing={agent.task_status} />
         <Row selected={false} primary="Note" trailing={agent.task_note || '(no note)'} />

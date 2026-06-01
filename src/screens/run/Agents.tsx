@@ -1,4 +1,4 @@
-// Run terminal list: displays tmux-backed entries in this run.
+// Run terminal list: displays tmux-backed terminals in this run.
 // Paginates rows when the list exceeds available terminal height.
 
 import React, { useEffect, useState } from 'react'
@@ -18,7 +18,7 @@ const CHROME_ROWS = 13
 const REFRESH_INTERVAL_MS = 5000
 
 type RowItem = 'agent' | '__section__' | 'pagination' | 'AddWorker' | 'Back'
-const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Add Entry'.length, 'Back'.length)
+const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Back'.length)
 
 interface SelectableItem {
   type: 'agent' | 'pagination' | 'action'
@@ -47,7 +47,6 @@ export function RunAgents() {
   )
   const [selectedIdx, setSelectedIdx] = useState(() => (agents.length > 0 ? 0 : 1))
   const [page, setPage] = useState(1)
-  const isSpawner = run?.mode === 'spawner'
 
   const dataItems: SelectableItem[] = agents.map(agent => ({ type: 'agent' as const, agent }))
 
@@ -94,7 +93,7 @@ export function RunAgents() {
     if (selected.type === 'action') {
       switch (selected.action) {
         case 'AddWorker':
-          if (!isSpawner || run?.status === 'ended' || run?.ended_at !== null) return
+          if (run?.status === 'ended' || run?.ended_at !== null) return
           push('AddWorker')
           break
         case 'Back': pop(); break
@@ -137,37 +136,33 @@ export function RunAgents() {
   }
 
   const isRunEnded = run.status === 'ended' || run.ended_at !== null
-  let statusContext = `${run.name} · ${agents.length} ${isSpawner ? 'terminals' : 'entries'}`
+  let statusContext = `${run.name} · ${agents.length} terminals`
   if (selected?.type === 'pagination') statusContext = `page ${page} of ${totalPages} · ← → turn page`
-  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'not available for this run type'
+  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : 'spawn new terminal'
   if (selected?.type === 'action' && selected.action === 'Back') statusContext = 'return to run hub'
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals']}
       meta={[
         { label: 'count', value: String(agents.length) },
         { label: 'status', value: run.status },
       ]}
-      tagline={isSpawner
-        ? 'Independent CLI terminals in this spawner run.'
-        : 'This run type is read-only in the spawner package.'}
+      tagline="Independent CLI terminals in this spawner run."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
       <Box flexDirection="column">
-        <Section label={isSpawner ? 'Terminals' : 'Entries'} />
+        <Section label="Terminals" />
         {agents.length === 0 && (
-          <Row selected={false} primary={isSpawner ? 'No terminals' : 'No entries'} trailing={isSpawner ? 'add a terminal below' : 'not managed here'} disabled />
+          <Row selected={false} primary="No terminals" trailing="add a terminal below" disabled />
         )}
         {pagedData.map((item, idx) => {
           const isSelected = selectedIdx === idx
 
           if (item.type === 'agent' && item.agent) {
             const agent = item.agent
-            const isRoot = !isSpawner && agent.role === 'root'
             const badges = [
-              ...(isRoot ? [{ label: 'root', color: colors.accent.primary }] : []),
               { label: agent.provider, color: providerColor(agent.provider) },
               { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider) },
             ]
@@ -200,10 +195,10 @@ export function RunAgents() {
 
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 1}
-          primary={isSpawner ? 'Add Terminal' : 'Add Entry'}
+          primary="Add Terminal"
           primaryWidth={ACTION_LABEL_WIDTH}
-          hint={isRunEnded ? 'run is ended' : isSpawner ? 'spawn new terminal' : 'not available for this run type'}
-          disabled={isRunEnded || !isSpawner}
+          hint={isRunEnded ? 'run is ended' : 'spawn new terminal'}
+          disabled={isRunEnded}
         />
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 2}

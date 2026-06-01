@@ -9,7 +9,7 @@ Read this first when returning to ReevesAgents after a context break or on a lat
 - The main install is passive: no provider config writes, no background service, and no ReevesAgents context injected into provider CLIs.
 - The local JSON registry is the source of truth. tmux is the execution and viewing surface.
 - The TUI is the human dashboard. The CLI is a compact human/script operator surface.
-- Orchestrator is PRE-BETA test code under `packages/orchestrator`; it must not leak into root install, TUI, CLI, or stable package docs.
+- Non-root experimental packages must not leak into the root install, TUI, CLI, or stable package docs.
 
 ## First Checks
 
@@ -47,7 +47,7 @@ Then read the code in this order:
 10. `scripts/smoke-cli.mjs`
 11. `test/`
 
-Only read or edit `packages/orchestrator` when the task explicitly asks for PRE-BETA orchestration work.
+Only read or edit non-root packages when the task explicitly asks for them.
 
 ## Current Architecture
 
@@ -105,7 +105,7 @@ CLI:
 - Real provider checks depend on local provider installation, auth, quota, and current provider CLI behavior.
 - Browser-style UI automation does not cover the Ink TUI. The TUI still needs a short manual terminal pass.
 - `specs/` contains local historical design notes, not release documentation.
-- Orchestrator is not ready for stable install. Treat `packages/orchestrator` as PRE-BETA test code only.
+- Non-root packages are not part of the stable install.
 - Some internal symbol names still use older labels such as `Agent` because the state schema predates the spawner-only surface. Visible main-package UI copy should say terminal.
 
 ## Verification Commands
@@ -114,12 +114,6 @@ Normal portable verification:
 
 ```sh
 pnpm verify
-```
-
-PRE-BETA orchestrator verification, only when changing `packages/orchestrator`:
-
-```sh
-pnpm --dir packages/orchestrator verify
 ```
 
 ## Working Rules For Future Agents

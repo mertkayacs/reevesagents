@@ -126,18 +126,17 @@ export function AgentDetail() {
   if (agent.task_note) summaryParts.push(`note ${agent.task_note}`)
   summaryParts.push(`workdir ${agent.working_dir}`)
   const summaryLine = summaryParts.join(' · ')
-  const isSpawner = run.mode === 'spawner'
-  const isCloseAgentDisabled = !isSpawner || agent.ended_at !== null
+  const isCloseAgentDisabled = agent.ended_at !== null
   const isHeadless = !!agent.headless
 
   let statusContext = `${agent.nickname} · ${agent.provider} · ${agent.task_status}`
   if (selected && selected.action !== '__section__') {
     const actionLabels: Record<RowItem, string> = {
       Output: 'view recent output',
-      Task: isSpawner ? 'view initial prompt and status' : 'view saved task status',
-      OpenCLI: isHeadless ? 'no tmux window' : isSpawner ? 'switch to this terminal window' : 'switch to this tmux window',
+      Task: 'view initial prompt and status',
+      OpenCLI: isHeadless ? 'no tmux window' : 'switch to this terminal window',
       CloseAgent: isCloseAgentDisabled ? 'not available' : 'close this terminal window',
-      Back: isSpawner ? 'return to terminals list' : 'return to entries list',
+      Back: 'return to terminals list',
       '__section__': '',
     }
     statusContext = actionLabels[selected.action] || ''
@@ -145,17 +144,12 @@ export function AgentDetail() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries', agent.nickname]}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname]}
       meta={[
         { label: 'provider', value: agent.provider },
-        ...(isSpawner ? [] : [{ label: 'role', value: agent.role }]),
         { label: 'status', value: agent.task_status },
       ]}
-      tagline={isSpawner
-        ? `${agent.provider} terminal in ${run.name}. It is independent and has no ReevesAgents context.`
-        : isHeadless
-          ? `${agent.provider} entry has no tmux window.`
-          : `${agent.provider} entry in ${run.name}. This run type is read-only here.`}
+      tagline={`${agent.provider} terminal in ${run.name}. It is independent and has no ReevesAgents context.`}
       statusContext={statusContext}
       statusKeys="↑↓ move · enter select · esc back"
     >
@@ -170,7 +164,7 @@ export function AgentDetail() {
           </Text>
           <Text color={colors.text.dim} wrap="truncate-end">{summaryLine}</Text>
         </Box>
-        <Section label={isSpawner ? 'Terminal' : 'Entry'} />
+        <Section label="Terminal" />
         {items.map((item, idx) => {
           const isSelected = selectedIdx === idx
 
@@ -185,15 +179,15 @@ export function AgentDetail() {
 
           const hints: Record<RowItem, string> = {
             Output: isHeadless ? 'no terminal output' : 'live peek of the tmux pane',
-            Task: isSpawner ? 'initial prompt and status' : 'saved task status and note',
-            OpenCLI: isHeadless ? 'no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this window',
-            CloseAgent: isSpawner ? 'close this terminal window' : 'not available for this run type',
-            Back: isSpawner ? 'return to terminals list' : 'return to entries list',
+            Task: 'initial prompt and status',
+            OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this terminal window',
+            CloseAgent: 'close this terminal window',
+            Back: 'return to terminals list',
             '__section__': '',
           }
-          const primary = isSpawner && item.action === 'OpenCLI'
+          const primary = item.action === 'OpenCLI'
             ? 'Open Terminal'
-            : isSpawner && item.action === 'CloseAgent'
+            : item.action === 'CloseAgent'
               ? 'Close Terminal'
               : LABELS[item.action]
 

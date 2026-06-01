@@ -14,7 +14,6 @@ export function RunStop() {
   const { toast } = useToast()
 
   const run = selectedRunId ? (() => { try { return readRun(selectedRunId) } catch { return null } })() : null
-  const isSpawner = run?.mode === 'spawner'
 
   if (!run) {
     return (
@@ -52,9 +51,7 @@ export function RunStop() {
     >
       <Dialog
         title={`Return and stop "${run.name}"?`}
-        body={isSpawner
-          ? 'Switches back to Reeves, closes this run\'s tmux session and terminal windows, then marks every terminal ended. Local JSON state is preserved.'
-          : 'Switches back to Reeves, closes this run\'s tmux session and windows, then marks every entry ended. Local JSON state is preserved.'}
+        body="Switches back to Reeves, closes this run's tmux session and terminal windows, then marks every terminal ended. Local JSON state is preserved."
         intent="danger"
         confirmLabel="Return & Stop"
         cancelLabel="Cancel"

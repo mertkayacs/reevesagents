@@ -75,6 +75,15 @@ describe('v1 run state', () => {
     expect(listRuns().map(run => run.id)).toEqual(['new', 'old'])
   })
 
+  it('hides non-spawner run records from the root package', async () => {
+    const { writeRun, listRuns, readRun } = await import('../src/state/runs.js')
+    writeRun(makeRun('stable'))
+    writeRun({ ...makeRun('prebeta'), mode: 'orchestrator' as any })
+
+    expect(listRuns().map(run => run.id)).toEqual(['stable'])
+    expect(() => readRun('prebeta')).toThrow('Run not found: prebeta')
+  })
+
   it('updates one run field without disturbing the rest', async () => {
     const { writeRun, updateRun, readRun } = await import('../src/state/runs.js')
     writeRun(makeRun('r2'))

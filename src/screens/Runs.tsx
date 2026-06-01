@@ -145,7 +145,7 @@ export function Runs() {
   let statusContext = ''
   if (selectedRun) {
     const agents = listAgents(selectedRun.id)
-    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} ${selectedRun.mode === 'spawner' ? 'terminals' : 'entries'} · ${selectedRun.working_dir}`
+    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} terminals · ${selectedRun.working_dir}`
   } else if (selected?.type === 'action' && selected.action && selected.action !== '__section__') {
     statusContext = ACTION_COPY[selected.action as typeof ACTIONS[number]]?.hint ?? selected.action
   } else if (selected?.type === 'pagination') {
@@ -177,9 +177,8 @@ export function Runs() {
           pagedRuns.map((run, idx) => {
             const agents = listAgents(run.id)
             const root = agents.find(a => a.role === 'root')
-            const isSpawner = run.mode === 'spawner'
             const badges = [
-              ...(isSpawner ? [{ label: 'spawn', color: colors.accent.primary }] : []),
+              { label: 'spawn', color: colors.accent.primary },
               ...(root
                 ? [
                   { label: root.provider, color: providerColor(root.provider) },
@@ -194,7 +193,7 @@ export function Runs() {
                 primary={run.name}
                 glyph={statusGlyph(runStatus(run))}
                 badges={badges}
-                hint={`${agents.length} ${isSpawner ? 'terminals' : 'entries'}`}
+                hint={`${agents.length} terminals`}
               />
             )
           })

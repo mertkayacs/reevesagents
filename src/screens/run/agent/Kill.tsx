@@ -20,10 +20,6 @@ export function AgentKill() {
     agent ? (() => { try { return readRun(agent.run_id) } catch { return null } })() : null
   )
 
-  function handleBackClicked(): void {
-    pop()
-  }
-
   function handleConfirm(): void {
     if (agent) {
       killAgent(agent.id)
@@ -34,10 +30,6 @@ export function AgentKill() {
   useInput((_input, key) => {
     if (key.return && (!agent || !run)) {
       pop()
-      return
-    }
-    if (key.return && agent && run?.mode !== 'spawner') {
-      handleBackClicked()
       return
     }
     if (key.escape || key.backspace) {
@@ -66,38 +58,14 @@ export function AgentKill() {
     )
   }
 
-  const isSpawner = run.mode === 'spawner'
-
-  if (!isSpawner) {
-    return (
-      <Frame
-        breadcrumb={['ReevesAgents', 'Runs', run.name, 'Entries', agent.nickname, 'Close']}
-        statusKeys="enter back · esc cancel"
-      >
-        <Box flexDirection="column">
-          <Text color={colors.status.warn}>This run type is not managed by the spawner package.</Text>
-          <Box marginTop={2}>
-            <Row
-              selected={true}
-              primary="Back"
-              hint="return to entry detail"
-            />
-          </Box>
-        </Box>
-      </Frame>
-    )
-  }
-
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries', agent.nickname, 'Close']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname, 'Close']}
       statusKeys="←→ switch · enter select · esc cancel"
     >
       <Dialog
         title={`Close ${agent.nickname}?`}
-        body={isSpawner
-          ? 'Closes this terminal window and marks it ended. Other terminals continue.'
-          : 'This run type is not managed by the spawner package.'}
+        body="Closes this terminal window and marks it ended. Other terminals continue."
         intent="danger"
         confirmLabel="Close"
         cancelLabel="Cancel"

@@ -6,9 +6,7 @@ The main `reevesagents` package is the stable spawner install:
 
 - Start one tmux workspace with multiple independent provider CLI terminals.
 - Keep the human in charge of coordination.
-- Do not write provider config, inject ReevesAgents environment variables, or create root/worker roles.
-
-The Orchestrator work is PRE-BETA test code under `packages/orchestrator`. It is not installed by the main package, not included in the root workspace install, and not part of the stable TUI or CLI.
+- Do not write provider config, inject ReevesAgents environment variables, or create agent roles.
 
 ReevesAgents tracks each run in local state and opens every terminal in its own tmux window. The registry is the source of truth; tmux is the execution and viewing surface. The TUI stays in the current or fallback `reeves` session, while each run gets its own tmux session to keep tabs uncluttered.
 
@@ -42,7 +40,7 @@ Not required:
 
 - Provider API keys in ReevesAgents config
 - Database, Docker, browser runtime, background service, or daemon
-- Orchestration setup for Spawner mode
+- MCP or approval setup
 
 Install is passive: no postinstall, no provider config writes, no background service.
 
@@ -66,7 +64,7 @@ Default permissions are `ask`. Use `skip` only in trusted disposable workspaces.
 
 ## Install
 
-The supported install surfaces all install the main spawner app only. They do not install `packages/orchestrator`, do not register MCP config, and do not add approval or orchestration commands.
+The supported install surfaces all install the main spawner app only. They do not register MCP config and do not add approval or coordination commands.
 
 After npm publish:
 
@@ -123,7 +121,7 @@ reevesagents doctor
 reevesagents
 ```
 
-The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Reference, Credits, or Quit. New Run starts the spawner wizard directly. When launched with run context, Welcome also shows Current Run. Runs auto-cleans ended and stale entries on refresh.
+The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Reference, Credits, or Quit. New Run starts the spawner wizard directly. When launched with run context, Welcome also shows Current Run. Runs auto-cleans ended and stale run records on refresh.
 
 Spawner mode can also start from the CLI:
 
@@ -189,17 +187,6 @@ reevesagents doctor          # setup checks
 ```
 
 `REEVES_REGISTRY` can point at an isolated state root for tests and smoke runs.
-
-## Orchestrator PRE-BETA
-
-`packages/orchestrator` contains experimental MCP coordination code for testing root/worker agent flows. It is intentionally separate from the main app:
-
-- Root `pnpm install` installs only the spawner app.
-- The root CLI exposes no orchestrator, MCP, approval, or setup commands.
-- The root npm tarball does not include `packages/orchestrator`.
-- The PRE-BETA package can change or break without a main-app semver promise.
-
-Do not publish or install the orchestrator package as a normal user path yet. Use it only when explicitly testing orchestration. Stable app users should install and run `reevesagents`.
 
 ## Development
 

@@ -152,15 +152,14 @@ export function AgentOutput() {
   }
 
   const isHeadless = !!agent.headless
-  const isSpawner = run.mode === 'spawner'
   let statusContext = `${agent.nickname} · output`
   if (selected?.type === 'pagination') {
     statusContext = `output page ${activePage} of ${totalPages} · ← → turn page`
   } else if (selected?.type === 'action') {
     const actionLabels: Record<RowItem, string> = {
       RefreshNow: 'fetch output immediately',
-      OpenCLI: isHeadless ? 'no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this window',
-      Back: isSpawner ? 'return to terminal detail' : 'return to entry detail',
+      OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this terminal window',
+      Back: 'return to terminal detail',
     }
     statusContext = actionLabels[selected.action]
   }
@@ -172,14 +171,12 @@ export function AgentOutput() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Terminals' : 'Entries', agent.nickname, 'Output']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname, 'Output']}
       meta={[
         { label: 'lines', value: outputLines.length === 0 ? '0' : `${shownStart}-${shownEnd}/${outputLines.length}` },
         { label: 'refresh', value: '5s' },
       ]}
-      tagline={isSpawner
-        ? 'Recent output from this independent terminal. Refreshes every 5 seconds.'
-        : isHeadless ? 'This entry has no tmux pane output.' : 'Recent output from this tmux pane. Refreshes every 5 seconds.'}
+      tagline="Recent output from this independent terminal. Refreshes every 5 seconds."
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ output pages · enter select · esc back"
     >
@@ -231,13 +228,13 @@ export function AgentOutput() {
 
           const hints: Record<RowItem, string> = {
             RefreshNow: 'peek immediately',
-            OpenCLI: isHeadless ? 'no tmux window' : isSpawner ? 'switch tmux to this terminal window' : 'switch tmux to this window',
-            Back: isSpawner ? 'return to terminal detail' : 'return to entry detail',
+            OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this terminal window',
+            Back: 'return to terminal detail',
           }
 
           const labels: Record<RowItem, string> = {
             RefreshNow: 'Refresh now',
-            OpenCLI: isSpawner ? 'Open Terminal' : 'Open Window',
+            OpenCLI: 'Open Terminal',
             Back: 'Back',
           }
 

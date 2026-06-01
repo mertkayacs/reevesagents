@@ -43,7 +43,6 @@ export function AddWorker() {
   const { toast } = useToast()
   const { draft, update, reset } = useWorkerDraft()
   const run = selectedRunId ? safeReadRun(selectedRunId) : null
-  const isSpawner = run?.mode === 'spawner'
 
   const fields: Field[] = useMemo(() => [
     { kind: 'text', id: 'nickname', label: 'Nickname', value: draft.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
@@ -57,13 +56,13 @@ export function AddWorker() {
       display: modelDisplayName(draft.model),
       hint: 'optional · blank uses CLI default',
     },
-    { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: isSpawner ? 'optional initial prompt · enter newline · esc done' : 'not available for this run type', required: !isSpawner },
+    { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
     { kind: 'text', id: 'workingDir', label: 'Working Dir', value: draft.workingDir, helpText: 'defaults to the run working dir', required: false },
     { kind: 'picker', id: 'permissions', label: 'Permissions', current: draft.permissions, values: PERMISSIONS_VALUES },
-  ], [draft, isSpawner])
+  ], [draft])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'add', label: isSpawner ? 'Add Terminal' : 'Add Worker', hint: isSpawner ? 'spawn an independent CLI terminal' : 'not available in spawner package' },
+    { id: 'add', label: 'Add Terminal', hint: 'spawn an independent CLI terminal' },
     { id: 'cancel', label: 'Cancel', hint: 'discard and return' },
   ]
 
@@ -108,13 +107,11 @@ export function AddWorker() {
 
   function handleAdd(): void {
     if (!selectedRunId) { toast('No run selected', 'error'); return }
-    if (!isSpawner) { toast('This run type cannot add terminals here', 'error'); return }
     if (!draft.provider) { toast('Provider is required', 'error'); return }
-    if (!isSpawner && !draft.prompt.trim()) { toast('Prompt is required', 'error'); return }
     try {
       spawnWorker({
         run_id: selectedRunId,
-        nickname: draft.nickname || (isSpawner ? draft.provider : 'worker'),
+        nickname: draft.nickname || draft.provider,
         provider: draft.provider,
         model: draft.model,
         task: draft.prompt,
@@ -168,7 +165,7 @@ export function AddWorker() {
 
   if (!run) {
     return (
-      <Frame breadcrumb={['ReevesAgents', 'Runs', 'Add Worker']}>
+      <Frame breadcrumb={['ReevesAgents', 'Runs', 'Add Terminal']}>
         <Row primary="No run selected" hint="press Esc to go back" selected={true} />
       </Frame>
     )
@@ -176,10 +173,8 @@ export function AddWorker() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, isSpawner ? 'Add Terminal' : 'Add Worker']}
-      tagline={isSpawner
-        ? `Configure an independent CLI terminal for ${run.name}.`
-        : 'This run type is not managed by the spawner package.'}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Add Terminal']}
+      tagline={`Configure an independent CLI terminal for ${run.name}.`}
       statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
       {fields.map((field, fIdx) => {

@@ -43,9 +43,7 @@ The main package is a TUI and CLI product first. Programmatic exports exist for 
 
 - Stable release-facing surfaces: CLI binary, TUI, README, docs, GitHub Releases, npm package, and Homebrew tap.
 - Review before promising as stable API: runtime exports, state exports, config/preset exports, and React components.
-- Do not promise provider credentials, hosted model traffic, terminal emulation, policy enforcement, background daemon behavior, provider config mutation, or cross-machine orchestration.
-
-Connected agent coordination is PRE-BETA test code under `packages/orchestrator`. It must not leak into any stable install path, TUI flow, CLI help, or packed root tarball. Root docs may mention it only to clarify that the main app is the spawner and orchestration is not stable.
+- Do not promise provider credentials, hosted model traffic, terminal emulation, policy enforcement, background daemon behavior, provider config mutation, or cross-machine coordination.
 
 ## Refactor Rule
 

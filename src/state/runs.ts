@@ -232,7 +232,9 @@ export function writeRun(run: RunRecord): string {
 }
 
 export function readRun(runId: string): RunRecord {
-  return readRunUnlocked(runId)
+  const run = readRunUnlocked(runId)
+  if (run.mode !== 'spawner') throw new Error(`Run not found: ${runId}`)
+  return run
 }
 
 export function updateRun(runId: string, patch: Partial<RunRecord>): void {
@@ -253,7 +255,8 @@ export function listRuns(): RunRecord[] {
   for (const entry of entries) {
     if (!existsSync(runPath(entry))) continue
     try {
-      runs.push(readRunUnlocked(entry))
+      const run = readRunUnlocked(entry)
+      if (run.mode === 'spawner') runs.push(run)
     } catch {
       // skip malformed run folders
     }

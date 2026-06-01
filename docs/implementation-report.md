@@ -14,7 +14,6 @@ ReevesAgents is a local tmux-first workspace manager for real AI CLI terminals.
 - Provider terminals are real CLIs: Claude Code, Codex CLI, OpenCode CLI, or Hermes.
 - TUI is the human dashboard.
 - CLI is an operator surface with friendly commands for common spawner actions.
-- Connected agent coordination was moved out of the main install and kept as PRE-BETA test code.
 
 ReevesAgents does not store provider credentials, proxy model traffic, embed a terminal emulator, mutate provider config during install, or replace provider authentication.
 
@@ -134,8 +133,6 @@ The old tree-oriented UI and legacy runtime pieces were removed, hidden, or move
 - old navigation/pane hooks
 - old tests tied to removed surfaces
 
-Connected coordination code lives under `packages/orchestrator` for PRE-BETA testing. It is not part of the main workspace install path or packed root release.
-
 ## Documentation Work
 
 Updated and checked:
@@ -192,7 +189,7 @@ Observed:
 - Root Vitest passed with 57 files and 415 tests.
 - Build passed.
 - CLI smoke passed against isolated setup and fake provider binaries.
-- Package content check passed with 12 files and no orchestrator paths.
+- Package content check passed with 12 files and only root package paths.
 - Packed root tarball contains the main package only: `dist`, README, changelog, license, and package metadata.
 - Clean tarball install in a temp project returned version `0.9.0` and `doctor --json` returned `ok: true`.
 
