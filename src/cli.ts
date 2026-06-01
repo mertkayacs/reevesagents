@@ -2,11 +2,9 @@
 // Inputs: process.argv. Outputs: TUI render or stdout text/JSON.
 // Invariant: this package exposes the stable spawner surface only.
 
-import React from 'react'
-import { render } from 'ink'
 import { Command } from 'commander'
 import { execFileSync } from 'node:child_process'
-import { Router } from './router.js'
+import { prepareTuiColorEnv } from './utils/color-env.js'
 import { runDoctor } from './launcher/doctor.js'
 import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
 import { isProvider, PROVIDERS } from './launcher/providers.js'
@@ -331,6 +329,17 @@ program
 const knownSubcommands = new Set(program.commands.map(command => command.name()))
 const firstArg = process.argv[2]
 
+async function renderTui(): Promise<void> {
+  prepareTuiColorEnv()
+  const [{ default: React }, { render }, { Router }] = await Promise.all([
+    import('react'),
+    import('ink'),
+    import('./router.js'),
+  ])
+  await render(React.createElement(Router), { alternateScreen: false }).waitUntilExit()
+  process.exit(0)
+}
+
 if (!firstArg || (!knownSubcommands.has(firstArg) && !firstArg.startsWith('--'))) {
   // tmux is required: window-based terminal navigation only works inside a tmux session.
   // If launched outside tmux on an interactive terminal, auto-wrap into a session
@@ -354,7 +363,10 @@ if (!firstArg || (!knownSubcommands.has(firstArg) && !firstArg.startsWith('--'))
   }
   process.on('SIGTERM', () => process.exit(0))
   if (process.stdout.isTTY) process.stdout.write('\x1b[2J\x1b[H')
-  render(React.createElement(Router), { alternateScreen: false }).waitUntilExit().then(() => process.exit(0))
+  renderTui().catch(err => {
+    process.stderr.write(`[FATAL] ${err instanceof Error ? err.message : String(err)}\n`)
+    process.exit(1)
+  })
 } else {
   program.parse()
 }
