@@ -19,6 +19,7 @@ This document covers the stable main package. The current release path is spawne
 | Unit | `CI=true pnpm test` | State normalization, provider command building, router behavior, spawner TUI flow, and runtime calls. | Temp registry plus fake drivers. |
 | Build | `CI=true pnpm build` | The package emits `dist/cli.js` and `dist/index.js`. | No user state. |
 | CLI smoke | `pnpm smoke:cli` | Built spawner CLI runs `runs` and `doctor` against fake providers. | Temp registry/config and fake `tmux`/provider bins. |
+| Package contents | `pnpm check:package` | Root npm tarball contains only the spawner package surface. | `npm pack --dry-run`, no install. |
 | Manual TUI smoke | `node dist/cli.js` with temp env | Welcome menu, Runs page, Main Menu return, narrow terminal behavior, and visible action flow. | Temp registry/config. |
 
 ## Acceptance Criteria
@@ -48,6 +49,7 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm smoke:cli
+pnpm check:package
 ```
 
 Use this to verify the packed package installs in a clean project without touching the real home directory:
@@ -121,6 +123,7 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm smoke:cli
+pnpm check:package
 pnpm pack --dry-run
 npm pack --dry-run
 ```
@@ -130,9 +133,10 @@ Observed results:
 - Frozen install passed with the spawner-only workspace lockfile.
 - Typecheck passed.
 - Lint passed.
-- Vitest passed with 63 files and 474 tests.
+- Root Vitest passed with 57 files and 415 tests.
 - Build passed.
 - CLI smoke passed against isolated fake setup.
+- Package content check passed with 12 files and no orchestrator paths.
 - Root `pnpm pack --dry-run` and `npm pack --dry-run` contained only `dist`, README, changelog, license, and package metadata.
 - Clean npm and pnpm tarball installs in temp projects returned version `0.9.0` and `doctor --json` returned `ok: true` with fake `HOME`, `REEVES_REGISTRY`, and `REEVES_CONFIG`.
 - PRE-BETA orchestrator check passed separately with 6 files and 73 tests.

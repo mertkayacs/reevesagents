@@ -109,7 +109,7 @@ describe('mcp tools', () => {
   it('start_run schema only lists focused providers', async () => {
     const { TOOLS } = await import('../src/mcp.js')
     const startRun = TOOLS.find(t => t.name === 'start_run')!
-    const root = startRun.inputSchema.properties.root as { properties: { provider: { enum: string[] } } }
+    const root = startRun.inputSchema.properties.root as unknown as { properties: { provider: { enum: readonly string[] } } }
     expect(root.properties.provider.enum).toEqual(['cc', 'codex', 'opencode', 'hermes'])
   })
 

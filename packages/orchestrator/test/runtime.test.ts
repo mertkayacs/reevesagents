@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Provider } from '../../../src/state/types.js'
+import { PROVIDERS } from '../../../src/launcher/providers.js'
 import type { RuntimeDriver } from '../src/runtime.js'
 
 let tmpDir: string
@@ -19,12 +20,7 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
-const available: Record<Provider, boolean> = {
-  cc: true,
-  codex: true,
-  opencode: true,
-  hermes: true,
-}
+const available = Object.fromEntries(PROVIDERS.map(provider => [provider, true])) as Record<Provider, boolean>
 
 class FakeDriver implements RuntimeDriver {
   calls: Array<{ args: string[], input?: string }> = []
