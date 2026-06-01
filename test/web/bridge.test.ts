@@ -73,7 +73,7 @@ describe('resolveTerminalTarget', () => {
   })
 
   it('throws when the id is empty', () => {
-    expect(() => resolveTerminalTarget('')).toThrow('missing terminal id')
+    expect(() => resolveTerminalTarget('')).toThrow('missing agent id')
   })
 
   it('throws when the agent does not exist', () => {
@@ -81,22 +81,22 @@ describe('resolveTerminalTarget', () => {
     expect(() => resolveTerminalTarget('ghost')).toThrow('Agent not found')
   })
 
-  it('throws when the terminal has ended', () => {
+  it('throws when the agent has ended', () => {
     writeRun(makeRun('r1'))
     writeAgent(makeAgent('gone', 'r1', { ended_at: '2026-01-01T01:00:00.000Z' }))
-    expect(() => resolveTerminalTarget('gone')).toThrow('terminal has ended')
+    expect(() => resolveTerminalTarget('gone')).toThrow('agent has ended')
   })
 
   it('throws when the agent is headless', () => {
     writeRun(makeRun('r1'))
     writeAgent(makeAgent('caller', 'r1', { headless: true, tmux_window_id: '' }))
-    expect(() => resolveTerminalTarget('caller')).toThrow('terminal has no tmux window')
+    expect(() => resolveTerminalTarget('caller')).toThrow('agent has no tmux window')
   })
 
   it('throws when the agent has no tmux window', () => {
     writeRun(makeRun('r1'))
     writeAgent(makeAgent('nowin', 'r1', { tmux_window_id: '' }))
-    expect(() => resolveTerminalTarget('nowin')).toThrow('terminal has no tmux window')
+    expect(() => resolveTerminalTarget('nowin')).toThrow('agent has no tmux window')
   })
 
   it('resolves orchestrator agents only when pre-beta mode is enabled', () => {
@@ -120,7 +120,7 @@ describe('resolveTerminalTarget', () => {
       tmux_pane_id: '',
     }))
 
-    expect(() => resolveTerminalTarget('root', { prebetaOrchestrator: true })).toThrow('terminal has no tmux window')
+    expect(() => resolveTerminalTarget('root', { prebetaOrchestrator: true })).toThrow('agent has no tmux window')
   })
 })
 

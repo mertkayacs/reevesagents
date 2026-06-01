@@ -7,7 +7,7 @@ import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../utils/display.js'
 import { findAgent, readRun } from '../state/runs.js'
 import { openAgent } from '../launcher/runtime.js'
 import type { AgentRecord } from '../state/types.js'
@@ -128,8 +128,9 @@ export function AgentDetail() {
   const summaryLine = summaryParts.join(' · ')
   const isCloseAgentDisabled = agent.ended_at !== null
   const isHeadless = !!agent.headless
+  const providerLabel = providerDisplayName(agent.provider)
 
-  let statusContext = `${agent.nickname} · ${agent.provider} · ${agent.task_status}`
+  let statusContext = `${agent.nickname} · ${providerLabel} · ${agent.task_status}`
   if (selected && selected.action !== '__section__') {
     const actionLabels: Record<RowItem, string> = {
       Output: 'view recent output',
@@ -146,10 +147,10 @@ export function AgentDetail() {
     <Frame
       breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname]}
       meta={[
-        { label: 'provider', value: agent.provider },
+        { label: 'provider', value: providerLabel },
         { label: 'status', value: agent.task_status },
       ]}
-      tagline={`${agent.provider} terminal in ${run.name}. It is independent and has no ReevesAgents context.`}
+      tagline={`${providerLabel} terminal in ${run.name}. It is independent and has no ReevesAgents context.`}
       statusContext={statusContext}
       statusKeys="↑↓ move · enter select · esc back"
     >
@@ -157,7 +158,7 @@ export function AgentDetail() {
         <Box flexDirection="column" marginBottom={1}>
           <Text wrap="truncate-end">
             <Text color={colors.surface.border}>[</Text>
-            <Text color={providerColor(agent.provider)}>{agent.provider}</Text>
+            <Text color={providerColor(agent.provider)}>{providerLabel}</Text>
             <Text color={colors.surface.border}>] [</Text>
             <Text color={modelColor(agent.model, agent.provider)}>{modelBadgeLabel(agent.model)}</Text>
             <Text color={colors.surface.border}>]</Text>

@@ -31,7 +31,7 @@ import {
 import { loadConfig } from '../state/config.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
-import { redactSecrets } from '../utils/display.js'
+import { providerDisplayName, redactSecrets } from '../utils/display.js'
 
 export interface AgentLaunchConfig {
   nickname?: string
@@ -185,7 +185,7 @@ function readDisplayIds(driver: RuntimeDriver, target?: string): TmuxIds | null 
 
 function requireProvider(provider: Provider, available: Record<Provider, boolean>): void {
   if (!isProvider(provider)) throw new Error(`Unsupported provider: ${String(provider)}`)
-  if (!available[provider]) throw new Error(`Provider '${provider}' not found on PATH`)
+  if (!available[provider]) throw new Error(`${providerDisplayName(provider)} not found on PATH`)
 }
 
 function pickReevesAnchor(driver: RuntimeDriver): { sessionName: string; windowId: string; paneId: string } {
@@ -286,7 +286,7 @@ function newAgentRecord(
   return {
     id,
     run_id: runId,
-    nickname: config.nickname || (role === 'root' ? config.provider : `${config.provider}-terminal`),
+    nickname: config.nickname || (role === 'root' ? providerDisplayName(config.provider) : `${providerDisplayName(config.provider)} terminal`),
     provider: config.provider,
     model: config.model,
     role,
@@ -320,7 +320,7 @@ function createAgentWindow(
   const workingDir = resolveWorkingDir(config.working_dir, inheritedWorkingDir)
   const permissions = config.permissions ?? cfg.global.default_permissions
   const shellCommand = terminalShellCommand(config, permissions)
-  const nickname = config.nickname || config.provider
+  const nickname = config.nickname || providerDisplayName(config.provider)
   const output = driver.tmux([
     'new-window',
     '-d',

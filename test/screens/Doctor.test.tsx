@@ -11,7 +11,7 @@ vi.mock('../../src/launcher/doctor.js', () => ({
     checks: [
       { name: 'node', status: 'ok' as const, detail: '20.19.0' },
       { name: 'tmux', status: 'ok' as const, detail: 'tmux 3.2' },
-      { name: 'providers', status: 'warn' as const, detail: 'cc:ok codex:missing' },
+      { name: 'providers', status: 'warn' as const, detail: 'Claude Code: ok; Codex CLI: missing' },
     ],
   }),
 }))

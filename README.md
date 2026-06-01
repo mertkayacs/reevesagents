@@ -49,16 +49,16 @@ Install is passive: no postinstall, no provider config writes, no background ser
 
 ## Providers
 
-| Key | CLI | Launch | Notes |
+| Provider spec | CLI | Launch | Notes |
 | --- | --- | --- | --- |
-| `cc` | Claude Code | `claude` | Supports model, API-key auth mode, effort, and skip permissions |
-| `codex` | Codex CLI | `codex` | Supports model and skip permissions; Codex app-server remote control is managed outside agent launches |
-| `opencode` | OpenCode CLI | `opencode` | Supports `--prompt` and `--model`; ReevesAgents does not add undocumented skip flags |
+| `claude-code` | Claude Code | `claude` | Supports model, API-key auth mode, effort, and skip permissions |
+| `codex-cli` | Codex CLI | `codex` | Supports model and skip permissions; Codex app-server remote control is managed outside agent launches |
+| `opencode-cli` | OpenCode CLI | `opencode` | Supports `--prompt` and `--model`; ReevesAgents does not add undocumented skip flags |
 | `hermes` | Hermes | `hermes chat` | Supports model and `--yolo` skip permissions |
-| `kimi` | Kimi Code | `kimi` | Supports model and `--yolo` skip permissions |
-| `deepseek` | DeepSeek CLI | `deepseek` | Supports model; ReevesAgents does not add undocumented skip flags |
+| `kimi-code` | Kimi Code | `kimi` | Supports model and `--yolo` skip permissions |
+| `deepseek-cli` | DeepSeek CLI | `deepseek` | Supports model; ReevesAgents does not add undocumented skip flags |
 | `pi` | Pi | `pi` | Supports model; ReevesAgents does not add undocumented skip flags |
-| `qwen` | Qwen Code | `qwen` | Supports model and `--approval-mode yolo` skip permissions |
+| `qwen-code` | Qwen Code | `qwen` | Supports model and `--approval-mode yolo` skip permissions |
 | `aider` | Aider | `aider` | Supports model and `--yes-always` skip confirmations |
 
 The TUI model picker is provider-scoped and intentionally small. Choosing `provider default` leaves the provider CLI to use its own configured default and ReevesAgents does not pass `--model`. The curated optional values live in `src/launcher/model-data/*.ts`, with one source file per provider.
@@ -184,13 +184,13 @@ The first screen is always Welcome. It is a persistent main menu: use arrows and
 Spawner mode can also start from the CLI:
 
 ```sh
-reevesagents spawn codex:builder cc:reviewer --name "release check" --prompt "Inspect the release state."
+reevesagents spawn codex-cli:builder claude-code:reviewer --name "release check" --prompt "Inspect the release state."
 ```
 
 Terminal specs can include an optional model as `provider:nickname:model`:
 
 ```sh
-reevesagents spawn cc:planner:sonnet codex:builder:gpt-5-codex
+reevesagents spawn claude-code:planner:sonnet codex-cli:builder:gpt-5-codex
 ```
 
 Leave the model off to use the provider CLI default.

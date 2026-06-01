@@ -5,6 +5,22 @@ import chalk from 'chalk'
 import type { Provider } from '../state/types.js'
 import { colors } from './tokens.js'
 
+export const PROVIDER_DISPLAY_NAMES: Record<Provider, string> = {
+  cc: 'Claude Code',
+  codex: 'Codex CLI',
+  opencode: 'OpenCode CLI',
+  hermes: 'Hermes',
+  kimi: 'Kimi Code',
+  deepseek: 'DeepSeek CLI',
+  pi: 'Pi',
+  qwen: 'Qwen Code',
+  aider: 'Aider',
+}
+
+export function providerDisplayName(provider: Provider): string {
+  return PROVIDER_DISPLAY_NAMES[provider] ?? provider
+}
+
 export function providerColor(p: Provider): string {
   return colors.provider[p] ?? 'gray'
 }

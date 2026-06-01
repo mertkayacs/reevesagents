@@ -10,7 +10,7 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
 import { colors, space } from '../../utils/tokens.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
 import { listAgents, readRun } from '../../state/runs.js'
 import { peekAgent } from '../../launcher/runtime.js'
 import type { AgentRecord, RunRecord } from '../../state/types.js'
@@ -223,6 +223,7 @@ export function RunOutput() {
             const isSelected = selected?.type === 'agent' && selected.agent?.id === agent.id
             const providerHue = providerColor(agent.provider)
             const modelHue = modelColor(agent.model, agent.provider)
+            const providerLabel = providerDisplayName(agent.provider)
 
             return (
               <Box key={agent.id} flexDirection="column" marginBottom={1}>
@@ -232,7 +233,7 @@ export function RunOutput() {
                       <Text color={isSelected ? colors.accent.bright : colors.text.primary}>{agent.nickname}</Text>
                       <Text color={colors.text.dim}> </Text>
                       <Text color={colors.surface.border}>[</Text>
-                      <Text color={providerHue}>{agent.provider}</Text>
+                      <Text color={providerHue}>{providerLabel}</Text>
                       <Text color={colors.surface.border}>] [</Text>
                       <Text color={modelHue}>{modelBadgeLabel(agent.model)}</Text>
                       <Text color={colors.surface.border}>]</Text>

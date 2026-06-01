@@ -10,23 +10,11 @@ import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
-import { providerColor } from '../utils/display.js'
+import { providerDisplayName } from '../utils/display.js'
 import { runsDir, stateRoot } from '../state/runs.js'
 import { presetsDir } from '../state/store.js'
 import { configPath } from '../state/config.js'
 import { useToast } from '../state/ToastContext.js'
-
-const LABELS = {
-  cc: 'Claude Code',
-  codex: 'Codex CLI',
-  opencode: 'OpenCode CLI',
-  hermes: 'Hermes',
-  kimi: 'Kimi Code',
-  deepseek: 'DeepSeek CLI',
-  pi: 'Pi',
-  qwen: 'Qwen Code',
-  aider: 'Aider',
-} as const
 
 const CONFIG_PATHS = {
   cc: '~/.claude/settings.json',
@@ -40,8 +28,7 @@ const CONFIG_PATHS = {
   aider: '~/.aider.conf.yml',
 }
 
-const PROVIDER_LABEL_WIDTH = Math.max(...Object.values(LABELS).map(label => label.length))
-const PROVIDER_BADGE_WIDTH = Math.max(...PROVIDERS.map(provider => provider.length))
+const PROVIDER_LABEL_WIDTH = Math.max(...PROVIDERS.map(provider => providerDisplayName(provider).length))
 const ACTION_LABEL_WIDTH = Math.max('Recheck'.length, 'Show Config'.length, 'Back'.length)
 
 type RowType = 'provider' | 'statePath' | 'action'
@@ -114,7 +101,7 @@ export function Settings() {
 
   // Selected provider becomes a one-line StatusBar context.
   const statusContext = selectedProvider
-    ? `${LABELS[selectedProvider]} · ${available[selectedProvider] ? 'installed' : 'not installed'} · config ${CONFIG_PATHS[selectedProvider]}`
+    ? `${providerDisplayName(selectedProvider)} · ${available[selectedProvider] ? 'installed' : 'not installed'} · config ${CONFIG_PATHS[selectedProvider]}`
     : selectedRow?.id === 'showConfig'
     ? configPath()
     : undefined
@@ -143,13 +130,8 @@ export function Settings() {
                 char: isInstalled ? glyphs.status.ok : glyphs.status.fail,
                 color: isInstalled ? colors.status.ok : colors.text.faint,
               }}
-              primary={LABELS[provider]}
+              primary={providerDisplayName(provider)}
               primaryWidth={PROVIDER_LABEL_WIDTH}
-              badge={{
-                label: provider,
-                color: providerColor(provider),
-                width: PROVIDER_BADGE_WIDTH,
-              }}
               hint={isInstalled ? 'installed' : 'not installed'}
             />
           )

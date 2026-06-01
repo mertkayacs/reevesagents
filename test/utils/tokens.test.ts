@@ -34,7 +34,7 @@ describe('tokens', () => {
     }
   })
 
-  it('cc provider is Anthropic Orange #d97757 (Claude brand)', () => {
+  it('Claude Code provider is Anthropic Orange #d97757 (Claude brand)', () => {
     expect(colors.provider.cc).toBe('#d97757')
   })
 

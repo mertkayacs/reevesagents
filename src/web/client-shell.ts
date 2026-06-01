@@ -64,7 +64,7 @@ export function placeholderPage(): string {
   <h1>ReevesAgents</h1>
   <span class="tag">web ui (beta) · loopback only</span>
 </header>
-<main id="app"><p class="empty">Loading terminals…</p></main>
+<main id="app"><p class="empty">Loading agents...</p></main>
 <script>
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
   function statusClass(s) { return 's-' + String(s).replace(/[^a-z]/gi, ''); }
@@ -82,13 +82,13 @@ export function placeholderPage(): string {
           '<div class="card">'
           + '<div class="mono" style="background:' + esc(t.color) + '">' + esc(t.monogram) + '</div>'
           + '<div><div class="name">' + esc(t.nickname) + '</div>'
-          + '<div class="sub">' + esc(t.provider) + (t.model ? ' · ' + esc(t.model) : '') + '</div></div>'
+          + '<div class="sub">' + esc(t.provider_label || t.provider) + (t.model ? ' · ' + esc(t.model) : '') + '</div></div>'
           + '<div class="status ' + statusClass(t.status) + '">' + esc(t.status) + '</div>'
           + '</div>'
         ).join('');
         return '<section class="run"><div class="run-name">' + esc(run.name)
           + '<span class="run-meta">' + esc(run.status) + ' · ' + esc(run.working_dir) + '</span></div>'
-          + (cards || '<p class="empty">no terminals</p>') + '</section>';
+          + (cards || '<p class="empty">no agents</p>') + '</section>';
       }).join('');
     } catch (err) {
       app.innerHTML = '<p class="empty">Failed to load state: ' + esc(err && err.message || err) + '</p>';

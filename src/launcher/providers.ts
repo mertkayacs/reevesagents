@@ -1,6 +1,6 @@
 // Build CLI commands for supported providers.
 // Each provider has a different binary, permission flags, and model args.
-// RC (remote control) is provider-specific: CC uses send-keys injection.
+// RC (remote control) is provider-specific: Claude Code uses send-keys injection.
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import type { Provider, Permissions, AuthMode, Effort } from '../state/types.js'
@@ -27,6 +27,32 @@ export const BIN: Record<Provider, string> = {
 }
 
 export const PROVIDERS = Object.keys(BIN) as Provider[]
+const PROVIDER_ALIASES: Record<string, Provider> = {
+  cc: 'cc',
+  claude: 'cc',
+  'claude code': 'cc',
+  'claude-code': 'cc',
+  claudecode: 'cc',
+  codex: 'codex',
+  'codex cli': 'codex',
+  'codex-cli': 'codex',
+  opencode: 'opencode',
+  'opencode cli': 'opencode',
+  'opencode-cli': 'opencode',
+  open_code: 'opencode',
+  hermes: 'hermes',
+  kimi: 'kimi',
+  'kimi code': 'kimi',
+  'kimi-code': 'kimi',
+  deepseek: 'deepseek',
+  'deepseek cli': 'deepseek',
+  'deepseek-cli': 'deepseek',
+  pi: 'pi',
+  qwen: 'qwen',
+  'qwen code': 'qwen',
+  'qwen-code': 'qwen',
+  aider: 'aider',
+}
 const HELP_INSPECT_TIMEOUT_MS = 3000
 const HELP_INSPECT_TOTAL_BUDGET_MS = 8000
 const HERMES_PROVIDER_PREFIXES = new Set([
@@ -119,6 +145,11 @@ export function isProvider(value: unknown): value is Provider {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(BIN, value)
 }
 
+export function normalizeProvider(value: unknown): Provider | null {
+  if (typeof value !== 'string') return null
+  return PROVIDER_ALIASES[value.trim().toLowerCase()] ?? null
+}
+
 export function buildCommand(opts: BuildCommandOptions): string[] {
   const { provider, permissions, model, auth_mode = 'default', effort = 'default' } = opts
   if (!isProvider(provider)) {
@@ -132,7 +163,7 @@ export function buildCommand(opts: BuildCommandOptions): string[] {
     if (auth_mode === 'api-key') cmd.push('--bare')
     if (effort !== 'default') cmd.push('--effort', effort)
     if (model) cmd.push('--model', model)
-    // RC injected via send-keys after startup; not a launch flag for CC
+    // RC injected via send-keys after startup; not a launch flag for Claude Code.
     return cmd
   }
 

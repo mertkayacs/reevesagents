@@ -12,7 +12,7 @@ import {
   computeRunStatus,
 } from '../state/runs.js'
 import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
-import { providerColor } from '../utils/display.js'
+import { providerColor, providerDisplayName } from '../utils/display.js'
 import type { Provider, RunViewStatus, TaskStatus } from '../state/types.js'
 import { isOrchestratorWebProvider } from './prebeta-orchestrator.js'
 
@@ -24,6 +24,7 @@ export interface WebTerminal {
   id: string
   nickname: string
   provider: Provider
+  provider_label: string
   model: string
   role: 'root' | 'worker'
   status: TaskStatus | 'ended'
@@ -52,6 +53,7 @@ export interface WebState {
 
 export interface WebProvider {
   id: Provider
+  name: string
   available: boolean
   orchestrator: boolean
   color: string
@@ -78,6 +80,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
         id: agent.id,
         nickname: agent.nickname,
         provider: agent.provider,
+        provider_label: providerDisplayName(agent.provider),
         model: agent.model,
         role: agent.role,
         status,
@@ -85,7 +88,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
         hasWindow,
         canAttach,
         canKill,
-        disabledReason: canAttach ? null : status === 'ended' ? 'terminal has ended' : 'terminal has no tmux window',
+        disabledReason: canAttach ? null : status === 'ended' ? 'agent has ended' : 'agent has no tmux window',
         monogram: monogram(agent.nickname, agent.provider),
         color: providerColor(agent.provider),
       }
@@ -109,6 +112,7 @@ export function listWebProviders(): WebProvider[] {
   const available = detectAvailable()
   return PROVIDERS.map(id => ({
     id,
+    name: providerDisplayName(id),
     available: available[id],
     orchestrator: isOrchestratorWebProvider(id),
     color: providerColor(id),

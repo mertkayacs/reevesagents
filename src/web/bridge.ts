@@ -35,15 +35,15 @@ export interface BridgeOptions {
   prebetaOrchestrator?: boolean
 }
 
-// Resolves a terminal id to its tmux target using only the registry record.
-// Throws a user-facing message when the terminal cannot be bridged.
+// Resolves an agent id to its tmux target using only the registry record.
+// Throws a user-facing message when the agent cannot be bridged.
 export function resolveTerminalTarget(id: string, options: BridgeOptions = {}): TerminalTarget {
-  if (!id) throw new Error('missing terminal id')
+  if (!id) throw new Error('missing agent id')
   const agent = options.prebetaOrchestrator ? findAgentAny(id) : findAgent(id)
   if (options.prebetaOrchestrator) readRunAny(agent.run_id)
   else readRun(agent.run_id)
-  if (agent.ended_at) throw new Error('terminal has ended')
-  if (agent.headless || !agent.tmux_window_id) throw new Error('terminal has no tmux window')
+  if (agent.ended_at) throw new Error('agent has ended')
+  if (agent.headless || !agent.tmux_window_id) throw new Error('agent has no tmux window')
   return { session: agent.tmux_session, windowId: agent.tmux_window_id, nickname: agent.nickname }
 }
 
@@ -97,7 +97,7 @@ function openBridge(ws: WebSocket, id: string, bridges: Set<Bridge>, options: Br
   try {
     target = resolveTerminalTarget(id, options)
   } catch (err) {
-    send(ws, { t: 'e', m: err instanceof Error ? err.message : 'terminal not found' })
+    send(ws, { t: 'e', m: err instanceof Error ? err.message : 'agent not found' })
     ws.close()
     return
   }
@@ -117,7 +117,7 @@ function openBridge(ws: WebSocket, id: string, bridges: Set<Bridge>, options: Br
     execFileSync('tmux', ['select-window', '-t', `${viewer}:${target.windowId}`], { stdio: 'ignore' })
   } catch {
     try { execFileSync('tmux', ['kill-session', '-t', viewer], { stdio: 'ignore' }) } catch { /* nothing to clean */ }
-    send(ws, { t: 'e', m: 'could not open a tmux view for this terminal' })
+    send(ws, { t: 'e', m: 'could not open a tmux view for this agent' })
     ws.close()
     return
   }

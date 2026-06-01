@@ -9,7 +9,7 @@ import { Section, SectionEnd } from '../../../components/Section.js'
 import { Pagination } from '../../../components/Pagination.js'
 import { useRouter } from '../../../router.js'
 import { colors, space } from '../../../utils/tokens.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import { findAgent, readRun } from '../../../state/runs.js'
 import { peekAgent, openAgent } from '../../../launcher/runtime.js'
 import type { AgentRecord } from '../../../state/types.js'
@@ -169,6 +169,7 @@ export function AgentOutput() {
   const shownEnd = pageStart + visibleOutputLines.length
   const providerHue = providerColor(agent.provider)
   const modelHue = modelColor(agent.model, agent.provider)
+  const providerLabel = providerDisplayName(agent.provider)
 
   return (
     <Frame
@@ -187,7 +188,7 @@ export function AgentOutput() {
             <Text color={colors.text.primary} bold>{agent.nickname}</Text>
             <Text color={colors.text.dim}> </Text>
             <Text color={colors.surface.border}>[</Text>
-            <Text color={providerHue}>{agent.provider}</Text>
+            <Text color={providerHue}>{providerLabel}</Text>
             <Text color={colors.surface.border}>] [</Text>
             <Text color={modelHue}>{modelBadgeLabel(agent.model)}</Text>
             <Text color={colors.surface.border}>]</Text>

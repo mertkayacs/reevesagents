@@ -9,7 +9,7 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { StepIndicator } from '../../components/StepIndicator.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../state/WizardContext.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
 
 type ActionId = 'start' | 'back' | 'cancel'
 const ACTION_LABEL_WIDTH = Math.max('Start Run'.length, 'Back to Edit'.length, 'Reset Wizard'.length)
@@ -61,7 +61,7 @@ export function NewRunReview() {
       <SectionEnd />
 
       <Section label="First Terminal" />
-      <Row selected={false} primary="Provider" badge={{ label: state.root.provider, color: providerColor(state.root.provider) }} />
+      <Row selected={false} primary="Provider" badge={{ label: providerDisplayName(state.root.provider), color: providerColor(state.root.provider) }} />
       <Row selected={false} primary="Model" badge={{ label: modelBadgeLabel(state.root.model), color: modelColor(state.root.model, state.root.provider) }} />
       <Row selected={false} primary="Prompt" trailing={promptPreview || '(none)'} />
       <Row selected={false} primary={showEffort ? 'Permissions / Effort' : 'Permissions'} trailing={permissionsSummary} />
@@ -76,7 +76,7 @@ export function NewRunReview() {
               selected={false}
               primary={worker.nickname || `terminal-${idx + 2}`}
               badges={[
-                { label: worker.provider, color: providerColor(worker.provider) },
+                { label: providerDisplayName(worker.provider), color: providerColor(worker.provider) },
                 { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider) },
               ]}
               trailing={worker.permissions}
@@ -87,13 +87,13 @@ export function NewRunReview() {
       )}
 
       <Section label="Planned Tmux Windows" />
-      <Row selected={false} primary="terminal 1" trailing={state.root.provider} />
+      <Row selected={false} primary="terminal 1" trailing={providerDisplayName(state.root.provider)} />
       {state.workers.map((worker, idx) => (
         <Row
           key={`tmux-${idx}`}
           selected={false}
           primary={`terminal ${idx + 2}`}
-          trailing={worker.nickname || worker.provider}
+          trailing={worker.nickname || providerDisplayName(worker.provider)}
         />
       ))}
       <SectionEnd />
