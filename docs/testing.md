@@ -20,6 +20,8 @@ This document covers the stable main package. The current release path is spawne
 | Build | `CI=true pnpm build` | The package emits `dist/cli.js` and `dist/index.js`. | No user state. |
 | CLI smoke | `pnpm smoke:cli` | Built spawner CLI runs `runs` and `doctor` against fake providers. | Temp registry/config and fake `tmux`/provider bins. |
 | Package contents | `pnpm check:package` | Root npm tarball contains only the spawner package surface. | `npm pack --dry-run`, no install. |
+| Install matrix | `pnpm check:install-matrix` | CLI/TUI-only install, Web install, and all-in PRE-BETA orchestrator install work from tarballs. | Temp npm projects, temp registry/config, fake `tmux`/provider bins for pre-beta Web create/stop. |
+| Orchestrator package | `CI=true pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir packages/orchestrator verify` | PRE-BETA MCP package typechecks, tests, builds, and packs as a separate package. | Separate package config and temp state in tests. |
 | Manual TUI smoke | `node dist/cli.js` with temp env | Welcome menu, Runs page, Main Menu return, narrow terminal behavior, and visible action flow. | Temp registry/config. |
 
 ## Acceptance Criteria
@@ -52,6 +54,21 @@ pnpm smoke:cli
 pnpm check:package
 ```
 
+Use this for the full release install matrix:
+
+```sh
+pnpm verify
+CI=true pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace
+pnpm --dir packages/orchestrator verify
+pnpm check:install-matrix
+```
+
+The matrix proves:
+
+- `npm install --omit=optional ./reevesagents-1.0.0.tgz` keeps CLI/TUI usable and disables Web cleanly.
+- `npm install ./reevesagents-1.0.0.tgz` starts the loopback Web beta.
+- `npm install ./reevesagents-1.0.0.tgz ./reevesagents-orchestrator-1.0.0.tgz` starts `reevesagents web --prebeta-orchestrator`, creates an orchestrator run through HTTP, shows it in `/api/state`, and stops it.
+
 Use this to verify the packed package installs in a clean project without touching the real home directory:
 
 ```sh
@@ -60,7 +77,7 @@ tmp=$(mktemp -d)
 mkdir -p "$tmp/home" "$tmp/registry"
 cd "$tmp"
 pnpm init
-HOME="$tmp/home" pnpm add /tmp/reevesagents-0.9.0.tgz
+HOME="$tmp/home" pnpm add /tmp/reevesagents-1.0.0.tgz
 ./node_modules/.bin/reevesagents --version
 REEVES_REGISTRY="$tmp/registry" REEVES_CONFIG="$tmp/config.json" ./node_modules/.bin/reevesagents doctor --json
 ```
@@ -76,12 +93,12 @@ cd "$tmp"
 mkdir npm-check pnpm-check
 cd npm-check
 npm init -y
-HOME="$tmp/npm-home" npm install "$tmp/reevesagents-0.9.0.tgz"
+HOME="$tmp/npm-home" npm install "$tmp/reevesagents-1.0.0.tgz"
 ./node_modules/.bin/reevesagents --version
 REEVES_REGISTRY="$tmp/npm-registry" REEVES_CONFIG="$tmp/npm-config.json" ./node_modules/.bin/reevesagents doctor --json
 cd ../pnpm-check
 pnpm init
-HOME="$tmp/pnpm-home" pnpm add "$tmp/reevesagents-0.9.0.tgz"
+HOME="$tmp/pnpm-home" pnpm add "$tmp/reevesagents-1.0.0.tgz"
 ./node_modules/.bin/reevesagents --version
 REEVES_REGISTRY="$tmp/pnpm-registry" REEVES_CONFIG="$tmp/pnpm-config.json" ./node_modules/.bin/reevesagents doctor --json
 ```
@@ -130,4 +147,4 @@ Observed results:
 - CLI smoke passed against isolated fake setup.
 - Package content check passed with 12 files and only root package paths.
 - Root `pnpm pack --dry-run` and `npm pack --dry-run` contained only `dist`, README, changelog, license, and package metadata.
-- Clean npm and pnpm tarball installs in temp projects returned version `0.9.0` and `doctor --json` returned `ok: true` with fake `HOME`, `REEVES_REGISTRY`, and `REEVES_CONFIG`.
+- Clean npm and pnpm tarball installs in temp projects returned version `1.0.0` and `doctor --json` returned `ok: true` with fake `HOME`, `REEVES_REGISTRY`, and `REEVES_CONFIG`.
