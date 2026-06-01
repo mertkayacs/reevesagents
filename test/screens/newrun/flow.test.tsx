@@ -63,8 +63,12 @@ describe('New Run keyboard flow', () => {
     await press(stdin, '\r') // Continue -> First Terminal
     await waitForFrame(lastFrame, 'First Terminal')
 
-    await press(stdin, down)
-    await press(stdin, down)
+    await press(stdin, down) // Model
+    await press(stdin, '\r') // open model options
+    await waitForFrame(lastFrame, 'Model Options')
+    await press(stdin, down) // sonnet
+    await press(stdin, '\r') // select sonnet
+    await press(stdin, down) // Prompt
     await press(stdin, '\r') // edit root prompt
     await press(stdin, 'root smoke task')
     await press(stdin, '\r') // newline in root prompt
@@ -112,6 +116,7 @@ describe('New Run keyboard flow', () => {
     const request = vi.mocked(RuntimeModule.startRun).mock.calls[0]![0]
     expect(request.mode).toBe('spawner')
     expect(request.name).toBe('tui-run')
+    expect(request.root.model).toBe('sonnet')
     expect(request.root.task).toBe('root smoke task\nsecond line')
     const workers = request.workers ?? []
     expect(workers).toHaveLength(1)

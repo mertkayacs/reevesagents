@@ -6,6 +6,7 @@ import React, { useState, useMemo } from 'react'
 import { useInput } from 'ink'
 import { Frame } from '../../components/Frame.js'
 import { Row } from '../../components/Row.js'
+import { ModelOptionList } from '../../components/ModelOptionList.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { StepIndicator } from '../../components/StepIndicator.js'
 import { TextField } from '../../components/TextField.js'
@@ -83,6 +84,8 @@ export function NewRunRoot() {
   const totalRows = fields.length + actions.length
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [editingFieldId, setEditingFieldId] = useState<FieldId | null>(null)
+  const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const [modelPickerIdx, setModelPickerIdx] = useState(0)
 
   // Clamp selection if conditional fields disappear after a picker change.
   if (selectedIdx >= totalRows) {
@@ -91,6 +94,24 @@ export function NewRunRoot() {
 
   function moveUp(): void { setSelectedIdx(i => Math.max(0, i - 1)) }
   function moveDown(): void { setSelectedIdx(i => Math.min(totalRows - 1, i + 1)) }
+
+  function openModelPicker(): void {
+    const values = modelValuesForProvider(state.root.provider)
+    const idx = values.indexOf(state.root.model)
+    setModelPickerIdx(idx >= 0 ? idx : 0)
+    setModelPickerOpen(true)
+  }
+
+  function moveModelPicker(delta: 1 | -1): void {
+    const values = modelValuesForProvider(state.root.provider)
+    setModelPickerIdx(idx => (idx + delta + values.length) % values.length)
+  }
+
+  function selectModel(): void {
+    const values = modelValuesForProvider(state.root.provider)
+    updateRoot({ model: values[modelPickerIdx] ?? '' })
+    setModelPickerOpen(false)
+  }
 
   function commitText(id: FieldId, value: string): void {
     if (id === 'prompt') updateRoot({ prompt: value })
@@ -116,6 +137,14 @@ export function NewRunRoot() {
   }
 
   useInput((_input, key) => {
+    if (modelPickerOpen) {
+      if (key.upArrow) { moveModelPicker(-1); return }
+      if (key.downArrow) { moveModelPicker(1); return }
+      if (key.return) { selectModel(); return }
+      if (key.escape || key.backspace) { setModelPickerOpen(false); return }
+      return
+    }
+
     if (editingFieldId) return
 
     if (key.upArrow) { moveUp(); return }
@@ -133,6 +162,8 @@ export function NewRunRoot() {
         const f = fields[selectedIdx]!
         if (f.kind === 'text') {
           setEditingFieldId(f.id)
+        } else if (f.id === 'model') {
+          openModelPicker()
         } else {
           cyclePicker(f.id, 1)
         }
@@ -146,7 +177,7 @@ export function NewRunRoot() {
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'First Terminal']}
       tagline="Configure the first independent CLI terminal."
-      statusKeys="enter edit/newline · ←→ cycle picker · esc done/back"
+      statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
       <StepIndicator step={2} total={4} name="First Terminal" />
 
@@ -180,6 +211,15 @@ export function NewRunRoot() {
           />
         )
       })}
+
+      {modelPickerOpen && (
+        <ModelOptionList
+          provider={state.root.provider}
+          values={modelValuesForProvider(state.root.provider)}
+          current={state.root.model}
+          selectedIdx={modelPickerIdx}
+        />
+      )}
 
       <Section label="Actions" />
 
