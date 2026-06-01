@@ -35,6 +35,9 @@ Provider runtime:
 - Provider authentication handled by that provider CLI
 
 Spawner mode needs only the core runtime plus the provider CLIs you launch.
+The Web UI beta also needs the optional `ws` and `@lydell/node-pty` packages,
+which npm installs by default. The TUI and CLI do not need those optional
+packages.
 
 Not required:
 
@@ -64,13 +67,32 @@ Default permissions are `ask`. Use `skip` only in trusted disposable workspaces.
 
 ## Install
 
-The supported install surfaces all install the main spawner app only. They do not register MCP config and do not add approval or coordination commands.
+Choose the smallest install surface that matches what you want to run.
+
+### Core CLI/TUI Only
+
+Use this when you do not want the optional browser terminal bridge:
+
+```sh
+npm install -g --omit=optional reevesagents
+reevesagents doctor
+reevesagents
+```
+
+This installs the stable CLI and TUI. `reevesagents web` will print a clear
+message explaining which optional Web package is missing.
+
+### CLI/TUI Plus Web Beta
+
+This is the default stable install. It includes the CLI, TUI, and loopback-only
+Web UI beta. It does not install MCP orchestration.
 
 After npm publish:
 
 ```sh
 npm install -g reevesagents
 reevesagents doctor
+reevesagents web
 ```
 
 Other npm-registry clients consume the same package:
@@ -83,6 +105,31 @@ yarn dlx reevesagents doctor
 bunx reevesagents doctor
 ```
 
+### All-In PRE-BETA Orchestrator/MCP
+
+Use this only when you explicitly want MCP-connected root/worker orchestration.
+It installs the stable app plus the separate pre-beta orchestrator package:
+
+```sh
+npm install -g reevesagents reevesagents-orchestrator
+reevesagents doctor
+reevesagents web --prebeta-orchestrator
+```
+
+The pre-beta Web mode can show and control both stable spawner runs and
+orchestrator runs. It can create orchestrator runs, add workers, stop runs, and
+control windowed worker terminals. Headless orchestrator roots are shown but
+cannot be opened in the browser terminal.
+
+Provider MCP config setup remains explicit:
+
+```sh
+reevesagents-orchestrator setup
+```
+
+That setup command is pre-beta and may write provider MCP config entries. The
+stable `reevesagents` install never does that by itself.
+
 After the Homebrew tap exists:
 
 ```sh
@@ -93,8 +140,15 @@ reevesagents doctor
 From a GitHub Release tarball:
 
 ```sh
-npm install -g ./reevesagents-0.9.0.tgz
+npm install -g ./reevesagents-1.0.0.tgz
 reevesagents doctor
+```
+
+For an all-in pre-beta tarball install, install both release tarballs:
+
+```sh
+npm install -g ./reevesagents-1.0.0.tgz ./reevesagents-orchestrator-1.0.0.tgz
+reevesagents web --prebeta-orchestrator
 ```
 
 From source:
@@ -106,6 +160,10 @@ pnpm install
 pnpm build
 pnpm link --global
 ```
+
+The source repository includes the pre-beta orchestrator package for development
+and verification, but the root workspace and root npm tarball still ship only
+the stable app and Web beta assets.
 
 Verify:
 
@@ -171,6 +229,8 @@ reevesagents peek <terminal-id> # print recent terminal output
 reevesagents stop <run-id>   # stop one run, requires --yes or ALLOW_DESTRUCTIVE=1
 reevesagents kill <terminal-id> # close one terminal, requires --yes or ALLOW_DESTRUCTIVE=1
 reevesagents doctor          # setup checks
+reevesagents web             # start loopback Web UI beta
+reevesagents web --prebeta-orchestrator # opt into MCP/orchestrator Web controls
 ```
 
 ## State Layout
@@ -218,7 +278,7 @@ See [docs/implementation-report.md](docs/implementation-report.md) for the end-t
 
 The TUI was redesigned in May 2026 with Spawner as the default low-permission path, a unified color system, responsive frame component, focused pages, auto-cleanup of ended runs, and a visible-menu interaction model. The current source of truth is this README plus [REEVESAGENTS_DESIGN.md](REEVESAGENTS_DESIGN.md).
 
-- Version: `0.9.0`
+- Version: `1.0.0`
 - npm package: not published yet
 - Homebrew formula: not available yet
 

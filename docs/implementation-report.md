@@ -191,7 +191,7 @@ Observed:
 - CLI smoke passed against isolated setup and fake provider binaries.
 - Package content check passed with 12 files and only root package paths.
 - Packed root tarball contains the main package only: `dist`, README, changelog, license, and package metadata.
-- Clean tarball install in a temp project returned version `0.9.0` and `doctor --json` returned `ok: true`.
+- Clean tarball install in a temp project returned the release version and `doctor --json` returned `ok: true`.
 
 ## Source References
 
