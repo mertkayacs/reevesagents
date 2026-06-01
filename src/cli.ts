@@ -254,9 +254,7 @@ program
       const agents = listAgents(run.id)
       const root = agents.find(agent => agent.role === 'root')
       const note = agents.find(agent => agent.task_note.trim())?.task_note ?? ''
-      const mode = run.mode === 'spawner' ? 'spawn' : 'external'
-      const noun = run.mode === 'spawner' ? 'terminals' : 'entries'
-      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  ${mode.padEnd(9)}  ${(root?.provider ?? '-').padEnd(8)}  ${String(agents.length).padStart(2)} ${noun.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
+      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  spawn      ${(root?.provider ?? '-').padEnd(8)}  ${String(agents.length).padStart(2)} ${'terminals'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
     }
   })
 

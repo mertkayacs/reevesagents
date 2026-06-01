@@ -103,7 +103,7 @@ describe('spawner runtime', () => {
     expect(pasted.join('\n')).not.toContain('You are a worker agent')
   })
 
-  it('rejects orchestrator starts in the root package', async () => {
+  it('rejects non-spawner starts in the root package', async () => {
     const driver = new FakeDriver()
     const { startRun } = await import('../src/launcher/runtime.js')
 
@@ -112,7 +112,7 @@ describe('spawner runtime', () => {
       name: 'beta',
       working_dir: '/tmp',
       root: { provider: 'codex', model: '', task: 'lead' },
-    } as never, { driver, available })).toThrow(/spawner package/)
+    } as never, { driver, available })).toThrow(/Only spawner runs/)
   })
 
   it('spawns a terminal into an existing spawner run session', async () => {

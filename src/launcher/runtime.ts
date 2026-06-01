@@ -347,7 +347,7 @@ function validateAgents(configs: AgentLaunchConfig[], available: Record<Provider
 
 function assertSpawnerMode(mode: unknown): void {
   if (mode !== undefined && mode !== 'spawner') {
-    throw new Error('This run mode is not available in the spawner package')
+    throw new Error('Only spawner runs are available in this package')
   }
 }
 
@@ -410,7 +410,7 @@ export function spawnWorker(request: SpawnWorkerRequest, options: RuntimeOptions
   const run = readRun(request.run_id)
   if (run.status === 'ended' || run.ended_at) throw new Error(`Run is ended: ${run.id}`)
   if (run.mode !== 'spawner') {
-    throw new Error('This run type cannot add terminals from the spawner package')
+    throw new Error('Run not found')
   }
   return createAgentWindow(
     run.id,
@@ -504,7 +504,7 @@ export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentR
   const agent = findAgent(agentId)
   const run = readRun(agent.run_id)
   if (run.mode !== 'spawner') {
-    throw new Error('This run type cannot close terminals from the spawner package')
+    throw new Error('Run not found')
   }
   try {
     driver.tmux(['kill-window', '-t', agent.tmux_window_id])

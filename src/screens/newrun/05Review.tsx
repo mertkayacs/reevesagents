@@ -55,7 +55,6 @@ export function NewRunReview() {
       <StepIndicator step={4} total={4} name="Review" />
 
       <Section label="Run" />
-      <Row selected={false} primary="Mode" trailing="Spawner" />
       <Row selected={false} primary="Name" trailing={state.name || '(unset)'} />
       <Row selected={false} primary="Working Dir" trailing={state.workingDir} />
       <SectionEnd />
