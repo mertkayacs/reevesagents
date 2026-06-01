@@ -46,6 +46,16 @@ export const colors = {
     qwen:     '#c58c63',  // muted copper
     aider:    '#8fa6d4',  // muted periwinkle
   },
+  model: {
+    default:  '#9b9488',  // CLI default or unset model
+    claude:   '#e0a06f',  // Claude family
+    openai:   '#72b7d6',  // OpenAI family
+    deepseek: '#7ac8bc',  // DeepSeek family
+    qwen:     '#d1a25d',  // Qwen family
+    kimi:     '#d0c268',  // Kimi family
+    local:    '#92b37a',  // local/open model family
+    other:    '#9ca8bd',  // known provider, unclassified model
+  },
 } as const
 
 export type ColorToken = string

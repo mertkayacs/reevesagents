@@ -10,7 +10,7 @@ import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
 import { colors } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
-import { providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
 import { listAgents, readRun } from '../../state/runs.js'
 import type { AgentRecord, RunRecord } from '../../state/types.js'
 
@@ -166,16 +166,19 @@ export function RunAgents() {
           if (item.type === 'agent' && item.agent) {
             const agent = item.agent
             const isRoot = !isSpawner && agent.role === 'root'
+            const badges = [
+              ...(isRoot ? [{ label: 'root', color: colors.accent.primary }] : []),
+              { label: agent.provider, color: providerColor(agent.provider) },
+              { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider) },
+            ]
             return (
               <Row
                 key={agent.id}
                 selected={isSelected}
                 primary={agent.nickname}
                 glyph={statusGlyph(agent.task_status)}
-                badge={isRoot
-                  ? { label: 'root', color: colors.accent.primary }
-                  : { label: agent.provider, color: providerColor(agent.provider) }}
-                hint={`${agent.provider} · ${agent.model || 'no model'}`}
+                badges={badges}
+                hint={agent.task_note || agent.task_status}
               />
             )
           }

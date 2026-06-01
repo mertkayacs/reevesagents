@@ -22,6 +22,18 @@ describe('tokens', () => {
     expect(new Set(values).size).toBe(values.length)
   })
 
+  it('every model color is unique', () => {
+    const values = Object.values(colors.model)
+    expect(new Set(values).size).toBe(values.length)
+  })
+
+  it('every model color is distinct from accent.bright', () => {
+    const cursor = colors.accent.bright
+    for (const model of Object.keys(colors.model) as Array<keyof typeof colors.model>) {
+      expect(colors.model[model]).not.toBe(cursor)
+    }
+  })
+
   it('cc provider is Anthropic Orange #d97757 (Claude brand)', () => {
     expect(colors.provider.cc).toBe('#d97757')
   })

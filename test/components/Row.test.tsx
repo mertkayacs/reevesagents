@@ -54,6 +54,22 @@ describe('Row', () => {
     expect(frame).toContain('running')
   })
 
+  it('renders multiple badges inline with labels', () => {
+    const { lastFrame } = render(
+      <Row
+        selected={false}
+        primary="Test Item"
+        badges={[
+          { label: 'codex', color: colors.provider.codex },
+          { label: 'gpt-5', color: colors.model.openai },
+        ]}
+      />
+    )
+    const frame = lastFrame()
+    expect(frame).toContain('codex')
+    expect(frame).toContain('gpt-5')
+  })
+
   it('renders hint in text.dim color', () => {
     const { lastFrame } = render(
       <Row

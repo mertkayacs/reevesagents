@@ -13,7 +13,8 @@ import { useWizard } from '../../state/WizardContext.js'
 import type { WorkerConfig } from '../../state/WizardContext.js'
 import { PROVIDERS } from '../../launcher/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
-import type { Permissions, Effort } from '../../state/types.js'
+import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import type { Permissions, Effort, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
 const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
@@ -156,11 +157,13 @@ export function NewRunWorker() {
             />
           )
         }
+        const badge = pickerBadge(field, worker.provider)
         return (
           <Row
             key={field.id}
             selected={selectedIdx === fIdx}
             primary={field.label}
+            badge={badge}
             trailing={`‹ ${field.display ?? field.current} ›`}
             hint={selectedIdx === fIdx ? field.hint ?? '← → cycle' : undefined}
           />
@@ -180,4 +183,10 @@ export function NewRunWorker() {
       <SectionEnd />
     </Frame>
   )
+}
+
+function pickerBadge(field: PickerField, provider: Provider): { label: string; color: string } | undefined {
+  if (field.id === 'provider') return { label: field.current, color: providerColor(field.current as Provider) }
+  if (field.id === 'model') return { label: modelBadgeLabel(field.current), color: modelColor(field.current, provider) }
+  return undefined
 }

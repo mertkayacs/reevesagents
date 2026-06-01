@@ -8,11 +8,17 @@ import { colors, space } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
 
+interface Badge {
+  label: string
+  color: string
+}
+
 interface Props {
   selected: boolean
   primary: string
   glyph?: { char: string; color: string }
-  badge?: { label: string; color: string }
+  badge?: Badge
+  badges?: Badge[]
   hint?: string
   trailing?: string
   primaryWidth?: number
@@ -20,11 +26,18 @@ interface Props {
   danger?: boolean
 }
 
+function truncateBadgeLabel(label: string, compact: boolean): string {
+  const max = compact ? 14 : 24
+  if (label.length <= max) return label
+  return `${label.slice(0, Math.max(1, max - 3))}...`
+}
+
 export function Row({
   selected,
   primary,
   glyph,
   badge,
+  badges,
   hint,
   trailing,
   primaryWidth,
@@ -36,7 +49,8 @@ export function Row({
   const compact = columns < 72
   const cursorChar = selected ? glyphs.cursor.focused : glyphs.cursor.unfocused
   const textBold = selected && !disabled
-  const buttonLike = !glyph && !badge && !trailing && !!hint
+  const inlineBadges = [...(badge ? [badge] : []), ...(badges ?? [])]
+  const buttonLike = !glyph && inlineBadges.length === 0 && !trailing && !!hint
   const showHint = Boolean(hint) && !compact
   const showTrailing = Boolean(trailing) && !compact
   const cursorColor = selected
@@ -91,16 +105,16 @@ export function Row({
           <Text color={glyph.color}>{glyph.char}</Text>
         )}
         {glyph && <Text>{' '}</Text>}
-        {badge && (
-          <>
+        {inlineBadges.map((item, idx) => (
+          <React.Fragment key={`${item.label}-${idx}`}>
             <Text color={colors.surface.border}>[</Text>
-            <Text color={badge.color}>
-              {badge.label}
+            <Text color={item.color}>
+              {truncateBadgeLabel(item.label, compact)}
             </Text>
             <Text color={colors.surface.border}>]</Text>
             <Text>{' '}</Text>
-          </>
-        )}
+          </React.Fragment>
+        ))}
         {buttonLike ? (
           <>
             <Text color={buttonBorderColor} backgroundColor={buttonBg}>[ </Text>
