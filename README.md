@@ -157,6 +157,7 @@ The TUI is visible-menu first: arrows navigate, Enter selects, and Esc/Backspace
 
 - The Welcome page animates the blue block logo and shows the duck hero variant.
 - The Runs page uses a static sectioned list to reduce flicker during normal use.
+- The interactive TUI enables color even when the parent shell exports `NO_COLOR` or `TERM=dumb`; set `REEVES_NO_COLOR=1` to force monochrome.
 - The mascot is an in-house chafa-rendered blocky duck (src/brand/assets/duck.svg).
 - Layouts adapt by page and terminal width instead of forcing one three-pane layout everywhere.
 - The design reference is Claude Code style terminal UX: simple visible controls, compact status, and low redraw noise.
