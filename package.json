@@ -24,8 +24,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src test",
     "smoke:cli": "node scripts/smoke-cli.mjs",
+    "check:package": "node scripts/check-package-contents.mjs",
     "render-mascot": "node scripts/render-mascot.mjs",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli"
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli && pnpm check:package"
   },
   "dependencies": {
     "chalk": "^5.6.2",

@@ -52,7 +52,7 @@ None of these surfaces should install or advertise `reevesagents-orchestrator`. 
 - Install the packed tarball in a fresh temp project with fake HOME, `REEVES_REGISTRY`, and `REEVES_CONFIG`.
 - Check the install surface matrix: root package tarball contents, temp npm install, temp pnpm install, and Homebrew formula contents once the tap exists.
 - Run the manual TUI pass from `docs/testing.md`.
-- Run `pnpm pack --dry-run` and inspect the package contents.
+- Run `pnpm check:package` and `pnpm pack --dry-run` to inspect the package contents.
 - Confirm the README clearly presents the stable spawner package as the default install.
 - Confirm Orchestrator is described only as PRE-BETA test code and is absent from root CLI help and the packed root tarball.
 - Confirm npm provenance publishing works with the GitHub `publish` workflow and `NPM_TOKEN`.

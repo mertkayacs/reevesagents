@@ -10,9 +10,10 @@ import { execFileSync } from 'node:child_process'
 import type { Provider } from '../../../src/state/types.js'
 
 const ORCHESTRATOR_MCP_PROVIDERS = ['cc', 'codex', 'opencode', 'hermes'] as const satisfies readonly Provider[]
+type OrchestratorMcpProvider = typeof ORCHESTRATOR_MCP_PROVIDERS[number]
 
 export interface CliRegistration {
-  provider: Provider
+  provider: OrchestratorMcpProvider
   cli: string
   detected: boolean
   registered: boolean
@@ -20,14 +21,14 @@ export interface CliRegistration {
   note?: string
 }
 
-const LABEL: Record<Provider, string> = {
+const LABEL: Record<OrchestratorMcpProvider, string> = {
   cc: 'Claude Code',
   codex: 'Codex CLI',
   opencode: 'OpenCode CLI',
   hermes: 'Hermes',
 }
 
-const BIN: Record<Provider, string> = {
+const BIN: Record<OrchestratorMcpProvider, string> = {
   cc: 'claude',
   codex: 'codex',
   opencode: 'opencode',
@@ -109,7 +110,7 @@ function writeJson(path: string, data: Record<string, unknown>): void {
   atomicWrite(path, JSON.stringify(data, null, 2))
 }
 
-function configPath(provider: Provider): string {
+function configPath(provider: OrchestratorMcpProvider): string {
   const home = setupHome()
   if (provider === 'cc') return join(home, '.claude', 'settings.json')
   if (provider === 'codex') return join(home, '.codex', 'config.toml')
@@ -288,7 +289,7 @@ function isYamlRegistered(path: string): boolean {
   }
 }
 
-export function register(provider: Provider): CliRegistration {
+export function register(provider: OrchestratorMcpProvider): CliRegistration {
   const path = configPath(provider)
   const detected = isBinAvailable(BIN[provider])
   if (!detected) {
@@ -320,7 +321,7 @@ export function register(provider: Provider): CliRegistration {
   }
 }
 
-export function unregister(provider: Provider): CliRegistration {
+export function unregister(provider: OrchestratorMcpProvider): CliRegistration {
   const path = configPath(provider)
   try {
     if (provider === 'cc') unregisterJson(path)
@@ -340,9 +341,9 @@ export function unregister(provider: Provider): CliRegistration {
   }
 }
 
-export function isRegistered(providerOrPath: Provider | string): boolean {
+export function isRegistered(providerOrPath: OrchestratorMcpProvider | string): boolean {
   if ((ORCHESTRATOR_MCP_PROVIDERS as readonly string[]).includes(providerOrPath)) {
-    const provider = providerOrPath as Provider
+    const provider = providerOrPath as OrchestratorMcpProvider
     const path = configPath(provider)
     if (provider === 'cc') return isJsonRegistered(path)
     if (provider === 'opencode') return isOpenCodeRegistered(path)

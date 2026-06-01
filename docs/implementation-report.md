@@ -180,6 +180,7 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm smoke:cli
+pnpm check:package
 pnpm pack --dry-run
 ```
 
@@ -188,9 +189,10 @@ Observed:
 - Frozen install passed with the spawner-only workspace lockfile.
 - Typecheck passed.
 - Lint passed.
-- Vitest passed with 63 files and 474 tests.
+- Root Vitest passed with 57 files and 415 tests.
 - Build passed.
 - CLI smoke passed against isolated setup and fake provider binaries.
+- Package content check passed with 12 files and no orchestrator paths.
 - Packed root tarball contains the main package only: `dist`, README, changelog, license, and package metadata.
 - Clean tarball install in a temp project returned version `0.9.0` and `doctor --json` returned `ok: true`.
 
