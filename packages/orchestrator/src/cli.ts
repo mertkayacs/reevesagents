@@ -4,6 +4,7 @@ import { Command } from 'commander'
 import { readFileSync } from 'node:fs'
 import { handleMcpTool, startMcpServer } from './mcp.js'
 import { registerAll } from './mcp-setup.js'
+import { ORCHESTRATOR_VERSION } from './version.js'
 import type { AgentRecord, RunRecord } from '../../../src/state/types.js'
 
 const program = new Command()
@@ -11,7 +12,7 @@ const program = new Command()
 program
   .name('reevesagents-orchestrator')
   .description('PRE-BETA ReevesAgents MCP orchestration tools')
-  .version('0.9.0')
+  .version(ORCHESTRATOR_VERSION)
 
 function callerAgentId(): string | null {
   return process.env.REEVES_SESSION_ID ?? process.env.REEVES_AGENT_ID ?? null

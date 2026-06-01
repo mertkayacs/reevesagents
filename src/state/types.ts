@@ -16,7 +16,7 @@ export type RunStatus = 'running' | 'ended'
 
 export type RunViewStatus = RunStatus | 'stale'
 
-export type RunMode = 'spawner'
+export type RunMode = 'spawner' | 'orchestrator'
 
 export type ScreenName =
   | 'Welcome'

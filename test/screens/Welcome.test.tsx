@@ -56,6 +56,7 @@ describe('Welcome', () => {
     expect(output).toContain('New Run')
     expect(output).toContain('Runs')
     expect(output).toContain('Doctor')
+    expect(output).toContain('Start Web UI')
     expect(output).toContain('Settings')
     expect(output).toContain('Reference')
     expect(output).toContain('Credits')

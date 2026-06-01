@@ -24,11 +24,11 @@ import {
 import { runDoctor } from '../../../src/launcher/doctor.js'
 import {
   appendAgentInbox,
-  findAgent,
-  listAgents,
-  listRuns,
+  findAgentAny as findAgent,
+  listAgentsAny as listAgents,
+  listRunsAny as listRuns,
   readAgentInbox,
-  readRun,
+  readRunAny as readRun,
   updateAgent,
   computeRunStatus,
   runHasLiveTmuxTarget,
@@ -50,6 +50,7 @@ import {
   type ApprovalRisk,
   type ApprovalStatus,
 } from './approvals.js'
+import { ORCHESTRATOR_VERSION } from './version.js'
 
 type Caller =
   | { role: 'operator' }
@@ -753,7 +754,7 @@ export async function startMcpServer(): Promise<void> {
   const callerAgentId = process.env.REEVES_SESSION_ID ?? process.env.REEVES_AGENT_ID ?? null
 
   const server = new Server(
-    { name: 'reevesagents-orchestrator', version: '0.9.0' },
+    { name: 'reevesagents-orchestrator', version: ORCHESTRATOR_VERSION },
     { capabilities: { tools: {} } },
   )
 

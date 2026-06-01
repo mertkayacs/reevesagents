@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>ReevesAgents web</title>
+  <link rel="stylesheet" href="xterm.css" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◆</span>
+      <span class="brand-name">ReevesAgents</span>
+      <span id="brand-beta" class="brand-beta">web · beta</span>
+    </div>
+    <div class="topbar-actions">
+      <span id="conn" class="conn" data-state="idle" title="live update stream">live</span>
+      <button id="new-btn" class="btn btn-accent" type="button">New terminal</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar" aria-label="terminals">
+      <div id="sidebar-list" class="sidebar-list"></div>
+      <div id="sidebar-empty" class="sidebar-empty">
+        <div class="empty-title">No terminals yet</div>
+        <div class="empty-body">Create one to spawn a provider CLI in its own tmux window.</div>
+      </div>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-head">
+        <div>
+          <div id="stage-title" class="stage-title">No terminal selected</div>
+          <div id="stage-sub" class="stage-sub">Pick a terminal on the left, or create one.</div>
+        </div>
+        <div id="stage-status" class="stage-status" hidden></div>
+      </div>
+      <div class="term-wrap">
+        <div id="term-host" class="term-host"></div>
+        <div id="stage-overlay" class="stage-overlay">
+          <div class="overlay-card">
+            <div class="overlay-title">Live terminals, in your browser</div>
+            <div class="overlay-body">
+              Click a terminal card to attach. Keystrokes go straight to its tmux window.
+              Closing this tab leaves the terminal running.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="new-dialog" class="dialog">
+    <form id="new-form" method="dialog">
+      <div class="dialog-title">New terminal</div>
+
+      <label class="field">
+        <span class="field-label">Provider</span>
+        <select id="f-provider" required></select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Name <span class="field-opt">optional</span></span>
+        <input id="f-nickname" type="text" maxlength="40" placeholder="planner" autocomplete="off" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Add to run</span>
+        <select id="f-run"></select>
+      </label>
+
+      <label class="field" id="mode-field" hidden>
+        <span class="field-label">Run mode</span>
+        <select id="f-mode">
+          <option value="spawner">Spawner</option>
+          <option value="orchestrator">Orchestrator MCP · pre-beta</option>
+        </select>
+      </label>
+
+      <label class="field" id="cwd-field">
+        <span class="field-label">Working dir <span class="field-opt">new run only</span></span>
+        <input id="f-cwd" type="text" placeholder="defaults to the server's directory" autocomplete="off" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Prompt <span class="field-opt">optional, typed in on start</span></span>
+        <textarea id="f-prompt" rows="3" placeholder="What should this terminal start working on?"></textarea>
+      </label>
+
+      <div id="new-error" class="dialog-error" hidden></div>
+
+      <div class="dialog-actions">
+        <button type="button" id="new-cancel" class="btn">Cancel</button>
+        <button type="submit" id="new-submit" class="btn btn-accent">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="xterm.js"></script>
+  <script src="addon-fit.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

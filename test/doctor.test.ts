@@ -93,4 +93,11 @@ describe('doctor', () => {
     expect(result.checks.find(c => c.name === 'presets dir')).toBeDefined()
     expect(result.checks.find(c => c.name === 'runs state')).toBeDefined()
   })
+
+  it('includes a web extras check that never fails (optional feature)', async () => {
+    const { runDoctor } = await import('../src/launcher/doctor.js')
+    const check = runDoctor().checks.find(c => c.name === 'web extras')
+    expect(check).toBeDefined()
+    expect(['ok', 'warn']).toContain(check!.status)
+  })
 })

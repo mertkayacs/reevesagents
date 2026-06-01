@@ -84,6 +84,18 @@ describe('v1 run state', () => {
     expect(() => readRun('prebeta')).toThrow('Run not found: prebeta')
   })
 
+  it('exposes non-spawner run records through explicit all-mode helpers', async () => {
+    const { writeRun, writeAgent, listRunsAny, listAgentsAny, readRunAny, findAgentAny } = await import('../src/state/runs.js')
+    writeRun(makeRun('stable'))
+    writeRun({ ...makeRun('prebeta'), mode: 'orchestrator' })
+    writeAgent(makeAgent('worker', 'prebeta'))
+
+    expect(readRunAny('prebeta').mode).toBe('orchestrator')
+    expect(listRunsAny().map(run => run.id).sort()).toEqual(['prebeta', 'stable'])
+    expect(listAgentsAny().map(agent => agent.id)).toEqual(['worker'])
+    expect(findAgentAny('worker').run_id).toBe('prebeta')
+  })
+
   it('updates one run field without disturbing the rest', async () => {
     const { writeRun, updateRun, readRun } = await import('../src/state/runs.js')
     writeRun(makeRun('r2'))

@@ -73,7 +73,7 @@ describe('v1 runtime', () => {
   it('starts one run with one tmux window per agent', async () => {
     const driver = new FakeDriver()
     const { startRun } = await import('../src/runtime.js')
-    const { readRun, listAgents } = await import('../../../src/state/runs.js')
+    const { readRunAny: readRun, listAgentsAny: listAgents } = await import('../../../src/state/runs.js')
 
     const result = startRun({
       mode: 'orchestrator',
@@ -138,7 +138,7 @@ describe('v1 runtime', () => {
   it('starts spawner runs as independent terminals without MCP or Reeves context injection', async () => {
     const driver = new FakeDriver()
     const { startRun } = await import('../src/runtime.js')
-    const { readRun, listAgents } = await import('../../../src/state/runs.js')
+    const { readRunAny: readRun, listAgentsAny: listAgents } = await import('../../../src/state/runs.js')
 
     const result = startRun({
       mode: 'spawner',
@@ -174,7 +174,7 @@ describe('v1 runtime', () => {
   it('spawns a worker into an existing run session', async () => {
     const driver = new FakeDriver()
     const { startRun, spawnWorker } = await import('../src/runtime.js')
-    const { listAgents } = await import('../../../src/state/runs.js')
+    const { listAgentsAny: listAgents } = await import('../../../src/state/runs.js')
     const result = startRun({
       mode: 'orchestrator',
       name: 'workers',
