@@ -17,6 +17,7 @@ import type { AgentRecord } from '../../../state/types.js'
 const PEEK_INTERVAL_MS = 5000
 const DETAIL_LINES = 50
 const CHROME_ROWS = 16
+const ACTION_LABEL_WIDTH = Math.max('Refresh Now'.length, 'Open Terminal'.length, 'Back'.length)
 
 type RowItem = 'RefreshNow' | 'OpenCLI' | 'Back'
 
@@ -157,7 +158,7 @@ export function AgentOutput() {
     statusContext = `output page ${activePage} of ${totalPages} · ← → turn page`
   } else if (selected?.type === 'action') {
     const actionLabels: Record<RowItem, string> = {
-      RefreshNow: 'fetch output immediately',
+      RefreshNow: 'fetch output now',
       OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this terminal window',
       Back: 'return to terminal detail',
     }
@@ -227,13 +228,13 @@ export function AgentOutput() {
           const isSelected = selectedIdx === rowIdx
 
           const hints: Record<RowItem, string> = {
-            RefreshNow: 'peek immediately',
+            RefreshNow: 'fetch output now',
             OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this terminal window',
             Back: 'return to terminal detail',
           }
 
           const labels: Record<RowItem, string> = {
-            RefreshNow: 'Refresh now',
+            RefreshNow: 'Refresh Now',
             OpenCLI: 'Open Terminal',
             Back: 'Back',
           }
@@ -243,6 +244,7 @@ export function AgentOutput() {
               key={item.action}
               selected={isSelected}
               primary={labels[item.action]}
+              primaryWidth={ACTION_LABEL_WIDTH}
               hint={hints[item.action]}
               disabled={item.action === 'OpenCLI' && isHeadless}
             />

@@ -12,6 +12,7 @@ import { useWizard } from '../../state/WizardContext.js'
 import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
 
 type ActionId = 'start' | 'back' | 'cancel'
+const ACTION_LABEL_WIDTH = Math.max('Start Run'.length, 'Back to Edit'.length, 'Reset Wizard'.length)
 
 export function NewRunReview() {
   const { push, pop } = useRouter()
@@ -56,7 +57,7 @@ export function NewRunReview() {
 
       <Section label="Run" />
       <Row selected={false} primary="Name" trailing={state.name || '(unset)'} />
-      <Row selected={false} primary="Working Dir" trailing={state.workingDir} />
+      <Row selected={false} primary="Working Dir" trailing={state.workingDir || '(none)'} />
       <SectionEnd />
 
       <Section label="First Terminal" />
@@ -86,7 +87,7 @@ export function NewRunReview() {
       )}
 
       <Section label="Planned Tmux Windows" />
-      <Row selected={false} primary="terminal 1" trailing={state.root.nickname || state.root.provider} />
+      <Row selected={false} primary="terminal 1" trailing={state.root.provider} />
       {state.workers.map((worker, idx) => (
         <Row
           key={`tmux-${idx}`}
@@ -104,6 +105,7 @@ export function NewRunReview() {
           key={action.id}
           selected={selectedIdx === idx}
           primary={action.label}
+          primaryWidth={ACTION_LABEL_WIDTH}
           hint={action.hint}
         />
       ))}

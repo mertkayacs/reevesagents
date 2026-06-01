@@ -1,5 +1,5 @@
-// Step 2/4: First terminal configuration. Provider, model, prompt, permissions, plus
-// conditional auth mode (cc only) and effort (cc and codex only).
+// Step 2/4: First terminal configuration. Provider, model, prompt,
+// permissions, plus conditional effort (cc and codex only).
 // Pickers cycle inline with Left/Right. Text fields edit inline with Enter.
 
 import React, { useState, useMemo } from 'react'
@@ -22,6 +22,7 @@ const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'm
 
 type FieldId = 'provider' | 'model' | 'prompt' | 'permissions' | 'effort'
 type ActionId = 'continue' | 'back' | 'cancel'
+const ACTION_LABEL_WIDTH = Math.max('Continue'.length, 'Back'.length, 'Reset Wizard'.length)
 
 interface PickerField {
   kind: 'picker'
@@ -228,6 +229,7 @@ export function NewRunRoot() {
           key={action.id}
           selected={selectedIdx === fields.length + idx}
           primary={action.label}
+          primaryWidth={ACTION_LABEL_WIDTH}
           hint={action.hint}
         />
       ))}

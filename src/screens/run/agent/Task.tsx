@@ -42,12 +42,12 @@ export function AgentTask() {
     <Frame
       breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname, 'Prompt']}
       meta={[{ label: 'status', value: agent.task_status }]}
-      tagline="Read-only. This terminal received only the initial prompt shown here."
-      statusKeys="enter back · esc back"
+      tagline="Read-only view of this terminal's initial prompt and current status."
+      statusKeys="enter/esc back"
     >
       <Box flexDirection="column">
         <Section label="Prompt" />
-        <Row selected={false} primary="Prompt" trailing={agent.task || '(no task)'} />
+        <Row selected={false} primary="Prompt" trailing={agent.task || '(no prompt)'} />
         <Row selected={false} primary="Status" trailing={agent.task_status} />
         <Row selected={false} primary="Note" trailing={agent.task_note || '(no note)'} />
         <Row
@@ -59,13 +59,8 @@ export function AgentTask() {
         />
         <SectionEnd />
 
-        <Box marginTop={2}>
-          <Section label="Actions" />
-        </Box>
-
-        <Box marginTop={1}>
-          <Row selected={true} primary="Back" hint="press enter or esc" />
-        </Box>
+        <Section label="Actions" />
+        <Row selected={true} primary="Back" hint="return to terminal detail" />
         <SectionEnd />
       </Box>
     </Frame>

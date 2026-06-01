@@ -68,6 +68,7 @@ let registry = ''
 function makeRun(): RunRecord {
   return {
     id: RUN_ID,
+    mode: 'spawner',
     name: 'scenario-run',
     status: 'running',
     tmux_session: 'reeves-scenario',

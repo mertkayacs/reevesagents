@@ -40,6 +40,10 @@ const CONFIG_PATHS = {
   aider: '~/.aider.conf.yml',
 }
 
+const PROVIDER_LABEL_WIDTH = Math.max(...Object.values(LABELS).map(label => label.length))
+const PROVIDER_BADGE_WIDTH = Math.max(...PROVIDERS.map(provider => provider.length))
+const ACTION_LABEL_WIDTH = Math.max('Recheck'.length, 'Show Config'.length, 'Back'.length)
+
 type RowType = 'provider' | 'statePath' | 'action'
 
 interface SettingsRow {
@@ -140,9 +144,11 @@ export function Settings() {
                 color: isInstalled ? colors.status.ok : colors.text.faint,
               }}
               primary={LABELS[provider]}
+              primaryWidth={PROVIDER_LABEL_WIDTH}
               badge={{
                 label: provider,
                 color: providerColor(provider),
+                width: PROVIDER_BADGE_WIDTH,
               }}
               hint={isInstalled ? 'installed' : 'not installed'}
             />
@@ -172,16 +178,19 @@ export function Settings() {
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'recheck')}
           primary="Recheck"
+          primaryWidth={ACTION_LABEL_WIDTH}
           hint="re-detect installed providers"
         />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'showConfig')}
           primary="Show Config"
+          primaryWidth={ACTION_LABEL_WIDTH}
           hint="show config file path"
         />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'back')}
           primary="Back"
+          primaryWidth={ACTION_LABEL_WIDTH}
           hint="return to previous page"
         />
         <SectionEnd />

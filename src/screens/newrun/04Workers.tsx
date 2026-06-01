@@ -12,6 +12,7 @@ import { useWizard } from '../../state/WizardContext.js'
 import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
 
 type ActionId = 'add' | 'continue' | 'back' | 'cancel'
+const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Continue'.length, 'Back'.length, 'Reset Wizard'.length)
 
 export function NewRunWorkers() {
   const { push, pop, setSelectedWorkerIdx } = useRouter()
@@ -26,6 +27,12 @@ export function NewRunWorkers() {
   ]
 
   const totalRows = workers.length + actions.length
+  const providerBadgeWidth = Math.max(...workers.map(worker => worker.provider.length), 1)
+  const modelBadgeWidth = Math.max(...workers.map(worker => modelBadgeLabel(worker.model).length), 'default'.length)
+  const terminalLabelWidth = Math.max(
+    ...workers.map((worker, idx) => (worker.nickname || `terminal-${idx + 2}`).length),
+    ACTION_LABEL_WIDTH,
+  )
   const [selectedIdx, setSelectedIdx] = useState(0)
 
   if (selectedIdx >= totalRows && totalRows > 0) {
@@ -69,6 +76,7 @@ export function NewRunWorkers() {
     >
       <StepIndicator step={3} total={4} name="Terminals" />
 
+      <Section label="Additional Terminals" />
       {workers.length === 0 ? (
         <Row selected={false} primary="No extra terminals yet." trailing="choose Add Terminal below" disabled />
       ) : (
@@ -77,14 +85,16 @@ export function NewRunWorkers() {
             key={`worker-${idx}`}
             selected={selectedIdx === idx}
             primary={worker.nickname || `terminal-${idx + 2}`}
+            primaryWidth={terminalLabelWidth}
             badges={[
-              { label: worker.provider, color: providerColor(worker.provider) },
-              { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider) },
+              { label: worker.provider, color: providerColor(worker.provider), width: providerBadgeWidth },
+              { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider), width: modelBadgeWidth },
             ]}
             hint={worker.prompt ? worker.prompt.slice(0, 40) : '(no prompt set)'}
           />
         ))
       )}
+      <SectionEnd />
 
       <Section label="Actions" />
 
@@ -93,6 +103,7 @@ export function NewRunWorkers() {
           key={action.id}
           selected={selectedIdx === workers.length + idx}
           primary={action.label}
+          primaryWidth={terminalLabelWidth}
           hint={action.hint}
         />
       ))}

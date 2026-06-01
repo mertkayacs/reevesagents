@@ -11,6 +11,7 @@ import { panelWidth, useLayoutColumns } from './LayoutContext.js'
 interface Badge {
   label: string
   color: string
+  width?: number
 }
 
 interface Props {
@@ -69,6 +70,7 @@ export function Row({
     : selected
     ? colors.text.primary
     : colors.text.dim
+  const badgeBracketColor = selected ? colors.accent.deep : colors.surface.border
   const buttonBorderColor = selected ? colors.accent.primary : colors.text.faint
   const buttonBg = selected && !disabled ? colors.surface.selected : undefined
   const buttonPrimaryWidth = buttonLike
@@ -105,16 +107,20 @@ export function Row({
           <Text color={glyph.color}>{glyph.char}</Text>
         )}
         {glyph && <Text>{' '}</Text>}
-        {inlineBadges.map((item, idx) => (
-          <React.Fragment key={`${item.label}-${idx}`}>
-            <Text color={colors.surface.border}>[</Text>
-            <Text color={item.color}>
-              {truncateBadgeLabel(item.label, compact)}
-            </Text>
-            <Text color={colors.surface.border}>]</Text>
-            <Text>{' '}</Text>
-          </React.Fragment>
-        ))}
+        {inlineBadges.map((item, idx) => {
+          const label = truncateBadgeLabel(item.label, compact)
+          const displayLabel = item.width && !compact ? label.padEnd(item.width) : label
+          return (
+            <React.Fragment key={`${item.label}-${idx}`}>
+              <Text color={badgeBracketColor}>[</Text>
+              <Text color={item.color}>
+                {displayLabel}
+              </Text>
+              <Text color={badgeBracketColor}>]</Text>
+              <Text>{' '}</Text>
+            </React.Fragment>
+          )
+        })}
         {buttonLike ? (
           <>
             <Text color={buttonBorderColor} backgroundColor={buttonBg}>[ </Text>

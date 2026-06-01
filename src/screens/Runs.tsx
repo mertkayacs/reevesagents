@@ -61,7 +61,10 @@ export function Runs() {
       }
       return prev
     })
-    setSelectedIdx(idx => Math.min(idx, Math.max(0, next.length + ACTIONS.length)))
+    const nextTotalPages = Math.max(1, Math.ceil(next.length / pageSize))
+    const nextVisibleRuns = next.slice(0, pageSize).length
+    const maxSelectableIdx = nextVisibleRuns + (nextTotalPages > 1 ? 1 : 0) + ACTIONS.length
+    setSelectedIdx(idx => Math.min(idx, Math.max(0, maxSelectableIdx)))
   }
 
   useEffect(() => {
@@ -92,6 +95,7 @@ export function Runs() {
   const runStatus = (run: RunRecord) => runStatuses.get(run.id) ?? computeRunStatus(run)
   const runningCount = runs.filter(run => runStatus(run) === 'running').length
   const staleCount = runs.filter(run => runStatus(run) === 'stale').length
+  const runNameWidth = Math.max(8, ...pagedRuns.map(run => run.name.length))
 
   function handleActivate(): void {
     if (!selected) return
@@ -191,6 +195,7 @@ export function Runs() {
                 key={run.id}
                 selected={selectedIdx === idx}
                 primary={run.name}
+                primaryWidth={runNameWidth}
                 glyph={statusGlyph(runStatus(run))}
                 badges={badges}
                 hint={`${agents.length} terminals`}

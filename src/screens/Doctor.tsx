@@ -52,6 +52,7 @@ export function Doctor() {
   const totalItems = actionOffset + 2  // Recheck, Back
 
   const selectedCheck = selectedIdx < pagedChecks.length ? pagedChecks[selectedIdx] : null
+  const checkLabelWidth = Math.max(...checks.map(check => check.name.length), 'Recheck'.length, 'Back'.length)
 
   const handleRecheck = () => {
     setIsSpinning(true)
@@ -93,6 +94,7 @@ export function Doctor() {
             selected={idx === selectedIdx}
             glyph={statusGlyph(check.status)}
             primary={check.name}
+            primaryWidth={checkLabelWidth}
             hint={check.detail}
           />
         ))}
@@ -122,8 +124,8 @@ export function Doctor() {
 
         <Box marginTop={1} />
         <Section label="Actions" />
-        <Row selected={selectedIdx === actionOffset} primary="Recheck" hint="run doctor again" />
-        <Row selected={selectedIdx === actionOffset + 1} primary="Back" hint="return to previous page" />
+        <Row selected={selectedIdx === actionOffset} primary="Recheck" primaryWidth={checkLabelWidth} hint="run doctor again" />
+        <Row selected={selectedIdx === actionOffset + 1} primary="Back" primaryWidth={checkLabelWidth} hint="return to previous page" />
         <SectionEnd />
       </Primary>
     </Frame>

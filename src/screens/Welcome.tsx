@@ -97,9 +97,9 @@ export function Welcome() {
           </Box>
         </Box>
 
-        <Box flexDirection="column">
-          <Text color={colors.text.dim}>Local tmux-first workspace manager for AI CLI terminals.</Text>
-          <Text color={colors.text.dim}>Spawner · TUI · CLI · tmux</Text>
+        <Box flexDirection="column" marginTop={1}>
+          <Text color={colors.text.dim} wrap="truncate-end">Local tmux-first workspace manager for AI CLI terminals.</Text>
+          <Text color={colors.text.dim} wrap="truncate-end">Spawner · TUI · CLI · tmux</Text>
         </Box>
 
         <Box flexDirection="column" marginTop={1}>

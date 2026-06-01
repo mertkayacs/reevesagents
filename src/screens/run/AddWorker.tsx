@@ -24,7 +24,7 @@ const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
 
 type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions'
 type ActionId = 'add' | 'cancel'
-const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Add Worker'.length, 'Cancel'.length)
+const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Cancel'.length)
 
 interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[]; display?: string; hint?: string }
 interface TextFieldDef { kind: 'text'; id: FieldId; label: string; value: string; helpText: string; required: boolean }
