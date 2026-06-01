@@ -15,6 +15,7 @@ import { startRun } from '../../launcher/runtime.js'
 import type { StartRunRequest } from '../../launcher/runtime.js'
 
 type ActionId = 'retry' | 'back'
+const ACTION_LABEL_WIDTH = Math.max('Retry'.length, 'Back to Review'.length)
 
 export function NewRunStarting() {
   const { pop, resetStack, setSelectedRunId } = useRouter()
@@ -91,7 +92,7 @@ export function NewRunStarting() {
     return (
       <Frame
         breadcrumb={['ReevesAgents', 'New Run', 'Starting']}
-      tagline="Run failed to start."
+        tagline="Run failed to start."
         statusKeys="enter select · ↑↓ move · esc back"
       >
         <Box flexDirection="column" marginY={1}>
@@ -105,6 +106,7 @@ export function NewRunStarting() {
             key={action.id}
             selected={actionIdx === idx}
             primary={action.label}
+            primaryWidth={ACTION_LABEL_WIDTH}
             hint={action.hint}
           />
         ))}

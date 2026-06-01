@@ -21,7 +21,7 @@ export function ModelOptionList({ provider, values, current, selectedIdx }: Prop
           key={model || 'provider-default'}
           selected={selectedIdx === idx}
           primary={modelDisplayName(model)}
-          badge={{ label: modelBadgeLabel(model), color: modelColor(model, provider) }}
+          badge={model ? { label: modelBadgeLabel(model), color: modelColor(model, provider) } : undefined}
           hint={model === current ? 'selected' : model ? 'available' : 'provider CLI default'}
         />
       ))}

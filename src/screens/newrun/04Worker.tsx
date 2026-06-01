@@ -22,6 +22,7 @@ const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'm
 
 type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'effort'
 type ActionId = 'save' | 'remove' | 'cancel'
+const ACTION_LABEL_WIDTH = Math.max('Done'.length, 'Remove This Terminal'.length, 'Back'.length)
 
 interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[]; display?: string; hint?: string }
 interface TextFieldDef { kind: 'text'; id: FieldId; label: string; value: string; helpText: string; required: boolean }
@@ -66,7 +67,7 @@ export function NewRunWorker() {
   }, [worker])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'save', label: 'Done', hint: 'return to terminals' },
+    { id: 'save', label: 'Done', hint: 'changes are saved automatically' },
     { id: 'remove', label: 'Remove This Terminal', hint: 'delete and return' },
     { id: 'cancel', label: 'Back', hint: 'return to terminals' },
   ]
@@ -219,6 +220,7 @@ export function NewRunWorker() {
           key={action.id}
           selected={selectedIdx === fields.length + aIdx}
           primary={action.label}
+          primaryWidth={ACTION_LABEL_WIDTH}
           hint={action.hint}
         />
       ))}

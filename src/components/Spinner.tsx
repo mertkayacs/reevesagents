@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
-import { colors } from '../utils/tokens.js'
+import { colors, space } from '../utils/tokens.js'
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const
 const INTERVAL_MS = 80
@@ -27,7 +27,11 @@ export function Spinner({ label, color = colors.accent.primary }: Props) {
   return (
     <Box>
       <Text color={color}>{FRAMES[frame]}</Text>
-      {label && <Text color={colors.text.dim}>  {label}</Text>}
+      {label && (
+        <Box marginLeft={space.sm}>
+          <Text color={colors.text.dim}>{label}</Text>
+        </Box>
+      )}
     </Box>
   )
 }

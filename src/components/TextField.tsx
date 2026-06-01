@@ -92,7 +92,7 @@ export function TextField({
   const cursorColor = selected ? colors.accent.bright : colors.text.faint
   const railColor = selected ? colors.accent.deep : colors.surface.border
   const labelColor = selected && editing ? colors.accent.primary : colors.text.dim
-  const valueColor = editing ? colors.text.primary : colors.text.primary
+  const valueColor = editing ? colors.accent.bright : colors.text.primary
   const displayValue = editing ? `${editValue}_` : value
   const labelText = `${label}${required ? ' *' : ''}`
   const contentWidth = Math.max(1, width - 6)
@@ -137,8 +137,8 @@ export function TextField({
         </Box>
       ))}
       {selected && helpText && (
-        <Box marginLeft={4} marginTop={space.sm}>
-          <Text color={colors.text.dim}>{helpText}</Text>
+        <Box marginLeft={4} marginTop={space.sm} width={Math.max(1, width - 4)}>
+          <Text color={colors.text.dim} wrap="truncate-end">{helpText}</Text>
         </Box>
       )}
     </Box>

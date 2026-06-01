@@ -18,7 +18,6 @@ const CHROME_ROWS = 13
 const REFRESH_INTERVAL_MS = 5000
 
 type RowItem = 'agent' | '__section__' | 'pagination' | 'AddWorker' | 'Back'
-const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Back'.length)
 
 interface SelectableItem {
   type: 'agent' | 'pagination' | 'action'
@@ -136,6 +135,13 @@ export function RunAgents() {
   }
 
   const isRunEnded = run.status === 'ended' || run.ended_at !== null
+  const providerBadgeWidth = Math.max(...agents.map(agent => agent.provider.length), 1)
+  const modelBadgeWidth = Math.max(...agents.map(agent => modelBadgeLabel(agent.model).length), 'default'.length)
+  const terminalLabelWidth = Math.max(
+    ...agents.map(agent => agent.nickname.length),
+    'Add Terminal'.length,
+    'Back'.length,
+  )
   let statusContext = `${run.name} · ${agents.length} terminals`
   if (selected?.type === 'pagination') statusContext = `page ${page} of ${totalPages} · ← → turn page`
   if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : 'spawn new terminal'
@@ -163,14 +169,15 @@ export function RunAgents() {
           if (item.type === 'agent' && item.agent) {
             const agent = item.agent
             const badges = [
-              { label: agent.provider, color: providerColor(agent.provider) },
-              { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider) },
+              { label: agent.provider, color: providerColor(agent.provider), width: providerBadgeWidth },
+              { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider), width: modelBadgeWidth },
             ]
             return (
               <Row
                 key={agent.id}
                 selected={isSelected}
                 primary={agent.nickname}
+                primaryWidth={terminalLabelWidth}
                 glyph={statusGlyph(agent.task_status)}
                 badges={badges}
                 hint={agent.task_note || agent.task_status}
@@ -196,14 +203,14 @@ export function RunAgents() {
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 1}
           primary="Add Terminal"
-          primaryWidth={ACTION_LABEL_WIDTH}
+          primaryWidth={terminalLabelWidth}
           hint={isRunEnded ? 'run is ended' : 'spawn new terminal'}
           disabled={isRunEnded}
         />
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 2}
           primary="Back"
-          primaryWidth={ACTION_LABEL_WIDTH}
+          primaryWidth={terminalLabelWidth}
           hint="return to run hub"
         />
         <SectionEnd />

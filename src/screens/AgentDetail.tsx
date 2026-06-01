@@ -15,9 +15,9 @@ import type { AgentRecord } from '../state/types.js'
 type RowItem = 'Output' | 'Task' | '__section__' | 'OpenCLI' | 'CloseAgent' | 'Back'
 const LABELS: Record<RowItem, string> = {
   Output: 'Output',
-  Task: 'Task',
-  OpenCLI: 'Open Entry',
-  CloseAgent: 'Close Entry',
+  Task: 'Prompt',
+  OpenCLI: 'Open Terminal',
+  CloseAgent: 'Close Terminal',
   Back: 'Back',
   '__section__': '',
 }
@@ -135,7 +135,7 @@ export function AgentDetail() {
       Output: 'view recent output',
       Task: 'view initial prompt and status',
       OpenCLI: isHeadless ? 'no tmux window' : 'switch to this terminal window',
-      CloseAgent: isCloseAgentDisabled ? 'not available' : 'close this terminal window',
+      CloseAgent: isCloseAgentDisabled ? 'terminal already ended' : 'close this terminal window',
       Back: 'return to terminals list',
       '__section__': '',
     }
@@ -185,17 +185,11 @@ export function AgentDetail() {
             Back: 'return to terminals list',
             '__section__': '',
           }
-          const primary = item.action === 'OpenCLI'
-            ? 'Open Terminal'
-            : item.action === 'CloseAgent'
-              ? 'Close Terminal'
-              : LABELS[item.action]
-
           return (
             <Row
               key={item.action}
               selected={isSelected}
-              primary={primary}
+              primary={LABELS[item.action]}
               primaryWidth={ACTION_LABEL_WIDTH}
               hint={hints[item.action]}
               disabled={(item.action === 'CloseAgent' && isCloseAgentDisabled) || (item.action === 'OpenCLI' && isHeadless)}

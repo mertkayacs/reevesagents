@@ -4,7 +4,7 @@
 
 import React from 'react'
 import { Box, Text, useInput } from 'ink'
-import { colors } from '../utils/tokens.js'
+import { colors, space } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 
 interface Props {
@@ -28,24 +28,34 @@ export function Pagination({ page, total, focused = false, onPrev, onNext }: Pro
   const prevColor = isFirstPage ? colors.text.faint : colors.text.dim
   const nextColor = isLastPage ? colors.text.faint : colors.text.dim
 
+  const cursorColor = focused ? colors.accent.bright : colors.text.faint
+  const railColor = focused ? colors.accent.deep : colors.surface.border
+
   return (
-    <Box>
-      <Text color={focused ? colors.accent.bright : colors.text.faint} bold={focused}>
-        {focused ? `${glyphs.cursor.focused} ` : '  '}
-      </Text>
-      <Text color={prevColor}>‹</Text>
-      <Text color={colors.text.dim}>
-        {' '}
-        page
-        {' '}
-        {page}
-        {' '}
-        of
-        {' '}
-        {total}
-        {' '}
-      </Text>
-      <Text color={nextColor}>›</Text>
+    <Box flexDirection="row">
+      <Box width={1} flexShrink={0}>
+        <Text color={cursorColor} bold={focused}>
+          {focused ? glyphs.cursor.focused : glyphs.cursor.unfocused}
+        </Text>
+      </Box>
+      <Box width={2} flexShrink={0}>
+        <Text color={railColor}> │</Text>
+      </Box>
+      <Box marginLeft={space.sm}>
+        <Text color={prevColor}>‹</Text>
+        <Text color={colors.text.dim}>
+          {' '}
+          page
+          {' '}
+          {page}
+          {' '}
+          of
+          {' '}
+          {total}
+          {' '}
+        </Text>
+        <Text color={nextColor}>›</Text>
+      </Box>
     </Box>
   )
 }

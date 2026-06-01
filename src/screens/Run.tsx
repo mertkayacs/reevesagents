@@ -168,7 +168,7 @@ export function Run() {
         <Box marginBottom={1}>
           <Text color={colors.text.dim} wrap="truncate-end">{summaryLine}</Text>
         </Box>
-        <Section label="Run" />
+        <Section label="Actions" />
         {items.map((item, idx) => {
           const isSelected = selectedIdx === idx
 
@@ -187,8 +187,8 @@ export function Run() {
           const hints: Record<RowItem, string> = {
             Agents: `${agents.length} terminals`,
             Output: 'peek across all terminals',
-            AddWorker: isRunEnded ? 'run is ended' : 'launch another independent terminal',
-            StopRun: isRunEnded ? 'run is ended' : 'return to Reeves and close this run session',
+            AddWorker: isRunEnded ? 'run is ended' : 'spawn new terminal',
+            StopRun: isRunEnded ? 'run is ended' : 'return to Reeves and close run windows',
             Back: 'return to all runs',
             '__section__': '',
           }

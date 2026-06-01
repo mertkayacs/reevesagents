@@ -15,6 +15,7 @@ import { useWizard } from '../../state/WizardContext.js'
 
 type FieldId = 'name' | 'workingDir'
 type ActionId = 'continue' | 'back' | 'cancel'
+const ACTION_LABEL_WIDTH = Math.max('Continue'.length, 'Back'.length, 'Reset Wizard'.length)
 
 export function NewRunBasics() {
   const { push, pop } = useRouter()
@@ -101,6 +102,7 @@ export function NewRunBasics() {
           key={action.id}
           selected={selectedIdx === fields.length + idx}
           primary={action.label}
+          primaryWidth={ACTION_LABEL_WIDTH}
           hint={action.hint}
         />
       ))}

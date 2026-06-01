@@ -199,7 +199,7 @@ export function RunOutput() {
   const secondsAgo = Math.floor((Date.now() - lastPeekAt) / 1000)
   const lastPeekLabel = secondsAgo === 0 ? 'just now' : `${secondsAgo}s ago`
   let statusContext = agents.length > 0 ? `${agents.length} terminal${agents.length === 1 ? '' : 's'}` : 'no terminals'
-  if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · enter opens detail`
+  if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · enter opens output`
   if (selected?.type === 'pagination') statusContext = `page ${activePage} of ${totalPages} · ← → turn page`
 
   return (
