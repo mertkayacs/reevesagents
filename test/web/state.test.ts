@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { writeRun, writeAgent } from '../../src/state/runs.js'
 import { buildWebState, listWebProviders } from '../../src/web/state.js'
 import { PROVIDERS } from '../../src/launcher/providers.js'
-import { providerColor } from '../../src/utils/display.js'
+import { providerColor, providerDisplayName } from '../../src/utils/display.js'
 import type { AgentRecord, RunRecord } from '../../src/state/types.js'
 
 let tmpDir: string
@@ -85,6 +85,7 @@ describe('buildWebState', () => {
     const planner = run.terminals.find(t => t.nickname === 'planner')!
     expect(planner.monogram).toBe('PL')
     expect(planner.color).toBe(providerColor('cc'))
+    expect(planner.provider_label).toBe('Claude Code')
     expect(planner.role).toBe('root')
     expect(planner.status).toBe('queued')
     expect(planner.model).toBe('opus')
@@ -130,7 +131,7 @@ describe('buildWebState', () => {
     const worker = prebeta.terminals.find(term => term.id === 'worker')!
     expect(root.canAttach).toBe(false)
     expect(root.canKill).toBe(false)
-    expect(root.disabledReason).toBe('terminal has no tmux window')
+    expect(root.disabledReason).toBe('agent has no tmux window')
     expect(worker.canAttach).toBe(true)
     expect(worker.canKill).toBe(true)
   })
@@ -144,6 +145,7 @@ describe('listWebProviders', () => {
     for (const p of list) {
       expect(typeof p.available).toBe('boolean')
       expect(typeof p.orchestrator).toBe('boolean')
+      expect(p.name).toBe(providerDisplayName(p.id))
       expect(p.color).toBe(providerColor(p.id))
     }
   })

@@ -17,7 +17,7 @@ import { readRun } from '../../state/runs.js'
 import { spawnWorker } from '../../launcher/runtime.js'
 import { PROVIDERS } from '../../launcher/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
 import type { Permissions, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
@@ -46,7 +46,7 @@ export function AddWorker() {
 
   const fields: Field[] = useMemo(() => [
     { kind: 'text', id: 'nickname', label: 'Nickname', value: draft.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
-    { kind: 'picker', id: 'provider', label: 'Provider', current: draft.provider, values: PROVIDERS },
+    { kind: 'picker', id: 'provider', label: 'Provider', current: draft.provider, values: PROVIDERS, display: providerDisplayName(draft.provider) },
     {
       kind: 'picker',
       id: 'model',
@@ -238,7 +238,7 @@ function safeReadRun(id: string): ReturnType<typeof readRun> | null {
 }
 
 function pickerBadge(field: PickerField, provider: Provider): { label: string; color: string } | undefined {
-  if (field.id === 'provider') return { label: field.current, color: providerColor(field.current as Provider) }
+  if (field.id === 'provider') return { label: providerDisplayName(field.current as Provider), color: providerColor(field.current as Provider) }
   if (field.id === 'model') return { label: modelBadgeLabel(field.current), color: modelColor(field.current, provider) }
   return undefined
 }

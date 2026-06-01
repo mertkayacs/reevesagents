@@ -1,5 +1,5 @@
 // Step 2/4: First terminal configuration. Provider, model, prompt,
-// permissions, plus conditional effort (cc and codex only).
+// permissions, plus conditional effort (Claude Code and Codex CLI only).
 // Pickers cycle inline with Left/Right. Text fields edit inline with Enter.
 
 import React, { useState, useMemo } from 'react'
@@ -14,7 +14,7 @@ import { useRouter } from '../../router.js'
 import { useWizard } from '../../state/WizardContext.js'
 import { PROVIDERS } from '../../launcher/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
 import type { Permissions, Effort, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
@@ -57,7 +57,7 @@ export function NewRunRoot() {
 
   const fields: Field[] = useMemo(() => {
     const list: Field[] = [
-      { kind: 'picker', id: 'provider', label: 'Provider', current: state.root.provider, values: PROVIDERS },
+      { kind: 'picker', id: 'provider', label: 'Provider', current: state.root.provider, values: PROVIDERS, display: providerDisplayName(state.root.provider) },
       {
         kind: 'picker',
         id: 'model',
@@ -239,7 +239,7 @@ export function NewRunRoot() {
 }
 
 function pickerBadge(field: PickerField, provider: Provider): { label: string; color: string } | undefined {
-  if (field.id === 'provider') return { label: field.current, color: providerColor(field.current as Provider) }
+  if (field.id === 'provider') return { label: providerDisplayName(field.current as Provider), color: providerColor(field.current as Provider) }
   if (field.id === 'model') return { label: modelBadgeLabel(field.current), color: modelColor(field.current, provider) }
   return undefined
 }

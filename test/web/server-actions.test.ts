@@ -249,17 +249,18 @@ describe('create terminal', () => {
     const handle = await start()
 
     const created = await post(handle.port, '/api/terminals', {
-      provider: 'codex',
+      provider: 'codex-cli',
       nickname: 'Builder One',
+      run_name: 'Release Check',
       working_dir: tmpDir,
     })
     expect(created.status).toBe(200)
     const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
-    expect(readRun(createdBody.run_id).name).toBe('Builder-One')
+    expect(readRun(createdBody.run_id).name).toBe('Release Check')
     expect(readAgent(createdBody.run_id, createdBody.id).nickname).toBe('Builder-One')
 
     const added = await post(handle.port, '/api/terminals', {
-      provider: 'cc',
+      provider: 'claude-code',
       nickname: 'Reviewer',
       run_id: createdBody.run_id,
     })
@@ -314,17 +315,19 @@ describe('create terminal', () => {
     expect(JSON.parse(state.body).prebeta).toEqual({ orchestrator: true })
 
     const created = await post(handle.port, '/api/terminals', {
-      provider: 'codex',
+      provider: 'codex-cli',
       nickname: 'Lead',
+      run_name: 'Orchestrator Check',
       mode: 'orchestrator',
       working_dir: tmpDir,
     })
     expect(created.status).toBe(200)
     const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
     expect(readRunAny(createdBody.run_id).mode).toBe('orchestrator')
+    expect(readRunAny(createdBody.run_id).name).toBe('Orchestrator Check')
 
     const added = await post(handle.port, '/api/terminals', {
-      provider: 'cc',
+      provider: 'claude-code',
       nickname: 'Worker',
       run_id: createdBody.run_id,
     })

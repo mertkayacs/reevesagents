@@ -13,7 +13,7 @@ export {
   stopRun,
 } from './launcher/runtime.js'
 export { runDoctor } from './launcher/doctor.js'
-export { detectAvailable, buildCommand, BIN, PROVIDERS, isProvider } from './launcher/providers.js'
+export { detectAvailable, buildCommand, BIN, PROVIDERS, isProvider, normalizeProvider } from './launcher/providers.js'
 export {
   MODEL_CATALOG,
   PROVIDER_DEFAULT_MODEL,

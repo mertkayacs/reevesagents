@@ -3,8 +3,17 @@ import { PROVIDERS } from '../src/launcher/providers.js'
 import type { Provider } from '../src/state/types.js'
 
 describe('display utilities', () => {
+  describe('providerDisplayName', () => {
+    it('renders full provider names for visible UI', async () => {
+      const { providerDisplayName } = await import('../src/utils/display.js')
+      expect(providerDisplayName('cc')).toBe('Claude Code')
+      expect(providerDisplayName('codex')).toBe('Codex CLI')
+      expect(providerDisplayName('opencode')).toBe('OpenCode CLI')
+    })
+  })
+
   describe('providerColor', () => {
-    it('cc returns Claude brand peach hex', async () => {
+    it('Claude Code returns Claude brand peach hex', async () => {
       const { providerColor } = await import('../src/utils/display.js')
       expect(providerColor('cc')).toBe('#d97757')
     })

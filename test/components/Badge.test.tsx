@@ -30,14 +30,14 @@ describe('Badge', () => {
   it('renders provider color badge', () => {
     const { lastFrame } = render(
       <Badge
-        glyph="cc"
-        label="Claude"
+        glyph="CL"
+        label="Claude Code"
         color={colors.provider.cc}
       />
     )
     const frame = lastFrame()
-    expect(frame).toContain('cc')
-    expect(frame).toContain('Claude')
+    expect(frame).toContain('CL')
+    expect(frame).toContain('Claude Code')
   })
 
   it('renders status warn badge', () => {

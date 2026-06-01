@@ -15,7 +15,8 @@ import { buildWebState, listWebProviders } from './state.js'
 import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
 import { startRun, spawnWorker, killAgent, stopRun } from '../launcher/runtime.js'
-import { isProvider } from '../launcher/providers.js'
+import { normalizeProvider } from '../launcher/providers.js'
+import { providerDisplayName } from '../utils/display.js'
 import { findAgent, findAgentAny, readRun, readRunAny } from '../state/runs.js'
 import {
   isOrchestratorWebProvider,
@@ -187,13 +188,19 @@ function sanitizeNickname(raw: string): string {
   return raw.trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').slice(0, 40)
 }
 
+function sanitizeRunName(raw: string): string {
+  return raw.trim().replace(/[^\p{L}\p{N} _.-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim()
+}
+
 // Creates a terminal: a worker in an existing run, or a fresh single-terminal run.
 // Provider is validated against the known set (it maps to the launched binary);
 // nickname is sanitized; the prompt is typed into the pane by the runtime, not shelled.
 async function createTerminal(body: Record<string, unknown>, ctx: RequestContext): Promise<{ id: string; run_id: string }> {
   const provider = body.provider
-  if (typeof provider !== 'string' || !isProvider(provider)) throw new Error('unknown provider')
+  const normalizedProvider = normalizeProvider(provider)
+  if (!normalizedProvider) throw new Error('unknown provider')
   const nickname = sanitizeNickname(typeof body.nickname === 'string' ? body.nickname : '')
+  const runName = sanitizeRunName(typeof body.run_name === 'string' ? body.run_name : '')
   const prompt = typeof body.prompt === 'string' ? body.prompt : ''
   const runId = typeof body.run_id === 'string' && body.run_id ? body.run_id : null
 
@@ -202,17 +209,17 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
     const mode = run.mode === 'spawner' ? 'spawner' : 'orchestrator'
     if (mode === 'orchestrator') {
       if (!ctx.orchestratorRuntime) throw new Error('PRE-BETA orchestrator web mode is not enabled')
-      if (!isOrchestratorWebProvider(provider)) throw new Error('provider is not supported in PRE-BETA orchestrator mode')
+      if (!isOrchestratorWebProvider(normalizedProvider)) throw new Error('provider is not supported in PRE-BETA orchestrator mode')
       const agent = ctx.orchestratorRuntime.spawnWorker({
         run_id: runId,
-        provider,
+        provider: normalizedProvider,
         nickname: nickname || undefined,
         model: '',
         task: prompt,
       })
       return { id: agent.id, run_id: agent.run_id }
     }
-    const agent = spawnWorker({ run_id: runId, provider, nickname: nickname || undefined, model: '', task: prompt })
+    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt })
     return { id: agent.id, run_id: agent.run_id }
   }
 
@@ -222,12 +229,12 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
     : process.cwd()
   if (mode === 'orchestrator') {
     if (!ctx.prebetaOrchestrator || !ctx.orchestratorRuntime) throw new Error('PRE-BETA orchestrator web mode is not enabled')
-    if (!isOrchestratorWebProvider(provider)) throw new Error('provider is not supported in PRE-BETA orchestrator mode')
+    if (!isOrchestratorWebProvider(normalizedProvider)) throw new Error('provider is not supported in PRE-BETA orchestrator mode')
     const result = ctx.orchestratorRuntime.startRun({
       mode: 'orchestrator',
-      name: nickname || provider,
+      name: runName || nickname || providerDisplayName(normalizedProvider),
       working_dir: workingDir,
-      root: { provider, nickname: nickname || undefined, model: '', task: prompt },
+      root: { provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt },
     })
     const root = result.agents[0]
     if (!root) throw new Error('run created no terminal')
@@ -236,9 +243,9 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
 
   const result = startRun({
     mode: 'spawner',
-    name: nickname || provider,
+    name: runName || nickname || providerDisplayName(normalizedProvider),
     working_dir: workingDir,
-    root: { provider, nickname: nickname || undefined, model: '', task: prompt },
+    root: { provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt },
   })
   const root = result.agents[0]
   if (!root) throw new Error('run created no terminal')

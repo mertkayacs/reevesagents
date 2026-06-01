@@ -17,24 +17,24 @@
     </div>
     <div class="topbar-actions">
       <span id="conn" class="conn" data-state="idle" title="live update stream">live</span>
-      <button id="new-btn" class="btn btn-accent" type="button">New terminal</button>
+      <button id="new-btn" class="btn btn-accent" type="button">New agent</button>
     </div>
   </header>
 
   <main class="layout">
-    <aside class="sidebar" aria-label="terminals">
+    <aside class="sidebar" aria-label="agents">
       <div id="sidebar-list" class="sidebar-list"></div>
       <div id="sidebar-empty" class="sidebar-empty">
-        <div class="empty-title">No terminals yet</div>
-        <div class="empty-body">Create one to spawn a provider CLI in its own tmux window.</div>
+        <div class="empty-title">No agents yet</div>
+        <div class="empty-body">Create a run to spawn a provider CLI in its own tmux window.</div>
       </div>
     </aside>
 
     <section class="stage">
       <div class="stage-head">
         <div>
-          <div id="stage-title" class="stage-title">No terminal selected</div>
-          <div id="stage-sub" class="stage-sub">Pick a terminal on the left, or create one.</div>
+          <div id="stage-title" class="stage-title">No agent selected</div>
+          <div id="stage-sub" class="stage-sub">Pick an agent on the left, or create one.</div>
         </div>
         <div id="stage-status" class="stage-status" hidden></div>
       </div>
@@ -42,10 +42,10 @@
         <div id="term-host" class="term-host"></div>
         <div id="stage-overlay" class="stage-overlay">
           <div class="overlay-card">
-            <div class="overlay-title">Live terminals, in your browser</div>
+            <div class="overlay-title">Live agents, in your browser</div>
             <div class="overlay-body">
-              Click a terminal card to attach. Keystrokes go straight to its tmux window.
-              Closing this tab leaves the terminal running.
+              Click an agent card to attach. Keystrokes go straight to its tmux window.
+              Closing this tab leaves the agent running.
             </div>
           </div>
         </div>
@@ -55,7 +55,17 @@
 
   <dialog id="new-dialog" class="dialog">
     <form id="new-form" method="dialog">
-      <div class="dialog-title">New terminal</div>
+      <div id="new-dialog-title" class="dialog-title">New agent</div>
+
+      <label class="field">
+        <span class="field-label">Target run</span>
+        <select id="f-run"></select>
+      </label>
+
+      <label class="field" id="run-name-field">
+        <span class="field-label">Run name <span class="field-opt">new run only</span></span>
+        <input id="f-run-name" type="text" maxlength="80" placeholder="release check" autocomplete="off" />
+      </label>
 
       <label class="field">
         <span class="field-label">Provider</span>
@@ -63,17 +73,12 @@
       </label>
 
       <label class="field">
-        <span class="field-label">Name <span class="field-opt">optional</span></span>
+        <span class="field-label">Agent name <span class="field-opt">optional</span></span>
         <input id="f-nickname" type="text" maxlength="40" placeholder="planner" autocomplete="off" />
       </label>
 
-      <label class="field">
-        <span class="field-label">Add to run</span>
-        <select id="f-run"></select>
-      </label>
-
       <label class="field" id="mode-field" hidden>
-        <span class="field-label">Run mode</span>
+        <span class="field-label">New run mode</span>
         <select id="f-mode">
           <option value="spawner">Spawner</option>
           <option value="orchestrator">Orchestrator MCP · pre-beta</option>
@@ -81,13 +86,13 @@
       </label>
 
       <label class="field" id="cwd-field">
-        <span class="field-label">Working dir <span class="field-opt">new run only</span></span>
+        <span class="field-label">Working directory <span class="field-opt">new run only</span></span>
         <input id="f-cwd" type="text" placeholder="defaults to the server's directory" autocomplete="off" />
       </label>
 
       <label class="field">
-        <span class="field-label">Prompt <span class="field-opt">optional, typed in on start</span></span>
-        <textarea id="f-prompt" rows="3" placeholder="What should this terminal start working on?"></textarea>
+        <span class="field-label">Initial prompt <span class="field-opt">optional, typed in on start</span></span>
+        <textarea id="f-prompt" rows="3" placeholder="What should this agent start working on?"></textarea>
       </label>
 
       <div id="new-error" class="dialog-error" hidden></div>

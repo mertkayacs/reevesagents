@@ -27,18 +27,18 @@ function slot(overrides: Partial<SavedTreeSlot>): SavedTreeSlot {
 function makeResearchTeam(createdAt: string): SavedTree {
   return {
     name: 'research-team',
-    description: 'Hermes leads; cc analyzes, codex builds, opencode reviews.',
+    description: 'Hermes leads; Claude Code analyzes, Codex CLI builds, OpenCode CLI reviews.',
     working_dir_pattern: '',
     root: slot({
       nickname_template: 'hermes-lead',
       provider: 'hermes',
       initial_prompt:
-        'Coordinate the team. Delegate review work to opencode, code analysis to cc, ' +
-        'and implementation to codex. Summarize findings.',
+        'Coordinate the team. Delegate review work to OpenCode CLI, code analysis to Claude Code, ' +
+        'and implementation to Codex CLI. Summarize findings.',
     }),
     workers: [
       slot({
-        nickname_template: 'cc-analyst',
+        nickname_template: 'claude-code-analyst',
         provider: 'cc',
         initial_prompt: 'Analyze code, reason about the problem, and report findings to the lead.',
       }),
@@ -58,21 +58,21 @@ function makeResearchTeam(createdAt: string): SavedTree {
   }
 }
 
-// Preset 2: cc-led pair, with a second cc executing and codex coding.
-function makeCcPair(createdAt: string): SavedTree {
+// Preset 2: Claude Code-led pair, with a second Claude Code executing and Codex CLI coding.
+function makeClaudeCodePair(createdAt: string): SavedTree {
   return {
-    name: 'cc-pair',
-    description: 'Claude Code plans; a second cc plus codex implement.',
+    name: 'claude-code-pair',
+    description: 'Claude Code plans; a second Claude Code plus Codex CLI implement.',
     working_dir_pattern: '',
     root: slot({
-      nickname_template: 'cc-planner',
+      nickname_template: 'claude-code-planner',
       provider: 'cc',
       initial_prompt:
         'Plan the work, then delegate concrete steps to the two workers. Review their output.',
     }),
     workers: [
       slot({
-        nickname_template: 'cc-worker',
+        nickname_template: 'claude-code-worker',
         provider: 'cc',
         initial_prompt: 'Execute the steps the planner gives you and report results back.',
       }),
@@ -91,7 +91,7 @@ export function defaultPresets(): SavedTree[] {
   // Distinct timestamps so the second preset sorts above the first by updated_at desc.
   const t1 = nowIso()
   const t2 = new Date(new Date(t1).getTime() + 1).toISOString()
-  return [makeResearchTeam(t1), makeCcPair(t2)]
+  return [makeResearchTeam(t1), makeClaudeCodePair(t2)]
 }
 
 // Seed the presets dir with the default presets if and only if it has no

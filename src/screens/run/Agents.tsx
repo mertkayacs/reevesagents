@@ -10,7 +10,7 @@ import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
 import { colors } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
 import { listAgents, readRun } from '../../state/runs.js'
 import type { AgentRecord, RunRecord } from '../../state/types.js'
 
@@ -135,7 +135,7 @@ export function RunAgents() {
   }
 
   const isRunEnded = run.status === 'ended' || run.ended_at !== null
-  const providerBadgeWidth = Math.max(...agents.map(agent => agent.provider.length), 1)
+  const providerBadgeWidth = Math.max(...agents.map(agent => providerDisplayName(agent.provider).length), 1)
   const modelBadgeWidth = Math.max(...agents.map(agent => modelBadgeLabel(agent.model).length), 'default'.length)
   const terminalLabelWidth = Math.max(
     ...agents.map(agent => agent.nickname.length),
@@ -168,8 +168,9 @@ export function RunAgents() {
 
           if (item.type === 'agent' && item.agent) {
             const agent = item.agent
+            const providerLabel = providerDisplayName(agent.provider)
             const badges = [
-              { label: agent.provider, color: providerColor(agent.provider), width: providerBadgeWidth },
+              { label: providerLabel, color: providerColor(agent.provider), width: providerBadgeWidth },
               { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider), width: modelBadgeWidth },
             ]
             return (

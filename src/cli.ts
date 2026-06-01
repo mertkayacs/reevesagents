@@ -7,10 +7,11 @@ import { execFileSync } from 'node:child_process'
 import { prepareTuiColorEnv } from './utils/color-env.js'
 import { runDoctor } from './launcher/doctor.js'
 import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
-import { isProvider, PROVIDERS } from './launcher/providers.js'
+import { normalizeProvider, PROVIDERS } from './launcher/providers.js'
 import { listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
+import { providerDisplayName } from './utils/display.js'
 import type { AgentRecord, Provider, RunRecord } from './state/types.js'
 
 process.on('uncaughtException', (err) => {
@@ -197,10 +198,11 @@ function requireDestructiveConfirmation(opts: { yes?: boolean }, command: string
 
 function parseTerminalSpec(spec: string): { provider: Provider; nickname?: string; model: string } {
   const [providerRaw = '', nickname, model = ''] = spec.split(':')
-  if (!isProvider(providerRaw)) {
-    throw new Error(`terminal spec must start with ${PROVIDERS.join(', ')}: ${spec}`)
+  const provider = normalizeProvider(providerRaw)
+  if (!provider) {
+    throw new Error(`terminal spec must start with a supported provider name: ${PROVIDERS.map(providerDisplayName).join(', ')}: ${spec}`)
   }
-  return { provider: providerRaw, nickname: nickname || undefined, model }
+  return { provider, nickname: nickname || undefined, model }
 }
 
 program
@@ -255,7 +257,8 @@ program
       const agents = listAgents(run.id)
       const root = agents.find(agent => agent.role === 'root')
       const note = agents.find(agent => agent.task_note.trim())?.task_note ?? ''
-      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  spawn      ${(root?.provider ?? '-').padEnd(8)}  ${String(agents.length).padStart(2)} ${'terminals'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
+      const rootProvider = root ? providerDisplayName(root.provider) : '-'
+      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  spawn      ${rootProvider.padEnd(14)}  ${String(agents.length).padStart(2)} ${'terminals'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
     }
   })
 

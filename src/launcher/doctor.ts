@@ -5,10 +5,11 @@ import { execFileSync } from 'node:child_process'
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import type { CheckResult } from '../state/types.js'
+import type { CheckResult, Provider } from '../state/types.js'
 import { detectAvailable, inspectProviderCompatibility } from './providers.js'
 import { listRuns, runsDir, stateRoot } from '../state/runs.js'
 import { WEB_EXTRA_MODULES } from '../web/extras.js'
+import { providerDisplayName } from '../utils/display.js'
 
 export interface DoctorResult {
   checks: CheckResult[]
@@ -103,8 +104,8 @@ function checkTmux(): CheckResult {
 function checkProviders(): CheckResult {
   const available = detectAvailable()
   const statuses = Object.entries(available)
-    .map(([name, isAvail]) => `${name}:${isAvail ? 'ok' : 'missing'}`)
-    .join(' ')
+    .map(([name, isAvail]) => `${providerDisplayName(name as Provider)}: ${isAvail ? 'ok' : 'missing'}`)
+    .join('; ')
   const noneAvail = Object.values(available).every(value => !value)
   return {
     name: 'providers',
@@ -124,9 +125,9 @@ function checkProviderCompatibility(): CheckResult {
 
   const problems = installed
     .filter(provider => !provider.ok)
-    .map(provider => `${provider.provider}: ${provider.detail}`)
+    .map(provider => `${providerDisplayName(provider.provider)}: ${provider.detail}`)
   if (problems.length === 0) {
-    return { name: 'provider compat', status: 'ok', detail: `${installed.map(provider => provider.provider).join(', ')} compatible` }
+    return { name: 'provider compat', status: 'ok', detail: `${installed.map(provider => providerDisplayName(provider.provider)).join(', ')} compatible` }
   }
   return {
     name: 'provider compat',

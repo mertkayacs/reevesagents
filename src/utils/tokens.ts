@@ -1,6 +1,6 @@
 // Named design primitives. Screens reference tokens, not raw hex.
 // Bluish ReevesAgents brand. Anthropic Orange (#d97757) is reserved for the
-// cc provider color only; it is the one warm color in the palette.
+// Claude Code provider color only; it is the one warm color in the palette.
 
 export const colors = {
   text: {

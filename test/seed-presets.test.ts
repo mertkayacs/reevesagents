@@ -28,7 +28,7 @@ describe('seed-presets', () => {
     expect(research?.root.provider).toBe('hermes')
     expect(research?.workers.map(w => w.provider)).toEqual(['cc', 'codex', 'opencode'])
 
-    const pair = presets.find(p => p.name === 'cc-pair')
+    const pair = presets.find(p => p.name === 'claude-code-pair')
     expect(pair?.root.provider).toBe('cc')
     expect(pair?.workers.map(w => w.provider)).toEqual(['cc', 'codex'])
   })
@@ -48,12 +48,12 @@ describe('seed-presets', () => {
     const { listSavedTrees } = await import('../src/state/store.js')
 
     const written = seedDefaultPresetsIfEmpty()
-    expect(written.sort()).toEqual(['cc-pair', 'research-team'])
+    expect(written.sort()).toEqual(['claude-code-pair', 'research-team'])
 
     const loaded = listSavedTrees()
-    expect(loaded.map(t => t.name).sort()).toEqual(['cc-pair', 'research-team'])
+    expect(loaded.map(t => t.name).sort()).toEqual(['claude-code-pair', 'research-team'])
     expect(loaded.find(t => t.name === 'research-team')?.workers).toHaveLength(3)
-    expect(loaded.find(t => t.name === 'cc-pair')?.workers).toHaveLength(2)
+    expect(loaded.find(t => t.name === 'claude-code-pair')?.workers).toHaveLength(2)
   })
 
   it('seedDefaultPresetsIfEmpty is a no-op when any preset already exists', async () => {

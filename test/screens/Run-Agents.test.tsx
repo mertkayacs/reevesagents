@@ -112,7 +112,7 @@ describe('Run › Agents list screen', () => {
     const frame = lastFrame() ?? ''
 
     expect(frame).toContain('root')
-    expect(frame).toContain('cc')
+    expect(frame).toContain('Claude Code')
     unmount()
   })
 
@@ -123,7 +123,7 @@ describe('Run › Agents list screen', () => {
     const frame = lastFrame() ?? ''
 
     expect(frame).toContain('worker-1')
-    expect(frame).toContain('codex')
+    expect(frame).toContain('Codex CLI')
     unmount()
   })
 

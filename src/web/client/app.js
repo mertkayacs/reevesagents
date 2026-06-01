@@ -31,12 +31,15 @@
     termHost: document.getElementById('term-host'),
     newBtn: document.getElementById('new-btn'),
     dialog: document.getElementById('new-dialog'),
+    dialogTitle: document.getElementById('new-dialog-title'),
     form: document.getElementById('new-form'),
     fProvider: document.getElementById('f-provider'),
     fNickname: document.getElementById('f-nickname'),
+    fRunName: document.getElementById('f-run-name'),
     fRun: document.getElementById('f-run'),
     fMode: document.getElementById('f-mode'),
     modeField: document.getElementById('mode-field'),
+    runNameField: document.getElementById('run-name-field'),
     fCwd: document.getElementById('f-cwd'),
     cwdField: document.getElementById('cwd-field'),
     fPrompt: document.getElementById('f-prompt'),
@@ -103,7 +106,7 @@
 
   // --- rendering ------------------------------------------------------------
 
-  function findTerminal(id) {
+  function findAgent(id) {
     for (const run of runs) {
       for (const t of run.terminals) if (t.id === id) return { run, terminal: t }
     }
@@ -118,8 +121,8 @@
       const opt = document.createElement('option')
       opt.value = p.id
       const supported = mode !== 'orchestrator' || p.orchestrator === true
-      opt.textContent = p.available ? p.id : `${p.id} (not installed)`
-      if (mode === 'orchestrator' && !supported) opt.textContent = `${p.id} (spawner only)`
+      opt.textContent = p.available ? p.name : `${p.name} (not installed)`
+      if (mode === 'orchestrator' && !supported) opt.textContent = `${p.name} (Spawner only)`
       opt.disabled = !p.available || !supported
       el.fProvider.appendChild(opt)
     }
@@ -130,11 +133,11 @@
   }
 
   function renderSidebar() {
-    const withTerminals = runs.filter(r => r.terminals.length > 0)
-    el.sidebarEmpty.hidden = withTerminals.length > 0
+    const runsWithAgents = runs.filter(r => r.terminals.length > 0)
+    el.sidebarEmpty.hidden = runsWithAgents.length > 0
     el.sidebarList.innerHTML = ''
 
-    for (const run of withTerminals) {
+    for (const run of runsWithAgents) {
       const group = document.createElement('div')
       group.className = 'run-group'
 
@@ -156,35 +159,35 @@
       }
       group.appendChild(head)
 
-      for (const t of run.terminals) group.appendChild(renderCard(run, t))
+      for (const agent of run.terminals) group.appendChild(renderCard(run, agent))
       el.sidebarList.appendChild(group)
     }
   }
 
-  function renderCard(run, t) {
+  function renderCard(run, agent) {
     const card = document.createElement('button')
-    card.className = 'card' + (t.status === 'ended' ? ' is-ended' : '')
+    card.className = 'card' + (agent.status === 'ended' ? ' is-ended' : '')
     card.type = 'button'
-    card.setAttribute('aria-selected', String(t.id === selectedId))
+    card.setAttribute('aria-selected', String(agent.id === selectedId))
 
     const avatar = document.createElement('span')
     avatar.className = 'avatar'
-    avatar.style.background = t.color
-    avatar.textContent = t.monogram
+    avatar.style.background = agent.color
+    avatar.textContent = agent.monogram
     card.appendChild(avatar)
 
     const body = document.createElement('span')
     body.className = 'card-body'
     const nm = document.createElement('span')
     nm.className = 'card-name'
-    nm.textContent = t.nickname
+    nm.textContent = agent.nickname
     const meta = document.createElement('span')
     meta.className = 'card-meta'
     const prov = document.createElement('span')
     prov.className = 'card-provider'
-    prov.textContent = t.provider
+    prov.textContent = agent.provider_label || agent.provider
     meta.appendChild(prov)
-    meta.append(document.createTextNode(` · ${t.role} · ${t.status}`))
+    meta.append(document.createTextNode(` · ${agent.role} · ${agent.status}`))
     body.appendChild(nm)
     body.appendChild(meta)
     card.appendChild(body)
@@ -193,25 +196,25 @@
     tail.className = 'card-tail'
     const dot = document.createElement('span')
     dot.className = 'dot'
-    dot.dataset.status = t.status
+    dot.dataset.status = agent.status
     tail.appendChild(dot)
-    if (t.canKill) {
+    if (agent.canKill) {
       const kill = document.createElement('span')
       kill.className = 'card-kill'
       kill.setAttribute('role', 'button')
-      kill.setAttribute('aria-label', `close terminal ${t.nickname}`)
-      kill.title = `close terminal ${t.nickname}`
+      kill.setAttribute('aria-label', `close agent ${agent.nickname}`)
+      kill.title = `close agent ${agent.nickname}`
       kill.textContent = '×'
-      kill.addEventListener('click', (ev) => { ev.stopPropagation(); killTerminal(t) })
+      kill.addEventListener('click', (ev) => { ev.stopPropagation(); closeAgent(agent) })
       tail.appendChild(kill)
     }
     card.appendChild(tail)
 
-    if (t.canAttach) {
-      card.addEventListener('click', () => attach(t.id))
+    if (agent.canAttach) {
+      card.addEventListener('click', () => attach(agent.id))
     } else {
       card.disabled = true
-      card.title = t.disabledReason || 'terminal is unavailable'
+      card.title = agent.disabledReason || 'agent is unavailable'
     }
     return card
   }
@@ -223,7 +226,7 @@
     el.stageStatus.textContent = text
   }
 
-  // --- terminal attach ------------------------------------------------------
+  // --- agent attach ---------------------------------------------------------
 
   function disposeSession() {
     if (!session) return
@@ -237,12 +240,12 @@
     if (session && session.id === id) return
     disposeSession()
 
-    const found = findTerminal(id)
+    const found = findAgent(id)
     selectedId = id
     renderSidebar()
     el.overlay.hidden = true
     el.stageTitle.textContent = found ? found.terminal.nickname : id
-    el.stageSub.textContent = found ? `${found.run.mode} · ${found.terminal.provider} · in ${found.run.name}` : ''
+    el.stageSub.textContent = found ? `${modeLabel(found.run.mode)} · ${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}` : ''
     setStageStatus('connecting', 'connecting')
 
     const term = new Terminal({
@@ -288,21 +291,21 @@
 
   // --- actions --------------------------------------------------------------
 
-  async function killTerminal(t) {
-    if (!confirm(`Close terminal "${t.nickname}"? Its tmux window will be killed.`)) return
+  async function closeAgent(agent) {
+    if (!confirm(`Close agent "${agent.nickname}"? Its tmux window will be killed.`)) return
     try {
-      await api('POST', `/api/terminals/${encodeURIComponent(t.id)}/kill`, { confirm: true })
-      if (session && session.id === t.id) { disposeSession(); showOverlay() }
+      await api('POST', `/api/terminals/${encodeURIComponent(agent.id)}/kill`, { confirm: true })
+      if (session && session.id === agent.id) { disposeSession(); showOverlay() }
     } catch (err) {
-      alert(`Could not close terminal: ${err.message}`)
+      alert(`Could not close agent: ${err.message}`)
     }
   }
 
   async function stopRun(run) {
-    if (!confirm(`Stop run "${run.name}"? Every terminal in it will be killed.`)) return
+    if (!confirm(`Stop run "${run.name}"? Every agent in it will be stopped.`)) return
     try {
       await api('POST', `/api/runs/${encodeURIComponent(run.id)}/stop`, { confirm: true })
-      if (session && findTerminal(session.id) === null) { disposeSession(); showOverlay() }
+      if (session && findAgent(session.id) === null) { disposeSession(); showOverlay() }
     } catch (err) {
       alert(`Could not stop run: ${err.message}`)
     }
@@ -311,37 +314,44 @@
   function showOverlay() {
     selectedId = null
     el.overlay.hidden = false
-    el.stageTitle.textContent = 'No terminal selected'
-    el.stageSub.textContent = 'Pick a terminal on the left, or create one.'
+    el.stageTitle.textContent = 'No agent selected'
+    el.stageSub.textContent = 'Pick an agent on the left, or create one.'
     setStageStatus(null)
     renderSidebar()
   }
 
-  // --- new terminal dialog --------------------------------------------------
+  // --- new agent dialog -----------------------------------------------------
 
   function openDialog() {
     el.newError.hidden = true
     el.fNickname.value = ''
+    el.fRunName.value = ''
     el.fPrompt.value = ''
     el.fCwd.value = ''
-    populateRunSelect()
+    const selected = selectedId ? findAgent(selectedId) : null
+    populateRunSelect(selected ? selected.run.id : '')
     syncCreateFields()
     el.dialog.showModal()
-    el.fProvider.focus()
+    if (el.runNameField.hidden) el.fProvider.focus()
+    else el.fRunName.focus()
   }
 
-  function populateRunSelect() {
+  function populateRunSelect(preferredRunId) {
     el.fRun.innerHTML = ''
     const fresh = document.createElement('option')
     fresh.value = ''
-    fresh.textContent = 'New run'
+    fresh.textContent = 'Create new run'
     el.fRun.appendChild(fresh)
     for (const run of runs) {
       if (run.status !== 'running') continue
       const opt = document.createElement('option')
       opt.value = run.id
-      opt.textContent = prebetaOrchestrator ? `${run.name} · ${run.mode}` : run.name
+      const count = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
+      opt.textContent = prebetaOrchestrator ? `${run.name} · ${modeLabel(run.mode)} · ${count}` : `${run.name} · ${count}`
       el.fRun.appendChild(opt)
+    }
+    if (preferredRunId && [...el.fRun.options].some(opt => opt.value === preferredRunId)) {
+      el.fRun.value = preferredRunId
     }
   }
 
@@ -353,8 +363,15 @@
 
   function syncCreateFields() {
     const addingToRun = !!el.fRun.value
+    const mode = selectedCreateMode()
+    el.dialogTitle.textContent = addingToRun ? 'Add agent to run' : 'Create run'
+    el.newSubmit.textContent = addingToRun ? 'Add agent' : 'Create run'
+    el.runNameField.hidden = addingToRun
     el.modeField.hidden = !prebetaOrchestrator || addingToRun
     el.cwdField.style.display = el.fRun.value ? 'none' : 'flex'
+    el.fPrompt.placeholder = mode === 'orchestrator'
+      ? 'What should this orchestrator agent start working on?'
+      : 'What should this agent start working on?'
     renderProviders()
   }
 
@@ -366,6 +383,7 @@
     const payload = {
       provider,
       nickname: el.fNickname.value.trim(),
+      run_name: el.fRun.value ? undefined : el.fRunName.value.trim() || undefined,
       prompt: el.fPrompt.value,
       run_id: el.fRun.value || undefined,
       working_dir: el.fRun.value ? undefined : el.fCwd.value.trim() || undefined,
@@ -395,6 +413,10 @@
   el.fRun.addEventListener('change', syncCreateFields)
   el.fMode.addEventListener('change', syncCreateFields)
   el.form.addEventListener('submit', submitNew)
+
+  function modeLabel(mode) {
+    return mode === 'orchestrator' ? 'Orchestrator MCP' : 'Spawner'
+  }
 
   loadState().catch((err) => {
     el.sidebarEmpty.hidden = false

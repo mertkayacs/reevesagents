@@ -12,7 +12,7 @@ import { Pagination } from '../components/Pagination.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../utils/display.js'
 import { autoCleanupRuns, computeRunStatus, listAgents, listRuns, runHasLiveTmuxTarget } from '../state/runs.js'
 import type { RunRecord } from '../state/types.js'
 
@@ -185,7 +185,7 @@ export function Runs() {
               { label: 'spawn', color: colors.accent.primary },
               ...(root
                 ? [
-                  { label: root.provider, color: providerColor(root.provider) },
+                  { label: providerDisplayName(root.provider), color: providerColor(root.provider) },
                   { label: modelBadgeLabel(root.model), color: modelColor(root.model, root.provider) },
                 ]
                 : []),

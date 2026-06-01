@@ -49,14 +49,14 @@ The `agents` folder name remains for state compatibility. The main package prese
 
 Supported providers:
 
-- `cc`: Claude Code through `claude`
-- `codex`: Codex CLI through `codex`
-- `opencode`: OpenCode CLI through `opencode`
+- `claude-code`: Claude Code through `claude`
+- `codex-cli`: Codex CLI through `codex`
+- `opencode-cli`: OpenCode CLI through `opencode`
 - `hermes`: Hermes through `hermes chat`
-- `kimi`: Kimi Code through `kimi`
-- `deepseek`: DeepSeek CLI through `deepseek`
+- `kimi-code`: Kimi Code through `kimi`
+- `deepseek-cli`: DeepSeek CLI through `deepseek`
 - `pi`: Pi through `pi`
-- `qwen`: Qwen Code through `qwen`
+- `qwen-code`: Qwen Code through `qwen`
 - `aider`: Aider through `aider`
 
 The main package launches only real provider CLIs. Optional model values remain curated and provider-scoped; blank model keeps each CLI's configured default.

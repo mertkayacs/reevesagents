@@ -1,32 +1,42 @@
 import { describe, it, expect } from 'vitest'
-import { buildCommand, helpCommand, missingHelpFeatures, PROVIDERS } from '../src/launcher/providers.js'
+import { buildCommand, helpCommand, missingHelpFeatures, normalizeProvider, PROVIDERS } from '../src/launcher/providers.js'
 import type { BuildCommandOptions } from '../src/launcher/providers.js'
 
 describe('providers', () => {
+  describe('normalizeProvider', () => {
+    it('accepts readable provider aliases for CLI and API input', () => {
+      expect(normalizeProvider('claude-code')).toBe('cc')
+      expect(normalizeProvider('Claude Code')).toBe('cc')
+      expect(normalizeProvider('codex-cli')).toBe('codex')
+      expect(normalizeProvider('qwen-code')).toBe('qwen')
+      expect(normalizeProvider('not-real')).toBeNull()
+    })
+  })
+
   describe('buildCommand', () => {
-    it('cc with skip permissions includes --dangerously-skip-permissions', () => {
+    it('Claude Code with skip permissions includes --dangerously-skip-permissions', () => {
       const opts: BuildCommandOptions = { provider: 'cc', permissions: 'skip', model: '' }
       expect(buildCommand(opts)).toContain('--dangerously-skip-permissions')
     })
 
-    it('cc with ask permissions does not include skip flag', () => {
+    it('Claude Code with ask permissions does not include skip flag', () => {
       const opts: BuildCommandOptions = { provider: 'cc', permissions: 'ask', model: '' }
       expect(buildCommand(opts)).not.toContain('--dangerously-skip-permissions')
     })
 
-    it('cc with model includes --model flag', () => {
+    it('Claude Code with model includes --model flag', () => {
       const opts: BuildCommandOptions = { provider: 'cc', permissions: 'ask', model: 'opus' }
       const cmd = buildCommand(opts)
       expect(cmd).toContain('--model')
       expect(cmd).toContain('opus')
     })
 
-    it('cc with api-key auth includes --bare', () => {
+    it('Claude Code with api-key auth includes --bare', () => {
       const opts: BuildCommandOptions = { provider: 'cc', permissions: 'ask', model: '', auth_mode: 'api-key' }
       expect(buildCommand(opts)).toContain('--bare')
     })
 
-    it('cc with effort includes --effort', () => {
+    it('Claude Code with effort includes --effort', () => {
       const opts: BuildCommandOptions = { provider: 'cc', permissions: 'ask', model: '', effort: 'high' }
       const cmd = buildCommand(opts)
       expect(cmd).toContain('--effort')
@@ -133,7 +143,7 @@ describe('providers', () => {
       expect(qwenCmd).toContain('qwen3-coder-plus')
       expect(aiderCmd).toContain('deepseek/deepseek-chat')
 
-      // cc-only flags never appear elsewhere
+      // Claude Code-only flags never appear elsewhere.
       expect(ccCmd).toContain('--bare')
       expect(ccCmd).toContain('--effort')
       expect(codexCmd).not.toContain('--bare')
@@ -163,7 +173,7 @@ describe('providers', () => {
       expect(qwenCmd).not.toContain('--dangerously-bypass-approvals-and-sandbox')
       expect(aiderCmd).not.toContain('--dangerously-bypass-approvals-and-sandbox')
 
-      // cc-only skip flag never appears elsewhere
+      // Claude Code-only skip flag never appears elsewhere.
       expect(ccCmd).toContain('--dangerously-skip-permissions')
       expect(codexCmd).not.toContain('--dangerously-skip-permissions')
       expect(opencodeCmd).not.toContain('--dangerously-skip-permissions')

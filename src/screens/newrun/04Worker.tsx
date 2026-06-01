@@ -14,7 +14,7 @@ import { useWizard } from '../../state/WizardContext.js'
 import type { WorkerConfig } from '../../state/WizardContext.js'
 import { PROVIDERS } from '../../launcher/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
 import type { Permissions, Effort, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
@@ -46,7 +46,7 @@ export function NewRunWorker() {
     if (!worker) return []
     const list: Field[] = [
       { kind: 'text', id: 'nickname', label: 'Nickname', value: worker.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
-      { kind: 'picker', id: 'provider', label: 'Provider', current: worker.provider, values: PROVIDERS },
+      { kind: 'picker', id: 'provider', label: 'Provider', current: worker.provider, values: PROVIDERS, display: providerDisplayName(worker.provider) },
       {
         kind: 'picker',
         id: 'model',
@@ -230,7 +230,7 @@ export function NewRunWorker() {
 }
 
 function pickerBadge(field: PickerField, provider: Provider): { label: string; color: string } | undefined {
-  if (field.id === 'provider') return { label: field.current, color: providerColor(field.current as Provider) }
+  if (field.id === 'provider') return { label: providerDisplayName(field.current as Provider), color: providerColor(field.current as Provider) }
   if (field.id === 'model') return { label: modelBadgeLabel(field.current), color: modelColor(field.current, provider) }
   return undefined
 }

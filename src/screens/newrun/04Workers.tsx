@@ -9,7 +9,7 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { StepIndicator } from '../../components/StepIndicator.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../state/WizardContext.js'
-import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
 
 type ActionId = 'add' | 'continue' | 'back' | 'cancel'
 const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Continue'.length, 'Back'.length, 'Reset Wizard'.length)
@@ -27,7 +27,7 @@ export function NewRunWorkers() {
   ]
 
   const totalRows = workers.length + actions.length
-  const providerBadgeWidth = Math.max(...workers.map(worker => worker.provider.length), 1)
+  const providerBadgeWidth = Math.max(...workers.map(worker => providerDisplayName(worker.provider).length), 1)
   const modelBadgeWidth = Math.max(...workers.map(worker => modelBadgeLabel(worker.model).length), 'default'.length)
   const terminalLabelWidth = Math.max(
     ...workers.map((worker, idx) => (worker.nickname || `terminal-${idx + 2}`).length),
@@ -80,19 +80,22 @@ export function NewRunWorkers() {
       {workers.length === 0 ? (
         <Row selected={false} primary="No extra terminals yet." trailing="choose Add Terminal below" disabled />
       ) : (
-        workers.map((worker, idx) => (
-          <Row
-            key={`worker-${idx}`}
-            selected={selectedIdx === idx}
-            primary={worker.nickname || `terminal-${idx + 2}`}
-            primaryWidth={terminalLabelWidth}
-            badges={[
-              { label: worker.provider, color: providerColor(worker.provider), width: providerBadgeWidth },
-              { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider), width: modelBadgeWidth },
-            ]}
-            hint={worker.prompt ? worker.prompt.slice(0, 40) : '(no prompt set)'}
-          />
-        ))
+        workers.map((worker, idx) => {
+          const providerLabel = providerDisplayName(worker.provider)
+          return (
+            <Row
+              key={`worker-${idx}`}
+              selected={selectedIdx === idx}
+              primary={worker.nickname || `terminal-${idx + 2}`}
+              primaryWidth={terminalLabelWidth}
+              badges={[
+                { label: providerLabel, color: providerColor(worker.provider), width: providerBadgeWidth },
+                { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider), width: modelBadgeWidth },
+              ]}
+              hint={worker.prompt ? worker.prompt.slice(0, 40) : '(no prompt set)'}
+            />
+          )
+        })
       )}
       <SectionEnd />
 

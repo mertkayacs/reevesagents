@@ -218,7 +218,7 @@ body {
   align-items: center;
   gap: var(--s-1);
 }
-.card-provider { text-transform: uppercase; letter-spacing: 0.5px; }
+.card-provider { letter-spacing: 0; }
 
 .card-tail { display: flex; align-items: center; gap: var(--s-2); }
 .dot {
@@ -314,7 +314,7 @@ body {
   background: var(--panel);
   color: var(--text);
   padding: 0;
-  width: min(440px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
 }
 .dialog::backdrop { background: rgba(8, 11, 15, 0.6); }
 .dialog form { padding: var(--s-5); display: flex; flex-direction: column; gap: var(--s-3); }
