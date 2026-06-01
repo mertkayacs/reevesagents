@@ -16,7 +16,8 @@ import { readRun } from '../../state/runs.js'
 import { spawnWorker } from '../../launcher/runtime.js'
 import { PROVIDERS } from '../../launcher/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
-import type { Permissions } from '../../state/types.js'
+import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
+import type { Permissions, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
 
@@ -170,11 +171,13 @@ export function AddWorker() {
             />
           )
         }
+        const badge = pickerBadge(field, draft.provider)
         return (
           <Row
             key={field.id}
             selected={selectedIdx === fIdx}
             primary={field.label}
+            badge={badge}
             trailing={`‹ ${field.display ?? field.current} ›`}
             hint={selectedIdx === fIdx ? field.hint ?? '← → cycle' : undefined}
           />
@@ -199,4 +202,10 @@ export function AddWorker() {
 
 function safeReadRun(id: string): ReturnType<typeof readRun> | null {
   try { return readRun(id) } catch { return null }
+}
+
+function pickerBadge(field: PickerField, provider: Provider): { label: string; color: string } | undefined {
+  if (field.id === 'provider') return { label: field.current, color: providerColor(field.current as Provider) }
+  if (field.id === 'model') return { label: modelBadgeLabel(field.current), color: modelColor(field.current, provider) }
+  return undefined
 }

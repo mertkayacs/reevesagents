@@ -12,7 +12,7 @@ import { Pagination } from '../components/Pagination.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
-import { providerColor } from '../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor } from '../utils/display.js'
 import { autoCleanupRuns, computeRunStatus, listAgents, listRuns, runHasLiveTmuxTarget } from '../state/runs.js'
 import type { RunRecord } from '../state/types.js'
 
@@ -178,15 +178,22 @@ export function Runs() {
             const agents = listAgents(run.id)
             const root = agents.find(a => a.role === 'root')
             const isSpawner = run.mode === 'spawner'
+            const badges = [
+              ...(isSpawner ? [{ label: 'spawn', color: colors.accent.primary }] : []),
+              ...(root
+                ? [
+                  { label: root.provider, color: providerColor(root.provider) },
+                  { label: modelBadgeLabel(root.model), color: modelColor(root.model, root.provider) },
+                ]
+                : []),
+            ]
             return (
               <Row
                 key={run.id}
                 selected={selectedIdx === idx}
                 primary={run.name}
                 glyph={statusGlyph(runStatus(run))}
-                badge={isSpawner
-                  ? { label: 'spawn', color: colors.accent.primary }
-                  : root ? { label: root.provider, color: providerColor(root.provider) } : undefined}
+                badges={badges}
                 hint={`${agents.length} ${isSpawner ? 'terminals' : 'entries'}`}
               />
             )

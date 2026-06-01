@@ -9,6 +9,7 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { StepIndicator } from '../../components/StepIndicator.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../state/WizardContext.js'
+import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
 
 type ActionId = 'start' | 'back' | 'cancel'
 
@@ -60,8 +61,8 @@ export function NewRunReview() {
       <SectionEnd />
 
       <Section label="First Terminal" />
-      <Row selected={false} primary="Provider" trailing={state.root.provider} />
-      <Row selected={false} primary="Model" trailing={state.root.model || '(default)'} />
+      <Row selected={false} primary="Provider" badge={{ label: state.root.provider, color: providerColor(state.root.provider) }} />
+      <Row selected={false} primary="Model" badge={{ label: modelBadgeLabel(state.root.model), color: modelColor(state.root.model, state.root.provider) }} />
       <Row selected={false} primary="Prompt" trailing={promptPreview || '(none)'} />
       <Row selected={false} primary={showEffort ? 'Permissions / Effort' : 'Permissions'} trailing={permissionsSummary} />
       <SectionEnd />
@@ -74,7 +75,11 @@ export function NewRunReview() {
               key={`worker-${idx}`}
               selected={false}
               primary={worker.nickname || `terminal-${idx + 2}`}
-              trailing={`${worker.provider} / ${worker.model || '(default)'} / ${worker.permissions}`}
+              badges={[
+                { label: worker.provider, color: providerColor(worker.provider) },
+                { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider) },
+              ]}
+              trailing={worker.permissions}
             />
           ))}
           <SectionEnd />

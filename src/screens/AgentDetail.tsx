@@ -7,6 +7,7 @@ import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
+import { modelBadgeLabel, modelColor, providerColor } from '../utils/display.js'
 import { findAgent, readRun } from '../state/runs.js'
 import { openAgent } from '../launcher/runtime.js'
 import type { AgentRecord } from '../state/types.js'
@@ -122,7 +123,6 @@ export function AgentDetail() {
 
   // Inline one-line summary. Skips empty fields. Truncates at terminal width.
   const summaryParts: string[] = []
-  if (agent.model) summaryParts.push(`model ${agent.model}`)
   if (agent.task_note) summaryParts.push(`note ${agent.task_note}`)
   summaryParts.push(`workdir ${agent.working_dir}`)
   const summaryLine = summaryParts.join(' · ')
@@ -160,7 +160,14 @@ export function AgentDetail() {
       statusKeys="↑↓ move · enter select · esc back"
     >
       <Box flexDirection="column">
-        <Box marginBottom={1}>
+        <Box flexDirection="column" marginBottom={1}>
+          <Text wrap="truncate-end">
+            <Text color={colors.surface.border}>[</Text>
+            <Text color={providerColor(agent.provider)}>{agent.provider}</Text>
+            <Text color={colors.surface.border}>] [</Text>
+            <Text color={modelColor(agent.model, agent.provider)}>{modelBadgeLabel(agent.model)}</Text>
+            <Text color={colors.surface.border}>]</Text>
+          </Text>
           <Text color={colors.text.dim} wrap="truncate-end">{summaryLine}</Text>
         </Box>
         <Section label={isSpawner ? 'Terminal' : 'Entry'} />

@@ -9,7 +9,7 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { StepIndicator } from '../../components/StepIndicator.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../state/WizardContext.js'
-import { providerColor } from '../../utils/display.js'
+import { modelBadgeLabel, modelColor, providerColor } from '../../utils/display.js'
 
 type ActionId = 'add' | 'continue' | 'back' | 'cancel'
 
@@ -77,7 +77,10 @@ export function NewRunWorkers() {
             key={`worker-${idx}`}
             selected={selectedIdx === idx}
             primary={worker.nickname || `terminal-${idx + 2}`}
-            badge={{ label: worker.provider, color: providerColor(worker.provider) }}
+            badges={[
+              { label: worker.provider, color: providerColor(worker.provider) },
+              { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider) },
+            ]}
             hint={worker.prompt ? worker.prompt.slice(0, 40) : '(no prompt set)'}
           />
         ))

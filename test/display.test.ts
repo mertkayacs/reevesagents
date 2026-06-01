@@ -32,6 +32,43 @@ describe('display utilities', () => {
     })
   })
 
+  describe('modelColor', () => {
+    it('returns a neutral color for CLI default models', async () => {
+      const { modelColor } = await import('../src/utils/display.js')
+      expect(modelColor('')).toBe('#9b9488')
+    })
+
+    it('groups Claude family aliases together', async () => {
+      const { modelColor } = await import('../src/utils/display.js')
+      expect(modelColor('sonnet')).toBe('#e0a06f')
+      expect(modelColor('anthropic/claude-opus-4')).toBe('#e0a06f')
+    })
+
+    it('groups OpenAI family model ids together', async () => {
+      const { modelColor } = await import('../src/utils/display.js')
+      expect(modelColor('openai/gpt-5')).toBe('#72b7d6')
+      expect(modelColor('gpt-5-codex')).toBe('#72b7d6')
+    })
+
+    it('uses provider fallback for unknown model ids', async () => {
+      const { modelColor } = await import('../src/utils/display.js')
+      expect(modelColor('latest', 'qwen')).toBe('#d1a25d')
+    })
+  })
+
+  describe('modelBadgeLabel', () => {
+    it('labels empty model as default', async () => {
+      const { modelBadgeLabel } = await import('../src/utils/display.js')
+      expect(modelBadgeLabel('')).toBe('default')
+    })
+
+    it('removes provider prefixes from model labels', async () => {
+      const { modelBadgeLabel } = await import('../src/utils/display.js')
+      expect(modelBadgeLabel('anthropic/claude-sonnet-4-5')).toBe('claude-sonnet-4-5')
+      expect(modelBadgeLabel('deepseek-coder:33b')).toBe('deepseek-coder:33b')
+    })
+  })
+
   describe('redactSecrets', () => {
     it('replaces anthropic keys with [REDACTED]', async () => {
       const { redactSecrets } = await import('../src/utils/display.js')
