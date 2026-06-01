@@ -82,7 +82,7 @@ describe('responsive layout', () => {
     const frame = lastFrame() ?? ''
     expect(frame).toContain('Main Menu')
     expect(frame).toContain('New Run')
-    expect(frame).toContain('1-4 of 8')
+    expect(frame).toContain('1-4 of 9')
     assertFits(frame, 60)
     unmount()
   })

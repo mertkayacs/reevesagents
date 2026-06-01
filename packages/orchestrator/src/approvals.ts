@@ -12,7 +12,13 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
-import { findAgent, listRuns, nowIso, runDir, withRunsLock } from '../../../src/state/runs.js'
+import {
+  findAgentAny as findAgent,
+  listRunsAny as listRuns,
+  nowIso,
+  runDir,
+  withRunsLock,
+} from '../../../src/state/runs.js'
 import { redactSecrets } from '../../../src/utils/display.js'
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired'

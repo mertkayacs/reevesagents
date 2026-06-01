@@ -3,10 +3,12 @@
 
 import { execFileSync } from 'node:child_process'
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import type { CheckResult } from '../state/types.js'
 import { detectAvailable, inspectProviderCompatibility } from './providers.js'
 import { listRuns, runsDir, stateRoot } from '../state/runs.js'
+import { WEB_EXTRA_MODULES } from '../web/extras.js'
 
 export interface DoctorResult {
   checks: CheckResult[]
@@ -143,6 +145,20 @@ function checkPathAccess(name: string, path: string): CheckResult {
   }
 }
 
+// The web UI is optional. Resolvability is the quick glance; `reevesagents web`
+// runs the truer load-check (checkWebExtras) at launch. Missing extras is a warn,
+// never a fail, so a TUI-only install keeps a clean bill of health.
+function checkWebExtras(): CheckResult {
+  const requireFrom = createRequire(import.meta.url)
+  const missing = WEB_EXTRA_MODULES.filter(name => {
+    try { requireFrom.resolve(name); return false } catch { return true }
+  })
+  if (missing.length === 0) {
+    return { name: 'web extras', status: 'ok', detail: `${WEB_EXTRA_MODULES.join(' + ')} present (web UI available)` }
+  }
+  return { name: 'web extras', status: 'warn', detail: `${missing.join(', ')} not installed; TUI unaffected, web UI disabled` }
+}
+
 function checkRunsState(): CheckResult {
   try {
     const runs = listRuns()
@@ -168,6 +184,7 @@ export function runDoctor(): DoctorResult {
       checkPathAccess('runs dir', runsDir()),
       checkPathAccess('presets dir', join(stateRoot(), 'presets')),
       checkRunsState(),
+      checkWebExtras(),
     ],
   }
 }

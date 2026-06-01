@@ -6,6 +6,7 @@ import { Frame } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
+import { REEVESAGENTS_VERSION } from '../version.js'
 
 export function Credits() {
   const { pop } = useRouter()
@@ -18,13 +19,13 @@ export function Credits() {
     <Frame
       breadcrumb={['ReevesAgents', 'Credits']}
       tagline="About this local tmux-first workspace manager."
-      statusContext="ReevesAgents 0.9.0"
+      statusContext={`ReevesAgents ${REEVESAGENTS_VERSION}`}
       statusKeys="enter back · esc back"
     >
       <Box flexDirection="column">
         <Section label="About" />
         <Row selected={false} primary="Name" trailing="ReevesAgents" />
-        <Row selected={false} primary="Version" trailing="0.9.0" />
+        <Row selected={false} primary="Version" trailing={REEVESAGENTS_VERSION} />
         <Row selected={false} primary="Purpose" trailing="Local tmux-first workspace manager for AI CLI terminals" />
         <SectionEnd />
 

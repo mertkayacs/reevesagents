@@ -10,6 +10,7 @@ import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
 import { isProvider, PROVIDERS } from './launcher/providers.js'
 import { listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
+import { REEVESAGENTS_VERSION } from './version.js'
 import type { AgentRecord, Provider, RunRecord } from './state/types.js'
 
 process.on('uncaughtException', (err) => {
@@ -22,7 +23,7 @@ const program = new Command()
 program
   .name('reevesagents')
   .description('local tmux-first workspace manager for AI CLI terminals')
-  .version('0.9.0')
+  .version(REEVESAGENTS_VERSION)
 
 function age(startedAt: string): string {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000))
@@ -324,6 +325,41 @@ program
     process.exit(anyFail ? 1 : 0)
   })
 
+program
+  .command('web')
+  .description('start the on-demand loopback web UI for spawner terminals')
+  .option('--port <n>', 'preferred port; falls back to the next free port')
+  .option('--no-open', 'do not open the browser')
+  .option('--prebeta-orchestrator', 'enable PRE-BETA orchestrator/MCP run controls when the separate package is installed')
+  .action((opts: { port?: string; open?: boolean; prebetaOrchestrator?: boolean }) => {
+    runWeb(opts).catch(err => {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    })
+  })
+
+async function runWeb(opts: { port?: string; open?: boolean; prebetaOrchestrator?: boolean }): Promise<void> {
+  const { checkWebExtras, webExtrasMessage } = await import('./web/extras.js')
+  const extras = await checkWebExtras()
+  if (!extras.ok) {
+    console.error(webExtrasMessage(extras.missing))
+    process.exit(1)
+  }
+  const { startWebServer } = await import('./web/server.js')
+  const parsed = opts.port ? Number.parseInt(opts.port, 10) : undefined
+  const handle = await startWebServer({
+    port: parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined,
+    open: opts.open !== false,
+    prebetaOrchestrator: opts.prebetaOrchestrator === true,
+  })
+  console.log(`reevesagents web running at ${handle.url}`)
+  if (opts.prebetaOrchestrator) console.log('PRE-BETA orchestrator/MCP controls enabled.')
+  console.log('press Ctrl+C to stop. terminals keep running.')
+  const shutdown = (): void => { handle.close().finally(() => process.exit(0)) }
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+}
+
 const knownSubcommands = new Set(program.commands.map(command => command.name()))
 const firstArg = process.argv[2]
 
@@ -335,6 +371,13 @@ async function renderTui(): Promise<void> {
     import('./router.js'),
   ])
   await render(React.createElement(Router), { alternateScreen: false }).waitUntilExit()
+  const { consumeWebLaunch } = await import('./web/launch-intent.js')
+  if (consumeWebLaunch()) {
+    // The menu asked to hand off to the web UI: launch it in this freed terminal.
+    // runWeb keeps the process alive (server + signal handlers); do not exit here.
+    await runWeb({ open: true })
+    return
+  }
   process.exit(0)
 }
 

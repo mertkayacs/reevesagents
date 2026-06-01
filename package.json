@@ -1,9 +1,9 @@
 {
   "name": "reevesagents",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Local tmux-first workspace manager for AI CLI terminals",
   "type": "module",
-  "packageManager": "pnpm@11.1.0",
+  "packageManager": "pnpm@10.34.1",
   "bin": {
     "reevesagents": "./dist/cli.js"
   },
@@ -17,7 +17,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/build-web-client.mjs",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -25,8 +25,10 @@
     "lint": "eslint src test",
     "smoke:cli": "node scripts/smoke-cli.mjs",
     "check:package": "node scripts/check-package-contents.mjs",
+    "check:install-matrix": "node scripts/check-install-matrix.mjs",
     "render-mascot": "node scripts/render-mascot.mjs",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli && pnpm check:package"
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli && pnpm check:package",
+    "verify:release": "pnpm verify && CI=true pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir packages/orchestrator verify && pnpm check:install-matrix"
   },
   "dependencies": {
     "chalk": "^5.6.2",
@@ -35,11 +37,18 @@
     "react": "^19.2.6",
     "strip-ansi": "^7.1.0"
   },
+  "optionalDependencies": {
+    "@lydell/node-pty": "1.2.0-beta.12",
+    "ws": "^8.21.0"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.7.0",
     "@types/react": "^19.2.14",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/parser": "^8.59.3",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "eslint": "10.3.0",
     "ink-testing-library": "^4.0.0",
     "prettier": "3.8.3",

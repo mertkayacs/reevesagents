@@ -1,4 +1,4 @@
-// Verifies the published root package stays spawner-only.
+// Verifies the published PRE-BETA orchestrator package stays separate and focused.
 
 import { execFileSync } from 'node:child_process'
 
@@ -7,32 +7,14 @@ const required = new Set([
   'dist/index.js',
   'package.json',
   'README.md',
-  'CHANGELOG.md',
-  'LICENSE',
-  // Web client assets: the optional web UI is dead without them, so prove the
-  // build step (build-web-client.mjs) ran and they shipped.
-  'dist/web/index.html',
-  'dist/web/app.js',
-  'dist/web/app.css',
-  'dist/web/xterm.js',
-  'dist/web/xterm.css',
-  'dist/web/addon-fit.js',
+  'docs/mcp-tools.md',
 ])
 
 const forbiddenPrefixes = [
-  'packages/',
   'src/',
   'test/',
-  'docs/',
   'scripts/',
   '.github/',
-]
-
-const forbiddenSubstrings = [
-  'orchestrator',
-  'mcp-setup',
-  'mcp-tools',
-  'approvals',
 ]
 
 function fail(message) {
@@ -50,12 +32,12 @@ for (const path of required) {
 }
 
 for (const path of files) {
+  if (path.startsWith('docs/') && path !== 'docs/mcp-tools.md') {
+    fail(`package includes non-runtime doc: ${path}`)
+  }
   if (forbiddenPrefixes.some(prefix => path.startsWith(prefix))) {
     fail(`package includes forbidden path: ${path}`)
   }
-  if (forbiddenSubstrings.some(value => path.includes(value))) {
-    fail(`package includes forbidden orchestrator-related path: ${path}`)
-  }
 }
 
-console.log(`package contents ok (${files.length} files)`)
+console.log(`orchestrator package contents ok (${files.length} files)`)

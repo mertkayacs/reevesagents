@@ -1,8 +1,9 @@
 {
   "name": "reevesagents-orchestrator",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "PRE-BETA MCP orchestration package for ReevesAgents",
   "type": "module",
+  "packageManager": "pnpm@10.34.1",
   "bin": {
     "reevesagents-orchestrator": "./dist/cli.js"
   },
@@ -12,7 +13,7 @@
   },
   "files": [
     "dist",
-    "docs",
+    "docs/mcp-tools.md",
     "README.md"
   ],
   "scripts": {
@@ -23,7 +24,8 @@
     "smoke:tmux": "node scripts/smoke-tmux-run.mjs",
     "smoke:providers-real": "node scripts/smoke-providers-real.mjs",
     "smoke:approval-real": "node scripts/smoke-approval-real.mjs",
-    "verify": "pnpm typecheck && pnpm test && pnpm build",
+    "check:package": "node scripts/check-package-contents.mjs",
+    "verify": "pnpm typecheck && pnpm test && pnpm build && pnpm check:package",
     "verify:real": "pnpm verify && pnpm smoke:tmux && pnpm smoke:providers-real"
   },
   "dependencies": {

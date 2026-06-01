@@ -12,6 +12,7 @@ import { colors } from '../utils/tokens.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { Row } from '../components/Row.js'
 import { LayoutProvider } from '../components/LayoutContext.js'
+import { requestWebLaunch } from '../web/launch-intent.js'
 import type { ScreenName } from '../state/types.js'
 
 function pickMascotVariant(columns: number): MascotVariant {
@@ -30,10 +31,11 @@ export function Welcome() {
   const compact = contentColumns < 58
   const mascotVariant = pickMascotVariant(contentColumns)
   const actions = useMemo(() => {
-    const rows: Array<{ label: string; hint: string; screen?: ScreenName; quit?: boolean }> = [
+    const rows: Array<{ label: string; hint: string; screen?: ScreenName; quit?: boolean; launchWeb?: boolean }> = [
       { label: 'New Run', hint: 'start a spawner workspace', screen: 'NewRun' },
       { label: 'Runs', hint: 'open active and recent runs', screen: 'Runs' },
       { label: 'Doctor', hint: 'check local setup', screen: 'Doctor' },
+      { label: 'Start Web UI (beta)', hint: 'open the browser terminal UI', launchWeb: true },
       { label: 'Settings', hint: 'providers and paths', screen: 'Settings' },
       { label: 'Reference', hint: 'Spawner, TUI, CLI, tmux', screen: 'Reference' },
       { label: 'Credits', hint: 'about ReevesAgents', screen: 'Credits' },
@@ -69,6 +71,13 @@ export function Welcome() {
     const action = actions[selectedIdx]
     if (!action) return
     if (action.quit) {
+      exit()
+      return
+    }
+    if (action.launchWeb) {
+      // Hand the terminal to the web server: signal intent, then exit the TUI so
+      // the CLI launches it in this same terminal (foreground, no daemon).
+      requestWebLaunch()
       exit()
       return
     }

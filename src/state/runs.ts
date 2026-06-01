@@ -122,7 +122,8 @@ function normalizePermissions(value: unknown): Permissions {
 }
 
 function normalizeRunMode(value: unknown): RunMode | undefined {
-  return value === 'spawner' ? 'spawner' : undefined
+  if (value === 'spawner' || value === 'orchestrator') return value
+  return undefined
 }
 
 function asString(value: unknown, fallback = ''): string {
@@ -214,7 +215,14 @@ function writeRunUnlocked(run: RunRecord): string {
 }
 
 function readRunUnlocked(runId: string): RunRecord {
-  return normalizeRun(JSON.parse(readFileSync(runPath(runId), 'utf-8')) as Record<string, unknown>)
+  let raw: string
+  try {
+    raw = readFileSync(runPath(runId), 'utf-8')
+  } catch {
+    // A missing run reads as "not found", not a raw fs error that leaks the path.
+    throw new Error(`Run not found: ${runId}`)
+  }
+  return normalizeRun(JSON.parse(raw) as Record<string, unknown>)
 }
 
 function writeAgentUnlocked(agent: AgentRecord): string {
@@ -237,13 +245,17 @@ export function readRun(runId: string): RunRecord {
   return run
 }
 
+export function readRunAny(runId: string): RunRecord {
+  return readRunUnlocked(runId)
+}
+
 export function updateRun(runId: string, patch: Partial<RunRecord>): void {
   withRunsLock(() => {
     writeRunUnlocked({ ...readRunUnlocked(runId), ...patch })
   })
 }
 
-export function listRuns(): RunRecord[] {
+function listRunsUnlocked(includeAllModes: boolean): RunRecord[] {
   let entries: string[]
   try {
     entries = readdirSync(runsDir())
@@ -256,12 +268,20 @@ export function listRuns(): RunRecord[] {
     if (!existsSync(runPath(entry))) continue
     try {
       const run = readRunUnlocked(entry)
-      if (run.mode === 'spawner') runs.push(run)
+      if (includeAllModes || run.mode === 'spawner') runs.push(run)
     } catch {
       // skip malformed run folders
     }
   }
   return runs.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+}
+
+export function listRuns(): RunRecord[] {
+  return listRunsUnlocked(false)
+}
+
+export function listRunsAny(): RunRecord[] {
+  return listRunsUnlocked(true)
 }
 
 export function removeRun(runId: string): void {
@@ -289,8 +309,7 @@ export function updateAgent(runId: string, agentId: string, patch: Partial<Agent
   })
 }
 
-export function listAgents(runId?: string): AgentRecord[] {
-  const runIds = runId ? [runId] : listRuns().map(run => run.id)
+function listAgentsForRunIds(runIds: string[]): AgentRecord[] {
   const agents: AgentRecord[] = []
 
   for (const id of runIds) {
@@ -317,8 +336,27 @@ export function listAgents(runId?: string): AgentRecord[] {
   })
 }
 
+export function listAgents(runId?: string): AgentRecord[] {
+  return listAgentsForRunIds(runId ? [runId] : listRuns().map(run => run.id))
+}
+
+export function listAgentsAny(runId?: string): AgentRecord[] {
+  return listAgentsForRunIds(runId ? [runId] : listRunsAny().map(run => run.id))
+}
+
 export function findAgent(agentId: string): AgentRecord {
   for (const run of listRuns()) {
+    try {
+      return readAgentUnlocked(run.id, agentId)
+    } catch {
+      // agent belongs to another run
+    }
+  }
+  throw new Error(`Agent not found: ${agentId}`)
+}
+
+export function findAgentAny(agentId: string): AgentRecord {
+  for (const run of listRunsAny()) {
     try {
       return readAgentUnlocked(run.id, agentId)
     } catch {

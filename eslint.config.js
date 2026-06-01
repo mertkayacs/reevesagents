@@ -28,4 +28,31 @@ export default [
       },
     },
   },
+  {
+    // Browser client: classic scripts that run in the page, not under Node.
+    // xterm.js and addon-fit.js load first and expose Terminal / FitAddon as globals.
+    files: ['src/web/client/**/*.js'],
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-console': 'off',
+    },
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        location: 'readonly',
+        fetch: 'readonly',
+        setTimeout: 'readonly',
+        EventSource: 'readonly',
+        WebSocket: 'readonly',
+        ResizeObserver: 'readonly',
+        confirm: 'readonly',
+        alert: 'readonly',
+        Terminal: 'readonly',
+        FitAddon: 'readonly',
+      },
+    },
+  },
 ]

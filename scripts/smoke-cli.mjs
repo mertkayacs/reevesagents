@@ -99,6 +99,10 @@ async function main() {
     console.log(`smoke dir: ${tmpDir}`)
     console.log(`cli:       ${cliPath}`)
 
+    const versionText = runCli(['--version'], env)
+    assert(versionText === '1.0.0', `expected version 1.0.0, got ${versionText}`)
+    ok('version prints release version')
+
     const runsText = runCli(['runs'], env)
     assert(runsText === 'no runs', `expected no runs, got ${runsText}`)
     ok('runs prints no runs on empty isolated state')
