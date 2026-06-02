@@ -19,6 +19,7 @@
     </div>
     <div class="topbar-actions">
       <span id="conn" class="conn" data-state="idle" title="live update stream">live</span>
+      <button id="new-agent-btn" class="btn btn-agent" type="button">New agent</button>
       <button id="new-run-btn" class="btn btn-accent" type="button">New run</button>
     </div>
   </header>
@@ -60,6 +61,10 @@
             <div class="overlay-body">
               Select an agent to open its live pane. Closing the browser leaves the run active.
             </div>
+            <div class="overlay-actions">
+              <button id="overlay-new-run" class="btn btn-accent" type="button">New run</button>
+              <button id="overlay-new-agent" class="btn btn-agent" type="button" hidden>New agent</button>
+            </div>
           </div>
         </div>
       </div>
@@ -73,17 +78,28 @@
         <div id="new-dialog-subtitle" class="dialog-subtitle">Start a run with its first agent.</div>
       </div>
 
+      <div class="create-switch" role="tablist" aria-label="Create type">
+        <button id="create-run-tab" class="create-tab" type="button" role="tab">New run</button>
+        <button id="create-agent-tab" class="create-tab" type="button" role="tab">New agent</button>
+      </div>
+
       <div id="target-run-note" class="dialog-note" hidden></div>
+
+      <label class="field" id="agent-run-field" hidden>
+        <span class="field-label">Run</span>
+        <select id="f-agent-run"></select>
+      </label>
 
       <label class="field" id="run-name-field">
         <span class="field-label">Run name</span>
         <input id="f-run-name" type="text" maxlength="80" placeholder="release check" autocomplete="off" />
       </label>
 
-      <label class="field">
-        <span class="field-label">Provider</span>
-        <select id="f-provider" required></select>
-      </label>
+      <div class="field provider-field">
+        <div class="field-label">Provider</div>
+        <select id="f-provider" required tabindex="-1" aria-hidden="true"></select>
+        <div id="provider-grid" class="provider-grid" role="listbox" aria-label="Provider"></div>
+      </div>
 
       <label class="field">
         <span class="field-label">Agent name <span class="field-opt">optional</span></span>

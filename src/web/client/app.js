@@ -32,18 +32,26 @@
     overlay: document.getElementById('stage-overlay'),
     termWrap: document.getElementById('term-wrap'),
     termHost: document.getElementById('term-host'),
+    newAgentBtn: document.getElementById('new-agent-btn'),
     newRunBtn: document.getElementById('new-run-btn'),
     emptyNewRun: document.getElementById('empty-new-run'),
+    overlayNewRun: document.getElementById('overlay-new-run'),
+    overlayNewAgent: document.getElementById('overlay-new-agent'),
     stageAddAgent: document.getElementById('stage-add-agent'),
     dialog: document.getElementById('new-dialog'),
     dialogTitle: document.getElementById('new-dialog-title'),
     dialogSubtitle: document.getElementById('new-dialog-subtitle'),
     targetRunNote: document.getElementById('target-run-note'),
+    createRunTab: document.getElementById('create-run-tab'),
+    createAgentTab: document.getElementById('create-agent-tab'),
     form: document.getElementById('new-form'),
     fProvider: document.getElementById('f-provider'),
+    providerGrid: document.getElementById('provider-grid'),
     fNickname: document.getElementById('f-nickname'),
     fRunName: document.getElementById('f-run-name'),
+    fAgentRun: document.getElementById('f-agent-run'),
     fMode: document.getElementById('f-mode'),
+    agentRunField: document.getElementById('agent-run-field'),
     modeField: document.getElementById('mode-field'),
     runNameField: document.getElementById('run-name-field'),
     fCwd: document.getElementById('f-cwd'),
@@ -132,10 +140,31 @@
     return null
   }
 
+  function runningRuns() {
+    return runs.filter(run => run.status === 'running')
+  }
+
+  function preferredRunId() {
+    const selected = selectedId ? findAgent(selectedId) : null
+    if (selected && selected.run.status === 'running') return selected.run.id
+    const first = runningRuns()[0]
+    return first ? first.id : ''
+  }
+
+  function providerById(id) {
+    return providers.find(provider => provider.id === id) || null
+  }
+
+  function providerColor(id) {
+    const provider = providerById(id)
+    return provider ? provider.color : '#7eb8f5'
+  }
+
   function renderProviders() {
     const current = el.fProvider.value
     const mode = selectedCreateMode()
     el.fProvider.innerHTML = ''
+    el.providerGrid.innerHTML = ''
     for (const p of providers) {
       const opt = document.createElement('option')
       opt.value = p.id
@@ -144,11 +173,60 @@
       if (mode === 'orchestrator' && !supported) opt.textContent = `${p.name} (Spawner only)`
       opt.disabled = !p.available || !supported
       el.fProvider.appendChild(opt)
+
+      const choice = document.createElement('button')
+      choice.className = 'provider-option'
+      choice.type = 'button'
+      choice.role = 'option'
+      choice.dataset.provider = p.id
+      choice.style.setProperty('--provider-color', p.color)
+      choice.disabled = opt.disabled
+      choice.title = opt.disabled ? opt.textContent : `use ${p.name}`
+      choice.addEventListener('click', () => {
+        if (choice.disabled) return
+        el.fProvider.value = p.id
+        updateProviderSelection()
+      })
+
+      const swatch = document.createElement('span')
+      swatch.className = 'provider-swatch'
+      choice.appendChild(swatch)
+
+      const body = document.createElement('span')
+      body.className = 'provider-body'
+      const name = document.createElement('span')
+      name.className = 'provider-name'
+      name.textContent = p.name
+      body.appendChild(name)
+      const meta = document.createElement('span')
+      meta.className = 'provider-meta'
+      meta.textContent = providerMeta(p, supported)
+      body.appendChild(meta)
+      choice.appendChild(body)
+      el.providerGrid.appendChild(choice)
     }
     const currentOption = [...el.fProvider.options].find(opt => opt.value === current && !opt.disabled)
     const firstAvailable = [...el.fProvider.options].find(opt => !opt.disabled)
     if (currentOption) el.fProvider.value = currentOption.value
     else if (firstAvailable) el.fProvider.value = firstAvailable.value
+    updateProviderSelection()
+  }
+
+  function providerMeta(provider, supported) {
+    if (!provider.available) return 'Not installed'
+    if (!supported) return 'Spawner only'
+    if (provider.orchestrator) return 'Ready · Orchestrator'
+    return 'Ready'
+  }
+
+  function updateProviderSelection() {
+    const selected = providerById(el.fProvider.value)
+    if (selected) el.dialog.style.setProperty('--selected-provider-color', selected.color)
+    else el.dialog.style.removeProperty('--selected-provider-color')
+    for (const option of el.providerGrid.querySelectorAll('.provider-option')) {
+      const active = option.dataset.provider === el.fProvider.value && !option.disabled
+      option.setAttribute('aria-selected', String(active))
+    }
   }
 
   function selectedProviderAvailable() {
@@ -337,6 +415,8 @@
     for (const run of runsWithAgents) {
       const group = document.createElement('div')
       group.className = 'run-group'
+      const rootColor = run.terminals[0] ? run.terminals[0].color : '#7eb8f5'
+      group.style.setProperty('--run-color', rootColor)
 
       const head = document.createElement('div')
       head.className = 'run-head'
@@ -401,12 +481,14 @@
     }
 
     updateStageActions()
+    updateCreateActions()
   }
 
   function renderHistoryRecord(record) {
     const item = document.createElement('div')
     item.className = 'history-card'
     item.dataset.status = record.status
+    if (record.root_provider) item.style.setProperty('--run-color', providerColor(record.root_provider))
 
     const body = document.createElement('div')
     body.className = 'history-body'
@@ -457,6 +539,7 @@
     const prov = document.createElement('span')
     prov.className = 'card-provider'
     prov.textContent = agent.provider_label || agent.provider
+    prov.style.setProperty('--provider-color', agent.color)
     meta.appendChild(prov)
     meta.append(document.createTextNode(` · ${agent.role}`))
     if (agent.model) meta.append(document.createTextNode(` · ${agent.model}`))
@@ -511,6 +594,14 @@
     if (canAdd) el.stageAddAgent.title = `add agent to ${selected.run.name}`
   }
 
+  function updateCreateActions() {
+    const hasRunningRun = runningRuns().length > 0
+    el.newAgentBtn.disabled = !hasRunningRun
+    el.newAgentBtn.title = hasRunningRun ? 'add an agent to an active run' : 'create a run before adding agents'
+    el.overlayNewAgent.hidden = !hasRunningRun
+    el.createAgentTab.disabled = !hasRunningRun
+  }
+
   // --- agent attach ---------------------------------------------------------
 
   function disposeSession() {
@@ -531,6 +622,7 @@
     el.overlay.hidden = true
     el.stageTitle.textContent = found ? found.terminal.nickname : id
     el.stageSub.textContent = found ? `${modeLabel(found.run.mode)} · ${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}` : ''
+    if (found) el.termWrap.style.setProperty('--agent-color', found.terminal.color)
     setStageStatus('connecting', 'connecting')
 
     const term = new Terminal({
@@ -631,6 +723,7 @@
   function showOverlay() {
     selectedId = null
     el.overlay.hidden = false
+    el.termWrap.style.removeProperty('--agent-color')
     el.stageTitle.textContent = 'No agent selected'
     el.stageSub.textContent = 'Pick an agent on the left, or create a run.'
     setStageStatus(null)
@@ -657,16 +750,38 @@
   }
 
   function openAgentDialog(runId) {
-    const run = runs.find(item => item.id === runId && item.status === 'running')
+    const targetRunId = runId || preferredRunId()
+    const run = runs.find(item => item.id === targetRunId && item.status === 'running')
+    if (!run && runningRuns().length === 0) {
+      openRunDialog()
+      showDialogError('Create a run first, then add agents to it.')
+      return
+    }
     if (!run) {
       alert('This run is no longer active.')
       return
     }
-    createContext = { kind: 'agent', runId }
+    createContext = { kind: 'agent', runId: run.id }
     resetCreateForm()
     syncCreateFields()
     el.dialog.showModal()
-    el.fProvider.focus()
+    el.fAgentRun.focus()
+  }
+
+  function populateAgentRunSelect(preferred) {
+    const current = preferred || el.fAgentRun.value || preferredRunId()
+    el.fAgentRun.innerHTML = ''
+    for (const run of runningRuns()) {
+      const opt = document.createElement('option')
+      opt.value = run.id
+      const count = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
+      opt.textContent = `${run.name} · ${modeLabel(run.mode)} · ${count}`
+      el.fAgentRun.appendChild(opt)
+    }
+    const hasCurrent = [...el.fAgentRun.options].some(opt => opt.value === current)
+    if (hasCurrent) el.fAgentRun.value = current
+    else if (el.fAgentRun.options.length > 0) el.fAgentRun.selectedIndex = 0
+    createContext.runId = el.fAgentRun.value || ''
   }
 
   function selectedRunForCreate() {
@@ -682,6 +797,7 @@
 
   function syncCreateFields() {
     const addingToRun = createContext.kind === 'agent'
+    if (addingToRun) populateAgentRunSelect(createContext.runId)
     const run = selectedRunForCreate()
     const mode = selectedCreateMode()
     el.dialog.dataset.intent = addingToRun ? 'agent' : 'run'
@@ -690,13 +806,16 @@
       ? 'Add one provider agent to the selected run.'
       : 'Start a run with its first provider agent.'
     el.newSubmit.textContent = addingToRun ? 'Add agent' : 'Create run'
+    el.createRunTab.setAttribute('aria-selected', String(!addingToRun))
+    el.createAgentTab.setAttribute('aria-selected', String(addingToRun))
+    el.agentRunField.hidden = !addingToRun
     el.runNameField.hidden = addingToRun
     el.modeField.hidden = !prebetaOrchestrator || addingToRun
     el.cwdField.hidden = addingToRun
     el.targetRunNote.hidden = !addingToRun
     if (addingToRun && run) {
       const count = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
-      el.targetRunNote.textContent = `${run.name} · ${modeLabel(run.mode)} · ${count}`
+      el.targetRunNote.textContent = `Adding to ${run.name} · ${modeLabel(run.mode)} · ${count}`
     } else {
       el.targetRunNote.textContent = ''
     }
@@ -705,6 +824,7 @@
       ? 'What should this orchestrator agent start working on?'
       : 'What should this agent start working on?'
     renderProviders()
+    updateCreateActions()
     if (addingToRun && !run) {
       showDialogError('This run is no longer active.')
       return
@@ -759,14 +879,33 @@
 
   // --- wire up --------------------------------------------------------------
 
+  el.newAgentBtn.addEventListener('click', () => openAgentDialog(preferredRunId()))
   el.newRunBtn.addEventListener('click', openRunDialog)
   el.emptyNewRun.addEventListener('click', openRunDialog)
+  el.overlayNewRun.addEventListener('click', openRunDialog)
+  el.overlayNewAgent.addEventListener('click', () => openAgentDialog(preferredRunId()))
   el.stageAddAgent.addEventListener('click', () => {
     const selected = selectedId ? findAgent(selectedId) : null
     if (selected) openAgentDialog(selected.run.id)
   })
+  el.createRunTab.addEventListener('click', () => {
+    createContext = { kind: 'run', runId: '' }
+    syncCreateFields()
+    el.fRunName.focus()
+  })
+  el.createAgentTab.addEventListener('click', () => {
+    if (runningRuns().length === 0) return
+    createContext = { kind: 'agent', runId: preferredRunId() }
+    syncCreateFields()
+    el.fAgentRun.focus()
+  })
   el.newCancel.addEventListener('click', () => el.dialog.close())
+  el.fAgentRun.addEventListener('change', () => {
+    createContext.runId = el.fAgentRun.value
+    syncCreateFields()
+  })
   el.fMode.addEventListener('change', syncCreateFields)
+  el.fProvider.addEventListener('change', updateProviderSelection)
   el.form.addEventListener('submit', submitNew)
 
   function modeLabel(mode) {
