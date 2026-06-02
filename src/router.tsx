@@ -11,6 +11,7 @@ import { WorkerDraftProvider } from './state/WorkerDraftContext.js'
 import { ErrorBoundary } from './components/ErrorBoundary.js'
 import { Welcome } from './screens/Welcome.js'
 import { Runs } from './screens/Runs.js'
+import { RunHistory } from './screens/RunHistory.js'
 import { Run } from './screens/Run.js'
 import { RunAgents } from './screens/run/Agents.js'
 import { RunOutput } from './screens/run/Output.js'
@@ -50,6 +51,7 @@ function renderScreen(screen: ScreenName) {
   switch (normalizeScreen(screen)) {
     case 'Welcome':     return <Welcome />
     case 'Runs':        return <Runs />
+    case 'RunHistory':  return <RunHistory />
     case 'Run':         return <Run />
     case 'RunAgents':   return <RunAgents />
     case 'RunOutput':   return <RunOutput />

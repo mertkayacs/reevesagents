@@ -16,7 +16,7 @@ vi.mock('../../../src/state/runs.js', async () => {
     ...actual,
     listRuns: vi.fn(() => []),
     listAgents: vi.fn(() => []),
-    autoCleanupRuns: vi.fn(() => ({ removed: [] })),
+    autoCleanupRuns: vi.fn(() => ({ removed: [], archived: [] })),
   }
 })
 vi.mock('../../../src/launcher/runtime.js')
@@ -40,7 +40,7 @@ describe('New Run keyboard flow', () => {
     vi.mocked(StoreModule.listSavedTrees).mockReturnValue([])
     vi.mocked(RunsModule.listRuns).mockReturnValue([])
     vi.mocked(RunsModule.listAgents).mockReturnValue([])
-    vi.mocked(RunsModule.autoCleanupRuns).mockReturnValue({ removed: [] })
+    vi.mocked(RunsModule.autoCleanupRuns).mockReturnValue({ removed: [], archived: [] })
     vi.mocked(RuntimeModule.startRun).mockReturnValue({
       run: { id: 'run-1' } as any,
       agents: [],

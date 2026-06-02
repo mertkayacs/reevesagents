@@ -18,9 +18,12 @@ export type RunViewStatus = RunStatus | 'stale'
 
 export type RunMode = 'spawner' | 'orchestrator'
 
+export type RunHistoryStatus = 'ended' | 'stale'
+
 export type ScreenName =
   | 'Welcome'
   | 'Runs'
+  | 'RunHistory'
   | 'Run'
   | 'RunAgents'
   | 'RunOutput'
@@ -66,6 +69,20 @@ export interface RunRecord {
   preset_name: string | null
   started_at: string
   ended_at: string | null
+}
+
+// ~/.reeves/history/runs/<run-id>.json
+export interface RunHistoryRecord {
+  id: string
+  name: string
+  mode: RunMode
+  status: RunHistoryStatus
+  working_dir: string
+  started_at: string
+  ended_at: string | null
+  archived_at: string
+  agent_count: number
+  root_provider: Provider | null
 }
 
 // ~/.reeves/runs/<run-id>/agents/<agent-id>.json

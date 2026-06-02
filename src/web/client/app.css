@@ -1,4 +1,4 @@
-/* ReevesAgents web skin: compact terminal workbench around xterm.js. */
+/* ReevesAgents web skin: compact agent workbench around xterm.js. */
 
 :root {
   color-scheme: dark;
@@ -350,7 +350,84 @@ button { letter-spacing: 0; }
   outline: none;
 }
 
-/* terminal card */
+.history-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-1) 0;
+  border-top: 1px solid var(--border-faint);
+}
+
+.history-title {
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.history-count {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.history-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 54px;
+  padding: var(--s-3);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-3);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.history-card[data-status="stale"] {
+  border-color: color-mix(in srgb, var(--warn) 22%, var(--border-faint));
+}
+
+.history-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-name {
+  overflow: hidden;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta,
+.history-date {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-date {
+  color: var(--faint);
+  font-family: var(--mono);
+}
+
+/* agent card */
 .card {
   --agent-color: var(--accent);
   position: relative;
@@ -403,13 +480,6 @@ button { letter-spacing: 0; }
   box-shadow:
     0 0 0 1px rgba(126, 184, 245, 0.1),
     var(--shadow-tight);
-}
-
-.card.is-draggable { cursor: grab; }
-.card.is-dragging {
-  opacity: 0.46;
-  transform: scale(0.99);
-  cursor: grabbing;
 }
 
 .card.is-disabled { opacity: 0.64; }
@@ -692,34 +762,6 @@ button { letter-spacing: 0; }
   z-index: 1;
   background: linear-gradient(90deg, var(--warm), var(--accent), var(--ok));
   opacity: 0.72;
-}
-
-.term-wrap.is-drop-target {
-  border-color: color-mix(in srgb, var(--accent) 76%, var(--border));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 0 0 1px rgba(126, 184, 245, 0.16),
-    0 0 34px rgba(126, 184, 245, 0.14),
-    var(--shadow-soft);
-  transform: translateY(-1px);
-}
-
-.term-wrap.is-drop-target::after {
-  content: "Drop to attach agent";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 6;
-  padding: var(--s-3) var(--s-4);
-  border: 1px solid color-mix(in srgb, var(--accent) 70%, var(--border));
-  border-radius: var(--r-3);
-  color: var(--text);
-  background: rgba(18, 22, 25, 0.92);
-  box-shadow: var(--shadow-soft);
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
 }
 
 .term-host {

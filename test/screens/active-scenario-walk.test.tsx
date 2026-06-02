@@ -42,7 +42,7 @@ vi.mock('../../src/state/runs.js', async () => {
   const actual = await vi.importActual<typeof import('../../src/state/runs.js')>('../../src/state/runs.js')
   return {
     ...actual,
-    autoCleanupRuns: vi.fn(() => ({ removed: [] })),
+    autoCleanupRuns: vi.fn(() => ({ removed: [], archived: [] })),
     runHasLiveTmuxTarget: vi.fn(() => true),
   }
 })

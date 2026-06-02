@@ -56,6 +56,7 @@ describe('startWebServer', () => {
     expect(state.status).toBe(200)
     const parsed = JSON.parse(state.body)
     expect(parsed.runs).toEqual([])
+    expect(parsed.history).toEqual([])
     expect(Array.isArray(parsed.providers)).toBe(true)
     expect(parsed.providers).toHaveLength(9)
     expect(parsed.providers[0]).toHaveProperty('available')
