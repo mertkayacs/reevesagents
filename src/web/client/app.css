@@ -78,6 +78,20 @@ body {
     var(--bg);
 }
 
+html[dir="rtl"] .topbar,
+html[dir="rtl"] .layout,
+html[dir="rtl"] .dialog {
+  direction: ltr;
+}
+
+html[dir="rtl"] .stage-title,
+html[dir="rtl"] .stage-sub,
+html[dir="rtl"] .overlay-card,
+html[dir="rtl"] .sidebar-empty,
+html[dir="rtl"] .dialog form {
+  direction: rtl;
+}
+
 button,
 input,
 select,
@@ -191,6 +205,41 @@ button { letter-spacing: 0; }
   display: flex;
   align-items: center;
   gap: var(--s-3);
+}
+
+.language-picker {
+  min-width: 132px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-2);
+  padding: 4px var(--s-2);
+  color: var(--muted);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    var(--panel-2);
+}
+
+.language-label {
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+
+.language-picker select {
+  min-width: 72px;
+  max-width: 116px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: var(--fs-sm);
+  outline: none;
 }
 
 .conn {
@@ -1500,6 +1549,20 @@ button { letter-spacing: 0; }
 
   .conn {
     display: none;
+  }
+
+  .language-picker {
+    min-width: 88px;
+    max-width: 112px;
+  }
+
+  .language-label {
+    display: none;
+  }
+
+  .language-picker select {
+    min-width: 64px;
+    max-width: 88px;
   }
 
   .btn {

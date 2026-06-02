@@ -15,6 +15,9 @@ import { runsDir, stateRoot } from '../state/runs.js'
 import { presetsDir } from '../state/store.js'
 import { configPath } from '../state/config.js'
 import { useToast } from '../state/ToastContext.js'
+import { LANGUAGE_OPTIONS } from '../i18n/languages.js'
+import { useLanguage, tuiLanguageLabel } from '../state/LanguageContext.js'
+import type { LanguageCode } from '../state/types.js'
 
 const CONFIG_PATHS = {
   cc: '~/.claude/settings.json',
@@ -29,27 +32,31 @@ const CONFIG_PATHS = {
 }
 
 const PROVIDER_LABEL_WIDTH = Math.max(...PROVIDERS.map(provider => providerDisplayName(provider).length))
-const ACTION_LABEL_WIDTH = Math.max('Recheck'.length, 'Show Config'.length, 'Back'.length)
+const LANGUAGE_LABEL_WIDTH = Math.max(...LANGUAGE_OPTIONS.map(option => option.nativeName.length + 3))
 
-type RowType = 'provider' | 'statePath' | 'action'
+type RowType = 'provider' | 'language' | 'statePath' | 'action'
 
 interface SettingsRow {
   type: RowType
   id: string
   provider?: typeof PROVIDERS[number]
+  language?: LanguageCode
   selectable: boolean
 }
 
 export function Settings() {
   const { pop } = useRouter()
   const { toast } = useToast()
+  const { language, setLanguage, t } = useLanguage()
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const available = useMemo(() => detectAvailable(), [refreshKey])
+  const actionLabelWidth = Math.max(t('settings.recheck').length, t('settings.showConfig').length, t('common.back').length)
 
   const rows: SettingsRow[] = [
     ...PROVIDERS.map(p => ({ type: 'provider' as const, id: p, provider: p, selectable: true })),
+    ...LANGUAGE_OPTIONS.map(option => ({ type: 'language' as const, id: `language-${option.code}`, language: option.code, selectable: true })),
     { type: 'statePath' as const, id: 'state', selectable: false },
     { type: 'statePath' as const, id: 'runs', selectable: false },
     { type: 'statePath' as const, id: 'presets', selectable: false },
@@ -77,7 +84,12 @@ export function Settings() {
       return
     }
     if (row.id === 'showConfig') {
-      toast(`Config: ${configPath()}`, 'info')
+      toast(t('settings.configToast', { path: configPath() }), 'info')
+      return
+    }
+    if (row.type === 'language' && row.language) {
+      setLanguage(row.language)
+      toast(t('language.saved'), 'info')
       return
     }
     if (row.id === 'back') {
@@ -95,29 +107,33 @@ export function Settings() {
 
   const selectedRow = rows[selectedIdx]
   const selectedProvider = selectedRow?.type === 'provider' ? selectedRow.provider : undefined
+  const selectedLanguage = selectedRow?.type === 'language' ? selectedRow.language : undefined
 
   const installedCount = Object.values(available).filter(Boolean).length
   const totalCount = PROVIDERS.length
 
   // Selected provider becomes a one-line StatusBar context.
   const statusContext = selectedProvider
-    ? `${providerDisplayName(selectedProvider)} · ${available[selectedProvider] ? 'installed' : 'not installed'} · config ${CONFIG_PATHS[selectedProvider]}`
+    ? `${providerDisplayName(selectedProvider)} · ${available[selectedProvider] ? t('common.installed') : t('common.notInstalled')} · config ${CONFIG_PATHS[selectedProvider]}`
+    : selectedLanguage
+    ? tuiLanguageLabel(selectedLanguage)
     : selectedRow?.id === 'showConfig'
     ? configPath()
     : undefined
 
   return (
-    <Frame
-      breadcrumb={['ReevesAgents', 'Settings']}
+      <Frame
+      breadcrumb={['ReevesAgents', t('settings.title')]}
       meta={[
-        { label: 'providers', value: `${installedCount}/${totalCount}` },
+        { label: t('settings.providersMeta'), value: `${installedCount}/${totalCount}` },
+        { label: t('common.language'), value: language },
       ]}
-      tagline="Providers, local state paths, and spawner configuration."
+      tagline={t('settings.tagline')}
       statusContext={statusContext}
-      statusKeys="↑↓ move · enter select · esc back"
+      statusKeys={t('settings.statusKeys')}
     >
       <Box flexDirection="column">
-        <Section label="Providers" />
+        <Section label={t('common.providers')} />
         {PROVIDERS.map((provider, _idx) => {
           const rowIdx = rows.findIndex(r => r.type === 'provider' && r.provider === provider)
           const isSelected = selectedIdx === rowIdx
@@ -132,48 +148,64 @@ export function Settings() {
               }}
               primary={providerDisplayName(provider)}
               primaryWidth={PROVIDER_LABEL_WIDTH}
-              hint={isInstalled ? 'installed' : 'not installed'}
+              hint={isInstalled ? t('common.installed') : t('common.notInstalled')}
             />
           )
         })}
         <SectionEnd />
 
-        <Section label="State paths" />
+        <Section label={t('common.language')} />
+        {LANGUAGE_OPTIONS.map(option => {
+          const rowIdx = rows.findIndex(r => r.type === 'language' && r.language === option.code)
+          return (
+            <Row
+              key={option.code}
+              selected={selectedIdx === rowIdx}
+              primary={`${option.flag} ${option.nativeName}`}
+              primaryWidth={LANGUAGE_LABEL_WIDTH}
+              hint={option.name}
+              trailing={option.code === language ? t('common.current') : undefined}
+            />
+          )
+        })}
+        <SectionEnd />
+
+        <Section label={t('settings.statePaths')} />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'state')}
-          primary="State"
+          primary={t('settings.state')}
           trailing={stateRoot()}
         />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'runs')}
-          primary="Runs"
+          primary={t('settings.runs')}
           trailing={runsDir()}
         />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'presets')}
-          primary="Presets"
+          primary={t('settings.presets')}
           trailing={presetsDir()}
         />
         <SectionEnd />
 
-        <Section label="Actions" />
+        <Section label={t('common.actions')} />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'recheck')}
-          primary="Recheck"
-          primaryWidth={ACTION_LABEL_WIDTH}
-          hint="re-detect installed providers"
+          primary={t('settings.recheck')}
+          primaryWidth={actionLabelWidth}
+          hint={t('settings.recheckHint')}
         />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'showConfig')}
-          primary="Show Config"
-          primaryWidth={ACTION_LABEL_WIDTH}
-          hint="show config file path"
+          primary={t('settings.showConfig')}
+          primaryWidth={actionLabelWidth}
+          hint={t('settings.showConfigHint')}
         />
         <Row
           selected={selectedIdx === rows.findIndex(r => r.id === 'back')}
-          primary="Back"
-          primaryWidth={ACTION_LABEL_WIDTH}
-          hint="return to previous page"
+          primary={t('common.back')}
+          primaryWidth={actionLabelWidth}
+          hint={t('settings.backHint')}
         />
         <SectionEnd />
       </Box>

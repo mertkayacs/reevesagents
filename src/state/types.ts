@@ -2,6 +2,8 @@
 
 export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes' | 'kimi' | 'deepseek' | 'pi' | 'qwen' | 'aider'
 
+export type LanguageCode = 'en' | 'de' | 'fr' | 'es' | 'pt' | 'it' | 'tr' | 'zh-Hans' | 'ar'
+
 export type Permissions = 'skip' | 'ask'
 
 export type TaskStatus = 'queued' | 'working' | 'done' | 'failed' | 'blocked'
@@ -22,6 +24,7 @@ export type RunHistoryStatus = 'ended' | 'stale'
 
 export type ScreenName =
   | 'Welcome'
+  | 'LanguageSelect'
   | 'Runs'
   | 'RunHistory'
   | 'Run'
@@ -168,6 +171,7 @@ export interface GlobalConfig {
   max_agents: number                // tree size cap; default 10
   ready_delay_ms: number            // ms to wait after session start before task injection; default 5000
   default_permissions: Permissions  // default 'ask'
+  language: LanguageCode            // default 'en'
 }
 
 export interface Config {
