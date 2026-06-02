@@ -39,6 +39,7 @@ const STATIC_ROUTES: Record<string, { file: string; type: string }> = {
   '/xterm.css': { file: 'xterm.css', type: 'text/css; charset=utf-8' },
   '/xterm.js': { file: 'xterm.js', type: 'text/javascript; charset=utf-8' },
   '/addon-fit.js': { file: 'addon-fit.js', type: 'text/javascript; charset=utf-8' },
+  '/brand-duck.json': { file: 'brand-duck.json', type: 'application/json; charset=utf-8' },
 }
 
 export interface WebServerOptions {

@@ -24,6 +24,7 @@
     sidebarEmpty: document.getElementById('sidebar-empty'),
     sidebarCount: document.getElementById('sidebar-count'),
     conn: document.getElementById('conn'),
+    brandDuck: document.getElementById('brand-duck'),
     brandBeta: document.getElementById('brand-beta'),
     stageTitle: document.getElementById('stage-title'),
     stageSub: document.getElementById('stage-sub'),
@@ -158,6 +159,172 @@
   function showDialogError(message) {
     el.newError.textContent = message
     el.newError.hidden = false
+  }
+
+  // --- brand animation ------------------------------------------------------
+
+  async function initBrandDuck() {
+    try {
+      const animation = await api('GET', '/brand-duck.json')
+      renderBrandDuck(animation)
+    } catch {
+      el.brandDuck.dataset.ready = 'error'
+    }
+  }
+
+  function renderBrandDuck(animation) {
+    if (!animation || !Array.isArray(animation.layers) || !Array.isArray(animation.assets)) return
+
+    const svg = svgEl('svg')
+    svg.setAttribute('viewBox', `0 0 ${animation.w || 51} ${animation.h || 63}`)
+    svg.setAttribute('role', 'img')
+    svg.setAttribute('focusable', 'false')
+
+    const title = svgEl('title')
+    title.textContent = 'ReevesAgents duck'
+    svg.appendChild(title)
+
+    const assets = new Map(animation.assets.map(asset => [asset.id, asset]))
+    const animatedLayers = []
+    for (const layer of [...animation.layers].reverse()) {
+      const asset = assets.get(layer.refId)
+      if (!asset || !Array.isArray(asset.layers)) continue
+      const group = svgEl('g')
+      group.dataset.layer = layer.nm || layer.refId
+      renderAssetLayers(group, asset.layers)
+      svg.appendChild(group)
+      animatedLayers.push({ layer, group })
+    }
+
+    el.brandDuck.innerHTML = ''
+    el.brandDuck.appendChild(svg)
+    el.brandDuck.dataset.ready = 'true'
+
+    const durationFrames = (animation.op || 120) - (animation.ip || 0)
+    const frameRate = animation.fr || 60
+    const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const applyFrame = frame => {
+      for (const item of animatedLayers) item.group.setAttribute('transform', layerTransform(item.layer, frame))
+      el.brandDuck.dataset.frame = String(Math.round(frame))
+    }
+
+    applyFrame(animation.ip || 0)
+    if (reducedMotion) return
+
+    const startedAt = window.performance.now()
+    const tick = now => {
+      const elapsed = (now - startedAt) / 1000
+      const frame = (animation.ip || 0) + ((elapsed * frameRate) % durationFrames)
+      applyFrame(frame)
+      window.requestAnimationFrame(tick)
+    }
+    window.requestAnimationFrame(tick)
+  }
+
+  function renderAssetLayers(parent, layers) {
+    for (const layer of [...layers].reverse()) {
+      const shape = (layer.shapes || []).find(item => item.ty === 'sh')
+      const fill = (layer.shapes || []).find(item => item.ty === 'fl')
+      if (!shape || !fill) continue
+      const path = svgEl('path')
+      path.setAttribute('d', shapePath(shape.ks && shape.ks.k))
+      path.setAttribute('fill', rgb(fill.c && fill.c.k))
+      path.setAttribute('fill-opacity', String(valueOf(fill.o) / 100))
+
+      const group = svgEl('g')
+      group.setAttribute('transform', layerTransform(layer, 0))
+      group.setAttribute('opacity', String(valueOf(layer.ks && layer.ks.o) / 100))
+      group.appendChild(path)
+      parent.appendChild(group)
+    }
+  }
+
+  function svgEl(name) {
+    return document.createElementNS('http://www.w3.org/2000/svg', name)
+  }
+
+  function shapePath(shape) {
+    if (!shape || !Array.isArray(shape.v) || shape.v.length === 0) return ''
+    const parts = [`M ${fmt(shape.v[0][0])} ${fmt(shape.v[0][1])}`]
+    for (let i = 1; i < shape.v.length; i += 1) {
+      addSegment(parts, shape, i - 1, i)
+    }
+    if (shape.c) {
+      addSegment(parts, shape, shape.v.length - 1, 0)
+      parts.push('Z')
+    }
+    return parts.join(' ')
+  }
+
+  function addSegment(parts, shape, fromIndex, toIndex) {
+    const from = shape.v[fromIndex]
+    const to = shape.v[toIndex]
+    const out = shape.o && shape.o[fromIndex] ? shape.o[fromIndex] : [0, 0]
+    const inn = shape.i && shape.i[toIndex] ? shape.i[toIndex] : [0, 0]
+    const c1 = [from[0] + out[0], from[1] + out[1]]
+    const c2 = [to[0] + inn[0], to[1] + inn[1]]
+    if (samePoint(c1, from) && samePoint(c2, to)) {
+      parts.push(`L ${fmt(to[0])} ${fmt(to[1])}`)
+    } else {
+      parts.push(`C ${fmt(c1[0])} ${fmt(c1[1])} ${fmt(c2[0])} ${fmt(c2[1])} ${fmt(to[0])} ${fmt(to[1])}`)
+    }
+  }
+
+  function layerTransform(layer, frame) {
+    const ks = layer.ks || {}
+    const anchor = valueOf(ks.a, frame)
+    const position = valueOf(ks.p, frame)
+    const scale = valueOf(ks.s, frame)
+    const rotation = valueOf(ks.r, frame)
+    const sx = Array.isArray(scale) ? scale[0] / 100 : 1
+    const sy = Array.isArray(scale) ? scale[1] / 100 : sx
+    return [
+      `translate(${fmt(position[0])} ${fmt(position[1])})`,
+      `rotate(${fmt(rotation || 0)})`,
+      `scale(${fmt(sx)} ${fmt(sy)})`,
+      `translate(${-fmt(anchor[0])} ${-fmt(anchor[1])})`,
+    ].join(' ')
+  }
+
+  function valueOf(prop, frame = 0) {
+    if (!prop) return [0, 0]
+    if (prop.a === 1 && Array.isArray(prop.k)) return keyedValue(prop.k, frame)
+    return prop.k
+  }
+
+  function keyedValue(keys, frame) {
+    if (keys.length === 0) return [0, 0]
+    for (let i = 0; i < keys.length - 1; i += 1) {
+      const current = keys[i]
+      const next = keys[i + 1]
+      if (frame < current.t || frame > next.t) continue
+      const span = Math.max(1, next.t - current.t)
+      const eased = ease((frame - current.t) / span)
+      return mix(current.s, next.s, eased)
+    }
+    return keys[keys.length - 1].s
+  }
+
+  function mix(from, to, amount) {
+    return from.map((value, index) => value + ((to[index] || 0) - value) * amount)
+  }
+
+  function ease(value) {
+    const x = Math.max(0, Math.min(1, value))
+    return x * x * (3 - (2 * x))
+  }
+
+  function rgb(value) {
+    if (!Array.isArray(value)) return '#ffffff'
+    return `rgb(${Math.round(value[0] * 255)}, ${Math.round(value[1] * 255)}, ${Math.round(value[2] * 255)})`
+  }
+
+  function samePoint(a, b) {
+    return Math.abs(a[0] - b[0]) < 0.0001 && Math.abs(a[1] - b[1]) < 0.0001
+  }
+
+  function fmt(value) {
+    return Number.parseFloat(Number(value || 0).toFixed(3))
   }
 
   function renderSidebar() {
@@ -611,6 +778,7 @@
     return `${String(value).replace('T', ' ').slice(0, 16)}Z`
   }
 
+  initBrandDuck()
   loadState().catch((err) => {
     el.sidebarEmpty.hidden = false
     el.sidebarEmpty.querySelector('.empty-body').textContent = `Could not load state: ${err.message}`

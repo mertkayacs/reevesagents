@@ -9,6 +9,23 @@ function readClientFile(name: string): string {
 }
 
 describe('web client create flow', () => {
+  it('mounts the animated Lottie duck instead of the old inline SVG', () => {
+    const html = readClientFile('index.html')
+    const js = readClientFile('app.js')
+    const css = readClientFile('app.css')
+    const lottie = JSON.parse(readClientFile('brand-duck.json')) as { nm?: string; layers?: unknown[]; assets?: unknown[] }
+
+    expect(html).toContain('id="brand-duck"')
+    expect(html).not.toContain('<svg class="brand-duck"')
+    expect(js).toContain("api('GET', '/brand-duck.json')")
+    expect(js).toContain('window.requestAnimationFrame(tick)')
+    expect(js).toContain('function renderBrandDuck(animation)')
+    expect(css).toContain('.brand-duck svg')
+    expect(lottie.nm).toBe('chick1 ')
+    expect(lottie.layers?.length).toBeGreaterThan(0)
+    expect(lottie.assets?.length).toBeGreaterThan(0)
+  })
+
   it('keeps new run and add agent as separate entry points', () => {
     const html = readClientFile('index.html')
     const js = readClientFile('app.js')

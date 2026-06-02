@@ -404,11 +404,17 @@ describe('state stream', () => {
 describe('static assets', () => {
   it('serves an allowlisted asset from the web root and 404s a missing one', async () => {
     writeFileSync(join(tmpDir, 'app.js'), '// fixture\n')
+    writeFileSync(join(tmpDir, 'brand-duck.json'), '{"ok":true}\n')
     const handle = await start({ webRoot: tmpDir })
 
     const present = await get(handle.port, '/app.js')
     expect(present.status).toBe(200)
     expect(present.contentType).toContain('text/javascript')
+
+    const brandDuck = await get(handle.port, '/brand-duck.json')
+    expect(brandDuck.status).toBe(200)
+    expect(brandDuck.contentType).toContain('application/json')
+    expect(JSON.parse(brandDuck.body)).toEqual({ ok: true })
 
     const missing = await get(handle.port, '/xterm.js')
     expect(missing.status).toBe(404)
