@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.34.1",
   "bin": {
-    "reevesagents": "./dist/cli.js"
+    "reevesagents": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "exports": {
@@ -62,7 +62,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mertkayacs/reevesagents.git"
+    "url": "git+https://github.com/mertkayacs/reevesagents.git"
   },
   "bugs": {
     "url": "https://github.com/mertkayacs/reevesagents/issues"
