@@ -138,11 +138,20 @@ button[hidden] { display: none !important; }
 
 .brand-duck {
   width: 42px;
-  height: 32px;
+  height: 46px;
   flex: 0 0 42px;
+  display: grid;
+  place-items: center;
   filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.32));
   transform-origin: 50% 70%;
   transition: transform var(--motion-pop), filter var(--motion);
+}
+
+.brand-duck svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
 }
 
 .brand:hover .brand-duck {
@@ -1147,7 +1156,7 @@ button[hidden] { display: none !important; }
 
   .brand-duck {
     width: 36px;
-    height: 27px;
+    height: 40px;
     flex-basis: 36px;
   }
 
