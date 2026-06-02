@@ -16,6 +16,7 @@ import type {
 } from '../state/types.js'
 import {
   agentPath,
+  endRunIfNoLiveAgents,
   findAgent,
   listAgents,
   nowIso,
@@ -511,7 +512,9 @@ export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentR
   } catch {
     // already gone
   }
-  updateAgent(agent.run_id, agent.id, { ended_at: nowIso(), task_status: 'done' })
+  const endedAt = nowIso()
+  updateAgent(agent.run_id, agent.id, { ended_at: endedAt, task_status: 'done' })
+  endRunIfNoLiveAgents(agent.run_id, endedAt)
   return findAgent(agentId)
 }
 

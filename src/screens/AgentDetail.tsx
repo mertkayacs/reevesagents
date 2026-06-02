@@ -8,7 +8,7 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../utils/display.js'
-import { findAgent, readRun } from '../state/runs.js'
+import { findAgent, listAgents, readRun } from '../state/runs.js'
 import { openAgent } from '../launcher/runtime.js'
 import type { AgentRecord } from '../state/types.js'
 
@@ -64,7 +64,7 @@ export function AgentDetail() {
         openAgent(agent.id)
         break
       case 'CloseAgent':
-        if (agent.role === 'root' || agent.ended_at !== null) return
+        if (agent.ended_at !== null || (agent.role === 'root' && liveAgents.length > 1)) return
         push('AgentKill')
         break
       case 'Back':
@@ -129,6 +129,9 @@ export function AgentDetail() {
   const isCloseAgentDisabled = agent.ended_at !== null
   const isHeadless = !!agent.headless
   const providerLabel = providerDisplayName(agent.provider)
+  const liveAgents = listAgents(agent.run_id).filter(item => item.ended_at === null)
+  const isRootLocked = agent.role === 'root' && liveAgents.length > 1
+  const closeAgentHint = isRootLocked ? 'close workers first' : isCloseAgentDisabled ? 'agent already ended' : 'close this agent'
 
   let statusContext = `${agent.nickname} · ${providerLabel} · ${agent.task_status}`
   if (selected && selected.action !== '__section__') {
@@ -136,7 +139,7 @@ export function AgentDetail() {
       Output: 'view recent output',
       Task: 'view initial prompt and status',
       OpenCLI: isHeadless ? 'no tmux window' : 'switch to this agent window',
-      CloseAgent: isCloseAgentDisabled ? 'agent already ended' : 'close this agent',
+      CloseAgent: closeAgentHint,
       Back: 'return to agents list',
       '__section__': '',
     }
@@ -182,7 +185,7 @@ export function AgentDetail() {
             Output: isHeadless ? 'no output' : 'live peek of the tmux pane',
             Task: 'initial prompt and status',
             OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this agent window',
-            CloseAgent: 'close this agent',
+            CloseAgent: closeAgentHint,
             Back: 'return to agents list',
             '__section__': '',
           }
@@ -193,7 +196,7 @@ export function AgentDetail() {
               primary={LABELS[item.action]}
               primaryWidth={ACTION_LABEL_WIDTH}
               hint={hints[item.action]}
-              disabled={(item.action === 'CloseAgent' && isCloseAgentDisabled) || (item.action === 'OpenCLI' && isHeadless)}
+              disabled={(item.action === 'CloseAgent' && (isCloseAgentDisabled || isRootLocked)) || (item.action === 'OpenCLI' && isHeadless)}
               danger={item.action === 'CloseAgent'}
             />
           )

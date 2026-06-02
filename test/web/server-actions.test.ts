@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { startWebServer, type WebServerHandle } from '../../src/web/server.js'
 import {
   listAgents,
+  listRunHistory,
   readAgent,
   readRun,
   readRunAny,
@@ -294,6 +295,34 @@ describe('create terminal', () => {
 
     const stateAfterStop = await get(handle.port, '/api/state')
     const parsed = JSON.parse(stateAfterStop.body)
+    expect(parsed.runs).toEqual([])
+    expect(parsed.history.map((record: { id: string }) => record.id)).toContain(createdBody.run_id)
+
+    const deleted = await post(handle.port, `/api/history/${encodeURIComponent(createdBody.run_id)}/delete`, { confirm: true })
+    expect(deleted.status).toBe(200)
+    expect(JSON.parse(deleted.body)).toEqual({ ok: true })
+    expect(listRunHistory()).toEqual([])
+  })
+
+  it('ends a run when its only web terminal is killed', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+
+    const created = await post(handle.port, '/api/terminals', {
+      provider: 'codex-cli',
+      nickname: 'Solo',
+      run_name: 'Solo Run',
+      working_dir: tmpDir,
+    })
+    expect(created.status).toBe(200)
+    const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
+
+    const killed = await post(handle.port, `/api/terminals/${encodeURIComponent(createdBody.id)}/kill`, { confirm: true })
+    expect(killed.status).toBe(200)
+    expect(readRun(createdBody.run_id).status).toBe('ended')
+
+    const stateAfterKill = await get(handle.port, '/api/state')
+    const parsed = JSON.parse(stateAfterKill.body)
     expect(parsed.runs).toEqual([])
     expect(parsed.history.map((record: { id: string }) => record.id)).toContain(createdBody.run_id)
   })

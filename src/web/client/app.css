@@ -570,7 +570,7 @@ button { letter-spacing: 0; }
   --run-color: var(--muted);
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--s-2);
   min-height: 54px;
@@ -599,6 +599,31 @@ button { letter-spacing: 0; }
 
 .history-card[data-status="stale"] {
   border-color: color-mix(in srgb, var(--warn) 22%, var(--border-faint));
+}
+
+.history-delete {
+  max-width: 96px;
+  min-height: 30px;
+  padding: 0 var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--error) 18%, var(--border-faint));
+  border-radius: var(--r-2);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  font: inherit;
+  font-size: var(--fs-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--motion), color var(--motion), background var(--motion);
+}
+
+.history-delete:hover,
+.history-delete:focus-visible {
+  border-color: color-mix(in srgb, var(--error) 42%, var(--border));
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  outline: none;
 }
 
 .history-body {
