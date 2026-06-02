@@ -40,8 +40,8 @@ Every stable install path must land on the same spawner-only root package:
 | npm global, all-in PRE-BETA | `npm install -g reevesagents reevesagents-orchestrator` | Explicit MCP/orchestrator add-on. |
 | pnpm global | `pnpm add -g reevesagents` | Uses npm package. |
 | one-off runners | `npx reevesagents`, `pnpm dlx reevesagents`, `yarn dlx reevesagents`, `bunx reevesagents` | Uses npm package. |
-| GitHub Release tarball | `npm install -g ./reevesagents-1.0.0.tgz` | Attach the root package tarball only. |
-| GitHub Release tarballs, all-in PRE-BETA | `npm install -g ./reevesagents-1.0.0.tgz ./reevesagents-orchestrator-1.0.0.tgz` | Attach both tarballs when pre-beta is part of the release. |
+| GitHub Release tarball | `npm install -g ./reevesagents-1.0.11.tgz` | Attach the root package tarball only. |
+| GitHub Release tarballs, all-in PRE-BETA | `npm install -g ./reevesagents-1.0.11.tgz ./reevesagents-orchestrator-1.0.0.tgz` | Attach both tarballs when pre-beta is part of the release. |
 | Homebrew tap | `brew install mertkayacs/tap/reevesagents` | Add after npm tarball URL and checksum are known. |
 | source | `pnpm install && pnpm build && pnpm link --global` | Root workspace only. |
 
@@ -70,7 +70,7 @@ The root package and root Homebrew formula must not bundle orchestrator/MCP file
 ## Release Blockers To Close
 
 - Create the Homebrew tap and formula.
-- Ship `1.0.0` only after the release install matrix and package content checks pass on macOS and Linux.
+- Ship `1.0.11` only after the release install matrix and package content checks pass on macOS and Linux.
 - Keep release-facing docs independent from local `specs/` working notes.
 - Keep the main package install passive and low-permission.
 - Keep non-root package files out of the root npm package.

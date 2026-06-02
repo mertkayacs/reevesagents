@@ -35,7 +35,7 @@ reevesagents web --prebeta-orchestrator
 From release tarballs:
 
 ```sh
-npm install -g ./reevesagents-1.0.0.tgz ./reevesagents-orchestrator-1.0.0.tgz
+npm install -g ./reevesagents-1.0.11.tgz ./reevesagents-orchestrator-1.0.0.tgz
 reevesagents web --prebeta-orchestrator
 ```
 

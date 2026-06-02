@@ -2,6 +2,12 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
+## 1.0.11 - Web UI Workbench Polish
+
+### Changed
+- Refined the Web beta into a compact terminal workbench with richer agent cards, improved stage framing, better responsive behavior, and drag-to-attach.
+- Set the root package, CLI smoke expectations, README, and release docs to `1.0.11`.
+
 ## 0.9.0 - Initial Public Prerelease
 
 ### Added
