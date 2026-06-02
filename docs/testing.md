@@ -32,7 +32,7 @@ This document covers the stable main package. The current release path is spawne
 - When Enter is pressed on a selected Welcome menu item, ReevesAgents shall open that selected page.
 - When no key is pressed on startup Welcome, ReevesAgents shall stay on the main menu.
 - When launched with run context, Welcome shall include a Current Run menu item.
-- When the TUI opens or refreshes Runs, ended and stale runs are auto-removed from the visible list.
+- When the TUI opens or refreshes Runs, ended and stale runs are auto-removed from the visible list and archived to shared history.
 - When the Runs page is open, the logo shall be static to reduce redraw flicker.
 
 ## Normal Verification
@@ -116,8 +116,8 @@ Automated tests cover the state, CLI, and tmux runtime boundaries. The TUI still
 5. Confirm the Runs page uses sectioned Runs and Actions panels without animated art.
 6. Use Main Menu and confirm Welcome does not auto-skip after returning from Runs.
 7. Confirm New Run opens the spawner wizard directly.
-8. Confirm spawner copy says terminals, local tmux, and no injected Reeves context.
-9. Confirm Add Terminal, Settings, and Doctor pages render without hidden slash commands.
+8. Confirm spawner copy says agents, local tmux, and no injected Reeves context.
+9. Confirm Add Agent, Settings, and Doctor pages render without hidden slash commands.
 10. Run once in a narrow terminal, around 52 columns, and confirm the footer and Runs list remain readable.
 11. Exit the TUI and remove the temp registry directory.
 
