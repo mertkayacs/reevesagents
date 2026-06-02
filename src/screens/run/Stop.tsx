@@ -6,12 +6,15 @@ import { Dialog } from '../../components/Dialog.js'
 import { Frame } from '../../components/Frame.js'
 import { useRouter } from '../../router.js'
 import { useToast } from '../../state/ToastContext.js'
+import { useLanguage } from '../../state/LanguageContext.js'
 import { archiveAndRemoveRun, readRun } from '../../state/runs.js'
 import { openReeves, stopRun } from '../../launcher/runtime.js'
+import { translatePhrase } from '../../i18n/catalog.js'
 
 export function RunStop() {
   const { selectedRunId, pop, resetStack } = useRouter()
   const { toast } = useToast()
+  const { t, language } = useLanguage()
 
   const run = selectedRunId ? (() => { try { return readRun(selectedRunId) } catch { return null } })() : null
 
@@ -22,11 +25,11 @@ export function RunStop() {
         statusKeys="←→ switch · enter select · esc cancel"
       >
         <Dialog
-          title="No run selected"
-          body="Cannot stop a run because no run is selected."
+          title={t('runStop.noRunTitle')}
+          body={t('runStop.noRunBody')}
           intent="default"
-          confirmLabel="Back"
-          cancelLabel="Cancel"
+          confirmLabel={t('common.back')}
+          cancelLabel={t('common.cancel')}
           onConfirm={() => pop()}
           onCancel={() => pop()}
         />
@@ -39,13 +42,14 @@ export function RunStop() {
     try {
       if (run.status === 'ended' || run.ended_at !== null) {
         archiveAndRemoveRun(run.id, 'ended')
-        toast(`Deleted ${run.name} from active runs. History kept.`, 'info')
+        toast(t('runStop.deletedToast', { name: run.name }), 'info')
         resetStack('RunHistory')
         return
       }
       try { openReeves(selectedRunId!) } catch { /* no attached tmux client */ }
       stopRun(selectedRunId!)
-      resetStack('Run')
+      toast(t('history.movedToast', { name: run.name }), 'info')
+      resetStack('RunHistory')
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'error')
     }
@@ -59,13 +63,11 @@ export function RunStop() {
       statusKeys="←→ switch · enter select · esc cancel"
     >
       <Dialog
-        title={isRunEnded ? `Delete stopped run "${run.name}"?` : `Return and stop "${run.name}"?`}
-        body={isRunEnded
-          ? 'Removes this stopped run from the active list and keeps a simple shared history record.'
-          : "Switches back to Reeves, stops this run's tmux session and agent windows, then marks every agent ended. Local JSON state is preserved."}
+        title={t(isRunEnded ? 'runStop.deleteTitle' : 'runStop.stopTitle', { name: run.name })}
+        body={t(isRunEnded ? 'runStop.deleteBody' : 'runStop.stopBody')}
         intent="danger"
-        confirmLabel={isRunEnded ? 'Delete Run' : 'Return & Stop'}
-        cancelLabel="Cancel"
+        confirmLabel={isRunEnded ? translatePhrase(language, 'Delete Run') : translatePhrase(language, 'Return & Stop')}
+        cancelLabel={t('common.cancel')}
         onConfirm={handleConfirm}
         onCancel={() => pop()}
       />

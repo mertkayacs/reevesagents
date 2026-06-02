@@ -144,6 +144,11 @@ describe('spawner runtime', () => {
   it('opens, peeks, sends input, interrupts, closes agents, and stops runs by stable ids', async () => {
     const driver = new FakeDriver()
     const {
+      listRunHistory,
+      readRun,
+    } = await import('../src/state/runs.js')
+
+    const {
       startRun,
       openReeves,
       openRunTabs,
@@ -177,6 +182,8 @@ describe('spawner runtime', () => {
     interrupt(terminal.id, { driver })
     expect(killAgent(terminal.id, { driver }).ended_at).not.toBeNull()
     expect(stopRun(result.run.id, { driver }).status).toBe('ended')
+    expect(() => readRun(result.run.id)).toThrow(/Run not found/)
+    expect(listRunHistory().map(record => record.id)).toContain(result.run.id)
 
     expect(driver.calls).toEqual(expect.arrayContaining([
       { args: ['select-window', '-t', `${result.run.tmux_session}:reeves`] },
@@ -194,7 +201,7 @@ describe('spawner runtime', () => {
   it('ends a run when the last live agent is closed', async () => {
     const driver = new FakeDriver()
     const { startRun, killAgent } = await import('../src/launcher/runtime.js')
-    const { readRun } = await import('../src/state/runs.js')
+    const { listRunHistory, readRun } = await import('../src/state/runs.js')
 
     const result = startRun({
       mode: 'spawner',
@@ -205,7 +212,11 @@ describe('spawner runtime', () => {
 
     killAgent(result.agents[0]!.id, { driver })
 
-    expect(readRun(result.run.id).status).toBe('ended')
-    expect(readRun(result.run.id).ended_at).not.toBeNull()
+    expect(() => readRun(result.run.id)).toThrow(/Run not found/)
+    expect(listRunHistory()).toHaveLength(1)
+    expect(listRunHistory()[0]).toMatchObject({ id: result.run.id, status: 'ended' })
+    expect(driver.calls).toEqual(expect.arrayContaining([
+      { args: ['kill-session', '-t', result.run.tmux_session] },
+    ]))
   })
 })

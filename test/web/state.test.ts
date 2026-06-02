@@ -110,6 +110,15 @@ describe('buildWebState', () => {
     expect(term.canDelete).toBe(true)
   })
 
+  it('excludes ended run records from active web runs', () => {
+    writeRun(makeRun('active'))
+    writeAgent(makeAgent('root', 'active', { role: 'root' }))
+    writeRun({ ...makeRun('ended'), status: 'ended', ended_at: '2026-01-01T01:00:00.000Z' })
+    writeAgent(makeAgent('ended-root', 'ended', { role: 'root', ended_at: '2026-01-01T01:00:00.000Z' }))
+
+    expect(buildWebState().runs.map(run => run.id)).toEqual(['active'])
+  })
+
   it('hides orchestrator runs by default and shows them in pre-beta mode', () => {
     writeRun(makeRun('stable'))
     writeAgent(makeAgent('stable-root', 'stable', { role: 'root' }))

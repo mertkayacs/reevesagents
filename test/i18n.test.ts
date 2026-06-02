@@ -29,8 +29,16 @@ describe('i18n language catalog', () => {
   it('translates shared TUI phrases without changing unknown runtime text', () => {
     expect(translatePhrase('tr', 'New Run')).toBe('Yeni run')
     expect(translatePhrase('tr', 'Cancel')).toBe('İptal')
+    expect(translatePhrase('tr', 'Open tmux tabs')).toBe('Tmux tablarını aç')
+    expect(translatePhrase('de', 'Return & Stop Run')).toBe('Zurück & Run stoppen')
     expect(translatePhrase('de', 'Back')).toBe('Zurück')
     expect(translatePhrase('ar', 'Actions')).toBe('إجراءات')
     expect(translatePhrase('fr', 'custom-run-name')).toBe('custom-run-name')
+  })
+
+  it('translates new web lifecycle labels', () => {
+    expect(translate('tr', 'web.statusEnded')).toBe('bitti')
+    expect(translate('de', 'web.useProvider', { name: 'Codex' })).toBe('Codex verwenden')
+    expect(translate('zh-Hans', 'history.movedToast', { name: 'Run A' })).toBe('Run A 已移到历史')
   })
 })

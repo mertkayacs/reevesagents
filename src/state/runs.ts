@@ -288,7 +288,11 @@ export function updateRun(runId: string, patch: Partial<RunRecord>): void {
   })
 }
 
-function listRunsUnlocked(includeAllModes: boolean): RunRecord[] {
+function isRunEnded(run: RunRecord): boolean {
+  return run.status === 'ended' || run.ended_at !== null
+}
+
+function listRunsUnlocked(includeAllModes: boolean, includeEnded = false): RunRecord[] {
   let entries: string[]
   try {
     entries = readdirSync(runsDir())
@@ -301,6 +305,7 @@ function listRunsUnlocked(includeAllModes: boolean): RunRecord[] {
     if (!existsSync(runPath(entry))) continue
     try {
       const run = readRunUnlocked(entry)
+      if (!includeEnded && isRunEnded(run)) continue
       if (includeAllModes || run.mode === 'spawner') runs.push(run)
     } catch {
       // skip malformed run folders
@@ -588,9 +593,9 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
   const haveTmux = options.cleanStale === false ? false : tmuxAvailable()
   const removed: string[] = []
   const archived: string[] = []
-  const runs = options.includeAllModes ? listRunsAny() : listRuns()
+  const runs = listRunsUnlocked(options.includeAllModes === true, true)
   for (const run of runs) {
-    const isEnded = run.status === 'ended' || run.ended_at !== null
+    const isEnded = isRunEnded(run)
     const isStale = !isEnded && haveTmux && !runHasLiveTmuxTarget(run, { sessionExists, targetExists })
     if (!isEnded && !isStale) continue
     try {

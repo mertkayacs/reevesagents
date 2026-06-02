@@ -73,6 +73,7 @@ vi.mock('../../src/state/runs.js', async () => {
     ...actual,
     findAgent: vi.fn(() => mockWorkerAgent),
     readRun: vi.fn(() => mockRun),
+    listAgents: vi.fn(() => [mockRootAgent, mockWorkerAgent]),
   }
 })
 
