@@ -4,6 +4,8 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import { colors } from '../utils/tokens.js'
+import { translatePhrase } from '../i18n/catalog.js'
+import { useLanguage } from '../state/LanguageContext.js'
 
 interface Props {
   step: number
@@ -12,6 +14,9 @@ interface Props {
 }
 
 export function StepIndicator({ step, total, name }: Props) {
+  const { language } = useLanguage()
+  const displayName = translatePhrase(language, name)
+
   return (
     <Box>
       <Text color={colors.accent.bright}>{step}</Text>
@@ -19,7 +24,7 @@ export function StepIndicator({ step, total, name }: Props) {
       <Text color={colors.text.muted}>{total}</Text>
       <Text> · </Text>
       <Text color={colors.accent.primary} bold>
-        {name}
+        {displayName}
       </Text>
     </Box>
   )

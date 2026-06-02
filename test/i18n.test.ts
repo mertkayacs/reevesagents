@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LANGUAGE_OPTIONS } from '../src/i18n/languages.js'
-import { translate } from '../src/i18n/catalog.js'
+import { translate, translatePhrase } from '../src/i18n/catalog.js'
 
 describe('i18n language catalog', () => {
   it('includes the requested languages in first-run order', () => {
@@ -24,5 +24,13 @@ describe('i18n language catalog', () => {
       expect(translate(option.code, 'welcome.newRun')).not.toBe('welcome.newRun')
       expect(translate(option.code, 'web.newRun')).not.toBe('web.newRun')
     }
+  })
+
+  it('translates shared TUI phrases without changing unknown runtime text', () => {
+    expect(translatePhrase('tr', 'New Run')).toBe('Yeni run')
+    expect(translatePhrase('tr', 'Cancel')).toBe('İptal')
+    expect(translatePhrase('de', 'Back')).toBe('Zurück')
+    expect(translatePhrase('ar', 'Actions')).toBe('إجراءات')
+    expect(translatePhrase('fr', 'custom-run-name')).toBe('custom-run-name')
   })
 })
