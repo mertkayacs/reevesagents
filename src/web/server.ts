@@ -22,7 +22,7 @@ import type { Permissions, Provider } from '../state/types.js'
 import { loadConfig, saveConfig } from '../state/config.js'
 import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
 import { localeCatalog } from '../i18n/catalog.js'
-import { autoCleanupRuns, findAgent, findAgentAny, readRun, readRunAny } from '../state/runs.js'
+import { autoCleanupRuns, deleteRunHistory, findAgent, findAgentAny, listRunHistory, readRun, readRunAny } from '../state/runs.js'
 import {
   isOrchestratorWebProvider,
   loadWebOrchestratorRuntime,
@@ -320,6 +320,12 @@ function stopWebRun(id: string, ctx: RequestContext): void {
   ctx.orchestratorRuntime.stopRun(id)
 }
 
+function deleteHistoryRecord(id: string, ctx: RequestContext): void {
+  const history = listRunHistory({ includeAllModes: ctx.prebetaOrchestrator })
+  if (!history.some(record => record.id === id)) throw new Error('history record not found')
+  deleteRunHistory(id)
+}
+
 async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
   if (!isAllowedHostHeader(req.headers.host)) {
     send(res, 403, 'forbidden host', 'text/plain; charset=utf-8')
@@ -397,6 +403,18 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       const body = await readJsonBody(req)
       requireConfirm(body)
       stopWebRun(decodeURIComponent(stopMatch[1]!), ctx)
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deleteHistoryMatch = path.match(/^\/api\/history\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteHistoryMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteHistoryRecord(decodeURIComponent(deleteHistoryMatch[1]!), ctx)
       sendJson(res, 200, { ok: true })
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })

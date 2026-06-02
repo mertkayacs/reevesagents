@@ -187,4 +187,22 @@ describe('spawner runtime', () => {
       { args: ['kill-session', '-t', result.run.tmux_session] },
     ]))
   })
+
+  it('ends a run when the last live agent is closed', async () => {
+    const driver = new FakeDriver()
+    const { startRun, killAgent } = await import('../src/launcher/runtime.js')
+    const { readRun } = await import('../src/state/runs.js')
+
+    const result = startRun({
+      mode: 'spawner',
+      name: 'solo',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+
+    killAgent(result.agents[0]!.id, { driver })
+
+    expect(readRun(result.run.id).status).toBe('ended')
+    expect(readRun(result.run.id).ended_at).not.toBeNull()
+  })
 })

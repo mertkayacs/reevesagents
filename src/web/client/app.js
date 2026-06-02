@@ -20,6 +20,7 @@
   }
 
   const WEB_EN = {
+    'common.delete': 'Delete',
     'web.beta': 'web · beta',
     'web.prebeta': 'web · pre-beta MCP',
     'web.live': 'live',
@@ -71,6 +72,7 @@
     'web.noRootProvider': 'no root provider',
     'web.addAgentTitle': 'add agent to {{name}}',
     'web.stopRunTitle': 'stop run {{name}}',
+    'web.deleteHistoryTitle': 'delete archived run {{name}}',
     'web.closeAgentLabel': 'close agent {{name}}',
     'web.agentUnavailable': 'agent is unavailable',
     'web.addAgentActiveTitle': 'add an agent to an active run',
@@ -85,6 +87,8 @@
     'web.closeAgentError': 'Could not close agent: {{message}}',
     'web.stopRunConfirm': 'Stop run "{{name}}"? Every agent in it will be stopped.',
     'web.stopRunError': 'Could not stop run: {{message}}',
+    'web.deleteHistoryConfirm': 'Delete archived run "{{name}}"? This only removes the saved history record.',
+    'web.deleteHistoryError': 'Could not delete archived run: {{message}}',
     'web.agentEnded': 'agent has ended',
     'web.createRunFirst': 'Create a run first, then add agents to it.',
     'web.runInactive': 'This run is no longer active.',
@@ -706,6 +710,13 @@
     date.className = 'history-date'
     date.textContent = shortIso(record.ended_at || record.archived_at)
     item.appendChild(date)
+    const del = document.createElement('button')
+    del.className = 'history-delete'
+    del.type = 'button'
+    del.textContent = t('common.delete')
+    del.title = t('web.deleteHistoryTitle', { name: record.name })
+    del.addEventListener('click', () => deleteHistoryRecord(record))
+    item.appendChild(del)
     return item
   }
 
@@ -896,6 +907,18 @@
     }
   }
 
+  async function deleteHistoryRecord(record) {
+    if (!confirm(t('web.deleteHistoryConfirm', { name: record.name }))) return
+    try {
+      await api('POST', `/api/history/${encodeURIComponent(record.id)}/delete`, { confirm: true })
+      history = history.filter(item => item.id !== record.id)
+      renderSidebar()
+      await refreshState()
+    } catch (err) {
+      alert(t('web.deleteHistoryError', { message: err.message }))
+    }
+  }
+
   function markAgentEnded(agentId) {
     const found = findAgent(agentId)
     if (!found) return
@@ -903,6 +926,10 @@
     found.terminal.canAttach = false
     found.terminal.canKill = false
     found.terminal.disabledReason = t('web.agentEnded')
+    if (!found.run.terminals.some(agent => agent.status !== 'ended')) {
+      found.run.status = 'ended'
+      found.run.canStop = false
+    }
   }
 
   function markRunStopped(runId) {

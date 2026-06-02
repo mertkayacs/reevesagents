@@ -210,6 +210,32 @@ describe('v1 run state', () => {
     expect(JSON.parse(readFileSync(join(tmpDir, 'runs', 'keep', 'run.json'), 'utf-8')).id).toBe('keep')
   })
 
+  it('deletes one archived history record', async () => {
+    const { archiveAndRemoveRun, deleteRunHistory, listRunHistory, writeRun } = await import('../src/state/runs.js')
+    writeRun(makeRun('keep', { status: 'ended', ended_at: '2026-01-01T00:00:01.000Z' }))
+    writeRun(makeRun('drop', { status: 'ended', ended_at: '2026-01-01T00:00:02.000Z' }))
+    archiveAndRemoveRun('keep', 'ended')
+    archiveAndRemoveRun('drop', 'ended')
+
+    deleteRunHistory('drop')
+
+    expect(listRunHistory().map(record => record.id)).toEqual(['keep'])
+  })
+
+  it('marks a run ended when no live agents remain', async () => {
+    const { endRunIfNoLiveAgents, readRun, updateAgent, writeAgent, writeRun } = await import('../src/state/runs.js')
+    writeRun(makeRun('solo'))
+    writeAgent(makeAgent('root', 'solo', { role: 'root' }))
+    updateAgent('solo', 'root', { ended_at: '2026-01-01T00:00:03.000Z' })
+
+    endRunIfNoLiveAgents('solo', '2026-01-01T00:00:03.000Z')
+
+    expect(readRun('solo')).toMatchObject({
+      status: 'ended',
+      ended_at: '2026-01-01T00:00:03.000Z',
+    })
+  })
+
   describe('autoCleanupRuns', () => {
     it('returns empty when registry has no runs', async () => {
       const { autoCleanupRuns } = await import('../src/state/runs.js')

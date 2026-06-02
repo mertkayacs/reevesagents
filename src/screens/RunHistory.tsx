@@ -4,16 +4,20 @@ import React, { useEffect, useState } from 'react'
 import { Box, useInput, useWindowSize } from 'ink'
 import { Frame } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
+import { Dialog } from '../components/Dialog.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
-import { listRunHistory } from '../state/runs.js'
+import { deleteRunHistory, listRunHistory } from '../state/runs.js'
+import { useToast } from '../state/ToastContext.js'
+import { useLanguage } from '../state/LanguageContext.js'
 import type { RunHistoryRecord } from '../state/types.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { providerColor, providerDisplayName } from '../utils/display.js'
 
-const ACTIONS = ['Back', 'Main Menu'] as const
+const ACTIONS = ['DeleteSelected', 'Back', 'Main Menu'] as const
 const ACTION_COPY: Record<typeof ACTIONS[number], { label: string; hint: string }> = {
+  DeleteSelected: { label: 'Delete Selected', hint: 'delete archived run' },
   Back: { label: 'Back', hint: 'return to active runs' },
   'Main Menu': { label: 'Main Menu', hint: 'settings, doctor, reference, credits' },
 }
@@ -59,14 +63,18 @@ function modeLabel(mode: RunHistoryRecord['mode']): string {
 
 export function RunHistory() {
   const { pop, resetStack } = useRouter()
+  const { toast } = useToast()
+  const { t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const visibleRecordCount = Math.max(3, termRows - CHROME_ROWS)
   const [records, setRecords] = useState<RunHistoryRecord[]>(() => listRunHistory({ includeAllModes: true }))
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [recordScroll, setRecordScroll] = useState(0)
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(() => records[0]?.id ?? null)
+  const [pendingDelete, setPendingDelete] = useState<RunHistoryRecord | null>(null)
 
   useEffect(() => {
-    const timer = setInterval(() => setRecords(listRunHistory({ includeAllModes: true })), 5000)
+    const timer = setInterval(refreshRecords, 5000)
     return () => clearInterval(timer)
   }, [])
 
@@ -80,10 +88,21 @@ export function RunHistory() {
   const activeIdx = normalizeSelectedIndex(selectedIdx, records.length)
   const selected = items[activeIdx]
   const selectedRecord = selected?.type === 'record' ? selected.record : null
+  const deleteTarget = records.find(record => record.id === selectedRecordId) ?? records[0] ?? null
   const maxRecordScroll = Math.max(0, records.length - visibleRecordCount)
   const visibleRecords = records.slice(recordScroll, recordScroll + visibleRecordCount)
   const recordNameWidth = Math.max(8, ...visibleRecords.map(record => record.name.length))
   const actionStartIdx = records.length + 1
+
+  function refreshRecords(): void {
+    const next = listRunHistory({ includeAllModes: true })
+    setRecords(next)
+    setSelectedRecordId(current => (
+      current && next.some(record => record.id === current)
+        ? current
+        : next[0]?.id ?? null
+    ))
+  }
 
   useEffect(() => {
     setRecordScroll(offset => {
@@ -95,9 +114,26 @@ export function RunHistory() {
     })
   }, [activeIdx, records.length, maxRecordScroll, visibleRecordCount])
 
+  useEffect(() => {
+    if (selectedRecord) setSelectedRecordId(selectedRecord.id)
+  }, [selectedRecord])
+
+  function confirmDelete(record: RunHistoryRecord): void {
+    deleteRunHistory(record.id)
+    setPendingDelete(null)
+    const next = listRunHistory({ includeAllModes: true })
+    setRecords(next)
+    setSelectedRecordId(next[0]?.id ?? null)
+    setSelectedIdx(idx => normalizeSelectedIndex(idx, next.length))
+    toast(t('history.deletedToast', { name: record.name }), 'info')
+  }
+
   function handleActivate(): void {
     if (selected?.type !== 'action') return
     switch (selected.action) {
+      case 'DeleteSelected':
+        if (deleteTarget) setPendingDelete(deleteTarget)
+        break
       case 'Back': pop(); break
       case 'Main Menu': resetStack('Welcome', ['Welcome']); break
     }
@@ -121,7 +157,28 @@ export function RunHistory() {
     const provider = selectedRecord.root_provider ? providerDisplayName(selectedRecord.root_provider) : 'no root provider'
     statusContext = `${selectedRecord.name} · ${selectedRecord.status} · ${selectedRecord.agent_count} agents · ${provider} · ${selectedRecord.working_dir}`
   } else if (selected?.type === 'action' && selected.action) {
-    statusContext = ACTION_COPY[selected.action].hint
+    statusContext = selected.action === 'DeleteSelected' && deleteTarget
+      ? `${ACTION_COPY[selected.action].hint} · ${deleteTarget.name}`
+      : ACTION_COPY[selected.action].hint
+  }
+
+  if (pendingDelete) {
+    return (
+      <Frame
+        breadcrumb={['ReevesAgents', 'Runs', 'History']}
+        statusKeys="←→ switch · enter select · esc cancel"
+      >
+        <Dialog
+          title={t('history.deleteTitle', { name: pendingDelete.name })}
+          body={t('history.deleteBody')}
+          intent="danger"
+          confirmLabel={t('common.delete')}
+          cancelLabel={t('common.cancel')}
+          onConfirm={() => confirmDelete(pendingDelete)}
+          onCancel={() => setPendingDelete(null)}
+        />
+      </Frame>
+    )
   }
 
   return (
@@ -185,6 +242,8 @@ export function RunHistory() {
             primary={ACTION_COPY[action].label}
             primaryWidth={ACTION_LABEL_WIDTH}
             hint={ACTION_COPY[action].hint}
+            disabled={action === 'DeleteSelected' && !deleteTarget}
+            danger={action === 'DeleteSelected'}
           />
         ))}
         <SectionEnd />

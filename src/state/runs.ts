@@ -352,6 +352,12 @@ export function removeRun(runId: string): void {
   })
 }
 
+export function deleteRunHistory(runId: string): void {
+  withRunsLock(() => {
+    rmSync(runHistoryPath(runId), { force: true })
+  })
+}
+
 export function computeRunStatus(run: RunRecord, tmuxSessionExists = true): RunViewStatus {
   if (run.status === 'ended' || run.ended_at !== null) return 'ended'
   return tmuxSessionExists ? 'running' : 'stale'
@@ -424,6 +430,18 @@ export function archiveAndRemoveRun(runId: string, status: RunHistoryStatus): Ru
     writeRunHistoryUnlocked(record)
     rmSync(runDir(runId), { recursive: true, force: true })
     return record
+  })
+}
+
+export function endRunIfNoLiveAgents(runId: string, endedAt = nowIso()): RunRecord {
+  return withRunsLock(() => {
+    const run = readRunUnlocked(runId)
+    if (run.status === 'ended' || run.ended_at !== null) return run
+    const liveAgents = listAgentsForRunIds([runId]).filter(agent => !agent.ended_at)
+    if (liveAgents.length > 0) return run
+    const endedRun: RunRecord = { ...run, status: 'ended', ended_at: endedAt }
+    writeRunUnlocked(endedRun)
+    return endedRun
   })
 }
 
