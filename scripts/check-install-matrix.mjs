@@ -6,6 +6,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -15,6 +16,8 @@ import { request } from 'node:http'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
 const packageRoot = join(root, 'packages', 'orchestrator')
+const rootVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+const orchestratorVersion = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).version
 
 function ok(label) { console.log(`  ok  ${label}`) }
 function fail(message) {
@@ -173,7 +176,7 @@ async function main() {
     npmInit(cliOnly)
     run('npm', ['install', '--omit=optional', rootTgz], { cwd: cliOnly })
     run(bin(cliOnly, 'reevesagents'), ['--help'], { cwd: cliOnly })
-    assert(run(bin(cliOnly, 'reevesagents'), ['--version'], { cwd: cliOnly }) === '1.0.11', 'root CLI version should match release')
+    assert(run(bin(cliOnly, 'reevesagents'), ['--version'], { cwd: cliOnly }) === rootVersion, 'root CLI version should match release')
     const noWeb = runMaybe(bin(cliOnly, 'reevesagents'), ['web', '--no-open', '--port', '19082'], {
       cwd: cliOnly,
       env: {
@@ -210,7 +213,7 @@ async function main() {
     run('npm', ['install', rootTgz, orchestratorTgz], { cwd: all })
     run(bin(all, 'reevesagents'), ['--help'], { cwd: all })
     run(bin(all, 'reevesagents-orchestrator'), ['--help'], { cwd: all })
-    assert(run(bin(all, 'reevesagents-orchestrator'), ['--version'], { cwd: all }) === '1.0.0', 'orchestrator CLI version should match release')
+    assert(run(bin(all, 'reevesagents-orchestrator'), ['--version'], { cwd: all }) === orchestratorVersion, 'orchestrator CLI version should match release')
     const fakeBin = join(tmp, 'fake-bin')
     installFakeBins(fakeBin)
     const allPort = 19084

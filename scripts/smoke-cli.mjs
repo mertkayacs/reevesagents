@@ -2,13 +2,14 @@
 // and temp state so doctor and runs commands never touch real state.
 
 import { spawnSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const cliPath = join(repoRoot, 'dist', 'cli.js')
+const expectedVersion = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version
 
 function ok(label) { console.log(`  ok  ${label}`) }
 function fail(label, err) {
@@ -100,7 +101,7 @@ async function main() {
     console.log(`cli:       ${cliPath}`)
 
     const versionText = runCli(['--version'], env)
-    assert(versionText === '1.0.11', `expected version 1.0.11, got ${versionText}`)
+    assert(versionText === expectedVersion, `expected version ${expectedVersion}, got ${versionText}`)
     ok('version prints release version')
 
     const runsText = runCli(['runs'], env)
