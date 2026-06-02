@@ -173,7 +173,7 @@ async function main() {
     npmInit(cliOnly)
     run('npm', ['install', '--omit=optional', rootTgz], { cwd: cliOnly })
     run(bin(cliOnly, 'reevesagents'), ['--help'], { cwd: cliOnly })
-    assert(run(bin(cliOnly, 'reevesagents'), ['--version'], { cwd: cliOnly }) === '1.0.0', 'root CLI version should match release')
+    assert(run(bin(cliOnly, 'reevesagents'), ['--version'], { cwd: cliOnly }) === '1.0.11', 'root CLI version should match release')
     const noWeb = runMaybe(bin(cliOnly, 'reevesagents'), ['web', '--no-open', '--port', '19082'], {
       cwd: cliOnly,
       env: {
