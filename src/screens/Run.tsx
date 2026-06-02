@@ -24,6 +24,7 @@ const LABELS: Record<RowItem, string> = {
 }
 const ACTION_LABEL_WIDTH = Math.max(
   ...Object.values(LABELS).map(label => label.length),
+  'Delete Run'.length,
 )
 
 interface SelectableItem {
@@ -76,7 +77,6 @@ export function Run() {
         push('AddWorker')
         break
       case 'StopRun':
-        if (run.status === 'ended' || run.ended_at !== null) return
         push('RunStop')
         break
       case 'Back':
@@ -147,7 +147,7 @@ export function Run() {
       Agents: 'view agents',
       Output: 'peek across agents',
       AddWorker: isRunEnded ? 'run is ended' : 'spawn new agent',
-      StopRun: isRunEnded ? 'run is ended' : 'return to Reeves and close run windows',
+      StopRun: isRunEnded ? 'delete stopped run from the active list' : 'return to Reeves and stop run windows',
       Back: 'return to runs',
     }
     statusContext = actionLabels[selected.action] || ''
@@ -181,14 +181,14 @@ export function Run() {
             )
           }
 
-          const isDisabledStop = item.action === 'StopRun' && isRunEnded
           const isDisabledAddWorker = item.action === 'AddWorker' && isRunEnded
+          const primary = item.action === 'StopRun' && isRunEnded ? 'Delete Run' : LABELS[item.action]
 
           const hints: Record<RowItem, string> = {
             Agents: `${agents.length} agents`,
             Output: 'peek across all agents',
             AddWorker: isRunEnded ? 'run is ended' : 'spawn new agent',
-            StopRun: isRunEnded ? 'run is ended' : 'return to Reeves and close run windows',
+            StopRun: isRunEnded ? 'move stopped run to history' : 'return to Reeves and stop run windows',
             Back: 'return to all runs',
             '__section__': '',
           }
@@ -197,10 +197,10 @@ export function Run() {
             <Row
               key={item.action}
               selected={isSelected}
-              primary={LABELS[item.action]}
+              primary={primary}
               primaryWidth={ACTION_LABEL_WIDTH}
               hint={hints[item.action]}
-              disabled={isDisabledStop || isDisabledAddWorker}
+              disabled={isDisabledAddWorker}
               danger={item.action === 'StopRun'}
             />
           )

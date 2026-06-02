@@ -72,8 +72,10 @@
     'web.noRootProvider': 'no root provider',
     'web.addAgentTitle': 'add agent to {{name}}',
     'web.stopRunTitle': 'stop run {{name}}',
+    'web.deleteRunTitle': 'delete stopped run {{name}}',
     'web.deleteHistoryTitle': 'delete archived run {{name}}',
-    'web.closeAgentLabel': 'close agent {{name}}',
+    'web.stopAgentTitle': 'stop agent {{name}}',
+    'web.deleteAgentTitle': 'delete stopped agent {{name}}',
     'web.agentUnavailable': 'agent is unavailable',
     'web.addAgentActiveTitle': 'add an agent to an active run',
     'web.createRunFirstTitle': 'create a run before adding agents',
@@ -83,10 +85,14 @@
     'web.error': 'error',
     'web.connectionError': 'connection error',
     'web.disconnected': 'disconnected',
-    'web.closeAgentConfirm': 'Close agent "{{name}}"? The running window for this agent will be closed.',
-    'web.closeAgentError': 'Could not close agent: {{message}}',
+    'web.stopAgentConfirm': 'Stop agent "{{name}}"? The running window for this agent will be closed.',
+    'web.stopAgentError': 'Could not stop agent: {{message}}',
     'web.stopRunConfirm': 'Stop run "{{name}}"? Every agent in it will be stopped.',
     'web.stopRunError': 'Could not stop run: {{message}}',
+    'web.deleteRunConfirm': 'Delete stopped run "{{name}}"? A simple history record will be kept.',
+    'web.deleteRunError': 'Could not delete stopped run: {{message}}',
+    'web.deleteAgentConfirm': 'Delete stopped agent "{{name}}"? This removes the saved agent record.',
+    'web.deleteAgentError': 'Could not delete stopped agent: {{message}}',
     'web.deleteHistoryConfirm': 'Delete archived run "{{name}}"? This only removes the saved history record.',
     'web.deleteHistoryError': 'Could not delete archived run: {{message}}',
     'web.agentEnded': 'agent has ended',
@@ -655,6 +661,15 @@
         stop.addEventListener('click', () => stopRun(run))
         actions.appendChild(stop)
       }
+      if (run.canDelete) {
+        const del = document.createElement('button')
+        del.className = 'run-delete'
+        del.type = 'button'
+        del.textContent = t('common.delete')
+        del.title = t('web.deleteRunTitle', { name: run.name })
+        del.addEventListener('click', () => deleteRun(run))
+        actions.appendChild(del)
+      }
       if (actions.childElementCount > 0) head.appendChild(actions)
       group.appendChild(head)
 
@@ -767,15 +782,17 @@
     status.className = 'card-status'
     status.textContent = agent.status
     tail.appendChild(status)
-    if (agent.canKill) {
-      const kill = document.createElement('button')
-      kill.className = 'card-kill'
-      kill.type = 'button'
-      kill.setAttribute('aria-label', t('web.closeAgentLabel', { name: agent.nickname }))
-      kill.title = t('web.closeAgentLabel', { name: agent.nickname })
-      kill.textContent = '×'
-      kill.addEventListener('click', () => closeAgent(agent))
-      tail.appendChild(kill)
+    if (agent.canKill || agent.canDelete) {
+      const lifecycle = document.createElement('button')
+      const isDelete = agent.canDelete
+      lifecycle.className = 'card-agent-action'
+      lifecycle.dataset.kind = isDelete ? 'delete' : 'stop'
+      lifecycle.type = 'button'
+      lifecycle.setAttribute('aria-label', t(isDelete ? 'web.deleteAgentTitle' : 'web.stopAgentTitle', { name: agent.nickname }))
+      lifecycle.title = t(isDelete ? 'web.deleteAgentTitle' : 'web.stopAgentTitle', { name: agent.nickname })
+      lifecycle.textContent = isDelete ? t('common.delete') : t('web.stop')
+      lifecycle.addEventListener('click', () => isDelete ? deleteAgentRecord(agent) : stopAgent(agent))
+      tail.appendChild(lifecycle)
     }
     card.appendChild(tail)
 
@@ -877,8 +894,8 @@
 
   // --- actions --------------------------------------------------------------
 
-  async function closeAgent(agent) {
-    if (!confirm(t('web.closeAgentConfirm', { name: agent.nickname }))) return
+  async function stopAgent(agent) {
+    if (!confirm(t('web.stopAgentConfirm', { name: agent.nickname }))) return
     const selectedWasAgent = agent.id === (session ? session.id : selectedId)
     try {
       await api('POST', `/api/terminals/${encodeURIComponent(agent.id)}/kill`, { confirm: true })
@@ -888,7 +905,7 @@
       await refreshState()
       if (selectedWasAgent) showOverlay()
     } catch (err) {
-      alert(t('web.closeAgentError', { message: err.message }))
+      alert(t('web.stopAgentError', { message: err.message }))
     }
   }
 
@@ -904,6 +921,36 @@
       if (selectedWasInRun) showOverlay()
     } catch (err) {
       alert(t('web.stopRunError', { message: err.message }))
+    }
+  }
+
+  async function deleteRun(run) {
+    if (!confirm(t('web.deleteRunConfirm', { name: run.name }))) return
+    const selectedWasInRun = run.terminals.some(agent => agent.id === (session ? session.id : selectedId))
+    try {
+      await api('POST', `/api/runs/${encodeURIComponent(run.id)}/delete`, { confirm: true })
+      runs = runs.filter(item => item.id !== run.id)
+      if (selectedWasInRun) { disposeSession(); showOverlay() }
+      else renderSidebar()
+      await refreshState()
+      if (selectedWasInRun) showOverlay()
+    } catch (err) {
+      alert(t('web.deleteRunError', { message: err.message }))
+    }
+  }
+
+  async function deleteAgentRecord(agent) {
+    if (!confirm(t('web.deleteAgentConfirm', { name: agent.nickname }))) return
+    const selectedWasAgent = agent.id === (session ? session.id : selectedId)
+    try {
+      await api('POST', `/api/terminals/${encodeURIComponent(agent.id)}/delete`, { confirm: true })
+      for (const run of runs) run.terminals = run.terminals.filter(item => item.id !== agent.id)
+      if (selectedWasAgent) { disposeSession(); showOverlay() }
+      else renderSidebar()
+      await refreshState()
+      if (selectedWasAgent) showOverlay()
+    } catch (err) {
+      alert(t('web.deleteAgentError', { message: err.message }))
     }
   }
 
@@ -925,10 +972,12 @@
     found.terminal.status = 'ended'
     found.terminal.canAttach = false
     found.terminal.canKill = false
+    found.terminal.canDelete = true
     found.terminal.disabledReason = t('web.agentEnded')
     if (!found.run.terminals.some(agent => agent.status !== 'ended')) {
       found.run.status = 'ended'
       found.run.canStop = false
+      found.run.canDelete = true
     }
   }
 
@@ -937,10 +986,12 @@
     if (!run) return
     run.status = 'ended'
     run.canStop = false
+    run.canDelete = true
     for (const agent of run.terminals) {
       agent.status = 'ended'
       agent.canAttach = false
       agent.canKill = false
+      agent.canDelete = true
       agent.disabledReason = t('web.agentEnded')
     }
   }

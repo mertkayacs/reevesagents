@@ -288,10 +288,19 @@ describe('create terminal', () => {
     expect(JSON.parse(killed.body)).toEqual({ ok: true })
     expect(readAgent(createdBody.run_id, addedBody.id).ended_at).not.toBeNull()
 
+    const deletedAgent = await post(handle.port, `/api/terminals/${encodeURIComponent(addedBody.id)}/delete`, { confirm: true })
+    expect(deletedAgent.status).toBe(200)
+    expect(JSON.parse(deletedAgent.body)).toEqual({ ok: true })
+    expect(listAgents(createdBody.run_id).map(agent => agent.id)).not.toContain(addedBody.id)
+
     const stopped = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/stop`, { confirm: true })
     expect(stopped.status).toBe(200)
     expect(JSON.parse(stopped.body)).toEqual({ ok: true })
     expect(readRun(createdBody.run_id).status).toBe('ended')
+
+    const deletedRun = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/delete`, { confirm: true })
+    expect(deletedRun.status).toBe(200)
+    expect(JSON.parse(deletedRun.body)).toEqual({ ok: true })
 
     const stateAfterStop = await get(handle.port, '/api/state')
     const parsed = JSON.parse(stateAfterStop.body)
@@ -443,6 +452,31 @@ describe('kill terminal', () => {
   })
 })
 
+describe('delete terminal', () => {
+  it('requires confirmation', async () => {
+    const handle = await start()
+    const res = await post(handle.port, '/api/terminals/ghost/delete', {})
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/confirmation required/i)
+  })
+
+  it('requires the terminal to be stopped first', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+    const created = await post(handle.port, '/api/terminals', {
+      provider: 'codex-cli',
+      nickname: 'Live Delete Guard',
+      working_dir: tmpDir,
+    })
+    const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
+
+    const res = await post(handle.port, `/api/terminals/${encodeURIComponent(createdBody.id)}/delete`, { confirm: true })
+
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/stop agent before deleting/i)
+  })
+})
+
 describe('stop run', () => {
   it('requires confirmation', async () => {
     const handle = await start()
@@ -456,6 +490,31 @@ describe('stop run', () => {
     const res = await post(handle.port, '/api/runs/ghost/stop', { confirm: true })
     expect(res.status).toBe(400)
     expect(JSON.parse(res.body).error).toMatch(/not found/i)
+  })
+})
+
+describe('delete run', () => {
+  it('requires confirmation', async () => {
+    const handle = await start()
+    const res = await post(handle.port, '/api/runs/ghost/delete', {})
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/confirmation required/i)
+  })
+
+  it('requires the run to be stopped first', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+    const created = await post(handle.port, '/api/terminals', {
+      provider: 'codex-cli',
+      nickname: 'Run Delete Guard',
+      working_dir: tmpDir,
+    })
+    const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
+
+    const res = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/delete`, { confirm: true })
+
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/stop run before deleting/i)
   })
 })
 

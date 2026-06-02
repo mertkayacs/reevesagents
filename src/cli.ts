@@ -302,13 +302,13 @@ program
 
 program
   .command('kill <agent-id>')
-  .description('close one spawner agent')
-  .option('-y, --yes', 'confirm close')
+  .description('stop one spawner agent')
+  .option('-y, --yes', 'confirm stop')
   .action((id, opts) => {
-    requireDestructiveConfirmation(opts, 'close agent')
+    requireDestructiveConfirmation(opts, 'stop agent')
     const agent = resolveAgent(id)
     const killed = killAgent(agent.id)
-    console.log(`closed ${killed.id.slice(0, 8)}  ${killed.nickname}`)
+    console.log(`stopped ${killed.id.slice(0, 8)}  ${killed.nickname}`)
   })
 
 program

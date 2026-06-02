@@ -1,4 +1,4 @@
-// Agent detail overview: summary plus output, prompt, open, close, and back actions.
+// Agent detail overview: summary plus output, prompt, open, lifecycle, and back actions.
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
@@ -12,16 +12,21 @@ import { findAgent, listAgents, readRun } from '../state/runs.js'
 import { openAgent } from '../launcher/runtime.js'
 import type { AgentRecord } from '../state/types.js'
 
-type RowItem = 'Output' | 'Task' | '__section__' | 'OpenCLI' | 'CloseAgent' | 'Back'
+type RowItem = 'Output' | 'Task' | '__section__' | 'OpenCLI' | 'AgentLifecycle' | 'Back'
 const LABELS: Record<RowItem, string> = {
   Output: 'Output',
   Task: 'Prompt',
   OpenCLI: 'Open Agent',
-  CloseAgent: 'Close Agent',
+  AgentLifecycle: 'Stop Agent',
   Back: 'Back',
   '__section__': '',
 }
-const ACTION_LABEL_WIDTH = Math.max(...Object.values(LABELS).map(label => label.length), 'Open Agent'.length, 'Close Agent'.length)
+const ACTION_LABEL_WIDTH = Math.max(
+  ...Object.values(LABELS).map(label => label.length),
+  'Open Agent'.length,
+  'Stop Agent'.length,
+  'Delete Agent'.length,
+)
 
 interface SelectableItem {
   type: 'action'
@@ -43,7 +48,7 @@ export function AgentDetail() {
     { type: 'action', action: 'Task' },
     { type: 'action', action: '__section__' },
     { type: 'action', action: 'OpenCLI' },
-    { type: 'action', action: 'CloseAgent' },
+    { type: 'action', action: 'AgentLifecycle' },
     { type: 'action', action: 'Back' },
   ]
 
@@ -63,8 +68,8 @@ export function AgentDetail() {
         if (agent.headless) return
         openAgent(agent.id)
         break
-      case 'CloseAgent':
-        if (agent.ended_at !== null || (agent.role === 'root' && liveAgents.length > 1)) return
+      case 'AgentLifecycle':
+        if (agent.role === 'root' && liveAgents.length > 1) return
         push('AgentKill')
         break
       case 'Back':
@@ -126,12 +131,12 @@ export function AgentDetail() {
   if (agent.task_note) summaryParts.push(`note ${agent.task_note}`)
   summaryParts.push(`workdir ${agent.working_dir}`)
   const summaryLine = summaryParts.join(' · ')
-  const isCloseAgentDisabled = agent.ended_at !== null
+  const isAgentEnded = agent.ended_at !== null
   const isHeadless = !!agent.headless
   const providerLabel = providerDisplayName(agent.provider)
   const liveAgents = listAgents(agent.run_id).filter(item => item.ended_at === null)
   const isRootLocked = agent.role === 'root' && liveAgents.length > 1
-  const closeAgentHint = isRootLocked ? 'close workers first' : isCloseAgentDisabled ? 'agent already ended' : 'close this agent'
+  const agentLifecycleHint = isRootLocked ? 'stop workers first' : isAgentEnded ? 'delete stopped agent' : 'stop this agent'
 
   let statusContext = `${agent.nickname} · ${providerLabel} · ${agent.task_status}`
   if (selected && selected.action !== '__section__') {
@@ -139,7 +144,7 @@ export function AgentDetail() {
       Output: 'view recent output',
       Task: 'view initial prompt and status',
       OpenCLI: isHeadless ? 'no tmux window' : 'switch to this agent window',
-      CloseAgent: closeAgentHint,
+      AgentLifecycle: agentLifecycleHint,
       Back: 'return to agents list',
       '__section__': '',
     }
@@ -185,19 +190,20 @@ export function AgentDetail() {
             Output: isHeadless ? 'no output' : 'live peek of the tmux pane',
             Task: 'initial prompt and status',
             OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this agent window',
-            CloseAgent: closeAgentHint,
+            AgentLifecycle: agentLifecycleHint,
             Back: 'return to agents list',
             '__section__': '',
           }
+          const primary = item.action === 'AgentLifecycle' && isAgentEnded ? 'Delete Agent' : LABELS[item.action]
           return (
             <Row
               key={item.action}
               selected={isSelected}
-              primary={LABELS[item.action]}
+              primary={primary}
               primaryWidth={ACTION_LABEL_WIDTH}
               hint={hints[item.action]}
-              disabled={(item.action === 'CloseAgent' && (isCloseAgentDisabled || isRootLocked)) || (item.action === 'OpenCLI' && isHeadless)}
-              danger={item.action === 'CloseAgent'}
+              disabled={(item.action === 'AgentLifecycle' && isRootLocked) || (item.action === 'OpenCLI' && isHeadless)}
+              danger={item.action === 'AgentLifecycle'}
             />
           )
         })}

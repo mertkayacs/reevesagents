@@ -352,6 +352,27 @@ export function removeRun(runId: string): void {
   })
 }
 
+export interface DeleteAgentOptions {
+  includeAllModes?: boolean
+}
+
+export function deleteAgent(agentId: string, options: DeleteAgentOptions = {}): AgentRecord {
+  return withRunsLock(() => {
+    const runs = listRunsUnlocked(options.includeAllModes === true)
+    for (const run of runs) {
+      try {
+        const agent = readAgentUnlocked(run.id, agentId)
+        if (!agent.ended_at) throw new Error('Stop agent before deleting it')
+        rmSync(agentPath(run.id, agent.id), { force: true })
+        return agent
+      } catch (err) {
+        if (err instanceof Error && err.message === 'Stop agent before deleting it') throw err
+      }
+    }
+    throw new Error(`Agent not found: ${agentId}`)
+  })
+}
+
 export function deleteRunHistory(runId: string): void {
   withRunsLock(() => {
     rmSync(runHistoryPath(runId), { force: true })

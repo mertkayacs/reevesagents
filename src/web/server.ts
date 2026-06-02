@@ -22,7 +22,17 @@ import type { Permissions, Provider } from '../state/types.js'
 import { loadConfig, saveConfig } from '../state/config.js'
 import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
 import { localeCatalog } from '../i18n/catalog.js'
-import { autoCleanupRuns, deleteRunHistory, findAgent, findAgentAny, listRunHistory, readRun, readRunAny } from '../state/runs.js'
+import {
+  archiveAndRemoveRun,
+  autoCleanupRuns,
+  deleteAgent,
+  deleteRunHistory,
+  findAgent,
+  findAgentAny,
+  listRunHistory,
+  readRun,
+  readRunAny,
+} from '../state/runs.js'
 import {
   isOrchestratorWebProvider,
   loadWebOrchestratorRuntime,
@@ -310,6 +320,12 @@ function killTerminal(id: string, ctx: RequestContext): void {
   ctx.orchestratorRuntime.killAgent(id)
 }
 
+function deleteTerminal(id: string, ctx: RequestContext): void {
+  const agent = ctx.prebetaOrchestrator ? findAgentAny(id) : findAgent(id)
+  if (!agent.ended_at) throw new Error('Stop agent before deleting it')
+  deleteAgent(id, { includeAllModes: ctx.prebetaOrchestrator })
+}
+
 function stopWebRun(id: string, ctx: RequestContext): void {
   const run = ctx.prebetaOrchestrator ? readRunAny(id) : readRun(id)
   if (run.mode === 'spawner') {
@@ -318,6 +334,12 @@ function stopWebRun(id: string, ctx: RequestContext): void {
   }
   if (!ctx.orchestratorRuntime) throw new Error('PRE-BETA orchestrator web mode is not enabled')
   ctx.orchestratorRuntime.stopRun(id)
+}
+
+function deleteWebRun(id: string, ctx: RequestContext): void {
+  const run = ctx.prebetaOrchestrator ? readRunAny(id) : readRun(id)
+  if (run.status !== 'ended' && run.ended_at === null) throw new Error('Stop run before deleting it')
+  archiveAndRemoveRun(id, 'ended')
 }
 
 function deleteHistoryRecord(id: string, ctx: RequestContext): void {
@@ -397,12 +419,36 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     }
     return
   }
+  const deleteTerminalMatch = path.match(/^\/api\/terminals\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteTerminalMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteTerminal(decodeURIComponent(deleteTerminalMatch[1]!), ctx)
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
   const stopMatch = path.match(/^\/api\/runs\/([^/]+)\/stop$/)
   if (method === 'POST' && stopMatch) {
     try {
       const body = await readJsonBody(req)
       requireConfirm(body)
       stopWebRun(decodeURIComponent(stopMatch[1]!), ctx)
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deleteRunMatch = path.match(/^\/api\/runs\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteRunMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteWebRun(decodeURIComponent(deleteRunMatch[1]!), ctx)
       sendJson(res, 200, { ok: true })
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })

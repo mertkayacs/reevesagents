@@ -75,6 +75,20 @@ vi.mock('../../src/state/runs.js', async () => {
 describe('Run hub screen', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(runsState.readRun).mockReturnValue({
+      id: 'run-1',
+      mode: 'spawner',
+      name: 'test-run',
+      status: 'running',
+      tmux_session: 'reeves-123',
+      reeves_window_id: '0',
+      reeves_pane_id: '0',
+      root_agent_id: 'agent-1',
+      working_dir: '/tmp/test',
+      preset_name: null,
+      started_at: '2026-05-22T10:00:00Z',
+      ended_at: null,
+    } as RunRecord)
     process.env.REEVES_RUN_ID = 'run-1'
   })
 
@@ -125,6 +139,32 @@ describe('Run hub screen', () => {
 
     expect(frame).toContain('Return & Stop Run')
     expect(frame).toContain('Back')
+    unmount()
+  })
+
+  it('changes stop into delete after the run ends', () => {
+    vi.mocked(runsState.readRun).mockReturnValue({
+      id: 'run-1',
+      mode: 'spawner',
+      name: 'test-run',
+      status: 'ended',
+      tmux_session: 'reeves-123',
+      reeves_window_id: '0',
+      reeves_pane_id: '0',
+      root_agent_id: 'agent-1',
+      working_dir: '/tmp/test',
+      preset_name: null,
+      started_at: '2026-05-22T10:00:00Z',
+      ended_at: '2026-05-22T11:00:00Z',
+    } as RunRecord)
+
+    const { lastFrame, unmount } = render(
+      <Router initialScreen="Run" />
+    )
+    const frame = lastFrame() ?? ''
+
+    expect(frame).toContain('Delete Run')
+    expect(frame).not.toContain('Return & Stop Run')
     unmount()
   })
 

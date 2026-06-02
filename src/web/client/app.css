@@ -509,7 +509,8 @@ button { letter-spacing: 0; }
 }
 
 .run-action,
-.run-stop {
+.run-stop,
+.run-delete {
   flex: 0 0 auto;
   border: 1px solid transparent;
   border-radius: var(--r-1);
@@ -534,6 +535,19 @@ button { letter-spacing: 0; }
   border-color: color-mix(in srgb, var(--error) 36%, var(--border));
   color: var(--error);
   background: color-mix(in srgb, var(--error) 10%, transparent);
+  outline: none;
+}
+
+.run-delete {
+  border-color: color-mix(in srgb, var(--error) 18%, transparent);
+  color: color-mix(in srgb, var(--error) 72%, var(--muted));
+}
+
+.run-delete:hover,
+.run-delete:focus-visible {
+  border-color: color-mix(in srgb, var(--error) 48%, var(--border));
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
   outline: none;
 }
 
@@ -858,31 +872,39 @@ button { letter-spacing: 0; }
   letter-spacing: 0;
 }
 
-.card-kill {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: 1px solid transparent;
+.card-agent-action {
+  min-width: 48px;
+  max-width: 74px;
+  min-height: 26px;
+  padding: 0 var(--s-2);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--error) 18%, transparent);
   border-radius: var(--r-1);
   color: var(--muted);
   background: transparent;
   cursor: pointer;
-  font-size: 18px;
+  font-size: var(--fs-xs);
   line-height: 1;
-  opacity: 0;
-  transition: border-color var(--motion), color var(--motion), background var(--motion), opacity var(--motion);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: border-color var(--motion), color var(--motion), background var(--motion), transform var(--motion);
 }
 
-.card:hover .card-kill,
-.card:focus-within .card-kill { opacity: 1; }
+.card-agent-action[data-kind="stop"] {
+  color: color-mix(in srgb, var(--warn) 70%, var(--muted));
+}
 
-.card-kill:hover,
-.card-kill:focus-visible {
+.card-agent-action[data-kind="delete"] {
+  color: color-mix(in srgb, var(--error) 74%, var(--muted));
+}
+
+.card-agent-action:hover,
+.card-agent-action:focus-visible {
   border-color: color-mix(in srgb, var(--error) 42%, var(--border));
   color: var(--error);
   background: color-mix(in srgb, var(--error) 10%, transparent);
   outline: none;
+  transform: translateY(-1px);
 }
 
 .sidebar-empty {
@@ -1614,7 +1636,8 @@ button { letter-spacing: 0; }
   }
 
   .run-action,
-  .run-stop {
+  .run-stop,
+  .run-delete {
     min-width: 64px;
     text-align: center;
   }
@@ -1636,6 +1659,12 @@ button { letter-spacing: 0; }
 
   .card-status {
     display: none;
+  }
+
+  .card-agent-action {
+    min-width: 44px;
+    max-width: 64px;
+    padding-inline: var(--s-1);
   }
 
   .stage-status {
