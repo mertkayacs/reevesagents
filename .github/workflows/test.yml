@@ -43,6 +43,8 @@ jobs:
         with:
           node-version: 22
 
+      - run: pnpm install --frozen-lockfile
+
       - run: pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace
         env:
           CI: 'true'
