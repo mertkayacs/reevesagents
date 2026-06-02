@@ -47,6 +47,9 @@
     form: document.getElementById('new-form'),
     fProvider: document.getElementById('f-provider'),
     providerGrid: document.getElementById('provider-grid'),
+    fModel: document.getElementById('f-model'),
+    fPermissions: document.getElementById('f-permissions'),
+    permissionGrid: document.getElementById('permission-grid'),
     fNickname: document.getElementById('f-nickname'),
     fRunName: document.getElementById('f-run-name'),
     fAgentRun: document.getElementById('f-agent-run'),
@@ -186,6 +189,7 @@
         if (choice.disabled) return
         el.fProvider.value = p.id
         updateProviderSelection()
+        renderModels()
       })
 
       const swatch = document.createElement('span')
@@ -210,6 +214,7 @@
     if (currentOption) el.fProvider.value = currentOption.value
     else if (firstAvailable) el.fProvider.value = firstAvailable.value
     updateProviderSelection()
+    renderModels()
   }
 
   function providerMeta(provider, supported) {
@@ -226,6 +231,34 @@
     for (const option of el.providerGrid.querySelectorAll('.provider-option')) {
       const active = option.dataset.provider === el.fProvider.value && !option.disabled
       option.setAttribute('aria-selected', String(active))
+    }
+  }
+
+  function modelLabel(model) {
+    return model || 'Provider default'
+  }
+
+  function renderModels() {
+    const selected = providerById(el.fProvider.value)
+    const current = el.fModel.value
+    el.fModel.innerHTML = ''
+    const models = selected && Array.isArray(selected.models) ? selected.models : ['']
+    for (const model of models) {
+      const opt = document.createElement('option')
+      opt.value = model
+      opt.textContent = modelLabel(model)
+      el.fModel.appendChild(opt)
+    }
+    const hasCurrent = [...el.fModel.options].some(opt => opt.value === current)
+    if (hasCurrent) el.fModel.value = current
+    else el.fModel.value = ''
+    el.fModel.disabled = !selectedProviderAvailable()
+  }
+
+  function updatePermissionSelection() {
+    for (const option of el.permissionGrid.querySelectorAll('.permission-option')) {
+      const active = option.dataset.permission === el.fPermissions.value
+      option.setAttribute('aria-checked', String(active))
     }
   }
 
@@ -737,8 +770,11 @@
     el.newError.hidden = true
     el.fNickname.value = ''
     el.fRunName.value = ''
+    el.fModel.value = ''
+    el.fPermissions.value = 'ask'
     el.fPrompt.value = ''
     el.fCwd.value = ''
+    updatePermissionSelection()
   }
 
   function openRunDialog() {
@@ -824,6 +860,7 @@
       ? 'What should this orchestrator agent start working on?'
       : 'What should this agent start working on?'
     renderProviders()
+    updatePermissionSelection()
     updateCreateActions()
     if (addingToRun && !run) {
       showDialogError('This run is no longer active.')
@@ -851,6 +888,8 @@
     }
     const payload = {
       provider,
+      model: el.fModel.value,
+      permissions: el.fPermissions.value,
       nickname: el.fNickname.value.trim(),
       prompt: el.fPrompt.value,
       run_id: createContext.kind === 'agent' ? createContext.runId : undefined,
@@ -905,7 +944,17 @@
     syncCreateFields()
   })
   el.fMode.addEventListener('change', syncCreateFields)
-  el.fProvider.addEventListener('change', updateProviderSelection)
+  el.fProvider.addEventListener('change', () => {
+    updateProviderSelection()
+    renderModels()
+  })
+  el.fPermissions.addEventListener('change', updatePermissionSelection)
+  for (const option of el.permissionGrid.querySelectorAll('.permission-option')) {
+    option.addEventListener('click', () => {
+      el.fPermissions.value = option.dataset.permission
+      updatePermissionSelection()
+    })
+  }
   el.form.addEventListener('submit', submitNew)
 
   function modeLabel(mode) {

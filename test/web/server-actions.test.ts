@@ -193,6 +193,8 @@ function fakeOrchestratorRuntime(): WebOrchestratorRuntime {
       run.root_agent_id = 'root'
       const root = makeAgent('root', run.id, request.root.provider, 'root')
       root.nickname = request.root.nickname || 'root'
+      root.model = request.root.model
+      root.permissions = request.root.permissions ?? 'ask'
       root.task = request.root.task
       writeRun(run)
       writeAgent(root)
@@ -201,6 +203,8 @@ function fakeOrchestratorRuntime(): WebOrchestratorRuntime {
     spawnWorker(request) {
       const worker = makeAgent('worker', request.run_id, request.provider, 'worker')
       worker.nickname = request.nickname || 'worker'
+      worker.model = request.model
+      worker.permissions = request.permissions ?? 'ask'
       worker.task = request.task
       writeAgent(worker)
       return worker
@@ -250,6 +254,8 @@ describe('create terminal', () => {
 
     const created = await post(handle.port, '/api/terminals', {
       provider: 'codex-cli',
+      model: 'gpt-5-codex',
+      permissions: 'skip',
       nickname: 'Builder One',
       run_name: 'Release Check',
       working_dir: tmpDir,
@@ -257,10 +263,15 @@ describe('create terminal', () => {
     expect(created.status).toBe(200)
     const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
     expect(readRun(createdBody.run_id).name).toBe('Release Check')
-    expect(readAgent(createdBody.run_id, createdBody.id).nickname).toBe('Builder-One')
+    const root = readAgent(createdBody.run_id, createdBody.id)
+    expect(root.nickname).toBe('Builder-One')
+    expect(root.model).toBe('gpt-5-codex')
+    expect(root.permissions).toBe('skip')
 
     const added = await post(handle.port, '/api/terminals', {
       provider: 'claude-code',
+      model: 'sonnet',
+      permissions: 'ask',
       nickname: 'Reviewer',
       run_id: createdBody.run_id,
     })
@@ -268,6 +279,8 @@ describe('create terminal', () => {
     const addedBody = JSON.parse(added.body) as { id: string; run_id: string }
     expect(addedBody.run_id).toBe(createdBody.run_id)
     expect(listAgents(createdBody.run_id).map(agent => agent.nickname)).toEqual(['Builder-One', 'Reviewer'])
+    expect(readAgent(createdBody.run_id, addedBody.id).model).toBe('sonnet')
+    expect(readAgent(createdBody.run_id, addedBody.id).permissions).toBe('ask')
 
     const killed = await post(handle.port, `/api/terminals/${encodeURIComponent(addedBody.id)}/kill`, { confirm: true })
     expect(killed.status).toBe(200)
@@ -299,6 +312,24 @@ describe('create terminal', () => {
     expect(JSON.parse(res.body).error).toMatch(/unknown provider/i)
   })
 
+  it('rejects unknown model and permission values', async () => {
+    const handle = await start()
+
+    const badModel = await post(handle.port, '/api/terminals', {
+      provider: 'codex',
+      model: 'not-a-codex-model',
+    })
+    expect(badModel.status).toBe(400)
+    expect(JSON.parse(badModel.body).error).toMatch(/unknown model/i)
+
+    const badPermissions = await post(handle.port, '/api/terminals', {
+      provider: 'codex',
+      permissions: 'always',
+    })
+    expect(badPermissions.status).toBe(400)
+    expect(JSON.parse(badPermissions.body).error).toMatch(/unknown permission mode/i)
+  })
+
   it('rejects orchestrator creation unless pre-beta mode is enabled', async () => {
     const handle = await start()
     const res = await post(handle.port, '/api/terminals', {
@@ -321,6 +352,8 @@ describe('create terminal', () => {
 
     const created = await post(handle.port, '/api/terminals', {
       provider: 'codex-cli',
+      model: 'gpt-5',
+      permissions: 'skip',
       nickname: 'Lead',
       run_name: 'Orchestrator Check',
       mode: 'orchestrator',
@@ -330,15 +363,21 @@ describe('create terminal', () => {
     const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
     expect(readRunAny(createdBody.run_id).mode).toBe('orchestrator')
     expect(readRunAny(createdBody.run_id).name).toBe('Orchestrator Check')
+    expect(readAgent(createdBody.run_id, createdBody.id).model).toBe('gpt-5')
+    expect(readAgent(createdBody.run_id, createdBody.id).permissions).toBe('skip')
 
     const added = await post(handle.port, '/api/terminals', {
       provider: 'claude-code',
+      model: 'opus',
+      permissions: 'ask',
       nickname: 'Worker',
       run_id: createdBody.run_id,
     })
     expect(added.status).toBe(200)
     const addedBody = JSON.parse(added.body) as { id: string; run_id: string }
     expect(addedBody.run_id).toBe(createdBody.run_id)
+    expect(readAgent(createdBody.run_id, addedBody.id).model).toBe('opus')
+    expect(readAgent(createdBody.run_id, addedBody.id).permissions).toBe('ask')
 
     const rootKill = await post(handle.port, `/api/terminals/${encodeURIComponent(createdBody.id)}/kill`, { confirm: true })
     expect(rootKill.status).toBe(400)

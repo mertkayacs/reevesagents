@@ -61,6 +61,8 @@ describe('startWebServer', () => {
     expect(parsed.providers).toHaveLength(9)
     expect(parsed.providers[0]).toHaveProperty('available')
     expect(parsed.providers[0]).toHaveProperty('name')
+    expect(parsed.providers[0]).toHaveProperty('models')
+    expect(parsed.providers[0].models).toContain('')
 
     const health = await raw(handle.port, { path: '/healthz' })
     expect(health.status).toBe(200)

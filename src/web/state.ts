@@ -13,6 +13,7 @@ import {
   computeRunStatus,
 } from '../state/runs.js'
 import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
+import { modelValuesForProvider } from '../launcher/model-catalog.js'
 import { providerColor, providerDisplayName } from '../utils/display.js'
 import type { Provider, RunViewStatus, TaskStatus } from '../state/types.js'
 import { isOrchestratorWebProvider } from './prebeta-orchestrator.js'
@@ -73,6 +74,7 @@ export interface WebProvider {
   available: boolean
   orchestrator: boolean
   color: string
+  models: string[]
 }
 
 function monogram(nickname: string, provider: string): string {
@@ -145,5 +147,6 @@ export function listWebProviders(): WebProvider[] {
     available: available[id],
     orchestrator: isOrchestratorWebProvider(id),
     color: providerColor(id),
+    models: [...modelValuesForProvider(id)],
   }))
 }
