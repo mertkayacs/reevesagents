@@ -5,11 +5,11 @@ This document is the product map for careful refactors. A surface should stay on
 ## Core Use Cases
 
 - First setup: install ReevesAgents, run Doctor, and confirm tmux plus provider CLIs are available without writing provider configs.
-- Start a run: create multiple independent provider CLI terminals in one tmux session for the human to coordinate.
-- Watch a run: inspect active, ended, and stale runs; see terminals, prompt status, and recent output.
-- Open a real terminal: jump from ReevesAgents to the provider CLI tmux window and type directly.
-- Add a terminal: extend an existing run with another independent provider CLI window.
-- Clean up: close a terminal or stop a run with explicit confirmation.
+- Start a run: create multiple independent provider CLI agents in one tmux session for the human to coordinate.
+- Watch a run: inspect active runs and shared history; see agents, prompt status, and recent output.
+- Open an agent: jump from ReevesAgents to the provider CLI tmux window and type directly.
+- Add an agent: extend an existing run with another independent provider CLI window.
+- Clean up: close an agent or stop a run with explicit confirmation.
 - Diagnose setup: inspect provider detection, state paths, and environment health without touching credentials.
 
 ## Human TUI
@@ -17,11 +17,11 @@ This document is the product map for careful refactors. A surface should stay on
 The TUI is the primary human surface. It should stay visible-menu first and avoid hidden commands.
 
 - Welcome: main entry, current run shortcut, setup/help pages, quit.
-- Runs: dashboard for active/stale/ended runs.
-- Run hub: run actions, terminal list, output, add terminal, stop run.
-- Terminal pages: detail, output, prompt, open provider CLI, close terminal.
-- New Run: basics, first terminal, additional terminals, review, starting.
-- Add Terminal: one-screen setup inside a run.
+- Runs: dashboard for active runs and shared history.
+- Run hub: run actions, agent list, output, add agent, stop run.
+- Agent pages: detail, output, prompt, open provider CLI, close agent.
+- New Run: basics, first agent, additional agents, review, starting.
+- Add Agent: one-screen setup inside a run.
 - Settings and Doctor: provider detection, state paths, health checks.
 - Reference and Credits: in-app map and project metadata.
 
@@ -30,10 +30,10 @@ The TUI is the primary human surface. It should stay visible-menu first and avoi
 The CLI is for humans and scripts. It should stay compact.
 
 - `reevesagents`: open the TUI.
-- `spawn`: start a low-permission multi-terminal run.
+- `spawn`: start a low-permission multi-agent run.
 - `runs`: list runs, with `--json` for scripts.
-- `open`: jump to a run's Reeves window or a terminal window.
-- `peek`: print recent terminal output.
+- `open`: jump to a run's Reeves window or an agent window.
+- `peek`: print recent agent output.
 - `doctor`: run setup and environment checks.
 - `stop` and `kill`: confirmed cleanup only.
 

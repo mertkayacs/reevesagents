@@ -76,10 +76,10 @@ The `reeves` window is the TUI anchor for that run. It is not a provider termina
 
 TUI:
 
-- Best for first-time human use, visual run inspection, opening terminals, and stopping runs.
+- Best for first-time human use, visual run inspection, opening agents, and stopping runs.
 - Starts on persistent Welcome.
 - Uses visible menus with arrows, Enter, Esc, and Backspace.
-- Uses Open Terminal for switching into a provider CLI window.
+- Uses Open Agent for switching into a provider CLI window.
 
 CLI:
 
@@ -90,7 +90,7 @@ CLI:
 ## What Is Ready
 
 - Source install and build path.
-- TUI run manager with Welcome, Runs, Run hub, Terminal detail, New Run, Add Terminal, Settings, Doctor, Reference, and Credits pages.
+- TUI run manager with Welcome, Runs, Run hub, Agent detail, New Run, Add Agent, Settings, Doctor, Reference, and Credits pages.
 - Per-run tmux sessions with independent provider terminals.
 - Local JSON registry under `~/.reeves/runs`.
 - Provider launch support for Claude Code, Codex CLI, OpenCode CLI, Hermes, Kimi Code, DeepSeek CLI, Pi, Qwen Code, and Aider.
@@ -106,7 +106,7 @@ CLI:
 - Browser-style UI automation does not cover the Ink TUI. The TUI still needs a short manual terminal pass.
 - `specs/` contains local historical design notes, not release documentation.
 - Non-root packages are not part of the stable install.
-- Some internal symbol names still use older labels such as `Agent` because the state schema predates the spawner-only surface. Visible main-package UI copy should say terminal.
+- Some internal symbols still reflect older schemas, but visible main-package UI copy should say agent.
 
 ## Verification Commands
 

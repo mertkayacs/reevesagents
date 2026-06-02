@@ -12,7 +12,7 @@ ReevesAgents tracks each run in local state and opens every agent in its own tmu
 
 ## What It Does
 
-- Shows active, ended, and stale runs in a visible-menu TUI.
+- Shows active runs plus shared TUI/Web history for ended and stale runs.
 - Starts multiple independent provider CLI agents.
 - Opens the real provider CLI window for each agent.
 - Stores local JSON state under `~/.reeves/runs`.
@@ -179,7 +179,7 @@ reevesagents doctor
 reevesagents
 ```
 
-The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Reference, Credits, or Quit. New Run starts the spawner wizard directly. When launched with run context, Welcome also shows Current Run. Runs auto-cleans ended and stale run records on refresh.
+The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Reference, Credits, or Quit. New Run starts the spawner wizard directly. When launched with run context, Welcome also shows Current Run. Runs auto-archives ended and stale run records on refresh.
 
 Spawner mode can also start from the CLI:
 
@@ -198,7 +198,8 @@ Leave the model off to use the provider CLI default.
 ## TUI Pages
 
 - Welcome: animated `REEVES AGENTS` block logo, chafa-rendered blocky duck mascot, and persistent main menu.
-- Runs: list all running, ended, and stale runs. Ended and stale runs auto-clean on refresh.
+- Runs: list active runs, spawn new runs, and open shared run history.
+- History: show archived ended and stale runs with simple metadata.
 - Run hub: show agents, output, add-agent, stop, and back actions.
 - Agent detail: inspect provider, status, working directory, tmux ids, recent output, prompt, open window, and close window.
 - New Run wizard: configure providers, prompts, and windows.
@@ -239,6 +240,9 @@ reevesagents web --prebeta-orchestrator # opt into MCP/orchestrator Web controls
 ~/.reeves/
   config.json
   presets/
+  history/
+    runs/
+      <run-id>.json
   runs/
     <run-id>/
       run.json
@@ -257,6 +261,10 @@ pnpm lint
 pnpm test
 pnpm build
 ```
+
+Contributors should open pull requests against `master`. Release stabilization
+uses `release/v1.0`; tags are cut only from verified release commits. See
+[CONTRIBUTING.md](CONTRIBUTING.md) and [docs/branching.md](docs/branching.md).
 
 Portable verification:
 

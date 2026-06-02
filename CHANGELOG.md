@@ -2,6 +2,16 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
+## Unreleased
+
+### Added
+- Added shared TUI/Web history for archived ended and stale runs.
+- Added contributor branch policy, issue templates, pull request template, and security policy.
+
+### Changed
+- Runs pages now keep active runs separate from history.
+- Web beta uses click-to-attach agent selection without drag-and-drop attach behavior.
+
 ## 1.0.11 - Web UI Workbench Polish
 
 ### Changed

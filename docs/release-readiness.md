@@ -50,6 +50,7 @@ The root package and root Homebrew formula must not bundle orchestrator/MCP file
 ## First Public Release Gate
 
 - Run `git status --short --branch` and make sure the release commit contains one coherent change set.
+- Use `release/v1.0` for release stabilization. Keep `git log --first-parent --oneline release/v1.0` easy to scan.
 - Run `pnpm install --frozen-lockfile`.
 - Run `pnpm verify`.
 - Run `CI=true pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace` and `pnpm --dir packages/orchestrator verify`.
@@ -76,6 +77,7 @@ The root package and root Homebrew formula must not bundle orchestrator/MCP file
 - Keep non-root package files out of the root npm package.
 - Publish or attach `reevesagents-orchestrator` only as an explicit PRE-BETA package or release artifact.
 - Add a small issue template and security policy before inviting external users.
+- Keep contributor branch rules in `CONTRIBUTING.md` and `docs/branching.md`.
 - Add at least one screenshot or terminal recording to the README once the TUI visual pass is stable.
 
 ## Solo Maintainer Bias

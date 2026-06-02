@@ -70,9 +70,9 @@ Current pages:
 - Welcome
 - Runs
 - Run
-- Terminal
+- Agent detail
 - New Run
-- Add Terminal
+- Add Agent
 - Settings
 - Reference
 - Credits
@@ -82,9 +82,9 @@ The UI no longer uses the same three-pane layout everywhere. Layouts vary by pag
 
 - Welcome is a small animated entry screen.
 - Runs is a compact dashboard with sectioned run rows and visible actions.
-- Run is a workspace view with rows for real spawner terminals. Reeves is a TUI anchor, not a provider terminal row.
-- New Run opens the spawner form flow directly. Add Terminal uses the same form layout.
-- Terminal, Settings, Reference, Credits, and Doctor use inspector-style layouts.
+- Run is a workspace view with rows for real spawner agents. Reeves is a TUI anchor, not a provider agent row.
+- New Run opens the spawner form flow directly. Add Agent uses the same form layout.
+- Agent detail, Settings, Reference, Credits, and Doctor use inspector-style layouts.
 - Narrow terminals use shorter metrics, fewer row fields, and shorter footer text.
 
 Welcome behavior:
