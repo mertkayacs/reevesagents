@@ -225,6 +225,32 @@ describe('v1 run state', () => {
       expect(existsSync(join(tmpDir, 'runs', 'e1'))).toBe(false)
     })
 
+    it('archives simple history before removing ended runs', async () => {
+      const { writeRun, writeAgent, autoCleanupRuns, listRunHistory, runHistoryPath } = await import('../src/state/runs.js')
+      writeRun(makeRun('hist', { status: 'ended', ended_at: '2026-01-01T00:00:02.000Z', root_agent_id: 'root' }))
+      writeAgent(makeAgent('root', 'hist', { role: 'root', provider: 'codex' }))
+
+      const result = autoCleanupRuns({ sessionExists: () => true })
+      const history = listRunHistory()
+
+      expect(result.archived).toContain('hist')
+      expect(existsSync(runHistoryPath('hist'))).toBe(true)
+      expect(history).toHaveLength(1)
+      expect(history[0]).toMatchObject({
+        id: 'hist',
+        name: 'run-hist',
+        mode: 'spawner',
+        status: 'ended',
+        working_dir: '/tmp',
+        started_at: '2026-01-01T00:00:00.000Z',
+        ended_at: '2026-01-01T00:00:02.000Z',
+        agent_count: 1,
+        root_provider: 'codex',
+      })
+      expect(history[0]).not.toHaveProperty('agents')
+      expect(history[0]).not.toHaveProperty('task')
+    })
+
     it('removes runs with ended_at set even if status is running', async () => {
       const { writeRun, autoCleanupRuns } = await import('../src/state/runs.js')
       writeRun(makeRun('e2', { status: 'running', ended_at: '2026-01-01T00:00:01.000Z' }))
@@ -250,11 +276,26 @@ describe('v1 run state', () => {
     })
 
     it('removes running runs whose tmux session is gone (stale)', async () => {
-      const { writeRun, autoCleanupRuns } = await import('../src/state/runs.js')
+      const { writeRun, autoCleanupRuns, listRunHistory } = await import('../src/state/runs.js')
       writeRun(makeRun('stale'))
       const result = autoCleanupRuns({ sessionExists: () => false })
       expect(result.removed).toContain('stale')
       expect(existsSync(join(tmpDir, 'runs', 'stale'))).toBe(false)
+      expect(listRunHistory()[0]?.status).toBe('stale')
+    })
+
+    it('archives all run modes only when all-mode cleanup is requested', async () => {
+      const { writeRun, autoCleanupRuns, listRunHistory } = await import('../src/state/runs.js')
+      writeRun(makeRun('stable', { status: 'ended', ended_at: '2026-01-01T00:00:01.000Z' }))
+      writeRun({ ...makeRun('prebeta', { status: 'ended', ended_at: '2026-01-01T00:00:02.000Z' }), mode: 'orchestrator' })
+
+      expect(autoCleanupRuns({ sessionExists: () => true }).removed).toEqual(['stable'])
+      expect(listRunHistory().map(record => record.id)).toEqual(['stable'])
+      expect(listRunHistory({ includeAllModes: true }).map(record => record.id)).toEqual(['stable'])
+
+      expect(autoCleanupRuns({ sessionExists: () => true, includeAllModes: true }).removed).toEqual(['prebeta'])
+      expect(listRunHistory().map(record => record.id)).toEqual(['stable'])
+      expect(listRunHistory({ includeAllModes: true }).map(record => record.id).sort()).toEqual(['prebeta', 'stable'])
     })
 
     it('removes running runs whose agent windows are gone even when the run session is alive', async () => {
@@ -294,6 +335,18 @@ describe('v1 run state', () => {
       // runs are cleaned. The "still-running" entry is preserved.
       expect(result.removed).toEqual(['finished'])
       expect(existsSync(join(tmpDir, 'runs', 'still-running'))).toBe(true)
+    })
+
+    it('can skip stale cleanup while still archiving ended runs', async () => {
+      const { writeRun, autoCleanupRuns, listRunHistory } = await import('../src/state/runs.js')
+      writeRun(makeRun('stale-but-visible'))
+      writeRun(makeRun('finished', { status: 'ended', ended_at: '2026-01-01T00:00:01.000Z' }))
+
+      const result = autoCleanupRuns({ sessionExists: () => false, cleanStale: false })
+
+      expect(result.removed).toEqual(['finished'])
+      expect(existsSync(join(tmpDir, 'runs', 'stale-but-visible'))).toBe(true)
+      expect(listRunHistory().map(record => record.id)).toEqual(['finished'])
     })
   })
 })

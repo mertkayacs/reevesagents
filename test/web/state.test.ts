@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { writeRun, writeAgent } from '../../src/state/runs.js'
+import { archiveAndRemoveRun, writeRun, writeAgent } from '../../src/state/runs.js'
 import { buildWebState, listWebProviders } from '../../src/web/state.js'
 import { PROVIDERS } from '../../src/launcher/providers.js'
 import { providerColor, providerDisplayName } from '../../src/utils/display.js'
@@ -64,7 +64,7 @@ function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = 
 
 describe('buildWebState', () => {
   it('returns no runs on empty state', () => {
-    expect(buildWebState()).toEqual({ runs: [] })
+    expect(buildWebState()).toEqual({ runs: [], history: [] })
   })
 
   it('groups terminals under their run with monogram and provider color', () => {
@@ -134,6 +134,26 @@ describe('buildWebState', () => {
     expect(root.disabledReason).toBe('agent has no tmux window')
     expect(worker.canAttach).toBe(true)
     expect(worker.canKill).toBe(true)
+  })
+
+  it('includes shared simple history records', () => {
+    writeRun(makeRun('old'))
+    writeAgent(makeAgent('root', 'old', { role: 'root', provider: 'codex' }))
+    archiveAndRemoveRun('old', 'ended')
+
+    const state = buildWebState()
+    expect(state.runs).toEqual([])
+    expect(state.history).toHaveLength(1)
+    expect(state.history[0]).toMatchObject({
+      id: 'old',
+      name: 'run-old',
+      mode: 'spawner',
+      status: 'ended',
+      working_dir: '/tmp/work',
+      agent_count: 1,
+      root_provider: 'codex',
+      root_provider_label: 'Codex CLI',
+    })
   })
 })
 

@@ -15,7 +15,8 @@ vi.mock('../../src/state/runs.js', async () => {
     ...actual,
     listRuns: vi.fn(() => []),
     listAgents: vi.fn(() => []),
-    autoCleanupRuns: vi.fn(() => ({ removed: [] })),
+    listRunHistory: vi.fn(() => []),
+    autoCleanupRuns: vi.fn(() => ({ removed: [], archived: [] })),
   }
 })
 
@@ -58,8 +59,40 @@ describe('Runs screen', () => {
     const frame = lastFrame() ?? ''
 
     expect(frame).toContain('New Run')
+    expect(frame).toContain('History')
     expect(frame).toContain('Main Menu')
     expect(frame).toContain('Quit')
+    unmount()
+  })
+
+  it('opens shared history from the action list', async () => {
+    vi.mocked(runsState.listRuns).mockReturnValue([])
+    vi.mocked(runsState.listAgents).mockReturnValue([])
+    vi.mocked(runsState.listRunHistory).mockReturnValue([{
+      id: 'old',
+      name: 'old run',
+      mode: 'spawner',
+      status: 'ended',
+      working_dir: '/tmp',
+      started_at: '2026-01-01T00:00:00.000Z',
+      ended_at: '2026-01-01T00:05:00.000Z',
+      archived_at: '2026-01-01T00:05:01.000Z',
+      agent_count: 1,
+      root_provider: 'codex',
+    }])
+
+    const { lastFrame, stdin, unmount } = render(<Router initialScreen="Runs" />)
+
+    await waitForInput()
+    stdin.write('\u001B[B')
+    await waitForInput()
+    stdin.write('\r')
+    await waitForInput()
+
+    const frame = lastFrame() ?? ''
+    expect(frame).toContain('History')
+    expect(frame).toContain('old run')
+    expect(frame).toContain('Codex CLI')
     unmount()
   })
 

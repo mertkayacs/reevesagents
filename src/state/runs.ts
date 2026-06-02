@@ -24,6 +24,8 @@ import type {
   AgentRecord,
   Message,
   Permissions,
+  RunHistoryRecord,
+  RunHistoryStatus,
   RunMode,
   RunRecord,
   RunViewStatus,
@@ -40,6 +42,10 @@ export function runsDir(): string {
   return join(stateRoot(), 'runs')
 }
 
+export function historyDir(): string {
+  return join(stateRoot(), 'history', 'runs')
+}
+
 export function runDir(runId: string): string {
   return join(runsDir(), runId)
 }
@@ -54,6 +60,10 @@ export function runPath(runId: string): string {
 
 export function agentPath(runId: string, agentId: string): string {
   return join(agentsDir(runId), `${agentId}.json`)
+}
+
+export function runHistoryPath(runId: string): string {
+  return join(historyDir(), `${runId}.json`)
 }
 
 export function nowIso(): string {
@@ -173,6 +183,23 @@ function normalizeRun(raw: Record<string, unknown>): RunRecord {
   return run
 }
 
+function normalizeRunHistory(raw: Record<string, unknown>): RunHistoryRecord {
+  return {
+    id: asString(raw.id),
+    name: asString(raw.name).trim() || fallbackRunName(asString(raw.id)),
+    mode: normalizeRunMode(raw.mode) ?? 'spawner',
+    status: raw.status === 'stale' ? 'stale' : 'ended',
+    working_dir: asString(raw.working_dir),
+    started_at: asString(raw.started_at, nowIso()),
+    ended_at: asNullableString(raw.ended_at),
+    archived_at: asString(raw.archived_at, nowIso()),
+    agent_count: typeof raw.agent_count === 'number' && Number.isFinite(raw.agent_count)
+      ? Math.max(0, Math.floor(raw.agent_count))
+      : 0,
+    root_provider: isProvider(raw.root_provider) ? raw.root_provider : null,
+  }
+}
+
 function normalizeAgent(raw: Record<string, unknown>): AgentRecord {
   const id = asString(raw.id)
   return {
@@ -231,6 +258,12 @@ function writeAgentUnlocked(agent: AgentRecord): string {
   return path
 }
 
+function writeRunHistoryUnlocked(record: RunHistoryRecord): string {
+  const path = runHistoryPath(record.id)
+  atomicWriteJson(path, record)
+  return path
+}
+
 function readAgentUnlocked(runId: string, agentId: string): AgentRecord {
   return normalizeAgent(JSON.parse(readFileSync(agentPath(runId, agentId), 'utf-8')) as Record<string, unknown>)
 }
@@ -276,12 +309,41 @@ function listRunsUnlocked(includeAllModes: boolean): RunRecord[] {
   return runs.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
 }
 
+function listRunHistoryUnlocked(includeAllModes: boolean): RunHistoryRecord[] {
+  let entries: string[]
+  try {
+    entries = readdirSync(historyDir())
+  } catch {
+    return []
+  }
+
+  const history: RunHistoryRecord[] = []
+  for (const entry of entries) {
+    if (!entry.endsWith('.json')) continue
+    try {
+      const record = normalizeRunHistory(JSON.parse(readFileSync(join(historyDir(), entry), 'utf-8')) as Record<string, unknown>)
+      if (includeAllModes || record.mode === 'spawner') history.push(record)
+    } catch {
+      // skip malformed history records
+    }
+  }
+  return history.sort((a, b) => new Date(b.archived_at).getTime() - new Date(a.archived_at).getTime())
+}
+
 export function listRuns(): RunRecord[] {
   return listRunsUnlocked(false)
 }
 
 export function listRunsAny(): RunRecord[] {
   return listRunsUnlocked(true)
+}
+
+export interface RunHistoryOptions {
+  includeAllModes?: boolean
+}
+
+export function listRunHistory(options: RunHistoryOptions = {}): RunHistoryRecord[] {
+  return listRunHistoryUnlocked(options.includeAllModes === true)
 }
 
 export function removeRun(runId: string): void {
@@ -333,6 +395,35 @@ function listAgentsForRunIds(runIds: string[]): AgentRecord[] {
     if (a.run_id !== b.run_id) return a.run_id.localeCompare(b.run_id)
     if (a.role !== b.role) return a.role === 'root' ? -1 : 1
     return new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
+  })
+}
+
+function buildRunHistoryRecord(run: RunRecord, status: RunHistoryStatus): RunHistoryRecord {
+  const agents = listAgentsForRunIds([run.id])
+  const root = agents.find(agent => agent.role === 'root' && (!run.root_agent_id || agent.id === run.root_agent_id))
+    ?? agents.find(agent => agent.role === 'root')
+    ?? null
+  return {
+    id: run.id,
+    name: run.name,
+    mode: run.mode === 'orchestrator' ? 'orchestrator' : 'spawner',
+    status,
+    working_dir: run.working_dir,
+    started_at: run.started_at,
+    ended_at: run.ended_at,
+    archived_at: nowIso(),
+    agent_count: agents.length,
+    root_provider: root?.provider ?? null,
+  }
+}
+
+export function archiveAndRemoveRun(runId: string, status: RunHistoryStatus): RunHistoryRecord {
+  return withRunsLock(() => {
+    const run = readRunUnlocked(runId)
+    const record = buildRunHistoryRecord(run, status)
+    writeRunHistoryUnlocked(record)
+    rmSync(runDir(runId), { recursive: true, force: true })
+    return record
   })
 }
 
@@ -422,6 +513,8 @@ export interface AutoCleanupOptions {
   sessionExists?: (_session: string) => boolean
   targetExists?: (_target: string) => boolean
   tmuxAvailable?: () => boolean
+  includeAllModes?: boolean
+  cleanStale?: boolean
 }
 
 export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions = {}): boolean {
@@ -447,24 +540,27 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
 // Runs refresh tick. If tmux is not installed at all, only ended runs are
 // cleaned (the stale check is skipped) so a missing-tmux environment never
 // nukes the user's run records. Per-run failures are swallowed.
-export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: string[] } {
+export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: string[]; archived: string[] } {
   const sessionExists = options.sessionExists ?? defaultTmuxSessionExists
   const targetExists = options.targetExists ?? defaultTmuxTargetExists
   const tmuxAvailable = options.sessionExists || options.targetExists
     ? () => true
     : options.tmuxAvailable ?? defaultTmuxAvailable
-  const haveTmux = tmuxAvailable()
+  const haveTmux = options.cleanStale === false ? false : tmuxAvailable()
   const removed: string[] = []
-  for (const run of listRuns()) {
+  const archived: string[] = []
+  const runs = options.includeAllModes ? listRunsAny() : listRuns()
+  for (const run of runs) {
     const isEnded = run.status === 'ended' || run.ended_at !== null
     const isStale = !isEnded && haveTmux && !runHasLiveTmuxTarget(run, { sessionExists, targetExists })
     if (!isEnded && !isStale) continue
     try {
-      removeRun(run.id)
+      const record = archiveAndRemoveRun(run.id, isStale ? 'stale' : 'ended')
       removed.push(run.id)
+      archived.push(record.id)
     } catch {
       // try again next refresh
     }
   }
-  return { removed }
+  return { removed, archived }
 }

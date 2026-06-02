@@ -278,6 +278,11 @@ describe('create terminal', () => {
     expect(stopped.status).toBe(200)
     expect(JSON.parse(stopped.body)).toEqual({ ok: true })
     expect(readRun(createdBody.run_id).status).toBe('ended')
+
+    const stateAfterStop = await get(handle.port, '/api/state')
+    const parsed = JSON.parse(stateAfterStop.body)
+    expect(parsed.runs).toEqual([])
+    expect(parsed.history.map((record: { id: string }) => record.id)).toContain(createdBody.run_id)
   })
 
   it('rejects an unknown provider', async () => {
@@ -346,6 +351,11 @@ describe('create terminal', () => {
     const stopped = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/stop`, { confirm: true })
     expect(stopped.status).toBe(200)
     expect(readRunAny(createdBody.run_id).status).toBe('ended')
+
+    const stateAfterStop = await get(handle.port, '/api/state')
+    const parsed = JSON.parse(stateAfterStop.body)
+    expect(parsed.runs).toEqual([])
+    expect(parsed.history.map((record: { id: string; mode: string }) => [record.id, record.mode])).toContainEqual([createdBody.run_id, 'orchestrator'])
   })
 })
 

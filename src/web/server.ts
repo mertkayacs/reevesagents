@@ -17,7 +17,7 @@ import { attachTerminalBridge } from './bridge.js'
 import { startRun, spawnWorker, killAgent, stopRun } from '../launcher/runtime.js'
 import { normalizeProvider } from '../launcher/providers.js'
 import { providerDisplayName } from '../utils/display.js'
-import { findAgent, findAgentAny, readRun, readRunAny } from '../state/runs.js'
+import { autoCleanupRuns, findAgent, findAgentAny, readRun, readRunAny } from '../state/runs.js'
 import {
   isOrchestratorWebProvider,
   loadWebOrchestratorRuntime,
@@ -125,7 +125,10 @@ function createSseHub(prebetaOrchestrator: boolean): SseHub {
   let timer: ReturnType<typeof setInterval> | null = null
   let last = ''
 
-  const snapshot = (): string => JSON.stringify(buildWebState({ prebetaOrchestrator }))
+  const snapshot = (): string => {
+    autoCleanupRuns({ includeAllModes: prebetaOrchestrator, cleanStale: false })
+    return JSON.stringify(buildWebState({ prebetaOrchestrator }))
+  }
   const write = (res: ServerResponse, payload: string): void => {
     try { res.write(`data: ${payload}\n\n`) } catch { /* client gone; close handler will drop it */ }
   }
@@ -300,6 +303,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     return
   }
   if (method === 'GET' && path === '/api/state') {
+    autoCleanupRuns({ includeAllModes: ctx.prebetaOrchestrator, cleanStale: false })
     sendJson(res, 200, {
       ...buildWebState({ prebetaOrchestrator: ctx.prebetaOrchestrator }),
       providers: listWebProviders(),

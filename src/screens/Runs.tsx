@@ -1,6 +1,6 @@
 // Runs list page: displays live runs with optional selection-driven detail.
 // Auto-cleanup of ended/stale runs on mount and every 2s refresh. Frame + List template.
-// Paginates run rows when the list exceeds the available terminal height.
+// Scrolls run rows when the list exceeds the available terminal height.
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { Box, useInput, useApp, useWindowSize } from 'ink'
@@ -8,7 +8,6 @@ import { Frame } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { Legend } from '../components/Legend.js'
-import { Pagination } from '../components/Pagination.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
@@ -16,19 +15,20 @@ import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from 
 import { autoCleanupRuns, computeRunStatus, listAgents, listRuns, runHasLiveTmuxTarget } from '../state/runs.js'
 import type { RunRecord } from '../state/types.js'
 
-const ACTIONS = ['NewRun', 'Main Menu', 'Quit'] as const
-const CHROME_ROWS = 17
+const ACTIONS = ['NewRun', 'History', 'Main Menu', 'Quit'] as const
+const CHROME_ROWS = 18
 const ACTION_COPY: Record<typeof ACTIONS[number], { label: string; hint: string }> = {
   NewRun: { label: 'New Run', hint: 'create a spawner workspace' },
+  History: { label: 'History', hint: 'view ended and stale runs' },
   'Main Menu': { label: 'Main Menu', hint: 'settings, doctor, reference, credits' },
   Quit: { label: 'Quit', hint: 'exit the TUI' },
 }
 const ACTION_LABEL_WIDTH = Math.max(...ACTIONS.map(action => ACTION_COPY[action].label.length))
 
 interface SelectableItem {
-  type: 'run' | 'pagination' | 'action'
+  type: 'run' | 'section' | 'action'
   run?: RunRecord
-  action?: string
+  action?: typeof ACTIONS[number]
 }
 
 function statusGlyph(status: string): { char: string; color: string } {
@@ -37,18 +37,35 @@ function statusGlyph(status: string): { char: string; color: string } {
   return { char: glyphs.status.fail, color: colors.status.error }
 }
 
+function normalizeSelectedIndex(idx: number, runCount: number): number {
+  const firstActionIdx = runCount + 1
+  const maxIdx = firstActionIdx + ACTIONS.length - 1
+  if (runCount === 0) return Math.min(Math.max(firstActionIdx, idx), maxIdx)
+  const clamped = Math.min(Math.max(0, idx), maxIdx)
+  return clamped === runCount ? firstActionIdx : clamped
+}
+
+function moveSelectedIndex(idx: number, delta: number, runCount: number): number {
+  const firstActionIdx = runCount + 1
+  const maxIdx = firstActionIdx + ACTIONS.length - 1
+  if (runCount === 0) return Math.min(Math.max(firstActionIdx, idx + delta), maxIdx)
+  let next = idx + delta
+  if (next === runCount) next += delta
+  return Math.min(Math.max(0, next), maxIdx)
+}
+
 export function Runs() {
   const { exit } = useApp()
   const { push, resetStack, setSelectedRunId } = useRouter()
   const { rows: termRows } = useWindowSize()
-  const pageSize = Math.max(2, termRows - CHROME_ROWS)
+  const visibleRunCount = Math.max(2, termRows - CHROME_ROWS)
 
   const [runs, setRuns] = useState<RunRecord[]>(() => {
     autoCleanupRuns()
     return listRuns()
   })
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const [page, setPage] = useState(1)
+  const [runScroll, setRunScroll] = useState(0)
 
   function refresh(): void {
     autoCleanupRuns()
@@ -61,10 +78,7 @@ export function Runs() {
       }
       return prev
     })
-    const nextTotalPages = Math.max(1, Math.ceil(next.length / pageSize))
-    const nextVisibleRuns = next.slice(0, pageSize).length
-    const maxSelectableIdx = nextVisibleRuns + (nextTotalPages > 1 ? 1 : 0) + ACTIONS.length
-    setSelectedIdx(idx => Math.min(idx, Math.max(0, maxSelectableIdx)))
+    setSelectedIdx(idx => normalizeSelectedIndex(idx, next.length))
   }
 
   useEffect(() => {
@@ -72,21 +86,16 @@ export function Runs() {
     return () => clearInterval(timer)
   }, [])
 
-  useEffect(() => { setPage(1) }, [runs.length])
-
-  const totalPages = Math.max(1, Math.ceil(runs.length / pageSize))
-  const pagedRuns = runs.slice((page - 1) * pageSize, page * pageSize)
-  const paginOffset = totalPages > 1 ? 1 : 0
-  const firstSelectableIdx = pagedRuns.length > 0 ? 0 : pagedRuns.length + paginOffset + 1
+  useEffect(() => { setSelectedIdx(idx => normalizeSelectedIndex(idx, runs.length)) }, [runs.length])
 
   const items: SelectableItem[] = [
-    ...pagedRuns.map(run => ({ type: 'run' as const, run })),
-    ...(totalPages > 1 ? [{ type: 'pagination' as const }] : []),
-    { type: 'action' as const, action: '__section__' },
+    ...runs.map(run => ({ type: 'run' as const, run })),
+    { type: 'section' as const },
     ...ACTIONS.map(action => ({ type: 'action' as const, action })),
   ]
 
-  const selected = items[selectedIdx]
+  const activeIdx = normalizeSelectedIndex(selectedIdx, runs.length)
+  const selected = items[activeIdx]
   const selectedRun = selected?.type === 'run' ? selected.run : null
   const runStatuses = useMemo(
     () => new Map(runs.map(run => [run.id, computeRunStatus(run, runHasLiveTmuxTarget(run))])),
@@ -95,11 +104,23 @@ export function Runs() {
   const runStatus = (run: RunRecord) => runStatuses.get(run.id) ?? computeRunStatus(run)
   const runningCount = runs.filter(run => runStatus(run) === 'running').length
   const staleCount = runs.filter(run => runStatus(run) === 'stale').length
-  const runNameWidth = Math.max(8, ...pagedRuns.map(run => run.name.length))
+  const maxRunScroll = Math.max(0, runs.length - visibleRunCount)
+  const visibleRuns = runs.slice(runScroll, runScroll + visibleRunCount)
+  const runNameWidth = Math.max(8, ...visibleRuns.map(run => run.name.length))
+  const actionStartIdx = runs.length + 1
+
+  useEffect(() => {
+    setRunScroll(offset => {
+      const clampedOffset = Math.min(offset, maxRunScroll)
+      if (activeIdx >= runs.length) return clampedOffset
+      if (activeIdx < clampedOffset) return activeIdx
+      if (activeIdx >= clampedOffset + visibleRunCount) return Math.min(maxRunScroll, activeIdx - visibleRunCount + 1)
+      return clampedOffset
+    })
+  }, [activeIdx, runs.length, maxRunScroll, visibleRunCount])
 
   function handleActivate(): void {
     if (!selected) return
-    if (selected.type === 'pagination') return
 
     if (selected.type === 'run' && selected.run) {
       setSelectedRunId(selected.run.id)
@@ -110,6 +131,7 @@ export function Runs() {
     if (selected.type === 'action') {
       switch (selected.action) {
         case 'NewRun': push('NewRun'); break
+        case 'History': push('RunHistory'); break
         case 'Main Menu': resetStack('Welcome', ['Welcome']); break
         case 'Quit': exit(); break
       }
@@ -118,42 +140,23 @@ export function Runs() {
 
   useInput((_input, key) => {
     if (key.upArrow) {
-      setSelectedIdx(idx => {
-        let next = idx - 1
-        while (next >= 0 && items[next]?.type === 'action' && items[next]?.action === '__section__') next--
-        return Math.max(0, next)
-      })
+      setSelectedIdx(idx => moveSelectedIndex(normalizeSelectedIndex(idx, runs.length), -1, runs.length))
       return
     }
     if (key.downArrow) {
-      setSelectedIdx(idx => {
-        let next = idx + 1
-        while (next < items.length && items[next]?.type === 'action' && items[next]?.action === '__section__') next++
-        return Math.min(items.length - 1, next)
-      })
+      setSelectedIdx(idx => moveSelectedIndex(normalizeSelectedIndex(idx, runs.length), 1, runs.length))
       return
     }
     if (key.return) { handleActivate(); return }
     if (key.escape || key.backspace) { resetStack('Welcome', ['Welcome']); return }
   })
 
-  useEffect(() => { setSelectedIdx(firstSelectableIdx) }, [firstSelectableIdx, page])
-  useEffect(() => {
-    setSelectedIdx(idx => {
-      const clamped = Math.min(idx, Math.max(0, items.length - 1))
-      const item = items[clamped]
-      return item?.type === 'action' && item.action === '__section__' ? firstSelectableIdx : clamped
-    })
-  }, [items.length, firstSelectableIdx])
-
   let statusContext = ''
   if (selectedRun) {
     const agents = listAgents(selectedRun.id)
     statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} agents · ${selectedRun.working_dir}`
-  } else if (selected?.type === 'action' && selected.action && selected.action !== '__section__') {
-    statusContext = ACTION_COPY[selected.action as typeof ACTIONS[number]]?.hint ?? selected.action
-  } else if (selected?.type === 'pagination') {
-    statusContext = `page ${page} of ${totalPages} · ← → turn page`
+  } else if (selected?.type === 'action' && selected.action) {
+    statusContext = ACTION_COPY[selected.action]?.hint ?? selected.action
   }
 
 
@@ -166,7 +169,7 @@ export function Runs() {
       ]}
       tagline="Manage local tmux workspaces. Spawner runs are independent provider CLI agents."
       statusContext={statusContext}
-      statusKeys="enter open · ↑↓ move · esc main menu"
+      statusKeys="enter open · ↑↓ scroll · esc main menu"
     >
       <Box flexDirection="column">
         <Section label="Runs" />
@@ -178,7 +181,8 @@ export function Runs() {
             disabled
           />
         ) : (
-          pagedRuns.map((run, idx) => {
+          visibleRuns.map((run, idx) => {
+            const absoluteIdx = runScroll + idx
             const agents = listAgents(run.id)
             const root = agents.find(a => a.role === 'root')
             const badges = [
@@ -193,7 +197,7 @@ export function Runs() {
             return (
               <Row
                 key={run.id}
-                selected={selectedIdx === idx}
+                selected={activeIdx === absoluteIdx}
                 primary={run.name}
                 primaryWidth={runNameWidth}
                 glyph={statusGlyph(runStatus(run))}
@@ -203,14 +207,12 @@ export function Runs() {
             )
           })
         )}
-
-        {totalPages > 1 && (
-          <Pagination
-            page={page}
-            total={totalPages}
-            focused={selectedIdx === pagedRuns.length}
-            onPrev={() => setPage(p => Math.max(1, p - 1))}
-            onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+        {runs.length > visibleRunCount && (
+          <Row
+            selected={false}
+            primary={`${runScroll + 1}-${runScroll + visibleRuns.length} of ${runs.length}`}
+            trailing="scroll with arrows"
+            disabled
           />
         )}
         <SectionEnd />
@@ -227,7 +229,7 @@ export function Runs() {
         {ACTIONS.map((action, idx) => (
           <Row
             key={action}
-            selected={selectedIdx === pagedRuns.length + paginOffset + 1 + idx}
+            selected={activeIdx === actionStartIdx + idx}
             primary={ACTION_COPY[action].label}
             primaryWidth={ACTION_LABEL_WIDTH}
             hint={ACTION_COPY[action].hint}

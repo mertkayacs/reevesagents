@@ -1,5 +1,5 @@
-// Web client: renders the terminal sidebar from /api/state, keeps it live over the
-// /api/events SSE stream, and attaches an xterm.js terminal to a tmux window through
+// Web client: renders the agent sidebar from /api/state, keeps it live over the
+// /api/events SSE stream, and attaches xterm.js to an agent tmux window through
 // the /term websocket bridge. Globals Terminal and FitAddon come from the xterm UMD
 // bundles loaded before this script. No build step, no framework.
 
@@ -51,12 +51,11 @@
   }
 
   let runs = []
+  let history = []
   let providers = []
   let prebetaOrchestrator = false
   let selectedId = null
   let session = null // { id, ws, term, fit, observer }
-  let draggedAgentId = null
-  let dropDepth = 0
 
   // --- http helpers ---------------------------------------------------------
 
@@ -91,6 +90,7 @@
   function applyState(data) {
     providers = data.providers || []
     runs = data.runs || []
+    history = data.history || []
     prebetaOrchestrator = data.prebeta && data.prebeta.orchestrator === true
     el.brandBeta.textContent = prebetaOrchestrator ? 'web · pre-beta MCP' : 'web · beta'
     renderProviders()
@@ -106,8 +106,9 @@
         const data = JSON.parse(e.data)
         if (Array.isArray(data.runs)) {
           runs = data.runs
-          renderSidebar()
         }
+        if (Array.isArray(data.history)) history = data.history
+        renderSidebar()
       } catch { /* ignore malformed frame */ }
     }
   }
@@ -156,10 +157,10 @@
   }
 
   function renderSidebar() {
-    const runsWithAgents = runs.filter(r => r.terminals.length > 0)
+    const runsWithAgents = runs.filter(r => r.status !== 'ended' && r.terminals.length > 0)
     const agentCount = runsWithAgents.reduce((sum, run) => sum + run.terminals.length, 0)
     el.sidebarCount.textContent = String(agentCount)
-    el.sidebarEmpty.hidden = runsWithAgents.length > 0
+    el.sidebarEmpty.hidden = runsWithAgents.length > 0 || history.length > 0
     el.sidebarList.innerHTML = ''
 
     for (const run of runsWithAgents) {
@@ -194,6 +195,52 @@
       for (const agent of run.terminals) group.appendChild(renderCard(run, agent))
       el.sidebarList.appendChild(group)
     }
+
+    if (history.length > 0) {
+      const group = document.createElement('div')
+      group.className = 'history-group'
+
+      const head = document.createElement('div')
+      head.className = 'history-head'
+      const title = document.createElement('span')
+      title.className = 'history-title'
+      title.textContent = 'History'
+      head.appendChild(title)
+      const count = document.createElement('span')
+      count.className = 'history-count'
+      count.textContent = `${history.length} archived`
+      head.appendChild(count)
+      group.appendChild(head)
+
+      for (const record of history) group.appendChild(renderHistoryRecord(record))
+      el.sidebarList.appendChild(group)
+    }
+  }
+
+  function renderHistoryRecord(record) {
+    const item = document.createElement('div')
+    item.className = 'history-card'
+    item.dataset.status = record.status
+
+    const body = document.createElement('div')
+    body.className = 'history-body'
+    const name = document.createElement('span')
+    name.className = 'history-name'
+    name.textContent = record.name
+    name.title = `${record.name} · ${record.working_dir}`
+    body.appendChild(name)
+    const meta = document.createElement('span')
+    meta.className = 'history-meta'
+    const provider = record.root_provider_label || 'no root provider'
+    meta.textContent = `${modeLabel(record.mode)} · ${record.status} · ${record.agent_count} agent${record.agent_count === 1 ? '' : 's'} · ${provider}`
+    body.appendChild(meta)
+    item.appendChild(body)
+
+    const date = document.createElement('span')
+    date.className = 'history-date'
+    date.textContent = shortIso(record.ended_at || record.archived_at)
+    item.appendChild(date)
+    return item
   }
 
   function renderCard(run, agent) {
@@ -256,52 +303,12 @@
 
     if (agent.canAttach) {
       open.addEventListener('click', () => attach(agent.id))
-      card.draggable = true
-      card.classList.add('is-draggable')
-      card.setAttribute('aria-grabbed', 'false')
-      card.addEventListener('dragstart', (ev) => startCardDrag(ev, card, agent))
-      card.addEventListener('dragend', () => endCardDrag(card))
     } else {
       open.disabled = true
       card.classList.add('is-disabled')
       open.title = agent.disabledReason || 'agent is unavailable'
     }
     return card
-  }
-
-  function startCardDrag(ev, card, agent) {
-    draggedAgentId = agent.id
-    dropDepth = 0
-    card.classList.add('is-dragging')
-    card.setAttribute('aria-grabbed', 'true')
-    document.body.classList.add('is-dragging-agent')
-    if (ev.dataTransfer) {
-      ev.dataTransfer.effectAllowed = 'copy'
-      ev.dataTransfer.setData('application/x-reeves-agent', agent.id)
-      ev.dataTransfer.setData('text/plain', agent.nickname)
-    }
-  }
-
-  function endCardDrag(card) {
-    card.classList.remove('is-dragging')
-    card.setAttribute('aria-grabbed', 'false')
-    clearDropTarget()
-  }
-
-  function canDropAgent(id) {
-    const found = id ? findAgent(id) : null
-    return !!found && found.terminal.canAttach
-  }
-
-  function setDropTarget(active) {
-    el.termWrap.classList.toggle('is-drop-target', active)
-  }
-
-  function clearDropTarget() {
-    draggedAgentId = null
-    dropDepth = 0
-    document.body.classList.remove('is-dragging-agent')
-    setDropTarget(false)
   }
 
   function setStageStatus(kind, text) {
@@ -540,33 +547,14 @@
   el.fRun.addEventListener('change', syncCreateFields)
   el.fMode.addEventListener('change', syncCreateFields)
   el.form.addEventListener('submit', submitNew)
-  el.termWrap.addEventListener('dragenter', (ev) => {
-    if (!canDropAgent(draggedAgentId)) return
-    ev.preventDefault()
-    dropDepth += 1
-    setDropTarget(true)
-  })
-  el.termWrap.addEventListener('dragover', (ev) => {
-    if (!canDropAgent(draggedAgentId)) return
-    ev.preventDefault()
-    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy'
-    setDropTarget(true)
-  })
-  el.termWrap.addEventListener('dragleave', () => {
-    if (!draggedAgentId) return
-    dropDepth = Math.max(0, dropDepth - 1)
-    if (dropDepth === 0) setDropTarget(false)
-  })
-  el.termWrap.addEventListener('drop', (ev) => {
-    const id = draggedAgentId || (ev.dataTransfer ? ev.dataTransfer.getData('application/x-reeves-agent') : '')
-    if (!canDropAgent(id)) return
-    ev.preventDefault()
-    clearDropTarget()
-    attach(id)
-  })
 
   function modeLabel(mode) {
     return mode === 'orchestrator' ? 'Orchestrator MCP' : 'Spawner'
+  }
+
+  function shortIso(value) {
+    if (!value) return 'unknown'
+    return `${String(value).replace('T', ' ').slice(0, 16)}Z`
   }
 
   loadState().catch((err) => {

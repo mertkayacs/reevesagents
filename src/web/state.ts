@@ -1,5 +1,5 @@
 // Shapes the registry into the view model the web client renders.
-// Input: the live registry (runs + agents). Output: runs grouped with terminal cards.
+// Input: the live registry (runs + agents). Output: live runs and simple history.
 // Invariant: read-only. This never writes state and reuses the same registry the
 // TUI and CLI read, so the web UI is a viewer, not a second source of truth.
 
@@ -8,6 +8,7 @@ import {
   listRunsAny,
   listAgents,
   listAgentsAny,
+  listRunHistory,
   runHasLiveTmuxTarget,
   computeRunStatus,
 } from '../state/runs.js'
@@ -47,8 +48,23 @@ export interface WebRun {
   terminals: WebTerminal[]
 }
 
+export interface WebRunHistory {
+  id: string
+  name: string
+  mode: 'spawner' | 'orchestrator'
+  status: 'ended' | 'stale'
+  working_dir: string
+  started_at: string
+  ended_at: string | null
+  archived_at: string
+  agent_count: number
+  root_provider: Provider | null
+  root_provider_label: string | null
+}
+
 export interface WebState {
   runs: WebRun[]
+  history: WebRunHistory[]
 }
 
 export interface WebProvider {
@@ -103,7 +119,20 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       terminals,
     }
   })
-  return { runs }
+  const history = listRunHistory({ includeAllModes: options.prebetaOrchestrator === true }).map<WebRunHistory>(record => ({
+    id: record.id,
+    name: record.name,
+    mode: record.mode,
+    status: record.status,
+    working_dir: record.working_dir,
+    started_at: record.started_at,
+    ended_at: record.ended_at,
+    archived_at: record.archived_at,
+    agent_count: record.agent_count,
+    root_provider: record.root_provider,
+    root_provider_label: record.root_provider ? providerDisplayName(record.root_provider) : null,
+  }))
+  return { runs, history }
 }
 
 // Provider options for the create form. Availability is probed via `which`, so this

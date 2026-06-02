@@ -29,7 +29,7 @@ vi.mock('../../src/state/runs.js', async () => {
     readRun: vi.fn(() => mockRun),
     listRuns: vi.fn(() => []),
     listAgents: vi.fn(() => []),
-    autoCleanupRuns: vi.fn(() => ({ removed: [] })),
+    autoCleanupRuns: vi.fn(() => ({ removed: [], archived: [] })),
   }
 })
 
