@@ -7,12 +7,15 @@ import { Row } from '../../../components/Row.js'
 import { Dialog } from '../../../components/Dialog.js'
 import { useRouter } from '../../../router.js'
 import { colors } from '../../../utils/tokens.js'
-import { deleteAgent, findAgent, readRun } from '../../../state/runs.js'
+import { translatePhrase } from '../../../i18n/catalog.js'
+import { useLanguage } from '../../../state/LanguageContext.js'
+import { deleteAgent, findAgent, listAgents, readRun } from '../../../state/runs.js'
 import { killAgent } from '../../../launcher/runtime.js'
 import type { AgentRecord } from '../../../state/types.js'
 
 export function AgentKill() {
   const { selectedAgentId, pop, resetStack } = useRouter()
+  const { language, t } = useLanguage()
   const [agent] = useState<AgentRecord | null>(() =>
     selectedAgentId ? (() => { try { return findAgent(selectedAgentId) } catch { return null } })() : null
   )
@@ -26,8 +29,10 @@ export function AgentKill() {
         deleteAgent(agent.id)
         resetStack('RunAgents')
       } else {
+        const wasLastLiveAgent = listAgents(agent.run_id).filter(item => !item.ended_at).length <= 1
         killAgent(agent.id)
-        pop()
+        if (wasLastLiveAgent) resetStack('RunHistory')
+        else pop()
       }
     }
   }
@@ -71,13 +76,11 @@ export function AgentKill() {
       statusKeys="←→ switch · enter select · esc cancel"
     >
       <Dialog
-        title={isAgentEnded ? `Delete ${agent.nickname}?` : `Stop ${agent.nickname}?`}
-        body={isAgentEnded
-          ? 'Removes this stopped agent from the run. Other run state is preserved.'
-          : 'Stops this agent window and marks it ended. Other agents continue.'}
+        title={t(isAgentEnded ? 'agentKill.deleteTitle' : 'agentKill.stopTitle', { name: agent.nickname })}
+        body={t(isAgentEnded ? 'agentKill.deleteBody' : 'agentKill.stopBody')}
         intent="danger"
-        confirmLabel={isAgentEnded ? 'Delete Agent' : 'Stop Agent'}
-        cancelLabel="Cancel"
+        confirmLabel={translatePhrase(language, isAgentEnded ? 'Delete Agent' : 'Stop Agent')}
+        cancelLabel={t('common.cancel')}
         onConfirm={handleConfirm}
         onCancel={pop}
       />

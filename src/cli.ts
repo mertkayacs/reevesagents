@@ -8,7 +8,7 @@ import { prepareTuiColorEnv } from './utils/color-env.js'
 import { runDoctor } from './launcher/doctor.js'
 import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
 import { normalizeProvider, PROVIDERS } from './launcher/providers.js'
-import { listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
+import { autoCleanupRuns, listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
 import { providerDisplayName } from './utils/display.js'
@@ -244,6 +244,7 @@ program
   .description('list runs')
   .option('--json', 'output JSON array')
   .action((opts) => {
+    autoCleanupRuns()
     const runs = listRuns().map(run => ({ ...run, view_status: computeRunStatus(run, runHasLiveTmuxTarget(run)) }))
     if (opts.json) {
       console.log(JSON.stringify(runs, null, 2))

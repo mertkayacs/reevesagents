@@ -75,6 +75,16 @@ describe('v1 run state', () => {
     expect(listRuns().map(run => run.id)).toEqual(['new', 'old'])
   })
 
+  it('hides ended runs from active run listings', async () => {
+    const { writeRun, listRuns, listRunsAny } = await import('../src/state/runs.js')
+    writeRun(makeRun('active'))
+    writeRun(makeRun('ended', { status: 'ended', ended_at: '2026-01-02T00:00:00.000Z' }))
+    writeRun({ ...makeRun('prebeta-ended', { status: 'ended', ended_at: '2026-01-02T00:00:00.000Z' }), mode: 'orchestrator' })
+
+    expect(listRuns().map(run => run.id)).toEqual(['active'])
+    expect(listRunsAny().map(run => run.id)).toEqual(['active'])
+  })
+
   it('hides non-spawner run records from the root package', async () => {
     const { writeRun, listRuns, readRun } = await import('../src/state/runs.js')
     writeRun(makeRun('stable'))

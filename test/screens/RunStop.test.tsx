@@ -64,7 +64,7 @@ describe('RunStop screen', () => {
     delete process.env.REEVES_RUN_ID
   })
 
-  it('returns to the run hub after stopping the run', async () => {
+  it('moves to history after stopping the run', async () => {
     const { stdin, lastFrame, unmount } = render(<Router initialScreen="RunStop" />)
 
     expect(lastFrame() ?? '').toContain('Return and stop "test-run"?')
@@ -75,7 +75,7 @@ describe('RunStop screen', () => {
 
     expect(runtime.openReeves).toHaveBeenCalledWith('run-1')
     expect(runtime.stopRun).toHaveBeenCalledWith('run-1')
-    expect(lastFrame() ?? '').toContain('test-run')
+    expect(lastFrame() ?? '').toContain('History')
     unmount()
   })
 

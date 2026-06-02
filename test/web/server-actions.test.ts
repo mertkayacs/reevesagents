@@ -296,11 +296,7 @@ describe('create terminal', () => {
     const stopped = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/stop`, { confirm: true })
     expect(stopped.status).toBe(200)
     expect(JSON.parse(stopped.body)).toEqual({ ok: true })
-    expect(readRun(createdBody.run_id).status).toBe('ended')
-
-    const deletedRun = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/delete`, { confirm: true })
-    expect(deletedRun.status).toBe(200)
-    expect(JSON.parse(deletedRun.body)).toEqual({ ok: true })
+    expect(() => readRun(createdBody.run_id)).toThrow(/Run not found/)
 
     const stateAfterStop = await get(handle.port, '/api/state')
     const parsed = JSON.parse(stateAfterStop.body)
@@ -328,7 +324,7 @@ describe('create terminal', () => {
 
     const killed = await post(handle.port, `/api/terminals/${encodeURIComponent(createdBody.id)}/kill`, { confirm: true })
     expect(killed.status).toBe(200)
-    expect(readRun(createdBody.run_id).status).toBe('ended')
+    expect(() => readRun(createdBody.run_id)).toThrow(/Run not found/)
 
     const stateAfterKill = await get(handle.port, '/api/state')
     const parsed = JSON.parse(stateAfterKill.body)

@@ -104,6 +104,18 @@
     'web.manyAgents': '{{count}} agents',
     'web.spawner': 'Spawner',
     'web.orchestrator': 'Orchestrator MCP',
+    'web.roleRoot': 'root',
+    'web.roleWorker': 'worker',
+    'web.statusQueued': 'queued',
+    'web.statusWorking': 'working',
+    'web.statusDone': 'done',
+    'web.statusFailed': 'failed',
+    'web.statusBlocked': 'blocked',
+    'web.statusEnded': 'ended',
+    'web.statusStale': 'stale',
+    'web.statusRunning': 'running',
+    'web.unknown': 'unknown',
+    'web.useProvider': 'use {{name}}',
   }
 
   const el = {
@@ -343,8 +355,8 @@
       const opt = document.createElement('option')
       opt.value = p.id
       const supported = mode !== 'orchestrator' || p.orchestrator === true
-      opt.textContent = p.available ? p.name : `${p.name} (not installed)`
-      if (mode === 'orchestrator' && !supported) opt.textContent = `${p.name} (Spawner only)`
+      opt.textContent = p.available ? p.name : `${p.name} (${t('web.notInstalled')})`
+      if (mode === 'orchestrator' && !supported) opt.textContent = `${p.name} (${t('web.spawnerOnly')})`
       opt.disabled = !p.available || !supported
       el.fProvider.appendChild(opt)
 
@@ -355,7 +367,7 @@
       choice.dataset.provider = p.id
       choice.style.setProperty('--provider-color', p.color)
       choice.disabled = opt.disabled
-      choice.title = opt.disabled ? opt.textContent : `use ${p.name}`
+      choice.title = opt.disabled ? opt.textContent : t('web.useProvider', { name: p.name })
       choice.addEventListener('click', () => {
         if (choice.disabled) return
         el.fProvider.value = p.id
@@ -717,7 +729,7 @@
     const meta = document.createElement('span')
     meta.className = 'history-meta'
     const provider = record.root_provider_label || t('web.noRootProvider')
-    meta.textContent = `${modeLabel(record.mode)} · ${record.status} · ${agentCountLabel(record.agent_count)} · ${provider}`
+    meta.textContent = `${modeLabel(record.mode)} · ${statusLabel(record.status)} · ${agentCountLabel(record.agent_count)} · ${provider}`
     body.appendChild(meta)
     item.appendChild(body)
 
@@ -765,7 +777,7 @@
     prov.textContent = agent.provider_label || agent.provider
     prov.style.setProperty('--provider-color', agent.color)
     meta.appendChild(prov)
-    meta.append(document.createTextNode(` · ${agent.role}`))
+    meta.append(document.createTextNode(` · ${roleLabel(agent.role)}`))
     if (agent.model) meta.append(document.createTextNode(` · ${agent.model}`))
     body.appendChild(nm)
     body.appendChild(meta)
@@ -780,7 +792,7 @@
     tail.appendChild(dot)
     const status = document.createElement('span')
     status.className = 'card-status'
-    status.textContent = agent.status
+    status.textContent = statusLabel(agent.status)
     tail.appendChild(status)
     if (agent.canKill || agent.canDelete) {
       const lifecycle = document.createElement('button')
@@ -1211,11 +1223,27 @@
   el.form.addEventListener('submit', submitNew)
 
   function modeLabel(mode) {
-    return mode === 'orchestrator' ? 'Orchestrator MCP' : 'Spawner'
+    return mode === 'orchestrator' ? t('web.orchestrator') : t('web.spawner')
+  }
+
+  function roleLabel(role) {
+    return role === 'root' ? t('web.roleRoot') : t('web.roleWorker')
+  }
+
+  function statusLabel(status) {
+    if (status === 'queued') return t('web.statusQueued')
+    if (status === 'working') return t('web.statusWorking')
+    if (status === 'done') return t('web.statusDone')
+    if (status === 'failed') return t('web.statusFailed')
+    if (status === 'blocked') return t('web.statusBlocked')
+    if (status === 'ended') return t('web.statusEnded')
+    if (status === 'stale') return t('web.statusStale')
+    if (status === 'running') return t('web.statusRunning')
+    return status
   }
 
   function shortIso(value) {
-    if (!value) return 'unknown'
+    if (!value) return t('web.unknown')
     return `${String(value).replace('T', ' ').slice(0, 16)}Z`
   }
 

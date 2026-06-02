@@ -16,6 +16,7 @@ import type {
 } from '../state/types.js'
 import {
   agentPath,
+  archiveAndRemoveRun,
   endRunIfNoLiveAgents,
   findAgent,
   listAgents,
@@ -522,8 +523,17 @@ export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentR
   }
   const endedAt = nowIso()
   updateAgent(agent.run_id, agent.id, { ended_at: endedAt, task_status: 'done' })
-  endRunIfNoLiveAgents(agent.run_id, endedAt)
-  return findAgent(agentId)
+  const updatedAgent = readAgent(agent.run_id, agent.id)
+  const endedRun = endRunIfNoLiveAgents(agent.run_id, endedAt)
+  if (endedRun.status === 'ended' || endedRun.ended_at !== null) {
+    try {
+      driver.tmux(['kill-session', '-t', run.tmux_session])
+    } catch {
+      // session may already be gone
+    }
+    archiveAndRemoveRun(run.id, 'ended')
+  }
+  return updatedAgent
 }
 
 export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord {
@@ -549,8 +559,10 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
     }
     updateAgent(run.id, agent.id, { ended_at: endedAt })
   }
-  updateRun(run.id, { status: 'ended', ended_at: endedAt })
-  return readRun(run.id)
+  const endedRun: RunRecord = { ...run, status: 'ended', ended_at: endedAt }
+  updateRun(run.id, { status: endedRun.status, ended_at: endedRun.ended_at })
+  archiveAndRemoveRun(run.id, 'ended')
+  return endedRun
 }
 
 export function agentJsonPath(runId: string, agentId: string): string {
