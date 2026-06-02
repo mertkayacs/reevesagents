@@ -1,20 +1,20 @@
 # reevesagents
 
-Local tmux-first workspace manager for AI CLI terminals.
+Local tmux-first workspace manager for AI CLI agents.
 
 The main `reevesagents` package is the stable spawner install:
 
-- Start one tmux workspace with multiple independent provider CLI terminals.
+- Start one tmux workspace with multiple independent provider CLI agents.
 - Keep the human in charge of coordination.
 - Do not write provider config, inject ReevesAgents environment variables, or create agent roles.
 
-ReevesAgents tracks each run in local state and opens every terminal in its own tmux window. The registry is the source of truth; tmux is the execution and viewing surface. The TUI stays in the current or fallback `reeves` session, while each run gets its own tmux session to keep tabs uncluttered.
+ReevesAgents tracks each run in local state and opens every agent in its own tmux window. The registry is the source of truth; tmux is the execution and viewing surface. The TUI stays in the current or fallback `reeves` session, while each run gets its own tmux session to keep tabs uncluttered.
 
 ## What It Does
 
 - Shows active, ended, and stale runs in a visible-menu TUI.
-- Starts multiple independent provider CLI terminals.
-- Opens the real provider CLI window for each terminal.
+- Starts multiple independent provider CLI agents.
+- Opens the real provider CLI window for each agent.
 - Stores local JSON state under `~/.reeves/runs`.
 - Uses a small animated Welcome screen, page-specific TUI layouts, and a static Runs dashboard to reduce terminal flicker.
 
@@ -71,7 +71,7 @@ Choose the smallest install surface that matches what you want to run.
 
 ### Core CLI/TUI Only
 
-Use this when you do not want the optional browser terminal bridge:
+Use this when you do not want the optional browser agent bridge:
 
 ```sh
 npm install -g --omit=optional reevesagents
@@ -118,8 +118,8 @@ reevesagents web --prebeta-orchestrator
 
 The pre-beta Web mode can show and control both stable spawner runs and
 orchestrator runs. It can create orchestrator runs, add workers, stop runs, and
-control windowed worker terminals. Headless orchestrator roots are shown but
-cannot be opened in the browser terminal.
+control windowed worker agents. Headless orchestrator roots are shown but
+cannot be opened in the browser agent view.
 
 Provider MCP config setup remains explicit:
 
@@ -187,7 +187,7 @@ Spawner mode can also start from the CLI:
 reevesagents spawn codex-cli:builder claude-code:reviewer --name "release check" --prompt "Inspect the release state."
 ```
 
-Terminal specs can include an optional model as `provider:nickname:model`:
+Agent specs can include an optional model as `provider:nickname:model`:
 
 ```sh
 reevesagents spawn claude-code:planner:sonnet codex-cli:builder:gpt-5-codex
@@ -199,8 +199,8 @@ Leave the model off to use the provider CLI default.
 
 - Welcome: animated `REEVES AGENTS` block logo, chafa-rendered blocky duck mascot, and persistent main menu.
 - Runs: list all running, ended, and stale runs. Ended and stale runs auto-clean on refresh.
-- Run hub: show terminals, output, add-terminal, stop, and back actions.
-- Terminal detail: inspect provider, status, working directory, tmux ids, recent output, prompt, open window, and close window.
+- Run hub: show agents, output, add-agent, stop, and back actions.
+- Agent detail: inspect provider, status, working directory, tmux ids, recent output, prompt, open window, and close window.
 - New Run wizard: configure providers, prompts, and windows.
 - Settings: provider detection and state paths.
 - Doctor: setup and environment health checks only.
@@ -222,12 +222,12 @@ The TUI is visible-menu first: arrows navigate, Enter selects, and Esc/Backspace
 
 ```sh
 reevesagents                 # open TUI
-reevesagents spawn [spec...] # start a low-permission multi-terminal spawner run
+reevesagents spawn [spec...] # start a low-permission multi-agent spawner run
 reevesagents runs            # list runs
-reevesagents open <id>       # open a run's reeves window or a terminal window
-reevesagents peek <terminal-id> # print recent terminal output
+reevesagents open <id>       # open a run's reeves window or an agent window
+reevesagents peek <agent-id> # print recent agent output
 reevesagents stop <run-id>   # stop one run, requires --yes or ALLOW_DESTRUCTIVE=1
-reevesagents kill <terminal-id> # close one terminal, requires --yes or ALLOW_DESTRUCTIVE=1
+reevesagents kill <agent-id> # close one agent, requires --yes or ALLOW_DESTRUCTIVE=1
 reevesagents doctor          # setup checks
 reevesagents web             # start loopback Web UI beta
 reevesagents web --prebeta-orchestrator # opt into MCP/orchestrator Web controls

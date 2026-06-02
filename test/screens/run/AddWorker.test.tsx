@@ -124,7 +124,7 @@ describe('AddWorker', () => {
     unmount()
   })
 
-  it('allows spawning a terminal without an initial prompt', async () => {
+  it('allows spawning an agent without an initial prompt', async () => {
     const { stdin, unmount } = renderAddWorker()
 
     for (let i = 0; i < 6; i++) await press(stdin, down)

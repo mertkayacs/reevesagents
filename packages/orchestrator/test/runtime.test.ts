@@ -135,7 +135,7 @@ describe('v1 runtime', () => {
     expect(launch).toContain(`REEVES_REGISTRY='${tmpDir}'`)
   })
 
-  it('starts spawner runs as independent terminals without MCP or Reeves context injection', async () => {
+  it('starts spawner runs as independent agents without MCP or Reeves context injection', async () => {
     const driver = new FakeDriver()
     const { startRun } = await import('../src/runtime.js')
     const { readRunAny: readRun, listAgentsAny: listAgents } = await import('../../../src/state/runs.js')

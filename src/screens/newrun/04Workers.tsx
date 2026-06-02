@@ -1,4 +1,4 @@
-// Step 3/4: additional terminals list. Empty is valid.
+// Step 3/4: additional agents list. Empty is valid.
 // Selecting a row and pressing Enter opens it for inline editing in step 4b.
 
 import React, { useState } from 'react'
@@ -12,7 +12,7 @@ import { useWizard } from '../../state/WizardContext.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
 
 type ActionId = 'add' | 'continue' | 'back' | 'cancel'
-const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Continue'.length, 'Back'.length, 'Reset Wizard'.length)
+const ACTION_LABEL_WIDTH = Math.max('Add Agent'.length, 'Continue'.length, 'Back'.length, 'Reset Wizard'.length)
 
 export function NewRunWorkers() {
   const { push, pop, setSelectedWorkerIdx } = useRouter()
@@ -20,17 +20,17 @@ export function NewRunWorkers() {
 
   const workers = state.workers
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'add', label: 'Add Terminal', hint: 'create another independent CLI terminal' },
+    { id: 'add', label: 'Add Agent', hint: 'create another independent CLI agent' },
     { id: 'continue', label: 'Continue', hint: 'to review' },
-    { id: 'back', label: 'Back', hint: 'return to first terminal' },
+    { id: 'back', label: 'Back', hint: 'return to first agent' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
 
   const totalRows = workers.length + actions.length
   const providerBadgeWidth = Math.max(...workers.map(worker => providerDisplayName(worker.provider).length), 1)
   const modelBadgeWidth = Math.max(...workers.map(worker => modelBadgeLabel(worker.model).length), 'default'.length)
-  const terminalLabelWidth = Math.max(
-    ...workers.map((worker, idx) => (worker.nickname || `terminal-${idx + 2}`).length),
+  const agentLabelWidth = Math.max(
+    ...workers.map((worker, idx) => (worker.nickname || `agent-${idx + 2}`).length),
     ACTION_LABEL_WIDTH,
   )
   const [selectedIdx, setSelectedIdx] = useState(0)
@@ -70,15 +70,15 @@ export function NewRunWorkers() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'New Run', 'Terminals']}
-      tagline="Add zero or more independent CLI terminals. The human coordinates them manually."
+      breadcrumb={['ReevesAgents', 'New Run', 'Agents']}
+      tagline="Add zero or more independent CLI agents. The human coordinates them manually."
       statusKeys="enter select · ↑↓ move · esc back"
     >
-      <StepIndicator step={3} total={4} name="Terminals" />
+      <StepIndicator step={3} total={4} name="Agents" />
 
-      <Section label="Additional Terminals" />
+      <Section label="Additional Agents" />
       {workers.length === 0 ? (
-        <Row selected={false} primary="No extra terminals yet." trailing="choose Add Terminal below" disabled />
+        <Row selected={false} primary="No extra agents yet." trailing="choose Add Agent below" disabled />
       ) : (
         workers.map((worker, idx) => {
           const providerLabel = providerDisplayName(worker.provider)
@@ -86,8 +86,8 @@ export function NewRunWorkers() {
             <Row
               key={`worker-${idx}`}
               selected={selectedIdx === idx}
-              primary={worker.nickname || `terminal-${idx + 2}`}
-              primaryWidth={terminalLabelWidth}
+              primary={worker.nickname || `agent-${idx + 2}`}
+              primaryWidth={agentLabelWidth}
               badges={[
                 { label: providerLabel, color: providerColor(worker.provider), width: providerBadgeWidth },
                 { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider), width: modelBadgeWidth },
@@ -106,7 +106,7 @@ export function NewRunWorkers() {
           key={action.id}
           selected={selectedIdx === workers.length + idx}
           primary={action.label}
-          primaryWidth={terminalLabelWidth}
+          primaryWidth={agentLabelWidth}
           hint={action.hint}
         />
       ))}

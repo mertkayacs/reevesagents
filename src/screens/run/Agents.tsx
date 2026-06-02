@@ -1,4 +1,4 @@
-// Run terminal list: displays tmux-backed terminals in this run.
+// Run agent list: displays tmux-backed agents in this run.
 // Paginates rows when the list exceeds available terminal height.
 
 import React, { useEffect, useState } from 'react'
@@ -137,31 +137,31 @@ export function RunAgents() {
   const isRunEnded = run.status === 'ended' || run.ended_at !== null
   const providerBadgeWidth = Math.max(...agents.map(agent => providerDisplayName(agent.provider).length), 1)
   const modelBadgeWidth = Math.max(...agents.map(agent => modelBadgeLabel(agent.model).length), 'default'.length)
-  const terminalLabelWidth = Math.max(
+  const agentLabelWidth = Math.max(
     ...agents.map(agent => agent.nickname.length),
-    'Add Terminal'.length,
+    'Add Agent'.length,
     'Back'.length,
   )
-  let statusContext = `${run.name} · ${agents.length} terminals`
+  let statusContext = `${run.name} · ${agents.length} agents`
   if (selected?.type === 'pagination') statusContext = `page ${page} of ${totalPages} · ← → turn page`
-  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : 'spawn new terminal'
+  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : 'spawn new agent'
   if (selected?.type === 'action' && selected.action === 'Back') statusContext = 'return to run hub'
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents']}
       meta={[
         { label: 'count', value: String(agents.length) },
         { label: 'status', value: run.status },
       ]}
-      tagline="Independent CLI terminals in this spawner run."
+      tagline="Independent CLI agents in this spawner run."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
       <Box flexDirection="column">
-        <Section label="Terminals" />
+        <Section label="Agents" />
         {agents.length === 0 && (
-          <Row selected={false} primary="No terminals" trailing="add a terminal below" disabled />
+          <Row selected={false} primary="No agents" trailing="add an agent below" disabled />
         )}
         {pagedData.map((item, idx) => {
           const isSelected = selectedIdx === idx
@@ -178,7 +178,7 @@ export function RunAgents() {
                 key={agent.id}
                 selected={isSelected}
                 primary={agent.nickname}
-                primaryWidth={terminalLabelWidth}
+                primaryWidth={agentLabelWidth}
                 glyph={statusGlyph(agent.task_status)}
                 badges={badges}
                 hint={agent.task_note || agent.task_status}
@@ -203,15 +203,15 @@ export function RunAgents() {
 
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 1}
-          primary="Add Terminal"
-          primaryWidth={terminalLabelWidth}
-          hint={isRunEnded ? 'run is ended' : 'spawn new terminal'}
+          primary="Add Agent"
+          primaryWidth={agentLabelWidth}
+          hint={isRunEnded ? 'run is ended' : 'spawn new agent'}
           disabled={isRunEnded}
         />
         <Row
           selected={selectedIdx === pagedData.length + paginOffset + 2}
           primary="Back"
-          primaryWidth={terminalLabelWidth}
+          primaryWidth={agentLabelWidth}
           hint="return to run hub"
         />
         <SectionEnd />

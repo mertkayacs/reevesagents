@@ -1,4 +1,4 @@
-// Step 2/4: First terminal configuration. Provider, model, prompt,
+// Step 2/4: first agent configuration. Provider, model, prompt,
 // permissions, plus conditional effort (Claude Code and Codex CLI only).
 // Pickers cycle inline with Left/Right. Text fields edit inline with Enter.
 
@@ -77,7 +77,7 @@ export function NewRunRoot() {
   }, [state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.effort])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'continue', label: 'Continue', hint: 'to additional terminals' },
+    { id: 'continue', label: 'Continue', hint: 'to additional agents' },
     { id: 'back', label: 'Back', hint: 'return to basics' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
@@ -176,11 +176,11 @@ export function NewRunRoot() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'New Run', 'First Terminal']}
-      tagline="Configure the first independent CLI terminal."
+      breadcrumb={['ReevesAgents', 'New Run', 'First Agent']}
+      tagline="Configure the first independent CLI agent."
       statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
-      <StepIndicator step={2} total={4} name="First Terminal" />
+      <StepIndicator step={2} total={4} name="First Agent" />
 
       {fields.map((field, idx) => {
         if (field.kind === 'text') {

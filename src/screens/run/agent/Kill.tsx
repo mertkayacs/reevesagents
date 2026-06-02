@@ -1,4 +1,4 @@
-// Terminal close: confirm dialog before closing a spawner terminal window.
+// Agent close: confirm dialog before closing a spawner agent window.
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
@@ -42,15 +42,15 @@ export function AgentKill() {
     return (
       <Frame
         breadcrumb={['ReevesAgents', 'Runs']}
-        statusContext="Terminal not found"
+        statusContext="Agent not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Terminal not found.</Text>
+          <Text color={colors.text.dim}>Agent not found.</Text>
           <Box marginTop={1}>
             <Row
               selected={true}
               primary="Back"
-              hint="return to terminal detail"
+              hint="return to agent detail"
             />
           </Box>
         </Box>
@@ -60,12 +60,12 @@ export function AgentKill() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname, 'Close']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, 'Close']}
       statusKeys="←→ switch · enter select · esc cancel"
     >
       <Dialog
         title={`Close ${agent.nickname}?`}
-        body="Closes this terminal window and marks it ended. Other terminals continue."
+        body="Closes this agent window and marks it ended. Other agents continue."
         intent="danger"
         confirmLabel="Close"
         cancelLabel="Cancel"

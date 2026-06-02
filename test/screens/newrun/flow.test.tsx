@@ -60,8 +60,8 @@ describe('New Run keyboard flow', () => {
 
     await press(stdin, down)
     await press(stdin, down)
-    await press(stdin, '\r') // Continue -> First Terminal
-    await waitForFrame(lastFrame, 'First Terminal')
+    await press(stdin, '\r') // Continue -> First Agent
+    await waitForFrame(lastFrame, 'First Agent')
 
     await press(stdin, down) // Model
     await press(stdin, '\r') // open model options
@@ -79,9 +79,9 @@ describe('New Run keyboard flow', () => {
     await press(stdin, down)
     await press(stdin, down)
     await press(stdin, '\r') // Continue -> Workers
-    await waitForFrame(lastFrame, 'Terminals')
+    await waitForFrame(lastFrame, 'Agents')
 
-    await press(stdin, '\r') // Add Terminal
+    await press(stdin, '\r') // Add Agent
     await waitForFrame(lastFrame, 'Nickname')
 
     await press(stdin, '\r') // edit worker nickname

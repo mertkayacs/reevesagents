@@ -1,4 +1,4 @@
-// Terminal prompt/status: read-only view of the saved initial prompt and status.
+// Agent prompt/status: read-only view of the saved initial prompt and status.
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
@@ -27,11 +27,11 @@ export function AgentTask() {
 
   if (!agent || !run) {
     return (
-      <Frame breadcrumb={['ReevesAgents', 'Runs']} statusContext="Terminal not found">
+      <Frame breadcrumb={['ReevesAgents', 'Runs']} statusContext="Agent not found">
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Terminal not found.</Text>
+          <Text color={colors.text.dim}>Agent not found.</Text>
           <Box marginTop={1}>
-            <Row selected={true} primary="Back" hint="return to terminal detail" />
+            <Row selected={true} primary="Back" hint="return to agent detail" />
           </Box>
         </Box>
       </Frame>
@@ -40,9 +40,9 @@ export function AgentTask() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname, 'Prompt']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, 'Prompt']}
       meta={[{ label: 'status', value: agent.task_status }]}
-      tagline="Read-only view of this terminal's initial prompt and current status."
+      tagline="Read-only view of this agent's initial prompt and current status."
       statusKeys="enter/esc back"
     >
       <Box flexDirection="column">
@@ -60,7 +60,7 @@ export function AgentTask() {
         <SectionEnd />
 
         <Section label="Actions" />
-        <Row selected={true} primary="Back" hint="return to terminal detail" />
+        <Row selected={true} primary="Back" hint="return to agent detail" />
         <SectionEnd />
       </Box>
     </Frame>

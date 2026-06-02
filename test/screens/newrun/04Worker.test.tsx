@@ -82,6 +82,6 @@ describe('NewRunWorker', () => {
     )
 
     const output = lastFrame()
-    expect(output).toContain('Terminal')
+    expect(output).toContain('Agent')
   })
 })

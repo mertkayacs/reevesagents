@@ -28,7 +28,7 @@ export function NewRunBasics() {
   ], [state.name, state.workingDir])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'continue', label: 'Continue', hint: 'to first terminal' },
+    { id: 'continue', label: 'Continue', hint: 'to first agent' },
     { id: 'back', label: 'Back', hint: 'return to runs' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
@@ -75,7 +75,7 @@ export function NewRunBasics() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Basics']}
-      tagline="Create a multi-terminal tmux workspace for independent CLI sessions."
+      tagline="Create a multi-agent tmux workspace for independent CLI sessions."
       statusKeys="enter edit · ↑↓ move · esc back"
     >
       <StepIndicator step={1} total={4} name="Basics" />

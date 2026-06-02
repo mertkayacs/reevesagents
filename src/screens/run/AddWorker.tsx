@@ -1,6 +1,6 @@
-// Add a terminal to an existing spawner run. Single screen, inline editing.
+// Add an agent to an existing spawner run. Single screen, inline editing.
 // Same Field union + picker cycling pattern as NewRun's 04Worker.
-// On Add Terminal, validates provider and model, then calls spawnWorker.
+// On Add Agent, validates provider and model, then calls spawnWorker.
 // On Cancel, resets the worker draft and pops back to Run hub.
 
 import React, { useState, useMemo } from 'react'
@@ -24,7 +24,7 @@ const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
 
 type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions'
 type ActionId = 'add' | 'cancel'
-const ACTION_LABEL_WIDTH = Math.max('Add Terminal'.length, 'Cancel'.length)
+const ACTION_LABEL_WIDTH = Math.max('Add Agent'.length, 'Cancel'.length)
 
 interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[]; display?: string; hint?: string }
 interface TextFieldDef { kind: 'text'; id: FieldId; label: string; value: string; helpText: string; required: boolean }
@@ -62,7 +62,7 @@ export function AddWorker() {
   ], [draft])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'add', label: 'Add Terminal', hint: 'spawn an independent CLI terminal' },
+    { id: 'add', label: 'Add Agent', hint: 'spawn an independent CLI agent' },
     { id: 'cancel', label: 'Cancel', hint: 'discard and return' },
   ]
 
@@ -165,7 +165,7 @@ export function AddWorker() {
 
   if (!run) {
     return (
-      <Frame breadcrumb={['ReevesAgents', 'Runs', 'Add Terminal']}>
+      <Frame breadcrumb={['ReevesAgents', 'Runs', 'Add Agent']}>
         <Row primary="No run selected" hint="press Esc to go back" selected={true} />
       </Frame>
     )
@@ -173,8 +173,8 @@ export function AddWorker() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Add Terminal']}
-      tagline={`Configure an independent CLI terminal for ${run.name}.`}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Add Agent']}
+      tagline={`Configure an independent CLI agent for ${run.name}.`}
       statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
       {fields.map((field, fIdx) => {

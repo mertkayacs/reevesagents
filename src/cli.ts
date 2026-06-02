@@ -23,7 +23,7 @@ const program = new Command()
 
 program
   .name('reevesagents')
-  .description('local tmux-first workspace manager for AI CLI terminals')
+  .description('local tmux-first workspace manager for AI CLI agents')
   .version(REEVESAGENTS_VERSION)
 
 function age(startedAt: string): string {
@@ -49,8 +49,8 @@ function resolveAgent(id: string): AgentRecord {
   if (exact) return exact
   const matches = agents.filter(agent => agent.id.startsWith(id) || agent.nickname.startsWith(id))
   if (matches.length === 1) return matches[0]!
-  if (matches.length > 1) throw new Error(`ambiguous terminal id: ${matches.map(agent => agent.id).join(', ')}`)
-  throw new Error(`terminal not found: ${id}`)
+  if (matches.length > 1) throw new Error(`ambiguous agent id: ${matches.map(agent => agent.id).join(', ')}`)
+  throw new Error(`agent not found: ${id}`)
 }
 
 function resolveOpenTarget(id: string): { run: RunRecord, session: string, windowId: string, label: string } {
@@ -196,25 +196,25 @@ function requireDestructiveConfirmation(opts: { yes?: boolean }, command: string
   throw new Error(`refusing to ${command} without --yes or ALLOW_DESTRUCTIVE=1`)
 }
 
-function parseTerminalSpec(spec: string): { provider: Provider; nickname?: string; model: string } {
+function parseAgentSpec(spec: string): { provider: Provider; nickname?: string; model: string } {
   const [providerRaw = '', nickname, model = ''] = spec.split(':')
   const provider = normalizeProvider(providerRaw)
   if (!provider) {
-    throw new Error(`terminal spec must start with a supported provider name: ${PROVIDERS.map(providerDisplayName).join(', ')}: ${spec}`)
+    throw new Error(`agent spec must start with a supported provider name: ${PROVIDERS.map(providerDisplayName).join(', ')}: ${spec}`)
   }
   return { provider, nickname: nickname || undefined, model }
 }
 
 program
-  .command('spawn [terminal...]')
-  .description('start a spawner run with independent provider CLI terminals')
+  .command('spawn [agent...]')
+  .description('start a spawner run with independent provider CLI agents')
   .option('--name <name>', 'run name', 'spawner')
   .option('--cwd <dir>', 'working directory', process.cwd())
-  .option('--prompt <text>', 'initial prompt pasted into each terminal', '')
-  .action((terminalSpecs: string[], opts) => {
+  .option('--prompt <text>', 'initial prompt pasted into each agent', '')
+  .action((agentSpecs: string[], opts) => {
     try {
-      const specs = terminalSpecs.length > 0 ? terminalSpecs : ['codex']
-      const [first, ...rest] = specs.map(parseTerminalSpec)
+      const specs = agentSpecs.length > 0 ? agentSpecs : ['codex']
+      const [first, ...rest] = specs.map(parseAgentSpec)
       const result = startRun({
         mode: 'spawner',
         name: opts.name,
@@ -232,7 +232,7 @@ program
           task: opts.prompt,
         })),
       })
-      console.log(`started ${result.run.id.slice(0, 8)}  ${result.run.name}  ${result.agents.length} terminals`)
+      console.log(`started ${result.run.id.slice(0, 8)}  ${result.run.name}  ${result.agents.length} agents`)
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)
@@ -258,20 +258,20 @@ program
       const root = agents.find(agent => agent.role === 'root')
       const note = agents.find(agent => agent.task_note.trim())?.task_note ?? ''
       const rootProvider = root ? providerDisplayName(root.provider) : '-'
-      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  spawn      ${rootProvider.padEnd(14)}  ${String(agents.length).padStart(2)} ${'terminals'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
+      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  spawn      ${rootProvider.padEnd(14)}  ${String(agents.length).padStart(2)} ${'agents'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
     }
   })
 
 program
   .command('open <id>')
-  .description('open a run reeves window or a terminal window')
+  .description('open a run reeves window or an agent window')
   .action((id) => {
     openTarget(id)
   })
 
 program
-  .command('peek <terminal-id>')
-  .description('show recent output from one terminal')
+  .command('peek <agent-id>')
+  .description('show recent output from one agent')
   .option('-n, --lines <n>', 'number of lines', '20')
   .option('--json', 'output JSON with lines array')
   .action((id, opts) => {
@@ -283,7 +283,7 @@ program
       return
     }
     if (!output) {
-      console.error(`no output for terminal ${agent.id}`)
+      console.error(`no output for agent ${agent.id}`)
       process.exit(1)
     }
     console.log(output)
@@ -301,11 +301,11 @@ program
   })
 
 program
-  .command('kill <terminal-id>')
-  .description('close one spawner terminal')
+  .command('kill <agent-id>')
+  .description('close one spawner agent')
   .option('-y, --yes', 'confirm close')
   .action((id, opts) => {
-    requireDestructiveConfirmation(opts, 'close terminal')
+    requireDestructiveConfirmation(opts, 'close agent')
     const agent = resolveAgent(id)
     const killed = killAgent(agent.id)
     console.log(`closed ${killed.id.slice(0, 8)}  ${killed.nickname}`)
@@ -330,7 +330,7 @@ program
 
 program
   .command('web')
-  .description('start the on-demand loopback web UI for spawner terminals')
+  .description('start the on-demand loopback web UI for spawner agents')
   .option('--port <n>', 'preferred port; falls back to the next free port')
   .option('--no-open', 'do not open the browser')
   .option('--prebeta-orchestrator', 'enable PRE-BETA orchestrator/MCP run controls when the separate package is installed')
@@ -357,7 +357,7 @@ async function runWeb(opts: { port?: string; open?: boolean; prebetaOrchestrator
   })
   console.log(`reevesagents web running at ${handle.url}`)
   if (opts.prebetaOrchestrator) console.log('PRE-BETA orchestrator/MCP controls enabled.')
-  console.log('press Ctrl+C to stop. terminals keep running.')
+  console.log('press Ctrl+C to stop. agents keep running.')
   const shutdown = (): void => { handle.close().finally(() => process.exit(0)) }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)

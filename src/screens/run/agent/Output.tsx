@@ -17,7 +17,7 @@ import type { AgentRecord } from '../../../state/types.js'
 const PEEK_INTERVAL_MS = 5000
 const DETAIL_LINES = 50
 const CHROME_ROWS = 16
-const ACTION_LABEL_WIDTH = Math.max('Refresh Now'.length, 'Open Terminal'.length, 'Back'.length)
+const ACTION_LABEL_WIDTH = Math.max('Refresh Now'.length, 'Open Agent'.length, 'Back'.length)
 
 type RowItem = 'RefreshNow' | 'OpenCLI' | 'Back'
 
@@ -136,15 +136,15 @@ export function AgentOutput() {
     return (
       <Frame
         breadcrumb={['ReevesAgents', 'Runs']}
-        statusContext="Terminal not found"
+        statusContext="Agent not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Terminal not found.</Text>
+          <Text color={colors.text.dim}>Agent not found.</Text>
           <Box marginTop={1}>
             <Row
               selected={true}
               primary="Back"
-              hint="return to terminals list"
+              hint="return to agents list"
             />
           </Box>
         </Box>
@@ -159,8 +159,8 @@ export function AgentOutput() {
   } else if (selected?.type === 'action') {
     const actionLabels: Record<RowItem, string> = {
       RefreshNow: 'fetch output now',
-      OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this terminal window',
-      Back: 'return to terminal detail',
+      OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this agent window',
+      Back: 'return to agent detail',
     }
     statusContext = actionLabels[selected.action]
   }
@@ -173,12 +173,12 @@ export function AgentOutput() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname, 'Output']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, 'Output']}
       meta={[
         { label: 'lines', value: outputLines.length === 0 ? '0' : `${shownStart}-${shownEnd}/${outputLines.length}` },
         { label: 'refresh', value: '5s' },
       ]}
-      tagline="Recent output from this independent terminal. Refreshes every 5 seconds."
+      tagline="Recent output from this independent agent. Refreshes every 5 seconds."
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ output pages · enter select · esc back"
     >
@@ -230,13 +230,13 @@ export function AgentOutput() {
 
           const hints: Record<RowItem, string> = {
             RefreshNow: 'fetch output now',
-            OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this terminal window',
-            Back: 'return to terminal detail',
+            OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this agent window',
+            Back: 'return to agent detail',
           }
 
           const labels: Record<RowItem, string> = {
             RefreshNow: 'Refresh Now',
-            OpenCLI: 'Open Terminal',
+            OpenCLI: 'Open Agent',
             Back: 'Back',
           }
 

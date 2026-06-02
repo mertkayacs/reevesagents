@@ -73,7 +73,7 @@ function callerContext(callerAgentId: string | null): Caller {
   if (!callerAgentId) return { role: 'operator' }
   const agent = findAgent(callerAgentId)
   const run = readRun(agent.run_id)
-  if (run.mode === 'spawner') throw new Error('spawner terminals are not MCP callers')
+  if (run.mode === 'spawner') throw new Error('spawner agents are not MCP callers')
   return { role: agent.role, agent, run }
 }
 
@@ -253,7 +253,7 @@ export const TOOLS = [
       type: 'object',
       properties: {
         name: { type: 'string' },
-        mode: { type: 'string', enum: ['orchestrator', 'spawner'], description: 'Defaults to orchestrator. Spawner mode creates independent terminals without MCP caller context.' },
+        mode: { type: 'string', enum: ['orchestrator', 'spawner'], description: 'Defaults to orchestrator. Spawner mode creates independent agents without MCP caller context.' },
         working_dir: { type: 'string' },
         root: {
           type: 'object',

@@ -111,9 +111,9 @@ describe('Run hub screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Terminals')
+    expect(frame).toContain('Agents')
     expect(frame).toContain('Output')
-    expect(frame).toContain('Add Terminal')
+    expect(frame).toContain('Add Agent')
     unmount()
   })
 
@@ -145,9 +145,9 @@ describe('Run hub screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    // B12: right Detail pane dropped; the summary line carries terminal count
-    // and session id; the header meta carries status + terminals.
-    expect(frame).toContain('terminals')
+    // B12: right Detail pane dropped; the summary line carries agent count
+    // and session id; the header meta carries status + agents.
+    expect(frame).toContain('agents')
     expect(frame).toContain('session')
     expect(frame).toContain('reeves-123')
     unmount()

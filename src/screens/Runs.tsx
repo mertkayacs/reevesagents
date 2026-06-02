@@ -149,7 +149,7 @@ export function Runs() {
   let statusContext = ''
   if (selectedRun) {
     const agents = listAgents(selectedRun.id)
-    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} terminals · ${selectedRun.working_dir}`
+    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} agents · ${selectedRun.working_dir}`
   } else if (selected?.type === 'action' && selected.action && selected.action !== '__section__') {
     statusContext = ACTION_COPY[selected.action as typeof ACTIONS[number]]?.hint ?? selected.action
   } else if (selected?.type === 'pagination') {
@@ -164,7 +164,7 @@ export function Runs() {
         { label: 'running', value: String(runningCount) },
         { label: 'stale', value: String(staleCount) },
       ]}
-      tagline="Manage local tmux workspaces. Spawner runs are independent provider CLI terminals."
+      tagline="Manage local tmux workspaces. Spawner runs are independent provider CLI agents."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc main menu"
     >
@@ -198,7 +198,7 @@ export function Runs() {
                 primaryWidth={runNameWidth}
                 glyph={statusGlyph(runStatus(run))}
                 badges={badges}
-                hint={`${agents.length} terminals`}
+                hint={`${agents.length} agents`}
               />
             )
           })
