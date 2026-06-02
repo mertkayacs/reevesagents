@@ -35,7 +35,7 @@ export function Welcome() {
       { label: 'New Run', hint: 'start a spawner workspace', screen: 'NewRun' },
       { label: 'Runs', hint: 'open active and recent runs', screen: 'Runs' },
       { label: 'Doctor', hint: 'check local setup', screen: 'Doctor' },
-      { label: 'Start Web UI (beta)', hint: 'open the browser terminal UI', launchWeb: true },
+      { label: 'Start Web UI (beta)', hint: 'open the browser agent UI', launchWeb: true },
       { label: 'Settings', hint: 'providers and paths', screen: 'Settings' },
       { label: 'Reference', hint: 'Spawner, TUI, CLI, tmux', screen: 'Reference' },
       { label: 'Credits', hint: 'about ReevesAgents', screen: 'Credits' },
@@ -107,7 +107,7 @@ export function Welcome() {
         </Box>
 
         <Box flexDirection="column" marginTop={1}>
-          <Text color={colors.text.dim} wrap="truncate-end">Local tmux-first workspace manager for AI CLI terminals.</Text>
+          <Text color={colors.text.dim} wrap="truncate-end">Local tmux-first workspace manager for AI CLI agents.</Text>
           <Text color={colors.text.dim} wrap="truncate-end">Spawner · TUI · CLI · tmux</Text>
         </Box>
 

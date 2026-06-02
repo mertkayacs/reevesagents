@@ -82,7 +82,7 @@ describe('Run › Agents list screen', () => {
     delete process.env.REEVES_RUN_ID
   })
 
-  it('renders breadcrumb with run name and Terminals', () => {
+  it('renders breadcrumb with run name and Agents', () => {
     const { lastFrame, unmount } = render(
       <Router initialScreen="RunAgents" />
     )
@@ -91,7 +91,7 @@ describe('Run › Agents list screen', () => {
     expect(frame).toContain('ReevesAgents')
     expect(frame).toContain('Runs')
     expect(frame).toContain('test-run')
-    expect(frame).toContain('Terminals')
+    expect(frame).toContain('Agents')
     unmount()
   })
 
@@ -127,13 +127,13 @@ describe('Run › Agents list screen', () => {
     unmount()
   })
 
-  it('includes action rows for Add Terminal and Back', () => {
+  it('includes action rows for Add Agent and Back', () => {
     const { lastFrame, unmount } = render(
       <Router initialScreen="RunAgents" />
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Add Terminal')
+    expect(frame).toContain('Add Agent')
     expect(frame).toContain('Back')
     unmount()
   })
@@ -149,17 +149,17 @@ describe('Run › Agents list screen', () => {
     unmount()
   })
 
-  it('shows tagline about terminals in this run', () => {
+  it('shows tagline about agents in this run', () => {
     const { lastFrame, unmount } = render(
       <Router initialScreen="RunAgents" />
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Independent CLI terminals in this spawner run')
+    expect(frame).toContain('Independent CLI agents in this spawner run')
     unmount()
   })
 
-  it('shows terminal nickname in list when selected', () => {
+  it('shows agent nickname in list when selected', () => {
     const { lastFrame, unmount } = render(
       <Router initialScreen="RunAgents" />
     )

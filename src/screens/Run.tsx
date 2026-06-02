@@ -15,9 +15,9 @@ const REFRESH_INTERVAL_MS = 5000
 
 type RowItem = 'Agents' | 'Output' | 'AddWorker' | '__section__' | 'StopRun' | 'Back'
 const LABELS: Record<RowItem, string> = {
-  Agents: 'Terminals',
+  Agents: 'Agents',
   Output: 'Output',
-  AddWorker: 'Add Terminal',
+  AddWorker: 'Add Agent',
   StopRun: 'Return & Stop Run',
   Back: 'Back',
   '__section__': '',
@@ -136,17 +136,17 @@ export function Run() {
   // Inline summary line. Skips empty/default fields. Truncates at terminal width.
   const isRunEnded = run.status === 'ended' || run.ended_at !== null
   const summaryParts: string[] = []
-  summaryParts.push(`${agents.length} terminals`)
+  summaryParts.push(`${agents.length} agents`)
   if (run.tmux_session) summaryParts.push(`session ${run.tmux_session}`)
   summaryParts.push(`workdir ${run.working_dir}`)
   const summaryLine = summaryParts.join(' · ')
 
-  let statusContext = `${run.name} · ${run.status} · ${agents.length} terminals`
+  let statusContext = `${run.name} · ${run.status} · ${agents.length} agents`
   if (selected && selected.action !== '__section__') {
     const actionLabels: Record<string, string> = {
-      Agents: 'view terminals',
-      Output: 'peek across terminals',
-      AddWorker: isRunEnded ? 'run is ended' : 'spawn new terminal',
+      Agents: 'view agents',
+      Output: 'peek across agents',
+      AddWorker: isRunEnded ? 'run is ended' : 'spawn new agent',
       StopRun: isRunEnded ? 'run is ended' : 'return to Reeves and close run windows',
       Back: 'return to runs',
     }
@@ -158,9 +158,9 @@ export function Run() {
       breadcrumb={['ReevesAgents', 'Runs', run.name]}
       meta={[
         { label: 'status', value: run.status },
-        { label: 'terminals', value: String(agents.length) },
+        { label: 'agents', value: String(agents.length) },
       ]}
-      tagline="Manage this spawner run. Terminals are independent provider CLIs."
+      tagline="Manage this spawner run. Agents are independent provider CLIs."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
@@ -185,9 +185,9 @@ export function Run() {
           const isDisabledAddWorker = item.action === 'AddWorker' && isRunEnded
 
           const hints: Record<RowItem, string> = {
-            Agents: `${agents.length} terminals`,
-            Output: 'peek across all terminals',
-            AddWorker: isRunEnded ? 'run is ended' : 'spawn new terminal',
+            Agents: `${agents.length} agents`,
+            Output: 'peek across all agents',
+            AddWorker: isRunEnded ? 'run is ended' : 'spawn new agent',
             StopRun: isRunEnded ? 'run is ended' : 'return to Reeves and close run windows',
             Back: 'return to all runs',
             '__section__': '',

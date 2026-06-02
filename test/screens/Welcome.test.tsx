@@ -44,7 +44,7 @@ describe('Welcome', () => {
   it('renders the tagline with two lines', () => {
     const { lastFrame } = render(<Welcome />)
     const output = lastFrame()
-    expect(output).toContain('Local tmux-first workspace manager for AI CLI terminals')
+    expect(output).toContain('Local tmux-first workspace manager for AI CLI agents')
     expect(output).toContain('Spawner')
     expect(output).toContain('TUI')
   })

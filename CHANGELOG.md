@@ -7,13 +7,13 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 ### Added
 - Public prerelease package metadata, README, release readiness notes, and verification docs.
 - Release checks for typecheck, lint, unit tests, build, CLI smoke, and package packing.
-- Spawner mode as the default low-permission multi-terminal run path.
+- Spawner mode as the default low-permission multi-agent run path.
 - PRE-BETA orchestrator test package kept outside the default install path.
 - Install surface policy for npm, pnpm, one-off runners, GitHub release tarballs, Homebrew, and source.
 
 ### Changed
 - Set the package, CLI, README, and Credits page version to `0.9.0`.
-- Cleaned up the main TUI pages with sectioned Runs, Run, Terminals, and Detail layouts.
+- Cleaned up the main TUI pages with sectioned Runs, Run, Agents, and Detail layouts.
 - Reorganized the changelog around versioned internal milestones.
 - Clarified docs and TUI copy so the main app is spawner-first and orchestration is PRE-BETA test code.
 
@@ -30,18 +30,18 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 ### Added
 - Persistent Welcome main menu with Current Run, Runs, Doctor, Settings, Reference, Credits, and Quit.
 - Runs dashboard with automatic cleanup of ended and stale runs.
-- Run hub, terminal list, output pages, add-terminal flow, and stop-run confirmation.
+- Run hub, agent list, output pages, add-agent flow, and stop-run confirmation.
 
 ### Changed
 - Moved each run to its own tmux session while keeping the local registry as the source of truth.
-- Renamed visible TUI actions from Open CLI to Open Terminal.
+- Renamed visible TUI actions from Open CLI to Open Agent.
 
 ## 0.6.0 - TUI Redesign
 
 ### Added
 - Ink-based TUI frame, header, rows, sections, status bar, pagination, dialogs, and responsive layout helpers.
 - Dark ReevesAgents visual system with provider colors and terminal-friendly wordmark/mascot rendering.
-- New Run wizard with basics, first terminal, additional terminals, review, and starting steps.
+- New Run wizard with basics, first agent, additional agents, review, and starting steps.
 
 ### Removed
 - Legacy slash-command and hidden-help interaction patterns.
@@ -58,15 +58,15 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 
 ### Added
 - Prototype commands for run discovery, lifecycle, tmux window control, and diagnostics.
-- Early status tracking for terminal windows.
+- Early status tracking for agent windows.
 - Pane output peeking for local inspection.
 
 ## 0.3.0 - Tmux Runtime
 
 ### Added
-- Runtime support for starting runs, spawning terminals, opening terminal windows, peeking output, closing terminals, and stopping runs.
+- Runtime support for starting runs, spawning agents, opening agent windows, peeking output, closing agents, and stopping runs.
 - Provider launch helpers for Claude Code, Codex CLI, OpenCode CLI, and Hermes.
-- Optional startup prompt paste for newly opened provider terminals.
+- Optional startup prompt paste for newly opened provider agents.
 
 ## 0.2.0 - Local State
 

@@ -1,5 +1,5 @@
-// Step 3b: edit one additional terminal slot. Reached from step 3 by Enter.
-// Same inline editing pattern as the first-terminal step.
+// Step 3b: edit one additional agent slot. Reached from step 3 by Enter.
+// Same inline editing pattern as the first-agent step.
 
 import React, { useState, useMemo } from 'react'
 import { useInput } from 'ink'
@@ -22,7 +22,7 @@ const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'm
 
 type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'effort'
 type ActionId = 'save' | 'remove' | 'cancel'
-const ACTION_LABEL_WIDTH = Math.max('Done'.length, 'Remove This Terminal'.length, 'Back'.length)
+const ACTION_LABEL_WIDTH = Math.max('Done'.length, 'Remove This Agent'.length, 'Back'.length)
 
 interface PickerField { kind: 'picker'; id: FieldId; label: string; current: string; values: readonly string[]; display?: string; hint?: string }
 interface TextFieldDef { kind: 'text'; id: FieldId; label: string; value: string; helpText: string; required: boolean }
@@ -68,8 +68,8 @@ export function NewRunWorker() {
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
     { id: 'save', label: 'Done', hint: 'changes are saved automatically' },
-    { id: 'remove', label: 'Remove This Terminal', hint: 'delete and return' },
-    { id: 'cancel', label: 'Back', hint: 'return to terminals' },
+    { id: 'remove', label: 'Remove This Agent', hint: 'delete and return' },
+    { id: 'cancel', label: 'Back', hint: 'return to agents' },
   ]
 
   const totalRows = fields.length + actions.length
@@ -159,19 +159,19 @@ export function NewRunWorker() {
 
   if (!worker) {
     return (
-      <Frame breadcrumb={['ReevesAgents', 'New Run', 'Terminals', 'Terminal']}>
-        <Row selected={true} primary="Terminal not found" hint="press Esc to go back" />
+      <Frame breadcrumb={['ReevesAgents', 'New Run', 'Agents', 'Agent']}>
+        <Row selected={true} primary="Agent not found" hint="press Esc to go back" />
       </Frame>
     )
   }
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'New Run', 'Terminals', worker.nickname || `terminal-${idx + 2}`]}
-      tagline="Configure this independent CLI terminal."
+      breadcrumb={['ReevesAgents', 'New Run', 'Agents', worker.nickname || `agent-${idx + 2}`]}
+      tagline="Configure this independent CLI agent."
       statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
-      <StepIndicator step={3} total={4} name="Terminal" />
+      <StepIndicator step={3} total={4} name="Agent" />
 
       {fields.map((field, fIdx) => {
         if (field.kind === 'text') {

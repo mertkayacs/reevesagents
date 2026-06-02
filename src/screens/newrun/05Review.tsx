@@ -19,8 +19,8 @@ export function NewRunReview() {
   const { state, reset } = useWizard()
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'start', label: 'Start Run', hint: 'launch independent tmux terminals' },
-    { id: 'back', label: 'Back to Edit', hint: 'return to terminals step' },
+    { id: 'start', label: 'Start Run', hint: 'launch independent tmux agents' },
+    { id: 'back', label: 'Back to Edit', hint: 'return to agents step' },
     { id: 'cancel', label: 'Reset Wizard', hint: 'clear and return' },
   ]
 
@@ -50,7 +50,7 @@ export function NewRunReview() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Review']}
-      tagline="Review the independent CLI terminals, then start."
+      tagline="Review the independent CLI agents, then start."
       statusKeys="enter select · ↑↓ move · esc back"
     >
       <StepIndicator step={4} total={4} name="Review" />
@@ -60,7 +60,7 @@ export function NewRunReview() {
       <Row selected={false} primary="Working Dir" trailing={state.workingDir || '(none)'} />
       <SectionEnd />
 
-      <Section label="First Terminal" />
+      <Section label="First Agent" />
       <Row selected={false} primary="Provider" badge={{ label: providerDisplayName(state.root.provider), color: providerColor(state.root.provider) }} />
       <Row selected={false} primary="Model" badge={{ label: modelBadgeLabel(state.root.model), color: modelColor(state.root.model, state.root.provider) }} />
       <Row selected={false} primary="Prompt" trailing={promptPreview || '(none)'} />
@@ -69,12 +69,12 @@ export function NewRunReview() {
 
       {state.workers.length > 0 && (
         <>
-          <Section label={`Additional Terminals (${state.workers.length})`} />
+          <Section label={`Additional Agents (${state.workers.length})`} />
           {state.workers.map((worker, idx) => (
             <Row
               key={`worker-${idx}`}
               selected={false}
-              primary={worker.nickname || `terminal-${idx + 2}`}
+              primary={worker.nickname || `agent-${idx + 2}`}
               badges={[
                 { label: providerDisplayName(worker.provider), color: providerColor(worker.provider) },
                 { label: modelBadgeLabel(worker.model), color: modelColor(worker.model, worker.provider) },
@@ -87,12 +87,12 @@ export function NewRunReview() {
       )}
 
       <Section label="Planned Tmux Windows" />
-      <Row selected={false} primary="terminal 1" trailing={providerDisplayName(state.root.provider)} />
+      <Row selected={false} primary="agent 1" trailing={providerDisplayName(state.root.provider)} />
       {state.workers.map((worker, idx) => (
         <Row
           key={`tmux-${idx}`}
           selected={false}
-          primary={`terminal ${idx + 2}`}
+          primary={`agent ${idx + 2}`}
           trailing={worker.nickname || providerDisplayName(worker.provider)}
         />
       ))}

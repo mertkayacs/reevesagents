@@ -26,7 +26,7 @@ export function Credits() {
         <Section label="About" />
         <Row selected={false} primary="Name" trailing="ReevesAgents" />
         <Row selected={false} primary="Version" trailing={REEVESAGENTS_VERSION} />
-        <Row selected={false} primary="Purpose" trailing="Local tmux-first workspace manager for AI CLI terminals" />
+        <Row selected={false} primary="Purpose" trailing="Local tmux-first workspace manager for AI CLI agents" />
         <SectionEnd />
 
         <Box marginTop={1} />

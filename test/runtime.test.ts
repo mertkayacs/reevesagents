@@ -52,7 +52,7 @@ describe('spawner runtime', () => {
     expect(() => parseTmuxIds('0 1')).toThrow(/Could not parse/)
   })
 
-  it('starts spawner runs as independent terminals without MCP or Reeves context injection', async () => {
+  it('starts spawner runs as independent agents without MCP or Reeves context injection', async () => {
     const driver = new FakeDriver()
     const { startRun } = await import('../src/launcher/runtime.js')
     const { readRun, listAgents } = await import('../src/state/runs.js')
@@ -115,7 +115,7 @@ describe('spawner runtime', () => {
     } as never, { driver, available })).toThrow(/Only spawner runs/)
   })
 
-  it('spawns a terminal into an existing spawner run session', async () => {
+  it('spawns an agent into an existing spawner run session', async () => {
     const driver = new FakeDriver()
     const { startRun, spawnWorker } = await import('../src/launcher/runtime.js')
     const { listAgents } = await import('../src/state/runs.js')
@@ -141,7 +141,7 @@ describe('spawner runtime', () => {
     expect(driver.calls.filter(call => call.args[0] === 'new-window')).toHaveLength(2)
   })
 
-  it('opens, peeks, sends input, interrupts, closes terminals, and stops runs by stable ids', async () => {
+  it('opens, peeks, sends input, interrupts, closes agents, and stops runs by stable ids', async () => {
     const driver = new FakeDriver()
     const {
       startRun,

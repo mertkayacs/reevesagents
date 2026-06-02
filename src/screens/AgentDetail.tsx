@@ -1,4 +1,4 @@
-// Terminal detail overview: summary plus output, prompt, open, close, and back actions.
+// Agent detail overview: summary plus output, prompt, open, close, and back actions.
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
@@ -16,12 +16,12 @@ type RowItem = 'Output' | 'Task' | '__section__' | 'OpenCLI' | 'CloseAgent' | 'B
 const LABELS: Record<RowItem, string> = {
   Output: 'Output',
   Task: 'Prompt',
-  OpenCLI: 'Open Terminal',
-  CloseAgent: 'Close Terminal',
+  OpenCLI: 'Open Agent',
+  CloseAgent: 'Close Agent',
   Back: 'Back',
   '__section__': '',
 }
-const ACTION_LABEL_WIDTH = Math.max(...Object.values(LABELS).map(label => label.length), 'Open Terminal'.length, 'Close Terminal'.length)
+const ACTION_LABEL_WIDTH = Math.max(...Object.values(LABELS).map(label => label.length), 'Open Agent'.length, 'Close Agent'.length)
 
 interface SelectableItem {
   type: 'action'
@@ -105,15 +105,15 @@ export function AgentDetail() {
     return (
       <Frame
         breadcrumb={['ReevesAgents', 'Runs']}
-        statusContext="Terminal not found"
+        statusContext="Agent not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Terminal not found.</Text>
+          <Text color={colors.text.dim}>Agent not found.</Text>
           <Box marginTop={1}>
             <Row
               selected={selectedIdx === 0}
               primary="Back"
-              hint="return to terminals list"
+              hint="return to agents list"
             />
           </Box>
         </Box>
@@ -135,9 +135,9 @@ export function AgentDetail() {
     const actionLabels: Record<RowItem, string> = {
       Output: 'view recent output',
       Task: 'view initial prompt and status',
-      OpenCLI: isHeadless ? 'no tmux window' : 'switch to this terminal window',
-      CloseAgent: isCloseAgentDisabled ? 'terminal already ended' : 'close this terminal window',
-      Back: 'return to terminals list',
+      OpenCLI: isHeadless ? 'no tmux window' : 'switch to this agent window',
+      CloseAgent: isCloseAgentDisabled ? 'agent already ended' : 'close this agent',
+      Back: 'return to agents list',
       '__section__': '',
     }
     statusContext = actionLabels[selected.action] || ''
@@ -145,12 +145,12 @@ export function AgentDetail() {
 
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Terminals', agent.nickname]}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname]}
       meta={[
         { label: 'provider', value: providerLabel },
         { label: 'status', value: agent.task_status },
       ]}
-      tagline={`${providerLabel} terminal in ${run.name}. It is independent and has no ReevesAgents context.`}
+      tagline={`${providerLabel} agent in ${run.name}. It is independent and has no ReevesAgents context.`}
       statusContext={statusContext}
       statusKeys="↑↓ move · enter select · esc back"
     >
@@ -165,7 +165,7 @@ export function AgentDetail() {
           </Text>
           <Text color={colors.text.dim} wrap="truncate-end">{summaryLine}</Text>
         </Box>
-        <Section label="Terminal" />
+        <Section label="Agent" />
         {items.map((item, idx) => {
           const isSelected = selectedIdx === idx
 
@@ -179,11 +179,11 @@ export function AgentDetail() {
           }
 
           const hints: Record<RowItem, string> = {
-            Output: isHeadless ? 'no terminal output' : 'live peek of the tmux pane',
+            Output: isHeadless ? 'no output' : 'live peek of the tmux pane',
             Task: 'initial prompt and status',
-            OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this terminal window',
-            CloseAgent: 'close this terminal window',
-            Back: 'return to terminals list',
+            OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this agent window',
+            CloseAgent: 'close this agent',
+            Back: 'return to agents list',
             '__section__': '',
           }
           return (

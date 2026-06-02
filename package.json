@@ -1,7 +1,7 @@
 {
   "name": "reevesagents",
   "version": "1.0.0",
-  "description": "Local tmux-first workspace manager for AI CLI terminals",
+  "description": "Local tmux-first workspace manager for AI CLI agents",
   "type": "module",
   "packageManager": "pnpm@10.34.1",
   "bin": {

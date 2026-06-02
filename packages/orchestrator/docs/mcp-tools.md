@@ -2,7 +2,7 @@
 
 `reevesagents-orchestrator mcp` is the PRE-BETA programmatic control plane for agents and operator clients. It uses the same local JSON registry and tmux runtime as the spawner TUI and CLI. The add-on CLI can also call the same tools directly with `reevesagents-orchestrator call <tool>`.
 
-Spawner mode does not use this path. Spawner terminals receive no ReevesAgents environment variables, no MCP config, no root/worker role, and no inbox or approval instructions.
+Spawner mode does not use this path. Spawner agents receive no ReevesAgents environment variables, no MCP config, no root/worker role, and no inbox or approval instructions.
 
 ## Caller Identity
 

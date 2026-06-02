@@ -316,7 +316,7 @@
   // --- actions --------------------------------------------------------------
 
   async function closeAgent(agent) {
-    if (!confirm(`Close agent "${agent.nickname}"? Its tmux window will be killed.`)) return
+    if (!confirm(`Close agent "${agent.nickname}"? The tmux window for this agent will be killed.`)) return
     const selectedWasAgent = agent.id === (session ? session.id : selectedId)
     try {
       await api('POST', `/api/terminals/${encodeURIComponent(agent.id)}/kill`, { confirm: true })

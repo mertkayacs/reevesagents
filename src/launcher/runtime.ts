@@ -1,5 +1,5 @@
-// Tmux spawner runtime: one run owns one tmux session with independent CLI terminals.
-// Inputs: run/terminal configs. Outputs: run and agent JSON records plus tmux side effects.
+// Tmux spawner runtime: one run owns one tmux session with independent CLI agents.
+// Inputs: run/agent configs. Outputs: run and agent JSON records plus tmux side effects.
 // Invariant: stored tmux targets use stable window/pane ids, never mutable indexes.
 
 import { execFileSync } from 'node:child_process'
@@ -286,7 +286,7 @@ function newAgentRecord(
   return {
     id,
     run_id: runId,
-    nickname: config.nickname || (role === 'root' ? providerDisplayName(config.provider) : `${providerDisplayName(config.provider)} terminal`),
+    nickname: config.nickname || (role === 'root' ? providerDisplayName(config.provider) : `${providerDisplayName(config.provider)} agent`),
     provider: config.provider,
     model: config.model,
     role,
@@ -445,7 +445,7 @@ export function peekAgent(agentId: string, lines = 10, options: RuntimeOptions =
   const driver = options.driver ?? realDriver
   try {
     const agent = findAgent(agentId)
-    if (agent.headless || !agent.tmux_pane_id) return '(headless agent - no terminal output)'
+    if (agent.headless || !agent.tmux_pane_id) return '(headless agent - no output)'
     let output = driver.tmux(['capture-pane', '-p', '-e', '-S', String(-lines), '-t', agent.tmux_pane_id])
     if (!output.trim()) {
       try { output = driver.tmux(['capture-pane', '-p', '-e', '-a', '-S', String(-lines), '-t', agent.tmux_pane_id]) } catch { /* no alternate screen */ }

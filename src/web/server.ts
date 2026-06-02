@@ -237,7 +237,7 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
       root: { provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt },
     })
     const root = result.agents[0]
-    if (!root) throw new Error('run created no terminal')
+    if (!root) throw new Error('run created no agent')
     return { id: root.id, run_id: result.run.id }
   }
 
@@ -248,7 +248,7 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
     root: { provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt },
   })
   const root = result.agents[0]
-  if (!root) throw new Error('run created no terminal')
+  if (!root) throw new Error('run created no agent')
   return { id: root.id, run_id: result.run.id }
 }
 

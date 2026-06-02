@@ -1,5 +1,5 @@
 // Stop run confirmation dialog.
-// User confirms to stop this run's tmux session and mark all terminals/agents ended.
+// User confirms to stop this run's tmux session and mark all agents ended.
 
 import React from 'react'
 import { Dialog } from '../../components/Dialog.js'
@@ -51,7 +51,7 @@ export function RunStop() {
     >
       <Dialog
         title={`Return and stop "${run.name}"?`}
-        body="Switches back to Reeves, closes this run's tmux session and terminal windows, then marks every terminal ended. Local JSON state is preserved."
+        body="Switches back to Reeves, closes this run's tmux session and agent windows, then marks every agent ended. Local JSON state is preserved."
         intent="danger"
         confirmLabel="Return & Stop"
         cancelLabel="Cancel"

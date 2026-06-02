@@ -71,6 +71,6 @@ describe('NewRunWorkers', () => {
     )
 
     const output = lastFrame()
-    expect(output).toContain('Terminals')
+    expect(output).toContain('Agents')
   })
 })

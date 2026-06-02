@@ -198,7 +198,7 @@ export function RunOutput() {
 
   const secondsAgo = Math.floor((Date.now() - lastPeekAt) / 1000)
   const lastPeekLabel = secondsAgo === 0 ? 'just now' : `${secondsAgo}s ago`
-  let statusContext = agents.length > 0 ? `${agents.length} terminal${agents.length === 1 ? '' : 's'}` : 'no terminals'
+  let statusContext = agents.length > 0 ? `${agents.length} agent${agents.length === 1 ? '' : 's'}` : 'no agents'
   if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · enter opens output`
   if (selected?.type === 'pagination') statusContext = `page ${activePage} of ${totalPages} · ← → turn page`
 
@@ -206,16 +206,16 @@ export function RunOutput() {
     <Frame
       breadcrumb={['ReevesAgents', 'Runs', run.name, 'Output']}
       meta={[
-        { label: 'terminals', value: String(agents.length) },
+        { label: 'agents', value: String(agents.length) },
         { label: 'last peek', value: lastPeekLabel },
       ]}
-      tagline="Recent output from each independent terminal in this spawner run. Refreshes every 5 seconds."
+      tagline="Recent output from each independent agent in this spawner run. Refreshes every 5 seconds."
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ page · enter open/refresh · esc back"
     >
       <Box flexDirection="column">
         {agents.length === 0 ? (
-          <Text color={colors.text.dim}>No terminals in this run.</Text>
+          <Text color={colors.text.dim}>No agents in this run.</Text>
         ) : (
           pagedAgents.map((agent) => {
             const peek = peeks[agent.id] || ''
@@ -273,7 +273,7 @@ export function RunOutput() {
         {['Refresh', 'Back'].map((action, idx) => {
           const actionRowIdx = pagedAgents.length + paginOffset + 1 + idx
           const isSelected = selectedIdx === actionRowIdx
-          const hint = action === 'Refresh' ? 'peek all terminals now' : 'return to run hub'
+          const hint = action === 'Refresh' ? 'peek all agents now' : 'return to run hub'
 
           return (
             <Row
