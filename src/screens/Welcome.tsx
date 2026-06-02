@@ -14,6 +14,7 @@ import { Row } from '../components/Row.js'
 import { LayoutProvider } from '../components/LayoutContext.js'
 import { requestWebLaunch } from '../web/launch-intent.js'
 import type { ScreenName } from '../state/types.js'
+import { useLanguage } from '../state/LanguageContext.js'
 
 function pickMascotVariant(columns: number): MascotVariant {
   if (columns < 50) return 'mini'
@@ -24,6 +25,7 @@ function pickMascotVariant(columns: number): MascotVariant {
 export function Welcome() {
   const { exit } = useApp()
   const { push, selectedRunId } = useRouter()
+  const { t, language } = useLanguage()
   const { columns, rows } = useWindowSize()
   const pagePadding = 1
   const contentColumns = Math.max(1, columns - 2 - (pagePadding * 2))
@@ -32,20 +34,20 @@ export function Welcome() {
   const mascotVariant = pickMascotVariant(contentColumns)
   const actions = useMemo(() => {
     const rows: Array<{ label: string; hint: string; screen?: ScreenName; quit?: boolean; launchWeb?: boolean }> = [
-      { label: 'New Run', hint: 'start a spawner workspace', screen: 'NewRun' },
-      { label: 'Runs', hint: 'open active and recent runs', screen: 'Runs' },
-      { label: 'Doctor', hint: 'check local setup', screen: 'Doctor' },
-      { label: 'Start Web UI (beta)', hint: 'open the browser agent UI', launchWeb: true },
-      { label: 'Settings', hint: 'providers and paths', screen: 'Settings' },
-      { label: 'Reference', hint: 'Spawner, TUI, CLI, tmux', screen: 'Reference' },
-      { label: 'Credits', hint: 'about ReevesAgents', screen: 'Credits' },
-      { label: 'Quit', hint: 'exit the TUI', quit: true },
+      { label: t('welcome.newRun'), hint: t('welcome.newRunHint'), screen: 'NewRun' },
+      { label: t('welcome.runs'), hint: t('welcome.runsHint'), screen: 'Runs' },
+      { label: t('welcome.doctor'), hint: t('welcome.doctorHint'), screen: 'Doctor' },
+      { label: `${t('welcome.startWeb')} (beta)`, hint: t('welcome.startWebHint'), launchWeb: true },
+      { label: t('common.settings'), hint: t('welcome.settingsHint'), screen: 'Settings' },
+      { label: t('welcome.reference'), hint: t('welcome.referenceHint'), screen: 'Reference' },
+      { label: t('welcome.credits'), hint: t('welcome.creditsHint'), screen: 'Credits' },
+      { label: t('welcome.quit'), hint: t('welcome.quitHint'), quit: true },
     ]
     if (selectedRunId) {
-      rows.splice(1, 0, { label: 'Current Run', hint: 'return to selected run', screen: 'Run' })
+      rows.splice(1, 0, { label: t('welcome.currentRun'), hint: t('welcome.currentRunHint'), screen: 'Run' })
     }
     return rows
-  }, [selectedRunId])
+  }, [selectedRunId, t, language])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const previousSizeRef = useRef<{ columns: number; rows: number } | null>(null)
   const visibleActionCount = Math.max(3, Math.min(actions.length, rows - 14))
@@ -107,13 +109,13 @@ export function Welcome() {
         </Box>
 
         <Box flexDirection="column" marginTop={1}>
-          <Text color={colors.text.dim} wrap="truncate-end">Local tmux-first workspace manager for AI CLI agents.</Text>
-          <Text color={colors.text.dim} wrap="truncate-end">Spawner · TUI · CLI · tmux</Text>
+          <Text color={colors.text.dim} wrap="truncate-end">{t('welcome.tagline1')}</Text>
+          <Text color={colors.text.dim} wrap="truncate-end">{t('welcome.tagline2')}</Text>
         </Box>
 
         <Box flexDirection="column" marginTop={1}>
           <LayoutProvider columns={menuColumns}>
-            <Section label="Main Menu" />
+            <Section label={t('welcome.menu')} />
             {visibleActions.map((action, localIdx) => {
               const idx = firstVisibleAction + localIdx
               return (
@@ -130,7 +132,7 @@ export function Welcome() {
             <SectionEnd />
 
             <Box>
-              <Text color={colors.text.muted}>↑↓ move · enter select · q quit{rangeText}</Text>
+              <Text color={colors.text.muted}>{t('welcome.keys')}{rangeText}</Text>
             </Box>
           </LayoutProvider>
         </Box>

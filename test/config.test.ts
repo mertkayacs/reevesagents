@@ -30,6 +30,7 @@ describe('config', () => {
     expect(typeof cfg.global).toBe('object')
     expect(typeof cfg.global.peek_interval_ms).toBe('number')
     expect(typeof cfg.global.max_agents).toBe('number')
+    expect(cfg.global.language).toBe('en')
   })
 
   it('saveConfig then loadConfig roundtrip', async () => {

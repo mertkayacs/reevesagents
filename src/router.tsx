@@ -8,7 +8,10 @@ import type { ScreenName, RouterContextValue } from './state/types.js'
 import { ToastProvider } from './state/ToastContext.js'
 import { WizardProvider } from './state/WizardContext.js'
 import { WorkerDraftProvider } from './state/WorkerDraftContext.js'
+import { LanguageProvider } from './state/LanguageContext.js'
+import { configExists } from './state/config.js'
 import { ErrorBoundary } from './components/ErrorBoundary.js'
+import { LanguageSelect } from './screens/LanguageSelect.js'
 import { Welcome } from './screens/Welcome.js'
 import { Runs } from './screens/Runs.js'
 import { RunHistory } from './screens/RunHistory.js'
@@ -49,6 +52,7 @@ function normalizeScreen(screen: ScreenName): ScreenName {
 
 function renderScreen(screen: ScreenName) {
   switch (normalizeScreen(screen)) {
+    case 'LanguageSelect': return <LanguageSelect />
     case 'Welcome':     return <Welcome />
     case 'Runs':        return <Runs />
     case 'RunHistory':  return <RunHistory />
@@ -112,8 +116,9 @@ export function Router({ initialScreen }: RouterProps = {}) {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [selectedCheckName, setSelectedCheckName] = useState<string | null>(null)
   const [selectedWorkerIdx, setSelectedWorkerIdx] = useState<number | null>(null)
+  const firstRunNeedsLanguage = !initialScreen && !configExists()
   const [history, setHistory] = useState<HistoryState>(() => ({
-    entries: [initialScreen ? normalizeScreen(initialScreen) : 'Welcome'],
+    entries: [initialScreen ? normalizeScreen(initialScreen) : firstRunNeedsLanguage ? 'LanguageSelect' : 'Welcome'],
     index: 0,
   }))
 
@@ -186,15 +191,17 @@ export function Router({ initialScreen }: RouterProps = {}) {
       canBack,
       canForward,
     }}>
-      <WizardProvider>
-        <WorkerDraftProvider>
-          <ToastProvider>
-            <ErrorBoundary>
-              {renderScreen(current)}
-            </ErrorBoundary>
-          </ToastProvider>
-        </WorkerDraftProvider>
-      </WizardProvider>
+      <LanguageProvider>
+        <WizardProvider>
+          <WorkerDraftProvider>
+            <ToastProvider>
+              <ErrorBoundary>
+                {renderScreen(current)}
+              </ErrorBoundary>
+            </ToastProvider>
+          </WorkerDraftProvider>
+        </WizardProvider>
+      </LanguageProvider>
     </RouterContext.Provider>
   )
 }

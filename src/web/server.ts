@@ -19,6 +19,9 @@ import { normalizeProvider } from '../launcher/providers.js'
 import { modelValuesForProvider } from '../launcher/model-catalog.js'
 import { providerDisplayName } from '../utils/display.js'
 import type { Permissions, Provider } from '../state/types.js'
+import { loadConfig, saveConfig } from '../state/config.js'
+import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
+import { localeCatalog } from '../i18n/catalog.js'
 import { autoCleanupRuns, findAgent, findAgentAny, readRun, readRunAny } from '../state/runs.js'
 import {
   isOrchestratorWebProvider,
@@ -83,6 +86,15 @@ function send(res: ServerResponse, status: number, body: string | Buffer, conten
 
 function sendJson(res: ServerResponse, status: number, obj: unknown): void {
   send(res, status, JSON.stringify(obj), 'application/json; charset=utf-8')
+}
+
+function webLanguagePayload(): unknown {
+  const current = loadConfig().global.language
+  return {
+    current,
+    languages: LANGUAGE_OPTIONS,
+    translations: localeCatalog(current),
+  }
 }
 
 function serveAsset(res: ServerResponse, file: string, type: string, ctx: RequestContext): void {
@@ -279,6 +291,14 @@ function requireConfirm(body: Record<string, unknown>): void {
   if (body.confirm !== true) throw new Error('confirmation required')
 }
 
+function updateLanguage(body: Record<string, unknown>): unknown {
+  if (!isLanguageCode(body.language)) throw new Error('unknown language')
+  const cfg = loadConfig()
+  cfg.global.language = body.language
+  saveConfig(cfg)
+  return webLanguagePayload()
+}
+
 function killTerminal(id: string, ctx: RequestContext): void {
   const agent = ctx.prebetaOrchestrator ? findAgentAny(id) : findAgent(id)
   const run = ctx.prebetaOrchestrator ? readRunAny(agent.run_id) : readRun(agent.run_id)
@@ -328,6 +348,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       ...buildWebState({ prebetaOrchestrator: ctx.prebetaOrchestrator }),
       providers: listWebProviders(),
       prebeta: { orchestrator: ctx.prebetaOrchestrator },
+      language: webLanguagePayload(),
     })
     return
   }
@@ -344,6 +365,15 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     try {
       const body = await readJsonBody(req)
       sendJson(res, 200, await createTerminal(body, ctx))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/language') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, updateLanguage(body))
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }

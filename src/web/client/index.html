@@ -19,6 +19,10 @@
     </div>
     <div class="topbar-actions">
       <span id="conn" class="conn" data-state="idle" title="live update stream">live</span>
+      <label class="language-picker" title="Language">
+        <span id="language-label" class="language-label">Language</span>
+        <select id="language-select" aria-label="Language"></select>
+      </label>
       <button id="new-agent-btn" class="btn btn-agent" type="button">New agent</button>
       <button id="new-run-btn" class="btn btn-accent" type="button">New run</button>
     </div>
@@ -126,7 +130,7 @@
         </div>
       </div>
 
-      <label class="field">
+      <label class="field" id="agent-name-field">
         <span class="field-label">Agent name <span class="field-opt">optional</span></span>
         <input id="f-nickname" type="text" maxlength="40" placeholder="planner" autocomplete="off" />
       </label>
@@ -144,7 +148,7 @@
         <input id="f-cwd" type="text" placeholder="defaults to the server's directory" autocomplete="off" />
       </label>
 
-      <label class="field">
+      <label class="field" id="prompt-field">
         <span class="field-label">Initial prompt <span class="field-opt">optional, typed in on start</span></span>
         <textarea id="f-prompt" rows="3" placeholder="What should this agent start working on?"></textarea>
       </label>

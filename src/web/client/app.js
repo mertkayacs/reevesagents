@@ -19,6 +19,83 @@
     white: '#ece7dc', brightWhite: '#ffffff',
   }
 
+  const WEB_EN = {
+    'web.beta': 'web · beta',
+    'web.prebeta': 'web · pre-beta MCP',
+    'web.live': 'live',
+    'web.offline': 'offline',
+    'web.languageTitle': 'Language',
+    'web.activeAgents': 'active agents',
+    'web.agents': 'Agents',
+    'web.noAgents': 'No agents yet',
+    'web.noAgentsBody': 'Create a run, then add provider agents as the work grows.',
+    'web.noAgentSelected': 'No agent selected',
+    'web.noAgentSub': 'Pick an agent on the left, or create a run.',
+    'web.addAgent': 'Add agent',
+    'web.stop': 'Stop',
+    'web.newAgent': 'New agent',
+    'web.newRun': 'New run',
+    'web.webAgent': 'web agent',
+    'web.noAgentAttached': 'No agent attached',
+    'web.overlayBody': 'Select an agent to open its live pane. Closing the browser leaves the run active.',
+    'web.newRunSubtitle': 'Start a run with its first provider agent.',
+    'web.addAgentSubtitle': 'Add one provider agent to the selected run.',
+    'web.createRun': 'Create run',
+    'web.run': 'Run',
+    'web.runName': 'Run name',
+    'web.provider': 'Provider',
+    'web.model': 'Model',
+    'web.permissionMode': 'Permission mode',
+    'web.askFirst': 'Ask first',
+    'web.askFirstMeta': 'Keep provider approval prompts',
+    'web.skipPrompts': 'Skip prompts',
+    'web.skipPromptsMeta': 'Use only in trusted workspaces',
+    'web.agentName': 'Agent name',
+    'web.optional': 'optional',
+    'web.newRunMode': 'New run mode',
+    'web.workingDirectory': 'Working directory',
+    'web.cwdPlaceholder': 'defaults to the server directory',
+    'web.initialPrompt': 'Initial prompt',
+    'web.initialPromptOpt': 'optional, typed in on start',
+    'web.promptPlaceholder': 'What should this agent start working on?',
+    'web.orchestratorPromptPlaceholder': 'What should this orchestrator agent start working on?',
+    'web.cancel': 'Cancel',
+    'web.create': 'Create',
+    'web.providerDefault': 'Provider default',
+    'web.notInstalled': 'Not installed',
+    'web.spawnerOnly': 'Spawner only',
+    'web.readyOrchestrator': 'Ready · Orchestrator',
+    'web.ready': 'Ready',
+    'web.history': 'History',
+    'web.archived': 'archived',
+    'web.noRootProvider': 'no root provider',
+    'web.addAgentTitle': 'add agent to {{name}}',
+    'web.stopRunTitle': 'stop run {{name}}',
+    'web.closeAgentLabel': 'close agent {{name}}',
+    'web.agentUnavailable': 'agent is unavailable',
+    'web.addAgentActiveTitle': 'add an agent to an active run',
+    'web.createRunFirstTitle': 'create a run before adding agents',
+    'web.connecting': 'connecting',
+    'web.closed': 'closed',
+    'web.exited': 'exited',
+    'web.error': 'error',
+    'web.connectionError': 'connection error',
+    'web.disconnected': 'disconnected',
+    'web.closeAgentConfirm': 'Close agent "{{name}}"? The running window for this agent will be closed.',
+    'web.closeAgentError': 'Could not close agent: {{message}}',
+    'web.stopRunConfirm': 'Stop run "{{name}}"? Every agent in it will be stopped.',
+    'web.stopRunError': 'Could not stop run: {{message}}',
+    'web.agentEnded': 'agent has ended',
+    'web.createRunFirst': 'Create a run first, then add agents to it.',
+    'web.runInactive': 'This run is no longer active.',
+    'web.noProvider': 'No installed provider is available for this mode.',
+    'web.addingTo': 'Adding to {{name}} · {{mode}} · {{count}}',
+    'web.oneAgent': '{{count}} agent',
+    'web.manyAgents': '{{count}} agents',
+    'web.spawner': 'Spawner',
+    'web.orchestrator': 'Orchestrator MCP',
+  }
+
   const el = {
     sidebarList: document.getElementById('sidebar-list'),
     sidebarEmpty: document.getElementById('sidebar-empty'),
@@ -26,6 +103,8 @@
     conn: document.getElementById('conn'),
     brandDuck: document.getElementById('brand-duck'),
     brandBeta: document.getElementById('brand-beta'),
+    languageLabel: document.getElementById('language-label'),
+    languageSelect: document.getElementById('language-select'),
     stageTitle: document.getElementById('stage-title'),
     stageSub: document.getElementById('stage-sub'),
     stageStatus: document.getElementById('stage-status'),
@@ -68,6 +147,9 @@
   let runs = []
   let history = []
   let providers = []
+  let language = 'en'
+  let languages = []
+  let messages = WEB_EN
   let prebetaOrchestrator = false
   let selectedId = null
   let session = null // { id, ws, term, fit, observer }
@@ -108,7 +190,7 @@
     runs = data.runs || []
     history = data.history || []
     prebetaOrchestrator = data.prebeta && data.prebeta.orchestrator === true
-    el.brandBeta.textContent = prebetaOrchestrator ? 'web · pre-beta MCP' : 'web · beta'
+    applyLanguage(data.language)
     renderProviders()
     renderSidebar()
   }
@@ -131,7 +213,86 @@
 
   function setConn(state) {
     el.conn.dataset.state = state
-    el.conn.textContent = state === 'down' ? 'offline' : 'live'
+    el.conn.textContent = state === 'down' ? t('web.offline') : t('web.live')
+  }
+
+  function t(key, values) {
+    let text = messages[key] || WEB_EN[key] || key
+    for (const [name, value] of Object.entries(values || {})) {
+      text = text.replaceAll(`{{${name}}}`, String(value))
+    }
+    return text
+  }
+
+  function applyLanguage(payload) {
+    if (!payload || typeof payload !== 'object') return
+    language = payload.current || language
+    languages = Array.isArray(payload.languages) ? payload.languages : languages
+    messages = { ...WEB_EN, ...(payload.translations || {}) }
+    document.documentElement.lang = language
+    const current = languages.find(item => item.code === language)
+    document.documentElement.dir = current && current.dir === 'rtl' ? 'rtl' : 'ltr'
+    renderLanguageSelect()
+    applyStaticTranslations()
+  }
+
+  function renderLanguageSelect() {
+    if (!el.languageSelect) return
+    const current = el.languageSelect.value || language
+    el.languageSelect.innerHTML = ''
+    for (const option of languages) {
+      const item = document.createElement('option')
+      item.value = option.code
+      item.textContent = `${option.flag} ${option.nativeName}`
+      item.title = option.name
+      el.languageSelect.appendChild(item)
+    }
+    el.languageSelect.value = [...el.languageSelect.options].some(option => option.value === current) ? current : language
+  }
+
+  function applyStaticTranslations() {
+    el.brandBeta.textContent = prebetaOrchestrator ? t('web.prebeta') : t('web.beta')
+    el.languageLabel.textContent = t('web.languageTitle')
+    el.languageSelect.setAttribute('aria-label', t('web.languageTitle'))
+    el.languageSelect.parentElement.title = t('web.languageTitle')
+    el.newAgentBtn.textContent = t('web.newAgent')
+    el.newRunBtn.textContent = t('web.newRun')
+    el.emptyNewRun.textContent = t('web.newRun')
+    el.overlayNewRun.textContent = t('web.newRun')
+    el.overlayNewAgent.textContent = t('web.newAgent')
+    el.stageAddAgent.textContent = t('web.addAgent')
+    document.querySelector('.sidebar-title').textContent = t('web.agents')
+    document.querySelector('.sidebar-kicker').textContent = t('web.activeAgents')
+    document.querySelector('.empty-title').textContent = t('web.noAgents')
+    document.querySelector('.empty-body').textContent = t('web.noAgentsBody')
+    document.querySelector('.overlay-eyebrow').textContent = t('web.webAgent')
+    document.querySelector('.overlay-title').textContent = t('web.noAgentAttached')
+    document.querySelector('.overlay-body').textContent = t('web.overlayBody')
+    el.createRunTab.textContent = t('web.newRun')
+    el.createAgentTab.textContent = t('web.newAgent')
+    document.querySelector('#agent-run-field .field-label').textContent = t('web.run')
+    document.querySelector('#run-name-field .field-label').textContent = t('web.runName')
+    document.querySelector('.provider-field .field-label').textContent = t('web.provider')
+    document.querySelector('.model-field .field-label').textContent = t('web.model')
+    document.querySelector('.permissions-field .field-label').textContent = t('web.permissionMode')
+    document.querySelector('[data-permission="ask"] .permission-title').textContent = t('web.askFirst')
+    document.querySelector('[data-permission="ask"] .permission-meta').textContent = t('web.askFirstMeta')
+    document.querySelector('[data-permission="skip"] .permission-title').textContent = t('web.skipPrompts')
+    document.querySelector('[data-permission="skip"] .permission-meta').textContent = t('web.skipPromptsMeta')
+    document.querySelector('#f-permissions option[value="ask"]').textContent = t('web.askFirst')
+    document.querySelector('#f-permissions option[value="skip"]').textContent = t('web.skipPrompts')
+    document.querySelector('#agent-name-field .field-label').innerHTML = `${t('web.agentName')} <span class="field-opt">${t('web.optional')}</span>`
+    document.querySelector('#mode-field .field-label').textContent = t('web.newRunMode')
+    document.querySelector('#cwd-field .field-label').textContent = t('web.workingDirectory')
+    document.querySelector('#f-cwd').placeholder = t('web.cwdPlaceholder')
+    document.querySelector('#prompt-field .field-label').innerHTML = `${t('web.initialPrompt')} <span class="field-opt">${t('web.initialPromptOpt')}</span>`
+    el.newCancel.textContent = t('web.cancel')
+    syncCreateFields()
+    if (!selectedId) {
+      el.stageTitle.textContent = t('web.noAgentSelected')
+      el.stageSub.textContent = t('web.noAgentSub')
+    }
+    renderSidebar()
   }
 
   // --- rendering ------------------------------------------------------------
@@ -218,10 +379,10 @@
   }
 
   function providerMeta(provider, supported) {
-    if (!provider.available) return 'Not installed'
-    if (!supported) return 'Spawner only'
-    if (provider.orchestrator) return 'Ready · Orchestrator'
-    return 'Ready'
+    if (!provider.available) return t('web.notInstalled')
+    if (!supported) return t('web.spawnerOnly')
+    if (provider.orchestrator) return t('web.readyOrchestrator')
+    return t('web.ready')
   }
 
   function updateProviderSelection() {
@@ -235,7 +396,11 @@
   }
 
   function modelLabel(model) {
-    return model || 'Provider default'
+    return model || t('web.providerDefault')
+  }
+
+  function agentCountLabel(count) {
+    return count === 1 ? t('web.oneAgent', { count }) : t('web.manyAgents', { count })
   }
 
   function renderModels() {
@@ -462,7 +627,7 @@
       headBody.appendChild(name)
       const meta = document.createElement('span')
       meta.className = 'run-meta'
-      meta.textContent = `${modeLabel(run.mode)} · ${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
+      meta.textContent = `${modeLabel(run.mode)} · ${agentCountLabel(run.terminals.length)}`
       headBody.appendChild(meta)
       head.appendChild(headBody)
 
@@ -472,8 +637,8 @@
         const add = document.createElement('button')
         add.className = 'run-action'
         add.type = 'button'
-        add.textContent = 'Add agent'
-        add.title = `add agent to ${run.name}`
+        add.textContent = t('web.addAgent')
+        add.title = t('web.addAgentTitle', { name: run.name })
         add.addEventListener('click', () => openAgentDialog(run.id))
         actions.appendChild(add)
       }
@@ -481,8 +646,8 @@
         const stop = document.createElement('button')
         stop.className = 'run-stop'
         stop.type = 'button'
-        stop.textContent = 'Stop'
-        stop.title = `stop run ${run.name}`
+        stop.textContent = t('web.stop')
+        stop.title = t('web.stopRunTitle', { name: run.name })
         stop.addEventListener('click', () => stopRun(run))
         actions.appendChild(stop)
       }
@@ -501,11 +666,11 @@
       head.className = 'history-head'
       const title = document.createElement('span')
       title.className = 'history-title'
-      title.textContent = 'History'
+      title.textContent = t('web.history')
       head.appendChild(title)
       const count = document.createElement('span')
       count.className = 'history-count'
-      count.textContent = `${history.length} archived`
+      count.textContent = `${history.length} ${t('web.archived')}`
       head.appendChild(count)
       group.appendChild(head)
 
@@ -532,8 +697,8 @@
     body.appendChild(name)
     const meta = document.createElement('span')
     meta.className = 'history-meta'
-    const provider = record.root_provider_label || 'no root provider'
-    meta.textContent = `${modeLabel(record.mode)} · ${record.status} · ${record.agent_count} agent${record.agent_count === 1 ? '' : 's'} · ${provider}`
+    const provider = record.root_provider_label || t('web.noRootProvider')
+    meta.textContent = `${modeLabel(record.mode)} · ${record.status} · ${agentCountLabel(record.agent_count)} · ${provider}`
     body.appendChild(meta)
     item.appendChild(body)
 
@@ -595,8 +760,8 @@
       const kill = document.createElement('button')
       kill.className = 'card-kill'
       kill.type = 'button'
-      kill.setAttribute('aria-label', `close agent ${agent.nickname}`)
-      kill.title = `close agent ${agent.nickname}`
+      kill.setAttribute('aria-label', t('web.closeAgentLabel', { name: agent.nickname }))
+      kill.title = t('web.closeAgentLabel', { name: agent.nickname })
       kill.textContent = '×'
       kill.addEventListener('click', () => closeAgent(agent))
       tail.appendChild(kill)
@@ -608,7 +773,7 @@
     } else {
       open.disabled = true
       card.classList.add('is-disabled')
-      open.title = agent.disabledReason || 'agent is unavailable'
+      open.title = agent.disabledReason || t('web.agentUnavailable')
     }
     return card
   }
@@ -624,13 +789,13 @@
     const selected = selectedId ? findAgent(selectedId) : null
     const canAdd = !!selected && selected.run.status === 'running'
     el.stageAddAgent.hidden = !canAdd
-    if (canAdd) el.stageAddAgent.title = `add agent to ${selected.run.name}`
+    if (canAdd) el.stageAddAgent.title = t('web.addAgentTitle', { name: selected.run.name })
   }
 
   function updateCreateActions() {
     const hasRunningRun = runningRuns().length > 0
     el.newAgentBtn.disabled = !hasRunningRun
-    el.newAgentBtn.title = hasRunningRun ? 'add an agent to an active run' : 'create a run before adding agents'
+    el.newAgentBtn.title = hasRunningRun ? t('web.addAgentActiveTitle') : t('web.createRunFirstTitle')
     el.overlayNewAgent.hidden = !hasRunningRun
     el.createAgentTab.disabled = !hasRunningRun
   }
@@ -656,7 +821,7 @@
     el.stageTitle.textContent = found ? found.terminal.nickname : id
     el.stageSub.textContent = found ? `${modeLabel(found.run.mode)} · ${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}` : ''
     if (found) el.termWrap.style.setProperty('--agent-color', found.terminal.color)
-    setStageStatus('connecting', 'connecting')
+    setStageStatus('connecting', t('web.connecting'))
 
     const term = new Terminal({
       fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
@@ -686,23 +851,23 @@
 
     session = { id, ws, term, fit, observer }
 
-    ws.onopen = () => { setStageStatus('live', 'live'); fit.fit(); sendResize(); term.focus() }
+    ws.onopen = () => { setStageStatus('live', t('web.live')); fit.fit(); sendResize(); term.focus() }
     ws.onmessage = (e) => {
       let f
       try { f = JSON.parse(e.data) } catch { return }
       if (f.t === 'o') term.write(f.d)
-      else if (f.t === 'x') { setStageStatus('closed', 'exited'); term.write(`\r\n\x1b[2m[exited ${f.code}]\x1b[0m\r\n`) }
-      else if (f.t === 'e') { setStageStatus('error', 'error'); term.write(`\r\n\x1b[31m[${f.m}]\x1b[0m\r\n`) }
+      else if (f.t === 'x') { setStageStatus('closed', t('web.exited')); term.write(`\r\n\x1b[2m[${t('web.exited')} ${f.code}]\x1b[0m\r\n`) }
+      else if (f.t === 'e') { setStageStatus('error', t('web.error')); term.write(`\r\n\x1b[31m[${f.m}]\x1b[0m\r\n`) }
     }
-    ws.onerror = () => setStageStatus('error', 'connection error')
-    ws.onclose = () => { if (session && session.id === id) setStageStatus('closed', 'disconnected') }
+    ws.onerror = () => setStageStatus('error', t('web.connectionError'))
+    ws.onclose = () => { if (session && session.id === id) setStageStatus('closed', t('web.disconnected')) }
     term.onData((d) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'i', d })) })
   }
 
   // --- actions --------------------------------------------------------------
 
   async function closeAgent(agent) {
-    if (!confirm(`Close agent "${agent.nickname}"? The running window for this agent will be closed.`)) return
+    if (!confirm(t('web.closeAgentConfirm', { name: agent.nickname }))) return
     const selectedWasAgent = agent.id === (session ? session.id : selectedId)
     try {
       await api('POST', `/api/terminals/${encodeURIComponent(agent.id)}/kill`, { confirm: true })
@@ -712,12 +877,12 @@
       await refreshState()
       if (selectedWasAgent) showOverlay()
     } catch (err) {
-      alert(`Could not close agent: ${err.message}`)
+      alert(t('web.closeAgentError', { message: err.message }))
     }
   }
 
   async function stopRun(run) {
-    if (!confirm(`Stop run "${run.name}"? Every agent in it will be stopped.`)) return
+    if (!confirm(t('web.stopRunConfirm', { name: run.name }))) return
     const selectedWasInRun = run.terminals.some(agent => agent.id === (session ? session.id : selectedId))
     try {
       await api('POST', `/api/runs/${encodeURIComponent(run.id)}/stop`, { confirm: true })
@@ -727,7 +892,7 @@
       await refreshState()
       if (selectedWasInRun) showOverlay()
     } catch (err) {
-      alert(`Could not stop run: ${err.message}`)
+      alert(t('web.stopRunError', { message: err.message }))
     }
   }
 
@@ -737,7 +902,7 @@
     found.terminal.status = 'ended'
     found.terminal.canAttach = false
     found.terminal.canKill = false
-    found.terminal.disabledReason = 'agent has ended'
+    found.terminal.disabledReason = t('web.agentEnded')
   }
 
   function markRunStopped(runId) {
@@ -749,7 +914,7 @@
       agent.status = 'ended'
       agent.canAttach = false
       agent.canKill = false
-      agent.disabledReason = 'agent has ended'
+      agent.disabledReason = t('web.agentEnded')
     }
   }
 
@@ -757,8 +922,8 @@
     selectedId = null
     el.overlay.hidden = false
     el.termWrap.style.removeProperty('--agent-color')
-    el.stageTitle.textContent = 'No agent selected'
-    el.stageSub.textContent = 'Pick an agent on the left, or create a run.'
+    el.stageTitle.textContent = t('web.noAgentSelected')
+    el.stageSub.textContent = t('web.noAgentSub')
     setStageStatus(null)
     updateStageActions()
     renderSidebar()
@@ -790,11 +955,11 @@
     const run = runs.find(item => item.id === targetRunId && item.status === 'running')
     if (!run && runningRuns().length === 0) {
       openRunDialog()
-      showDialogError('Create a run first, then add agents to it.')
+      showDialogError(t('web.createRunFirst'))
       return
     }
     if (!run) {
-      alert('This run is no longer active.')
+      alert(t('web.runInactive'))
       return
     }
     createContext = { kind: 'agent', runId: run.id }
@@ -810,7 +975,7 @@
     for (const run of runningRuns()) {
       const opt = document.createElement('option')
       opt.value = run.id
-      const count = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
+      const count = agentCountLabel(run.terminals.length)
       opt.textContent = `${run.name} · ${modeLabel(run.mode)} · ${count}`
       el.fAgentRun.appendChild(opt)
     }
@@ -837,11 +1002,11 @@
     const run = selectedRunForCreate()
     const mode = selectedCreateMode()
     el.dialog.dataset.intent = addingToRun ? 'agent' : 'run'
-    el.dialogTitle.textContent = addingToRun ? 'Add agent' : 'New run'
+    el.dialogTitle.textContent = addingToRun ? t('web.addAgent') : t('web.newRun')
     el.dialogSubtitle.textContent = addingToRun
-      ? 'Add one provider agent to the selected run.'
-      : 'Start a run with its first provider agent.'
-    el.newSubmit.textContent = addingToRun ? 'Add agent' : 'Create run'
+      ? t('web.addAgentSubtitle')
+      : t('web.newRunSubtitle')
+    el.newSubmit.textContent = addingToRun ? t('web.addAgent') : t('web.createRun')
     el.createRunTab.setAttribute('aria-selected', String(!addingToRun))
     el.createAgentTab.setAttribute('aria-selected', String(addingToRun))
     el.agentRunField.hidden = !addingToRun
@@ -850,25 +1015,25 @@
     el.cwdField.hidden = addingToRun
     el.targetRunNote.hidden = !addingToRun
     if (addingToRun && run) {
-      const count = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
-      el.targetRunNote.textContent = `Adding to ${run.name} · ${modeLabel(run.mode)} · ${count}`
+      const count = agentCountLabel(run.terminals.length)
+      el.targetRunNote.textContent = t('web.addingTo', { name: run.name, mode: modeLabel(run.mode), count })
     } else {
       el.targetRunNote.textContent = ''
     }
     el.fNickname.placeholder = addingToRun ? 'reviewer' : 'lead'
     el.fPrompt.placeholder = mode === 'orchestrator'
-      ? 'What should this orchestrator agent start working on?'
-      : 'What should this agent start working on?'
+      ? t('web.orchestratorPromptPlaceholder')
+      : t('web.promptPlaceholder')
     renderProviders()
     updatePermissionSelection()
     updateCreateActions()
     if (addingToRun && !run) {
-      showDialogError('This run is no longer active.')
+      showDialogError(t('web.runInactive'))
       return
     }
     if (el.dialog.open && !selectedProviderAvailable()) {
-      showDialogError('No installed provider is available for this mode.')
-    } else if (el.newError.textContent === 'No installed provider is available for this mode.') {
+      showDialogError(t('web.noProvider'))
+    } else if (el.newError.textContent === t('web.noProvider')) {
       el.newError.hidden = true
     }
   }
@@ -878,12 +1043,12 @@
     el.newError.hidden = true
     const provider = el.fProvider.value
     if (!selectedProviderAvailable()) {
-      showDialogError('No installed provider is available for this mode.')
+      showDialogError(t('web.noProvider'))
       return
     }
     const run = selectedRunForCreate()
     if (createContext.kind === 'agent' && !run) {
-      showDialogError('This run is no longer active.')
+      showDialogError(t('web.runInactive'))
       return
     }
     const payload = {
@@ -947,6 +1112,16 @@
   el.fProvider.addEventListener('change', () => {
     updateProviderSelection()
     renderModels()
+  })
+  el.languageSelect.addEventListener('change', async () => {
+    try {
+      const payload = await api('POST', '/api/language', { language: el.languageSelect.value })
+      applyLanguage(payload)
+      await refreshState()
+    } catch (err) {
+      alert(err.message)
+      el.languageSelect.value = language
+    }
   })
   el.fPermissions.addEventListener('change', updatePermissionSelection)
   for (const option of el.permissionGrid.querySelectorAll('.permission-option')) {
