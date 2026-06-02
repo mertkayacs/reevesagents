@@ -69,14 +69,37 @@ body {
   background: var(--panel);
 }
 
-.brand { display: flex; align-items: baseline; gap: var(--s-2); }
-.brand-mark { color: var(--accent); font-size: var(--fs-lg); }
-.brand-name { font-weight: 600; letter-spacing: 0.2px; }
+.brand { display: flex; align-items: center; gap: var(--s-2); }
+.brand-duck {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+.brand-duck::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 3px;
+  box-shadow:
+    6px 0 #f3c950, 9px 0 #f3c950, 12px 0 #f3c950,
+    3px 3px #f3c950, 6px 3px #f3c950, 9px 3px #f3c950, 12px 3px #f3c950, 15px 3px #d99f35,
+    3px 6px #f3c950, 6px 6px #15191f, 9px 6px #f3c950, 12px 6px #f3c950, 15px 6px #e9773b,
+    0 9px #f3c950, 3px 9px #f3c950, 6px 9px #f3c950, 9px 9px #f3c950, 12px 9px #d99f35, 15px 9px #e9773b, 18px 9px #e9773b,
+    0 12px #f3c950, 3px 12px #f3c950, 6px 12px #f3c950, 9px 12px #f3c950, 12px 12px #f3c950, 15px 12px #d99f35,
+    3px 15px #d99f35, 6px 15px #f3c950, 9px 15px #f3c950, 12px 15px #d99f35,
+    6px 18px #d99f35, 9px 18px #d99f35,
+    6px 21px #d99f35, 12px 21px #d99f35;
+  image-rendering: pixelated;
+}
+.brand-name { font-weight: 600; letter-spacing: 0; }
 .brand-beta {
   color: var(--muted);
   font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0;
 }
 
 .topbar-actions { display: flex; align-items: center; gap: var(--s-3); }
@@ -84,7 +107,7 @@ body {
 .conn {
   font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0;
   color: var(--muted);
   display: inline-flex;
   align-items: center;
@@ -148,7 +171,7 @@ body {
 .run-name {
   font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 0;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -169,14 +192,13 @@ body {
 /* terminal card */
 .card {
   display: grid;
-  grid-template-columns: 36px 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-3);
   padding: var(--s-2) var(--s-3);
   background: var(--panel-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-2);
-  cursor: pointer;
   text-align: left;
   width: 100%;
   font: inherit;
@@ -184,10 +206,30 @@ body {
   transition: border-color var(--motion), background var(--motion);
 }
 .card:hover { border-color: var(--border); }
-.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .card[aria-selected="true"] {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+}
+.card.is-disabled { opacity: 0.7; }
+.card-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: var(--s-3);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.card-main:disabled { cursor: default; }
+.card-main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--r-1);
 }
 
 .avatar {
@@ -200,7 +242,7 @@ body {
   font-weight: 700;
   font-size: var(--fs-sm);
   color: var(--accent-ink);
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .card-body { min-width: 0; }
@@ -237,7 +279,7 @@ body {
 
 .card-kill {
   border: none;
-  background: none;
+  background: transparent;
   color: var(--muted);
   cursor: pointer;
   font-size: var(--fs-md);
@@ -248,7 +290,11 @@ body {
   transition: color var(--motion), background var(--motion), opacity var(--motion);
 }
 .card:hover .card-kill, .card:focus-within .card-kill { opacity: 1; }
-.card-kill:hover { color: var(--error); background: var(--panel); }
+.card-kill:hover, .card-kill:focus-visible {
+  color: var(--error);
+  background: var(--panel);
+  outline: none;
+}
 
 .card.is-ended { opacity: 0.55; }
 .card.is-ended .card-name { text-decoration: line-through; text-decoration-color: var(--muted); }
@@ -272,7 +318,7 @@ body {
 .stage-status {
   font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0;
   padding: var(--s-1) var(--s-2);
   border-radius: var(--r-1);
   border: 1px solid var(--border);
