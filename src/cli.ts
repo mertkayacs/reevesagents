@@ -56,7 +56,7 @@ function resolveAgent(id: string): AgentRecord {
 function resolveOpenTarget(id: string): { run: RunRecord, session: string, windowId: string, label: string } {
   try {
     const run = resolveRun(id)
-    return { run, session: run.reeves_session ?? run.tmux_session, windowId: run.reeves_window_id, label: run.name }
+    return { run, session: run.tmux_session, windowId: 'reeves', label: run.name }
   } catch {
     const agent = resolveAgent(id)
     return { run: readRun(agent.run_id), session: agent.tmux_session, windowId: agent.tmux_window_id, label: agent.nickname }
@@ -264,7 +264,7 @@ program
 
 program
   .command('open <id>')
-  .description('open a run reeves window or an agent window')
+  .description('open a run tmux tab set or an agent window')
   .action((id) => {
     openTarget(id)
   })

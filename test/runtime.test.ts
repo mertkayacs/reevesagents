@@ -146,6 +146,7 @@ describe('spawner runtime', () => {
     const {
       startRun,
       openReeves,
+      openRunTabs,
       openAgent,
       peekAgent,
       sendText,
@@ -165,6 +166,7 @@ describe('spawner runtime', () => {
     const terminal = result.agents.find(agent => agent.role === 'worker')!
 
     openReeves(result.run.id, { driver })
+    openRunTabs(result.run.id, { driver })
     openAgent(terminal.id, { driver })
     expect(peekAgent(terminal.id, 5, { driver })).toBe('ready [REDACTED]')
     sendText(terminal.id, 'hello', { driver })
@@ -177,6 +179,7 @@ describe('spawner runtime', () => {
     expect(stopRun(result.run.id, { driver }).status).toBe('ended')
 
     expect(driver.calls).toEqual(expect.arrayContaining([
+      { args: ['select-window', '-t', `${result.run.tmux_session}:reeves`] },
       { args: ['select-window', '-t', `${terminal.tmux_session}:${terminal.tmux_window_id}`] },
       { args: ['capture-pane', '-p', '-e', '-S', '-5', '-t', terminal.tmux_pane_id] },
       { args: ['paste-buffer', '-b', helloBuffer, '-t', terminal.tmux_pane_id] },

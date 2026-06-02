@@ -48,6 +48,7 @@ vi.mock('../../src/state/runs.js', async () => {
 })
 
 vi.mock('../../src/launcher/runtime.js', () => ({
+  openRunTabs: vi.fn(),
   openAgent: vi.fn(),
   openReeves: vi.fn(),
   stopRun: vi.fn(),

@@ -9,14 +9,17 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { listAgents, readRun } from '../state/runs.js'
+import { useToast } from '../state/ToastContext.js'
+import { openRunTabs } from '../launcher/runtime.js'
 import type { RunRecord } from '../state/types.js'
 
 const REFRESH_INTERVAL_MS = 5000
 
-type RowItem = 'Agents' | 'Output' | 'AddWorker' | '__section__' | 'StopRun' | 'Back'
+type RowItem = 'Agents' | 'Output' | 'OpenTabs' | 'AddWorker' | '__section__' | 'StopRun' | 'Back'
 const LABELS: Record<RowItem, string> = {
   Agents: 'Agents',
   Output: 'Output',
+  OpenTabs: 'Open tmux tabs',
   AddWorker: 'Add Agent',
   StopRun: 'Return & Stop Run',
   Back: 'Back',
@@ -34,6 +37,7 @@ interface SelectableItem {
 
 export function Run() {
   const { selectedRunId, push, pop } = useRouter()
+  const { toast } = useToast()
   const [run, setRun] = useState<RunRecord | null>(() =>
     selectedRunId ? (() => { try { return readRun(selectedRunId) } catch { return null } })() : null
   )
@@ -54,6 +58,7 @@ export function Run() {
   const items: SelectableItem[] = [
     { type: 'action', action: 'Agents' },
     { type: 'action', action: 'Output' },
+    { type: 'action', action: 'OpenTabs' },
     { type: 'action', action: 'AddWorker' },
     { type: 'action', action: '__section__' },
     { type: 'action', action: 'StopRun' },
@@ -71,6 +76,14 @@ export function Run() {
         break
       case 'Output':
         push('RunOutput')
+        break
+      case 'OpenTabs':
+        if (run.status === 'ended' || run.ended_at !== null) return
+        try {
+          openRunTabs(run.id)
+        } catch (err) {
+          toast(err instanceof Error ? err.message : String(err), 'error')
+        }
         break
       case 'AddWorker':
         if (run.status === 'ended' || run.ended_at !== null) return
@@ -146,6 +159,7 @@ export function Run() {
     const actionLabels: Record<string, string> = {
       Agents: 'view agents',
       Output: 'peek across agents',
+      OpenTabs: isRunEnded ? 'run is ended' : 'switch to this run tmux session',
       AddWorker: isRunEnded ? 'run is ended' : 'spawn new agent',
       StopRun: isRunEnded ? 'delete stopped run from the active list' : 'return to Reeves and stop run windows',
       Back: 'return to runs',
@@ -187,11 +201,13 @@ export function Run() {
           const hints: Record<RowItem, string> = {
             Agents: `${agents.length} agents`,
             Output: 'peek across all agents',
+            OpenTabs: isRunEnded ? 'run is ended' : 'switch to tmux tabs for this run',
             AddWorker: isRunEnded ? 'run is ended' : 'spawn new agent',
             StopRun: isRunEnded ? 'move stopped run to history' : 'return to Reeves and stop run windows',
             Back: 'return to all runs',
             '__section__': '',
           }
+          const isDisabledOpenTabs = item.action === 'OpenTabs' && isRunEnded
 
           return (
             <Row
@@ -200,7 +216,7 @@ export function Run() {
               primary={primary}
               primaryWidth={ACTION_LABEL_WIDTH}
               hint={hints[item.action]}
-              disabled={isDisabledAddWorker}
+              disabled={isDisabledAddWorker || isDisabledOpenTabs}
               danger={item.action === 'StopRun'}
             />
           )

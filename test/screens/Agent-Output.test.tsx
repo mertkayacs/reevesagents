@@ -49,11 +49,16 @@ vi.mock('../../src/state/runs.js', async () => {
   }
 })
 
-vi.mock('../../src/launcher/runtime.js', () => ({
-  openAgent: vi.fn(),
-  peekAgent: vi.fn(() => 'line 1\nline 2\nline 3\nsample output'),
-  killAgent: vi.fn(),
-}))
+vi.mock('../../src/launcher/runtime.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/launcher/runtime.js')>('../../src/launcher/runtime.js')
+  return {
+    ...actual,
+    openRunTabs: vi.fn(),
+    openAgent: vi.fn(),
+    peekAgent: vi.fn(() => 'line 1\nline 2\nline 3\nsample output'),
+    killAgent: vi.fn(),
+  }
+})
 
 describe('AgentOutput screen', () => {
   beforeEach(() => {

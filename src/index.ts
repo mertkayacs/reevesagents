@@ -7,6 +7,7 @@ export { ErrorBoundary } from './components/ErrorBoundary.js'
 export {
   startRun,
   openReeves,
+  openRunTabs,
   openAgent,
   peekAgent,
   killAgent,

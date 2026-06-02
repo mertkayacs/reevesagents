@@ -5,7 +5,10 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
 import { Router } from '../../src/router.js'
 import * as runsState from '../../src/state/runs.js'
+import * as runtime from '../../src/launcher/runtime.js'
 import type { RunRecord, AgentRecord } from '../../src/state/types.js'
+
+const waitForInput = () => new Promise(resolve => setTimeout(resolve, 75))
 
 vi.mock('../../src/state/runs.js', async () => {
   const actual = await vi.importActual('../../src/state/runs.js')
@@ -72,6 +75,14 @@ vi.mock('../../src/state/runs.js', async () => {
   }
 })
 
+vi.mock('../../src/launcher/runtime.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/launcher/runtime.js')>('../../src/launcher/runtime.js')
+  return {
+    ...actual,
+    openRunTabs: vi.fn(),
+  }
+})
+
 describe('Run hub screen', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -127,7 +138,25 @@ describe('Run hub screen', () => {
 
     expect(frame).toContain('Agents')
     expect(frame).toContain('Output')
+    expect(frame).toContain('Open tmux tabs')
     expect(frame).toContain('Add Agent')
+    unmount()
+  })
+
+  it('opens the run tmux tab set from the action row', async () => {
+    const { stdin, unmount } = render(
+      <Router initialScreen="Run" />
+    )
+
+    await waitForInput()
+    stdin.write('\u001B[B')
+    await waitForInput()
+    stdin.write('\u001B[B')
+    await waitForInput()
+    stdin.write('\r')
+    await waitForInput()
+
+    expect(runtime.openRunTabs).toHaveBeenCalledWith('run-1')
     unmount()
   })
 
