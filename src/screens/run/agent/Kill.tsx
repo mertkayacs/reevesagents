@@ -1,4 +1,4 @@
-// Agent close: confirm dialog before closing a spawner agent window.
+// Agent lifecycle confirmation: stop live agents, delete stopped agents.
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
@@ -7,12 +7,12 @@ import { Row } from '../../../components/Row.js'
 import { Dialog } from '../../../components/Dialog.js'
 import { useRouter } from '../../../router.js'
 import { colors } from '../../../utils/tokens.js'
-import { findAgent, readRun } from '../../../state/runs.js'
+import { deleteAgent, findAgent, readRun } from '../../../state/runs.js'
 import { killAgent } from '../../../launcher/runtime.js'
 import type { AgentRecord } from '../../../state/types.js'
 
 export function AgentKill() {
-  const { selectedAgentId, pop } = useRouter()
+  const { selectedAgentId, pop, resetStack } = useRouter()
   const [agent] = useState<AgentRecord | null>(() =>
     selectedAgentId ? (() => { try { return findAgent(selectedAgentId) } catch { return null } })() : null
   )
@@ -22,8 +22,13 @@ export function AgentKill() {
 
   function handleConfirm(): void {
     if (agent) {
-      killAgent(agent.id)
-      pop()
+      if (agent.ended_at) {
+        deleteAgent(agent.id)
+        resetStack('RunAgents')
+      } else {
+        killAgent(agent.id)
+        pop()
+      }
     }
   }
 
@@ -58,16 +63,20 @@ export function AgentKill() {
     )
   }
 
+  const isAgentEnded = agent.ended_at !== null
+
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, 'Close']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Agents', agent.nickname, isAgentEnded ? 'Delete' : 'Stop']}
       statusKeys="←→ switch · enter select · esc cancel"
     >
       <Dialog
-        title={`Close ${agent.nickname}?`}
-        body="Closes this agent window and marks it ended. Other agents continue."
+        title={isAgentEnded ? `Delete ${agent.nickname}?` : `Stop ${agent.nickname}?`}
+        body={isAgentEnded
+          ? 'Removes this stopped agent from the run. Other run state is preserved.'
+          : 'Stops this agent window and marks it ended. Other agents continue.'}
         intent="danger"
-        confirmLabel="Close"
+        confirmLabel={isAgentEnded ? 'Delete Agent' : 'Stop Agent'}
         cancelLabel="Cancel"
         onConfirm={handleConfirm}
         onCancel={pop}

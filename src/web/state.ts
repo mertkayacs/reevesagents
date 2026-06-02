@@ -34,6 +34,7 @@ export interface WebTerminal {
   hasWindow: boolean
   canAttach: boolean
   canKill: boolean
+  canDelete: boolean
   disabledReason: string | null
   monogram: string
   color: string
@@ -46,6 +47,7 @@ export interface WebRun {
   status: RunViewStatus
   working_dir: string
   canStop: boolean
+  canDelete: boolean
   terminals: WebTerminal[]
 }
 
@@ -89,11 +91,13 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
   const runs = runsSource.map<WebRun>(run => {
     const mode = run.mode === 'spawner' ? 'spawner' : 'orchestrator'
     const live = runHasLiveTmuxTarget(run)
+    const status = computeRunStatus(run, live)
     const terminals = listForRun(run.id).map<WebTerminal>(agent => {
       const status = agent.ended_at ? 'ended' : agent.task_status
       const hasWindow = !agent.headless && !!agent.tmux_window_id
       const canAttach = hasWindow && status !== 'ended'
       const canKill = status !== 'ended' && hasWindow && (mode === 'spawner' || agent.role !== 'root')
+      const canDelete = status === 'ended'
       return {
         id: agent.id,
         nickname: agent.nickname,
@@ -106,6 +110,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
         hasWindow,
         canAttach,
         canKill,
+        canDelete,
         disabledReason: canAttach ? null : status === 'ended' ? 'agent has ended' : 'agent has no tmux window',
         monogram: monogram(agent.nickname, agent.provider),
         color: providerColor(agent.provider),
@@ -115,9 +120,10 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       id: run.id,
       mode,
       name: run.name,
-      status: computeRunStatus(run, live),
+      status,
       working_dir: run.working_dir,
       canStop: run.status === 'running' && !run.ended_at,
+      canDelete: run.status === 'ended' || run.ended_at !== null,
       terminals,
     }
   })

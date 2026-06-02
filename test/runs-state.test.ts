@@ -210,6 +210,17 @@ describe('v1 run state', () => {
     expect(JSON.parse(readFileSync(join(tmpDir, 'runs', 'keep', 'run.json'), 'utf-8')).id).toBe('keep')
   })
 
+  it('deletes only stopped agents', async () => {
+    const { deleteAgent, listAgents, writeAgent, writeRun } = await import('../src/state/runs.js')
+    writeRun(makeRun('agents'))
+    writeAgent(makeAgent('live', 'agents'))
+    writeAgent(makeAgent('ended', 'agents', { ended_at: '2026-01-01T00:00:03.000Z' }))
+
+    expect(() => deleteAgent('live')).toThrow(/stop agent before deleting/i)
+    expect(deleteAgent('ended').id).toBe('ended')
+    expect(listAgents('agents').map(agent => agent.id)).toEqual(['live'])
+  })
+
   it('deletes one archived history record', async () => {
     const { archiveAndRemoveRun, deleteRunHistory, listRunHistory, writeRun } = await import('../src/state/runs.js')
     writeRun(makeRun('keep', { status: 'ended', ended_at: '2026-01-01T00:00:01.000Z' }))

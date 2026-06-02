@@ -80,6 +80,7 @@ describe('buildWebState', () => {
     expect(run.mode).toBe('spawner')
     expect(run.name).toBe('run-r1')
     expect(run.canStop).toBe(true)
+    expect(run.canDelete).toBe(false)
     expect(run.terminals).toHaveLength(2)
 
     const planner = run.terminals.find(t => t.nickname === 'planner')!
@@ -91,6 +92,7 @@ describe('buildWebState', () => {
     expect(planner.model).toBe('opus')
     expect(planner.canAttach).toBe(true)
     expect(planner.canKill).toBe(true)
+    expect(planner.canDelete).toBe(false)
 
     const worker = run.terminals.find(t => t.nickname === 'worker')!
     expect(worker.color).toBe(providerColor('codex'))
@@ -105,6 +107,7 @@ describe('buildWebState', () => {
     expect(term.status).toBe('ended')
     expect(term.canAttach).toBe(false)
     expect(term.canKill).toBe(false)
+    expect(term.canDelete).toBe(true)
   })
 
   it('hides orchestrator runs by default and shows them in pre-beta mode', () => {

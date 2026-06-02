@@ -6,7 +6,7 @@ import { Dialog } from '../../components/Dialog.js'
 import { Frame } from '../../components/Frame.js'
 import { useRouter } from '../../router.js'
 import { useToast } from '../../state/ToastContext.js'
-import { readRun } from '../../state/runs.js'
+import { archiveAndRemoveRun, readRun } from '../../state/runs.js'
 import { openReeves, stopRun } from '../../launcher/runtime.js'
 
 export function RunStop() {
@@ -35,25 +35,36 @@ export function RunStop() {
   }
 
   function handleConfirm(): void {
+    if (!run) return
     try {
+      if (run.status === 'ended' || run.ended_at !== null) {
+        archiveAndRemoveRun(run.id, 'ended')
+        toast(`Deleted ${run.name} from active runs. History kept.`, 'info')
+        resetStack('RunHistory')
+        return
+      }
       try { openReeves(selectedRunId!) } catch { /* no attached tmux client */ }
       stopRun(selectedRunId!)
-      resetStack('Runs')
+      resetStack('Run')
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'error')
     }
   }
 
+  const isRunEnded = run.status === 'ended' || run.ended_at !== null
+
   return (
     <Frame
-      breadcrumb={['ReevesAgents', 'Runs', run.name, 'Stop']}
+      breadcrumb={['ReevesAgents', 'Runs', run.name, isRunEnded ? 'Delete' : 'Stop']}
       statusKeys="←→ switch · enter select · esc cancel"
     >
       <Dialog
-        title={`Return and stop "${run.name}"?`}
-        body="Switches back to Reeves, closes this run's tmux session and agent windows, then marks every agent ended. Local JSON state is preserved."
+        title={isRunEnded ? `Delete stopped run "${run.name}"?` : `Return and stop "${run.name}"?`}
+        body={isRunEnded
+          ? 'Removes this stopped run from the active list and keeps a simple shared history record.'
+          : "Switches back to Reeves, stops this run's tmux session and agent windows, then marks every agent ended. Local JSON state is preserved."}
         intent="danger"
-        confirmLabel="Return & Stop"
+        confirmLabel={isRunEnded ? 'Delete Run' : 'Return & Stop'}
         cancelLabel="Cancel"
         onConfirm={handleConfirm}
         onCancel={() => pop()}
