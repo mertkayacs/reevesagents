@@ -7,6 +7,8 @@ import { Box, Text } from 'ink'
 import { colors, space } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
+import { translatePhrase } from '../i18n/catalog.js'
+import { useLanguage } from '../state/LanguageContext.js'
 
 interface Badge {
   label: string
@@ -45,6 +47,7 @@ export function Row({
   disabled,
   danger,
 }: Props) {
+  const { language } = useLanguage()
   const columns = useLayoutColumns()
   const width = panelWidth(columns)
   const compact = columns < 72
@@ -73,10 +76,13 @@ export function Row({
   const badgeBracketColor = selected ? colors.accent.deep : colors.surface.border
   const buttonBorderColor = selected ? colors.accent.primary : colors.text.faint
   const buttonBg = selected && !disabled ? colors.surface.selected : undefined
+  const displayPrimary = translatePhrase(language, primary)
+  const displayHint = hint ? translatePhrase(language, hint) : hint
+  const displayTrailing = trailing ? translatePhrase(language, trailing) : trailing
   const buttonPrimaryWidth = buttonLike
-    ? Math.max(primaryWidth ?? 0, primary.length, 12)
+    ? Math.max(primaryWidth ?? 0, displayPrimary.length, 12)
     : primaryWidth
-  const primaryText = buttonPrimaryWidth ? primary.padEnd(buttonPrimaryWidth) : primary
+  const primaryText = buttonPrimaryWidth ? displayPrimary.padEnd(buttonPrimaryWidth) : displayPrimary
   const railColor = selected ? colors.accent.deep : colors.surface.border
   const availableWidth = Math.max(1, width - 6)
   const trailingWidth = showTrailing
@@ -142,14 +148,14 @@ export function Row({
             dimColor={disabled}
             wrap="truncate-end"
           >
-            {primary}
+            {displayPrimary}
           </Text>
         )}
-        {showHint && (
+        {showHint && displayHint && (
           <>
             <Text color={separatorColor}> │</Text>
             <Box marginLeft={space.sm} flexShrink={1}>
-              <Text color={hintColor} wrap="truncate-end">{hint}</Text>
+              <Text color={hintColor} wrap="truncate-end">{displayHint}</Text>
             </Box>
           </>
         )}
@@ -160,7 +166,7 @@ export function Row({
             <Text color={separatorColor}> │ </Text>
           </Box>
           <Box width={trailingTextWidth} flexShrink={0}>
-            <Text color={colors.text.muted} wrap="truncate-end">{trailing}</Text>
+            <Text color={colors.text.muted} wrap="truncate-end">{displayTrailing}</Text>
           </Box>
         </Box>
       )}

@@ -13,6 +13,8 @@ import { Detail } from './Detail.js'
 import { StatusBar } from './StatusBar.js'
 import { LayoutProvider } from './LayoutContext.js'
 import { colors, space } from '../utils/tokens.js'
+import { translatePhrase } from '../i18n/catalog.js'
+import { useLanguage } from '../state/LanguageContext.js'
 
 export const FLOOR_COLS = 50
 export const FLOOR_ROWS = 18
@@ -77,6 +79,7 @@ export function Frame({
   statusContext,
   statusKeys,
 }: FrameProps) {
+  const { language } = useLanguage()
   const { columns: cols, rows } = useWindowSize()
   const tooSmall = cols < FLOOR_COLS || rows < FLOOR_ROWS
   const innerCols = Math.max(1, cols - 2)
@@ -91,17 +94,26 @@ export function Frame({
   const showDetail = detail !== undefined && innerCols >= DETAIL_BREAKPOINT
   const bodyColumns = Math.max(1, innerCols - (bodyPadding * 2) - (showDetail ? 36 : 0))
   const tmuxSession = process.env.TMUX ? 'active' : undefined
+  const displayBreadcrumb = breadcrumb.map(item => translatePhrase(language, item))
+  const displayMeta = meta?.map(item => ({
+    label: translatePhrase(language, item.label),
+    value: item.value,
+  }))
+  const displayTagline = tagline ? translatePhrase(language, tagline) : tagline
+  const displayDetailTitle = detailTitle ? translatePhrase(language, detailTitle) : detailTitle
+  const displayStatusContext = statusContext ? translatePhrase(language, statusContext) : statusContext
+  const displayStatusKeys = statusKeys ? translatePhrase(language, statusKeys) : statusKeys
 
   return (
     <Box flexDirection="column" width={cols} borderStyle="single" borderColor={colors.surface.border}>
       <Header
-        breadcrumb={breadcrumb}
-        meta={meta}
+        breadcrumb={displayBreadcrumb}
+        meta={displayMeta}
         tmuxSession={tmuxSession}
         columns={innerCols}
       />
       <Rule cols={innerCols} />
-      {tagline ? <Tagline text={tagline} rows={innerRows} cols={innerCols} /> : null}
+      {displayTagline ? <Tagline text={displayTagline} rows={innerRows} cols={innerCols} /> : null}
 
       <Box flexDirection="row">
         <LayoutProvider columns={bodyColumns}>
@@ -111,13 +123,13 @@ export function Frame({
         </LayoutProvider>
         {showDetail ? (
           <Box width={36} flexShrink={0} overflow="hidden">
-            <Detail title={detailTitle}>{detail}</Detail>
+            <Detail title={displayDetailTitle}>{detail}</Detail>
           </Box>
         ) : null}
       </Box>
 
       <Rule cols={innerCols} />
-      <StatusBar context={statusContext} keys={statusKeys} rows={innerRows} cols={innerCols} />
+      <StatusBar context={displayStatusContext} keys={displayStatusKeys} rows={innerRows} cols={innerCols} />
     </Box>
   )
 }

@@ -105,4 +105,26 @@ describe('Router startup', () => {
       rmSync(tmp, { recursive: true, force: true })
     }
   })
+
+  it('localizes shared TUI chrome from the saved language', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'reeves-router-i18n-test-'))
+    process.env.REEVES_CONFIG = join(tmp, 'config.json')
+    process.env.REEVES_REGISTRY = tmp
+    writeFileSync(process.env.REEVES_CONFIG, JSON.stringify({ version: 2, global: { language: 'tr' } }), 'utf8')
+    try {
+      const Component = Router as React.ComponentType<{ initialScreen?: ScreenName }>
+      const { lastFrame, unmount } = render(React.createElement(Component, { initialScreen: 'Runs' }))
+      const frame = lastFrame() ?? ''
+
+      expect(frame).toContain('Runlar')
+      expect(frame).toContain('İşlemler')
+      expect(frame).toContain('Yeni run')
+      expect(frame).not.toContain('New Run')
+      unmount()
+    } finally {
+      delete process.env.REEVES_CONFIG
+      delete process.env.REEVES_REGISTRY
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
 })
