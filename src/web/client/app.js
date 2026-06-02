@@ -76,6 +76,15 @@
 
   async function loadState() {
     const data = await api('GET', '/api/state')
+    applyState(data)
+  }
+
+  async function refreshState() {
+    const data = await api('GET', '/api/state')
+    applyState(data)
+  }
+
+  function applyState(data) {
     providers = data.providers || []
     runs = data.runs || []
     prebetaOrchestrator = data.prebeta && data.prebeta.orchestrator === true
@@ -132,6 +141,16 @@
     else if (firstAvailable) el.fProvider.value = firstAvailable.value
   }
 
+  function selectedProviderAvailable() {
+    const selected = el.fProvider.selectedOptions[0]
+    return !!selected && !selected.disabled && !!selected.value
+  }
+
+  function showDialogError(message) {
+    el.newError.textContent = message
+    el.newError.hidden = false
+  }
+
   function renderSidebar() {
     const runsWithAgents = runs.filter(r => r.terminals.length > 0)
     el.sidebarEmpty.hidden = runsWithAgents.length > 0
@@ -165,16 +184,19 @@
   }
 
   function renderCard(run, agent) {
-    const card = document.createElement('button')
+    const card = document.createElement('div')
     card.className = 'card' + (agent.status === 'ended' ? ' is-ended' : '')
-    card.type = 'button'
     card.setAttribute('aria-selected', String(agent.id === selectedId))
+
+    const open = document.createElement('button')
+    open.className = 'card-main'
+    open.type = 'button'
 
     const avatar = document.createElement('span')
     avatar.className = 'avatar'
     avatar.style.background = agent.color
     avatar.textContent = agent.monogram
-    card.appendChild(avatar)
+    open.appendChild(avatar)
 
     const body = document.createElement('span')
     body.className = 'card-body'
@@ -190,7 +212,8 @@
     meta.append(document.createTextNode(` · ${agent.role} · ${agent.status}`))
     body.appendChild(nm)
     body.appendChild(meta)
-    card.appendChild(body)
+    open.appendChild(body)
+    card.appendChild(open)
 
     const tail = document.createElement('span')
     tail.className = 'card-tail'
@@ -199,22 +222,23 @@
     dot.dataset.status = agent.status
     tail.appendChild(dot)
     if (agent.canKill) {
-      const kill = document.createElement('span')
+      const kill = document.createElement('button')
       kill.className = 'card-kill'
-      kill.setAttribute('role', 'button')
+      kill.type = 'button'
       kill.setAttribute('aria-label', `close agent ${agent.nickname}`)
       kill.title = `close agent ${agent.nickname}`
       kill.textContent = '×'
-      kill.addEventListener('click', (ev) => { ev.stopPropagation(); closeAgent(agent) })
+      kill.addEventListener('click', () => closeAgent(agent))
       tail.appendChild(kill)
     }
     card.appendChild(tail)
 
     if (agent.canAttach) {
-      card.addEventListener('click', () => attach(agent.id))
+      open.addEventListener('click', () => attach(agent.id))
     } else {
-      card.disabled = true
-      card.title = agent.disabledReason || 'agent is unavailable'
+      open.disabled = true
+      card.classList.add('is-disabled')
+      open.title = agent.disabledReason || 'agent is unavailable'
     }
     return card
   }
@@ -293,9 +317,14 @@
 
   async function closeAgent(agent) {
     if (!confirm(`Close agent "${agent.nickname}"? Its tmux window will be killed.`)) return
+    const selectedWasAgent = agent.id === (session ? session.id : selectedId)
     try {
       await api('POST', `/api/terminals/${encodeURIComponent(agent.id)}/kill`, { confirm: true })
-      if (session && session.id === agent.id) { disposeSession(); showOverlay() }
+      markAgentEnded(agent.id)
+      if (selectedWasAgent) { disposeSession(); showOverlay() }
+      else renderSidebar()
+      await refreshState()
+      if (selectedWasAgent) showOverlay()
     } catch (err) {
       alert(`Could not close agent: ${err.message}`)
     }
@@ -303,11 +332,38 @@
 
   async function stopRun(run) {
     if (!confirm(`Stop run "${run.name}"? Every agent in it will be stopped.`)) return
+    const selectedWasInRun = run.terminals.some(agent => agent.id === (session ? session.id : selectedId))
     try {
       await api('POST', `/api/runs/${encodeURIComponent(run.id)}/stop`, { confirm: true })
-      if (session && findAgent(session.id) === null) { disposeSession(); showOverlay() }
+      markRunStopped(run.id)
+      if (selectedWasInRun) { disposeSession(); showOverlay() }
+      else renderSidebar()
+      await refreshState()
+      if (selectedWasInRun) showOverlay()
     } catch (err) {
       alert(`Could not stop run: ${err.message}`)
+    }
+  }
+
+  function markAgentEnded(agentId) {
+    const found = findAgent(agentId)
+    if (!found) return
+    found.terminal.status = 'ended'
+    found.terminal.canAttach = false
+    found.terminal.canKill = false
+    found.terminal.disabledReason = 'agent has ended'
+  }
+
+  function markRunStopped(runId) {
+    const run = runs.find(item => item.id === runId)
+    if (!run) return
+    run.status = 'ended'
+    run.canStop = false
+    for (const agent of run.terminals) {
+      agent.status = 'ended'
+      agent.canAttach = false
+      agent.canKill = false
+      agent.disabledReason = 'agent has ended'
     }
   }
 
@@ -373,13 +429,21 @@
       ? 'What should this orchestrator agent start working on?'
       : 'What should this agent start working on?'
     renderProviders()
+    if (el.dialog.open && !selectedProviderAvailable()) {
+      showDialogError('No installed provider is available for this mode.')
+    } else if (el.newError.textContent === 'No installed provider is available for this mode.') {
+      el.newError.hidden = true
+    }
   }
 
   async function submitNew(ev) {
     ev.preventDefault()
     el.newError.hidden = true
     const provider = el.fProvider.value
-    if (!provider) return
+    if (!selectedProviderAvailable()) {
+      showDialogError('No installed provider is available for this mode.')
+      return
+    }
     const payload = {
       provider,
       nickname: el.fNickname.value.trim(),
@@ -392,9 +456,11 @@
     el.newSubmit.disabled = true
     try {
       const created = await api('POST', '/api/terminals', payload)
+      await refreshState()
       el.dialog.close()
       if (created && created.id) {
         selectedId = created.id
+        renderSidebar()
         // give the spawner a moment to create the tmux window before attaching
         setTimeout(() => attach(created.id), 400)
       }
