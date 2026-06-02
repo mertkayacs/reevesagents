@@ -433,6 +433,14 @@ export function openReeves(runId: string, options: RuntimeOptions = {}): void {
   driver.tmux(['select-window', '-t', target])
 }
 
+export function openRunTabs(runId: string, options: RuntimeOptions = {}): void {
+  const driver = options.driver ?? realDriver
+  const run = readRun(runId)
+  const target = `${run.tmux_session}:reeves`
+  try { driver.tmux(['switch-client', '-t', target]) } catch { /* no attached client */ }
+  driver.tmux(['select-window', '-t', target])
+}
+
 export function openAgent(agentId: string, options: RuntimeOptions = {}): void {
   const driver = options.driver ?? realDriver
   const agent = findAgent(agentId)
