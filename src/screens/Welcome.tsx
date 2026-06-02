@@ -12,7 +12,7 @@ import { colors } from '../utils/tokens.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { Row } from '../components/Row.js'
 import { LayoutProvider } from '../components/LayoutContext.js'
-import { requestWebLaunch } from '../web/launch-intent.js'
+import { startWebFromTui } from '../web/tui-launch.js'
 import type { ScreenName } from '../state/types.js'
 import { useLanguage } from '../state/LanguageContext.js'
 
@@ -49,6 +49,8 @@ export function Welcome() {
     return rows
   }, [selectedRunId, t, language])
   const [selectedIdx, setSelectedIdx] = useState(0)
+  const [webStarting, setWebStarting] = useState(false)
+  const [webMessage, setWebMessage] = useState<string | null>(null)
   const previousSizeRef = useRef<{ columns: number; rows: number } | null>(null)
   const visibleActionCount = Math.max(3, Math.min(actions.length, rows - 14))
   const firstVisibleAction = Math.min(
@@ -69,6 +71,19 @@ export function Welcome() {
     process.stdout.write('\x1b[3J\x1b[2J\x1b[H')
   }, [columns, rows])
 
+  async function launchWeb(): Promise<void> {
+    if (webStarting) return
+    setWebStarting(true)
+    try {
+      const url = await startWebFromTui()
+      setWebMessage(t('welcome.webRunning', { url }))
+    } catch (err) {
+      setWebMessage(err instanceof Error ? err.message : String(err))
+    } finally {
+      setWebStarting(false)
+    }
+  }
+
   function activate(): void {
     const action = actions[selectedIdx]
     if (!action) return
@@ -77,10 +92,7 @@ export function Welcome() {
       return
     }
     if (action.launchWeb) {
-      // Hand the terminal to the web server: signal intent, then exit the TUI so
-      // the CLI launches it in this same terminal (foreground, no daemon).
-      requestWebLaunch()
-      exit()
+      void launchWeb()
       return
     }
     if (action.screen) push(action.screen)
@@ -134,6 +146,13 @@ export function Welcome() {
             <Box>
               <Text color={colors.text.muted}>{t('welcome.keys')}{rangeText}</Text>
             </Box>
+            {webStarting || webMessage ? (
+              <Box>
+                <Text color={webStarting ? colors.status.warn : colors.accent.bright} wrap="truncate-end">
+                  {webStarting ? t('welcome.webStarting') : webMessage}
+                </Text>
+              </Box>
+            ) : null}
           </LayoutProvider>
         </Box>
       </Box>

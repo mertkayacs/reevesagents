@@ -373,13 +373,11 @@ async function renderTui(): Promise<void> {
     import('ink'),
     import('./router.js'),
   ])
-  await render(React.createElement(Router), { alternateScreen: false }).waitUntilExit()
-  const { consumeWebLaunch } = await import('./web/launch-intent.js')
-  if (consumeWebLaunch()) {
-    // The menu asked to hand off to the web UI: launch it in this freed terminal.
-    // runWeb keeps the process alive (server + signal handlers); do not exit here.
-    await runWeb({ open: true })
-    return
+  try {
+    await render(React.createElement(Router), { alternateScreen: false }).waitUntilExit()
+  } finally {
+    const { closeTuiWebServer } = await import('./web/tui-launch.js')
+    await closeTuiWebServer()
   }
   process.exit(0)
 }

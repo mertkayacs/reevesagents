@@ -3,8 +3,12 @@ import React from 'react'
 import { render } from 'ink-testing-library'
 import { Welcome } from '../../src/screens/Welcome.js'
 import * as RouterModule from '../../src/router.js'
+import * as TuiLaunch from '../../src/web/tui-launch.js'
 
 vi.mock('../../src/router.js')
+vi.mock('../../src/web/tui-launch.js', () => ({
+  startWebFromTui: vi.fn(async () => 'http://127.0.0.1:8080'),
+}))
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 const originalIsTTY = process.stdout.isTTY
@@ -14,6 +18,7 @@ describe('Welcome', () => {
 
   beforeEach(() => {
     mockPush = vi.fn()
+    vi.mocked(TuiLaunch.startWebFromTui).mockResolvedValue('http://127.0.0.1:8080')
     vi.spyOn(RouterModule, 'useRouter').mockReturnValue({
       replace: vi.fn(),
       push: mockPush,
@@ -27,6 +32,7 @@ describe('Welcome', () => {
   afterEach(() => {
     Object.defineProperty(process.stdout, 'isTTY', { value: originalIsTTY, configurable: true })
     vi.restoreAllMocks()
+    vi.clearAllMocks()
   })
 
   it('renders the Wordmark pixel art', () => {
@@ -114,5 +120,22 @@ describe('Welcome', () => {
     stdin.write('\r')
     await waitForInput()
     expect(mockPush).toHaveBeenCalledWith('Doctor')
+  })
+
+  it('starts the Web UI without leaving the TUI', async () => {
+    const { stdin, lastFrame } = render(<Welcome />)
+
+    stdin.write('\u001B[B')
+    await waitForInput()
+    stdin.write('\u001B[B')
+    await waitForInput()
+    stdin.write('\u001B[B')
+    await waitForInput()
+    stdin.write('\r')
+    await waitForInput()
+
+    expect(TuiLaunch.startWebFromTui).toHaveBeenCalledTimes(1)
+    expect(mockPush).not.toHaveBeenCalled()
+    expect(lastFrame() ?? '').toContain('Web UI running at http://127.0.0.1:8080')
   })
 })
