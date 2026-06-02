@@ -115,7 +115,7 @@ reevesagents doctor
 From a GitHub Release tarball:
 
 ```sh
-npm install -g ./reevesagents-1.0.0.tgz
+npm install -g ./reevesagents-1.0.11.tgz
 reevesagents doctor
 ```
 
@@ -249,7 +249,7 @@ See [docs/implementation-report.md](docs/implementation-report.md) for the end-t
 
 The TUI was redesigned in May 2026 with Spawner as the default low-permission path, a unified color system, responsive frame component, focused pages, auto-cleanup of ended runs, and a visible-menu interaction model. The current source of truth is this README plus [REEVESAGENTS_DESIGN.md](REEVESAGENTS_DESIGN.md).
 
-- Version: `1.0.0`
+- Version: `1.0.11`
 - npm package: not published yet
 - Homebrew formula: not available yet
 
