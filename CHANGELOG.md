@@ -12,11 +12,11 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 - Runs pages now keep active runs separate from history.
 - Web beta uses click-to-attach agent selection without drag-and-drop attach behavior.
 
-## 1.0.11 - Web UI Workbench Polish
+## 1.0.0 - Web UI Workbench Polish
 
 ### Changed
 - Refined the Web beta into a compact terminal workbench with richer agent cards, improved stage framing, better responsive behavior, and drag-to-attach.
-- Set the root package, CLI smoke expectations, README, and release docs to `1.0.11`.
+- Set the root package, CLI smoke expectations, README, and release docs to `1.0.0`.
 
 ## 0.9.0 - Initial Public Prerelease
 
@@ -24,14 +24,13 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 - Public prerelease package metadata, README, release readiness notes, and verification docs.
 - Release checks for typecheck, lint, unit tests, build, CLI smoke, and package packing.
 - Spawner mode as the default low-permission multi-agent run path.
-- PRE-BETA orchestrator test package kept outside the default install path.
 - Install surface policy for npm, pnpm, one-off runners, GitHub release tarballs, Homebrew, and source.
 
 ### Changed
 - Set the package, CLI, README, and Credits page version to `0.9.0`.
 - Cleaned up the main TUI pages with sectioned Runs, Run, Agents, and Detail layouts.
 - Reorganized the changelog around versioned internal milestones.
-- Clarified docs and TUI copy so the main app is spawner-first and orchestration is PRE-BETA test code.
+- Clarified docs and TUI copy so the main app is spawner-first.
 
 ## 0.8.0 - Verification And Release Docs
 

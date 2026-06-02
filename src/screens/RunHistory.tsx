@@ -53,20 +53,16 @@ function shortIso(value: string | null): string {
   return `${value.replace('T', ' ').slice(0, 16)}Z`
 }
 
-function modeLabel(mode: RunHistoryRecord['mode']): string {
-  return mode === 'orchestrator' ? 'orchestrator' : 'spawner'
-}
-
 export function RunHistory() {
   const { pop, resetStack } = useRouter()
   const { rows: termRows } = useWindowSize()
   const visibleRecordCount = Math.max(3, termRows - CHROME_ROWS)
-  const [records, setRecords] = useState<RunHistoryRecord[]>(() => listRunHistory({ includeAllModes: true }))
+  const [records, setRecords] = useState<RunHistoryRecord[]>(() => listRunHistory())
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [recordScroll, setRecordScroll] = useState(0)
 
   useEffect(() => {
-    const timer = setInterval(() => setRecords(listRunHistory({ includeAllModes: true })), 5000)
+    const timer = setInterval(() => setRecords(listRunHistory()), 5000)
     return () => clearInterval(timer)
   }, [])
 
@@ -147,7 +143,6 @@ export function RunHistory() {
           visibleRecords.map((record, idx) => {
             const absoluteIdx = recordScroll + idx
             const badges = [
-              { label: modeLabel(record.mode), color: colors.accent.primary },
               { label: record.status, color: record.status === 'stale' ? colors.status.warn : colors.status.error },
               ...(record.root_provider
                 ? [{ label: providerDisplayName(record.root_provider), color: providerColor(record.root_provider) }]

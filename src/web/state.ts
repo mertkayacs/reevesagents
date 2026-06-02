@@ -5,9 +5,7 @@
 
 import {
   listRuns,
-  listRunsAny,
   listAgents,
-  listAgentsAny,
   listRunHistory,
   runHasLiveTmuxTarget,
   computeRunStatus,
@@ -15,11 +13,6 @@ import {
 import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
 import { providerColor, providerDisplayName } from '../utils/display.js'
 import type { Provider, RunViewStatus, TaskStatus } from '../state/types.js'
-import { isOrchestratorWebProvider } from './prebeta-orchestrator.js'
-
-export interface WebStateOptions {
-  prebetaOrchestrator?: boolean
-}
 
 export interface WebTerminal {
   id: string
@@ -40,7 +33,7 @@ export interface WebTerminal {
 
 export interface WebRun {
   id: string
-  mode: 'spawner' | 'orchestrator'
+  mode: 'spawner'
   name: string
   status: RunViewStatus
   working_dir: string
@@ -51,7 +44,6 @@ export interface WebRun {
 export interface WebRunHistory {
   id: string
   name: string
-  mode: 'spawner' | 'orchestrator'
   status: 'ended' | 'stale'
   working_dir: string
   started_at: string
@@ -71,7 +63,6 @@ export interface WebProvider {
   id: Provider
   name: string
   available: boolean
-  orchestrator: boolean
   color: string
 }
 
@@ -81,17 +72,14 @@ function monogram(nickname: string, provider: string): string {
   return (alnum.slice(0, 2) || provider.slice(0, 2)).toUpperCase()
 }
 
-export function buildWebState(options: WebStateOptions = {}): WebState {
-  const runsSource = options.prebetaOrchestrator ? listRunsAny() : listRuns()
-  const listForRun = options.prebetaOrchestrator ? listAgentsAny : listAgents
-  const runs = runsSource.map<WebRun>(run => {
-    const mode = run.mode === 'spawner' ? 'spawner' : 'orchestrator'
+export function buildWebState(): WebState {
+  const runs = listRuns().map<WebRun>(run => {
     const live = runHasLiveTmuxTarget(run)
-    const terminals = listForRun(run.id).map<WebTerminal>(agent => {
+    const terminals = listAgents(run.id).map<WebTerminal>(agent => {
       const status = agent.ended_at ? 'ended' : agent.task_status
       const hasWindow = !agent.headless && !!agent.tmux_window_id
       const canAttach = hasWindow && status !== 'ended'
-      const canKill = status !== 'ended' && hasWindow && (mode === 'spawner' || agent.role !== 'root')
+      const canKill = status !== 'ended' && hasWindow
       return {
         id: agent.id,
         nickname: agent.nickname,
@@ -111,7 +99,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
     })
     return {
       id: run.id,
-      mode,
+      mode: 'spawner',
       name: run.name,
       status: computeRunStatus(run, live),
       working_dir: run.working_dir,
@@ -119,10 +107,9 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       terminals,
     }
   })
-  const history = listRunHistory({ includeAllModes: options.prebetaOrchestrator === true }).map<WebRunHistory>(record => ({
+  const history = listRunHistory().map<WebRunHistory>(record => ({
     id: record.id,
     name: record.name,
-    mode: record.mode,
     status: record.status,
     working_dir: record.working_dir,
     started_at: record.started_at,
@@ -143,7 +130,6 @@ export function listWebProviders(): WebProvider[] {
     id,
     name: providerDisplayName(id),
     available: available[id],
-    orchestrator: isOrchestratorWebProvider(id),
     color: providerColor(id),
   }))
 }

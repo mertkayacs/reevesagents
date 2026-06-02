@@ -100,7 +100,7 @@ async function main() {
     console.log(`cli:       ${cliPath}`)
 
     const versionText = runCli(['--version'], env)
-    assert(versionText === '1.0.11', `expected version 1.0.11, got ${versionText}`)
+    assert(versionText === '1.0.0', `expected version 1.0.0, got ${versionText}`)
     ok('version prints release version')
 
     const runsText = runCli(['runs'], env)

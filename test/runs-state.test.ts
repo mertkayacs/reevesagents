@@ -75,27 +75,6 @@ describe('v1 run state', () => {
     expect(listRuns().map(run => run.id)).toEqual(['new', 'old'])
   })
 
-  it('hides non-spawner run records from the root package', async () => {
-    const { writeRun, listRuns, readRun } = await import('../src/state/runs.js')
-    writeRun(makeRun('stable'))
-    writeRun({ ...makeRun('prebeta'), mode: 'orchestrator' as any })
-
-    expect(listRuns().map(run => run.id)).toEqual(['stable'])
-    expect(() => readRun('prebeta')).toThrow('Run not found: prebeta')
-  })
-
-  it('exposes non-spawner run records through explicit all-mode helpers', async () => {
-    const { writeRun, writeAgent, listRunsAny, listAgentsAny, readRunAny, findAgentAny } = await import('../src/state/runs.js')
-    writeRun(makeRun('stable'))
-    writeRun({ ...makeRun('prebeta'), mode: 'orchestrator' })
-    writeAgent(makeAgent('worker', 'prebeta'))
-
-    expect(readRunAny('prebeta').mode).toBe('orchestrator')
-    expect(listRunsAny().map(run => run.id).sort()).toEqual(['prebeta', 'stable'])
-    expect(listAgentsAny().map(agent => agent.id)).toEqual(['worker'])
-    expect(findAgentAny('worker').run_id).toBe('prebeta')
-  })
-
   it('updates one run field without disturbing the rest', async () => {
     const { writeRun, updateRun, readRun } = await import('../src/state/runs.js')
     writeRun(makeRun('r2'))
@@ -239,7 +218,6 @@ describe('v1 run state', () => {
       expect(history[0]).toMatchObject({
         id: 'hist',
         name: 'run-hist',
-        mode: 'spawner',
         status: 'ended',
         working_dir: '/tmp',
         started_at: '2026-01-01T00:00:00.000Z',
@@ -282,20 +260,6 @@ describe('v1 run state', () => {
       expect(result.removed).toContain('stale')
       expect(existsSync(join(tmpDir, 'runs', 'stale'))).toBe(false)
       expect(listRunHistory()[0]?.status).toBe('stale')
-    })
-
-    it('archives all run modes only when all-mode cleanup is requested', async () => {
-      const { writeRun, autoCleanupRuns, listRunHistory } = await import('../src/state/runs.js')
-      writeRun(makeRun('stable', { status: 'ended', ended_at: '2026-01-01T00:00:01.000Z' }))
-      writeRun({ ...makeRun('prebeta', { status: 'ended', ended_at: '2026-01-01T00:00:02.000Z' }), mode: 'orchestrator' })
-
-      expect(autoCleanupRuns({ sessionExists: () => true }).removed).toEqual(['stable'])
-      expect(listRunHistory().map(record => record.id)).toEqual(['stable'])
-      expect(listRunHistory({ includeAllModes: true }).map(record => record.id)).toEqual(['stable'])
-
-      expect(autoCleanupRuns({ sessionExists: () => true, includeAllModes: true }).removed).toEqual(['prebeta'])
-      expect(listRunHistory().map(record => record.id)).toEqual(['stable'])
-      expect(listRunHistory({ includeAllModes: true }).map(record => record.id).sort()).toEqual(['prebeta', 'stable'])
     })
 
     it('removes running runs whose agent windows are gone even when the run session is alive', async () => {

@@ -85,7 +85,7 @@ message explaining which optional Web package is missing.
 ### CLI/TUI Plus Web Beta
 
 This is the default stable install. It includes the CLI, TUI, and loopback-only
-Web UI beta. It does not install MCP orchestration.
+Web UI beta.
 
 After npm publish:
 
@@ -105,31 +105,6 @@ yarn dlx reevesagents doctor
 bunx reevesagents doctor
 ```
 
-### All-In PRE-BETA Orchestrator/MCP
-
-Use this only when you explicitly want MCP-connected root/worker orchestration.
-It installs the stable app plus the separate pre-beta orchestrator package:
-
-```sh
-npm install -g reevesagents reevesagents-orchestrator
-reevesagents doctor
-reevesagents web --prebeta-orchestrator
-```
-
-The pre-beta Web mode can show and control both stable spawner runs and
-orchestrator runs. It can create orchestrator runs, add workers, stop runs, and
-control windowed worker agents. Headless orchestrator roots are shown but
-cannot be opened in the browser agent view.
-
-Provider MCP config setup remains explicit:
-
-```sh
-reevesagents-orchestrator setup
-```
-
-That setup command is pre-beta and may write provider MCP config entries. The
-stable `reevesagents` install never does that by itself.
-
 After the Homebrew tap exists:
 
 ```sh
@@ -140,15 +115,8 @@ reevesagents doctor
 From a GitHub Release tarball:
 
 ```sh
-npm install -g ./reevesagents-1.0.11.tgz
+npm install -g ./reevesagents-1.0.0.tgz
 reevesagents doctor
-```
-
-For an all-in pre-beta tarball install, install both release tarballs:
-
-```sh
-npm install -g ./reevesagents-1.0.11.tgz ./reevesagents-orchestrator-1.0.0.tgz
-reevesagents web --prebeta-orchestrator
 ```
 
 From source:
@@ -160,10 +128,6 @@ pnpm install
 pnpm build
 pnpm link --global
 ```
-
-The source repository includes the pre-beta orchestrator package for development
-and verification, but the root workspace and root npm tarball still ship only
-the stable app and Web beta assets.
 
 Verify:
 
@@ -231,7 +195,6 @@ reevesagents stop <run-id>   # stop one run, requires --yes or ALLOW_DESTRUCTIVE
 reevesagents kill <agent-id> # close one agent, requires --yes or ALLOW_DESTRUCTIVE=1
 reevesagents doctor          # setup checks
 reevesagents web             # start loopback Web UI beta
-reevesagents web --prebeta-orchestrator # opt into MCP/orchestrator Web controls
 ```
 
 ## State Layout
@@ -286,7 +249,7 @@ See [docs/implementation-report.md](docs/implementation-report.md) for the end-t
 
 The TUI was redesigned in May 2026 with Spawner as the default low-permission path, a unified color system, responsive frame component, focused pages, auto-cleanup of ended runs, and a visible-menu interaction model. The current source of truth is this README plus [REEVESAGENTS_DESIGN.md](REEVESAGENTS_DESIGN.md).
 
-- Version: `1.0.11`
+- Version: `1.0.0`
 - npm package: not published yet
 - Homebrew formula: not available yet
 

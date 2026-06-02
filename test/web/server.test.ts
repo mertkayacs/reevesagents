@@ -103,11 +103,4 @@ describe('startWebServer', () => {
     expect(second.port).toBe(first.port + 1)
   })
 
-  it('requires the separate orchestrator package for pre-beta orchestrator mode', async () => {
-    await expect(startWebServer({
-      open: false,
-      port: 19085,
-      prebetaOrchestrator: true,
-    })).rejects.toThrow(/requires the separate orchestrator package/i)
-  })
 })

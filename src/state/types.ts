@@ -16,7 +16,7 @@ export type RunStatus = 'running' | 'ended'
 
 export type RunViewStatus = RunStatus | 'stale'
 
-export type RunMode = 'spawner' | 'orchestrator'
+export type RunMode = 'spawner'
 
 export type RunHistoryStatus = 'ended' | 'stale'
 
@@ -75,7 +75,6 @@ export interface RunRecord {
 export interface RunHistoryRecord {
   id: string
   name: string
-  mode: RunMode
   status: RunHistoryStatus
   working_dir: string
   started_at: string

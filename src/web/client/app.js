@@ -39,8 +39,6 @@
     fNickname: document.getElementById('f-nickname'),
     fRunName: document.getElementById('f-run-name'),
     fRun: document.getElementById('f-run'),
-    fMode: document.getElementById('f-mode'),
-    modeField: document.getElementById('mode-field'),
     runNameField: document.getElementById('run-name-field'),
     fCwd: document.getElementById('f-cwd'),
     cwdField: document.getElementById('cwd-field'),
@@ -53,7 +51,6 @@
   let runs = []
   let history = []
   let providers = []
-  let prebetaOrchestrator = false
   let selectedId = null
   let session = null // { id, ws, term, fit, observer }
 
@@ -91,8 +88,7 @@
     providers = data.providers || []
     runs = data.runs || []
     history = data.history || []
-    prebetaOrchestrator = data.prebeta && data.prebeta.orchestrator === true
-    el.brandBeta.textContent = prebetaOrchestrator ? 'web · pre-beta MCP' : 'web · beta'
+    el.brandBeta.textContent = 'web · beta'
     renderProviders()
     renderSidebar()
   }
@@ -129,15 +125,12 @@
 
   function renderProviders() {
     const current = el.fProvider.value
-    const mode = selectedCreateMode()
     el.fProvider.innerHTML = ''
     for (const p of providers) {
       const opt = document.createElement('option')
       opt.value = p.id
-      const supported = mode !== 'orchestrator' || p.orchestrator === true
       opt.textContent = p.available ? p.name : `${p.name} (not installed)`
-      if (mode === 'orchestrator' && !supported) opt.textContent = `${p.name} (Spawner only)`
-      opt.disabled = !p.available || !supported
+      opt.disabled = !p.available
       el.fProvider.appendChild(opt)
     }
     const currentOption = [...el.fProvider.options].find(opt => opt.value === current && !opt.disabled)
@@ -178,7 +171,7 @@
       headBody.appendChild(name)
       const meta = document.createElement('span')
       meta.className = 'run-meta'
-      meta.textContent = `${modeLabel(run.mode)} · ${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
+      meta.textContent = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
       headBody.appendChild(meta)
       head.appendChild(headBody)
       if (run.canStop) {
@@ -232,7 +225,7 @@
     const meta = document.createElement('span')
     meta.className = 'history-meta'
     const provider = record.root_provider_label || 'no root provider'
-    meta.textContent = `${modeLabel(record.mode)} · ${record.status} · ${record.agent_count} agent${record.agent_count === 1 ? '' : 's'} · ${provider}`
+    meta.textContent = `${record.status} · ${record.agent_count} agent${record.agent_count === 1 ? '' : 's'} · ${provider}`
     body.appendChild(meta)
     item.appendChild(body)
 
@@ -337,7 +330,7 @@
     renderSidebar()
     el.overlay.hidden = true
     el.stageTitle.textContent = found ? found.terminal.nickname : id
-    el.stageSub.textContent = found ? `${modeLabel(found.run.mode)} · ${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}` : ''
+    el.stageSub.textContent = found ? `${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}` : ''
     setStageStatus('connecting', 'connecting')
 
     const term = new Terminal({
@@ -471,7 +464,7 @@
       const opt = document.createElement('option')
       opt.value = run.id
       const count = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
-      opt.textContent = prebetaOrchestrator ? `${run.name} · ${modeLabel(run.mode)} · ${count}` : `${run.name} · ${count}`
+      opt.textContent = `${run.name} · ${count}`
       el.fRun.appendChild(opt)
     }
     if (preferredRunId && [...el.fRun.options].some(opt => opt.value === preferredRunId)) {
@@ -479,23 +472,13 @@
     }
   }
 
-  function selectedCreateMode() {
-    const run = runs.find(item => item.id === el.fRun.value)
-    if (run) return run.mode || 'spawner'
-    return prebetaOrchestrator && el.fMode.value === 'orchestrator' ? 'orchestrator' : 'spawner'
-  }
-
   function syncCreateFields() {
     const addingToRun = !!el.fRun.value
-    const mode = selectedCreateMode()
     el.dialogTitle.textContent = addingToRun ? 'Add agent to run' : 'Create run'
     el.newSubmit.textContent = addingToRun ? 'Add agent' : 'Create run'
     el.runNameField.hidden = addingToRun
-    el.modeField.hidden = !prebetaOrchestrator || addingToRun
     el.cwdField.style.display = el.fRun.value ? 'none' : 'flex'
-    el.fPrompt.placeholder = mode === 'orchestrator'
-      ? 'What should this orchestrator agent start working on?'
-      : 'What should this agent start working on?'
+    el.fPrompt.placeholder = 'What should this agent start working on?'
     renderProviders()
     if (el.dialog.open && !selectedProviderAvailable()) {
       showDialogError('No installed provider is available for this mode.')
@@ -519,7 +502,6 @@
       prompt: el.fPrompt.value,
       run_id: el.fRun.value || undefined,
       working_dir: el.fRun.value ? undefined : el.fCwd.value.trim() || undefined,
-      mode: el.fRun.value ? undefined : selectedCreateMode(),
     }
     el.newSubmit.disabled = true
     try {
@@ -545,12 +527,7 @@
   el.newBtn.addEventListener('click', openDialog)
   el.newCancel.addEventListener('click', () => el.dialog.close())
   el.fRun.addEventListener('change', syncCreateFields)
-  el.fMode.addEventListener('change', syncCreateFields)
   el.form.addEventListener('submit', submitNew)
-
-  function modeLabel(mode) {
-    return mode === 'orchestrator' ? 'Orchestrator MCP' : 'Spawner'
-  }
 
   function shortIso(value) {
     if (!value) return 'unknown'

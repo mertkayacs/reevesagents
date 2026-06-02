@@ -16,7 +16,6 @@ assignees: ""
 
 - [ ] Stable CLI/TUI
 - [ ] Web UI beta
-- [ ] PRE-BETA orchestrator/MCP package
 - [ ] Docs or release packaging
 
 ## Constraints
@@ -26,5 +25,4 @@ assignees: ""
 - Does this affect provider config, credentials, or permissions?
 
 ## Alternatives
-
 

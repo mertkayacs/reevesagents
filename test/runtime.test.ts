@@ -95,24 +95,10 @@ describe('spawner runtime', () => {
     expect(launchCommands).not.toContain('REEVES_SESSION_ID')
     expect(launchCommands).not.toContain('REEVES_AGENT_ID')
     expect(launchCommands).not.toContain('REEVES_RUN_ID')
-    expect(launchCommands).not.toContain('--mcp-config')
-    expect(launchCommands).not.toContain('mcp_servers.reevesagents')
     expect(pasted).toEqual(['build the thing', 'review the thing'])
     expect(pasted.join('\n')).not.toContain('ReevesAgents context')
     expect(pasted.join('\n')).not.toContain('You are the root agent')
     expect(pasted.join('\n')).not.toContain('You are a worker agent')
-  })
-
-  it('rejects non-spawner starts in the root package', async () => {
-    const driver = new FakeDriver()
-    const { startRun } = await import('../src/launcher/runtime.js')
-
-    expect(() => startRun({
-      mode: 'orchestrator',
-      name: 'beta',
-      working_dir: '/tmp',
-      root: { provider: 'codex', model: '', task: 'lead' },
-    } as never, { driver, available })).toThrow(/Only spawner runs/)
   })
 
   it('spawns an agent into an existing spawner run session', async () => {

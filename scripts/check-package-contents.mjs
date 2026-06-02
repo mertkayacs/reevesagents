@@ -28,13 +28,6 @@ const forbiddenPrefixes = [
   '.github/',
 ]
 
-const forbiddenSubstrings = [
-  'orchestrator',
-  'mcp-setup',
-  'mcp-tools',
-  'approvals',
-]
-
 function fail(message) {
   console.error(message)
   process.exit(1)
@@ -52,9 +45,6 @@ for (const path of required) {
 for (const path of files) {
   if (forbiddenPrefixes.some(prefix => path.startsWith(prefix))) {
     fail(`package includes forbidden path: ${path}`)
-  }
-  if (forbiddenSubstrings.some(value => path.includes(value))) {
-    fail(`package includes forbidden orchestrator-related path: ${path}`)
   }
 }
 
