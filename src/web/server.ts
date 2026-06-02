@@ -16,7 +16,9 @@ import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
 import { startRun, spawnWorker, killAgent, stopRun } from '../launcher/runtime.js'
 import { normalizeProvider } from '../launcher/providers.js'
+import { modelValuesForProvider } from '../launcher/model-catalog.js'
 import { providerDisplayName } from '../utils/display.js'
+import type { Permissions, Provider } from '../state/types.js'
 import { autoCleanupRuns, findAgent, findAgentAny, readRun, readRunAny } from '../state/runs.js'
 import {
   isOrchestratorWebProvider,
@@ -196,6 +198,20 @@ function sanitizeRunName(raw: string): string {
   return raw.trim().replace(/[^\p{L}\p{N} _.-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim()
 }
 
+function normalizeModel(provider: Provider, raw: unknown): string {
+  const model = typeof raw === 'string' ? raw.trim() : ''
+  if (!modelValuesForProvider(provider).includes(model)) {
+    throw new Error('unknown model for provider')
+  }
+  return model
+}
+
+function normalizePermissionsInput(raw: unknown): Permissions | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (raw === 'ask' || raw === 'skip') return raw
+  throw new Error('unknown permission mode')
+}
+
 // Creates a terminal: a worker in an existing run, or a fresh single-terminal run.
 // Provider is validated against the known set (it maps to the launched binary);
 // nickname is sanitized; the prompt is typed into the pane by the runtime, not shelled.
@@ -203,6 +219,8 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
   const provider = body.provider
   const normalizedProvider = normalizeProvider(provider)
   if (!normalizedProvider) throw new Error('unknown provider')
+  const model = normalizeModel(normalizedProvider, body.model)
+  const permissions = normalizePermissionsInput(body.permissions)
   const nickname = sanitizeNickname(typeof body.nickname === 'string' ? body.nickname : '')
   const runName = sanitizeRunName(typeof body.run_name === 'string' ? body.run_name : '')
   const prompt = typeof body.prompt === 'string' ? body.prompt : ''
@@ -218,12 +236,13 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
         run_id: runId,
         provider: normalizedProvider,
         nickname: nickname || undefined,
-        model: '',
+        model,
+        permissions,
         task: prompt,
       })
       return { id: agent.id, run_id: agent.run_id }
     }
-    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt })
+    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model, permissions, task: prompt })
     return { id: agent.id, run_id: agent.run_id }
   }
 
@@ -238,7 +257,7 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
       mode: 'orchestrator',
       name: runName || nickname || providerDisplayName(normalizedProvider),
       working_dir: workingDir,
-      root: { provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt },
+      root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, task: prompt },
     })
     const root = result.agents[0]
     if (!root) throw new Error('run created no agent')
@@ -249,7 +268,7 @@ async function createTerminal(body: Record<string, unknown>, ctx: RequestContext
     mode: 'spawner',
     name: runName || nickname || providerDisplayName(normalizedProvider),
     working_dir: workingDir,
-    root: { provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt },
+    root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, task: prompt },
   })
   const root = result.agents[0]
   if (!root) throw new Error('run created no agent')

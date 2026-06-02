@@ -1197,7 +1197,28 @@ button { letter-spacing: 0; }
 
 .field select option:disabled { color: var(--muted); }
 
+.create-options-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.95fr);
+  gap: var(--s-3);
+  align-items: stretch;
+}
+
+.model-field,
+.permissions-field {
+  min-width: 0;
+}
+
 .provider-field select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.permissions-field > select {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1291,6 +1312,69 @@ button { letter-spacing: 0; }
   font-size: var(--fs-xs);
 }
 
+.permission-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+  min-height: 42px;
+}
+
+.permission-option {
+  min-width: 0;
+  min-height: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-2);
+  padding: 7px var(--s-2);
+  color: var(--dim);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), transparent),
+    var(--panel-2);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--motion), background var(--motion), box-shadow var(--motion), color var(--motion), transform var(--motion);
+}
+
+.permission-option:hover,
+.permission-option:focus-visible {
+  border-color: color-mix(in srgb, var(--selected-provider-color) 52%, var(--border));
+  color: var(--text);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.permission-option[aria-checked="true"] {
+  border-color: color-mix(in srgb, var(--selected-provider-color) 72%, var(--border));
+  color: var(--text);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--selected-provider-color) 16%, transparent), transparent 74%),
+    color-mix(in srgb, var(--selected-provider-color) 10%, var(--panel-2));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--selected-provider-color) 16%, transparent);
+}
+
+.permission-title,
+.permission-meta {
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-title {
+  font-size: var(--fs-sm);
+  font-weight: 740;
+}
+
+.permission-meta {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
 .dialog-error {
   border: 1px solid color-mix(in srgb, var(--error) 42%, var(--border));
   border-radius: var(--r-2);
@@ -1324,6 +1408,10 @@ button { letter-spacing: 0; }
 
   .provider-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .create-options-grid {
+    grid-template-columns: 1fr;
   }
 
   .stage-head {
@@ -1421,6 +1509,10 @@ button { letter-spacing: 0; }
   }
 
   .provider-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-grid {
     grid-template-columns: 1fr;
   }
 

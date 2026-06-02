@@ -101,6 +101,31 @@
         <div id="provider-grid" class="provider-grid" role="listbox" aria-label="Provider"></div>
       </div>
 
+      <div class="create-options-grid">
+        <label class="field model-field">
+          <span class="field-label">Model</span>
+          <select id="f-model"></select>
+        </label>
+
+        <div class="field permissions-field">
+          <div class="field-label">Permission mode</div>
+          <select id="f-permissions" required tabindex="-1" aria-hidden="true">
+            <option value="ask">Ask first</option>
+            <option value="skip">Skip prompts</option>
+          </select>
+          <div id="permission-grid" class="permission-grid" role="radiogroup" aria-label="Permission mode">
+            <button class="permission-option" type="button" role="radio" data-permission="ask">
+              <span class="permission-title">Ask first</span>
+              <span class="permission-meta">Keep provider approval prompts</span>
+            </button>
+            <button class="permission-option" type="button" role="radio" data-permission="skip">
+              <span class="permission-title">Skip prompts</span>
+              <span class="permission-meta">Use only in trusted workspaces</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <label class="field">
         <span class="field-label">Agent name <span class="field-opt">optional</span></span>
         <input id="f-nickname" type="text" maxlength="40" placeholder="planner" autocomplete="off" />
