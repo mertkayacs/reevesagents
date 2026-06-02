@@ -29,7 +29,7 @@
     </div>
     <div class="topbar-actions">
       <span id="conn" class="conn" data-state="idle" title="live update stream">live</span>
-      <button id="new-btn" class="btn btn-accent" type="button">New agent</button>
+      <button id="new-run-btn" class="btn btn-accent" type="button">New run</button>
     </div>
   </header>
 
@@ -45,7 +45,8 @@
       <div id="sidebar-list" class="sidebar-list"></div>
       <div id="sidebar-empty" class="sidebar-empty">
         <div class="empty-title">No agents yet</div>
-        <div class="empty-body">Create a run to spawn a provider CLI agent in its own tmux window.</div>
+        <div class="empty-body">Create a run, then add provider agents as the work grows.</div>
+        <button id="empty-new-run" class="btn btn-accent empty-action" type="button">New run</button>
       </div>
     </aside>
 
@@ -53,9 +54,12 @@
       <div class="stage-head">
         <div>
           <div id="stage-title" class="stage-title">No agent selected</div>
-          <div id="stage-sub" class="stage-sub">Pick an agent on the left, or create one.</div>
+          <div id="stage-sub" class="stage-sub">Pick an agent on the left, or create a run.</div>
         </div>
-        <div id="stage-status" class="stage-status" hidden></div>
+        <div class="stage-head-actions">
+          <button id="stage-add-agent" class="btn btn-secondary" type="button" hidden>Add agent</button>
+          <div id="stage-status" class="stage-status" hidden></div>
+        </div>
       </div>
       <div id="term-wrap" class="term-wrap">
         <div id="term-host" class="term-host"></div>
@@ -64,7 +68,7 @@
             <div class="overlay-eyebrow">web agent</div>
             <div class="overlay-title">No agent attached</div>
             <div class="overlay-body">
-              Select an agent to open its live pane. The browser can close without stopping the run.
+              Select an agent to open its live pane. Closing the browser leaves the run active.
             </div>
           </div>
         </div>
@@ -74,15 +78,15 @@
 
   <dialog id="new-dialog" class="dialog">
     <form id="new-form" method="dialog">
-      <div id="new-dialog-title" class="dialog-title">New agent</div>
+      <div class="dialog-header">
+        <div id="new-dialog-title" class="dialog-title">New run</div>
+        <div id="new-dialog-subtitle" class="dialog-subtitle">Start a run with its first agent.</div>
+      </div>
 
-      <label class="field">
-        <span class="field-label">Target run</span>
-        <select id="f-run"></select>
-      </label>
+      <div id="target-run-note" class="dialog-note" hidden></div>
 
       <label class="field" id="run-name-field">
-        <span class="field-label">Run name <span class="field-opt">new run only</span></span>
+        <span class="field-label">Run name</span>
         <input id="f-run-name" type="text" maxlength="80" placeholder="release check" autocomplete="off" />
       </label>
 
@@ -105,7 +109,7 @@
       </label>
 
       <label class="field" id="cwd-field">
-        <span class="field-label">Working directory <span class="field-opt">new run only</span></span>
+        <span class="field-label">Working directory</span>
         <input id="f-cwd" type="text" placeholder="defaults to the server's directory" autocomplete="off" />
       </label>
 

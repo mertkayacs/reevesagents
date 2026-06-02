@@ -31,14 +31,17 @@
     overlay: document.getElementById('stage-overlay'),
     termWrap: document.getElementById('term-wrap'),
     termHost: document.getElementById('term-host'),
-    newBtn: document.getElementById('new-btn'),
+    newRunBtn: document.getElementById('new-run-btn'),
+    emptyNewRun: document.getElementById('empty-new-run'),
+    stageAddAgent: document.getElementById('stage-add-agent'),
     dialog: document.getElementById('new-dialog'),
     dialogTitle: document.getElementById('new-dialog-title'),
+    dialogSubtitle: document.getElementById('new-dialog-subtitle'),
+    targetRunNote: document.getElementById('target-run-note'),
     form: document.getElementById('new-form'),
     fProvider: document.getElementById('f-provider'),
     fNickname: document.getElementById('f-nickname'),
     fRunName: document.getElementById('f-run-name'),
-    fRun: document.getElementById('f-run'),
     fMode: document.getElementById('f-mode'),
     modeField: document.getElementById('mode-field'),
     runNameField: document.getElementById('run-name-field'),
@@ -56,6 +59,7 @@
   let prebetaOrchestrator = false
   let selectedId = null
   let session = null // { id, ws, term, fit, observer }
+  let createContext = { kind: 'run', runId: '' }
 
   // --- http helpers ---------------------------------------------------------
 
@@ -181,15 +185,28 @@
       meta.textContent = `${modeLabel(run.mode)} · ${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
       headBody.appendChild(meta)
       head.appendChild(headBody)
+
+      const actions = document.createElement('div')
+      actions.className = 'run-actions'
+      if (run.status === 'running') {
+        const add = document.createElement('button')
+        add.className = 'run-action'
+        add.type = 'button'
+        add.textContent = 'Add agent'
+        add.title = `add agent to ${run.name}`
+        add.addEventListener('click', () => openAgentDialog(run.id))
+        actions.appendChild(add)
+      }
       if (run.canStop) {
         const stop = document.createElement('button')
         stop.className = 'run-stop'
         stop.type = 'button'
-        stop.textContent = 'stop run'
+        stop.textContent = 'Stop'
         stop.title = `stop run ${run.name}`
         stop.addEventListener('click', () => stopRun(run))
-        head.appendChild(stop)
+        actions.appendChild(stop)
       }
+      if (actions.childElementCount > 0) head.appendChild(actions)
       group.appendChild(head)
 
       for (const agent of run.terminals) group.appendChild(renderCard(run, agent))
@@ -215,6 +232,8 @@
       for (const record of history) group.appendChild(renderHistoryRecord(record))
       el.sidebarList.appendChild(group)
     }
+
+    updateStageActions()
   }
 
   function renderHistoryRecord(record) {
@@ -318,6 +337,13 @@
     el.stageStatus.textContent = text
   }
 
+  function updateStageActions() {
+    const selected = selectedId ? findAgent(selectedId) : null
+    const canAdd = !!selected && selected.run.status === 'running'
+    el.stageAddAgent.hidden = !canAdd
+    if (canAdd) el.stageAddAgent.title = `add agent to ${selected.run.name}`
+  }
+
   // --- agent attach ---------------------------------------------------------
 
   function disposeSession() {
@@ -384,7 +410,7 @@
   // --- actions --------------------------------------------------------------
 
   async function closeAgent(agent) {
-    if (!confirm(`Close agent "${agent.nickname}"? The tmux window for this agent will be killed.`)) return
+    if (!confirm(`Close agent "${agent.nickname}"? The running window for this agent will be closed.`)) return
     const selectedWasAgent = agent.id === (session ? session.id : selectedId)
     try {
       await api('POST', `/api/terminals/${encodeURIComponent(agent.id)}/kill`, { confirm: true })
@@ -439,64 +465,83 @@
     selectedId = null
     el.overlay.hidden = false
     el.stageTitle.textContent = 'No agent selected'
-    el.stageSub.textContent = 'Pick an agent on the left, or create one.'
+    el.stageSub.textContent = 'Pick an agent on the left, or create a run.'
     setStageStatus(null)
+    updateStageActions()
     renderSidebar()
   }
 
-  // --- new agent dialog -----------------------------------------------------
+  // --- create dialog --------------------------------------------------------
 
-  function openDialog() {
+  function resetCreateForm() {
     el.newError.hidden = true
     el.fNickname.value = ''
     el.fRunName.value = ''
     el.fPrompt.value = ''
     el.fCwd.value = ''
-    const selected = selectedId ? findAgent(selectedId) : null
-    populateRunSelect(selected ? selected.run.id : '')
-    syncCreateFields()
-    el.dialog.showModal()
-    if (el.runNameField.hidden) el.fProvider.focus()
-    else el.fRunName.focus()
   }
 
-  function populateRunSelect(preferredRunId) {
-    el.fRun.innerHTML = ''
-    const fresh = document.createElement('option')
-    fresh.value = ''
-    fresh.textContent = 'Create new run'
-    el.fRun.appendChild(fresh)
-    for (const run of runs) {
-      if (run.status !== 'running') continue
-      const opt = document.createElement('option')
-      opt.value = run.id
-      const count = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
-      opt.textContent = prebetaOrchestrator ? `${run.name} · ${modeLabel(run.mode)} · ${count}` : `${run.name} · ${count}`
-      el.fRun.appendChild(opt)
+  function openRunDialog() {
+    createContext = { kind: 'run', runId: '' }
+    resetCreateForm()
+    syncCreateFields()
+    el.dialog.showModal()
+    el.fRunName.focus()
+  }
+
+  function openAgentDialog(runId) {
+    const run = runs.find(item => item.id === runId && item.status === 'running')
+    if (!run) {
+      alert('This run is no longer active.')
+      return
     }
-    if (preferredRunId && [...el.fRun.options].some(opt => opt.value === preferredRunId)) {
-      el.fRun.value = preferredRunId
-    }
+    createContext = { kind: 'agent', runId }
+    resetCreateForm()
+    syncCreateFields()
+    el.dialog.showModal()
+    el.fProvider.focus()
+  }
+
+  function selectedRunForCreate() {
+    if (createContext.kind !== 'agent') return null
+    return runs.find(item => item.id === createContext.runId && item.status === 'running') || null
   }
 
   function selectedCreateMode() {
-    const run = runs.find(item => item.id === el.fRun.value)
+    const run = selectedRunForCreate()
     if (run) return run.mode || 'spawner'
     return prebetaOrchestrator && el.fMode.value === 'orchestrator' ? 'orchestrator' : 'spawner'
   }
 
   function syncCreateFields() {
-    const addingToRun = !!el.fRun.value
+    const addingToRun = createContext.kind === 'agent'
+    const run = selectedRunForCreate()
     const mode = selectedCreateMode()
-    el.dialogTitle.textContent = addingToRun ? 'Add agent to run' : 'Create run'
+    el.dialog.dataset.intent = addingToRun ? 'agent' : 'run'
+    el.dialogTitle.textContent = addingToRun ? 'Add agent' : 'New run'
+    el.dialogSubtitle.textContent = addingToRun
+      ? 'Add one provider agent to the selected run.'
+      : 'Start a run with its first provider agent.'
     el.newSubmit.textContent = addingToRun ? 'Add agent' : 'Create run'
     el.runNameField.hidden = addingToRun
     el.modeField.hidden = !prebetaOrchestrator || addingToRun
-    el.cwdField.style.display = el.fRun.value ? 'none' : 'flex'
+    el.cwdField.hidden = addingToRun
+    el.targetRunNote.hidden = !addingToRun
+    if (addingToRun && run) {
+      const count = `${run.terminals.length} agent${run.terminals.length === 1 ? '' : 's'}`
+      el.targetRunNote.textContent = `${run.name} · ${modeLabel(run.mode)} · ${count}`
+    } else {
+      el.targetRunNote.textContent = ''
+    }
+    el.fNickname.placeholder = addingToRun ? 'reviewer' : 'lead'
     el.fPrompt.placeholder = mode === 'orchestrator'
       ? 'What should this orchestrator agent start working on?'
       : 'What should this agent start working on?'
     renderProviders()
+    if (addingToRun && !run) {
+      showDialogError('This run is no longer active.')
+      return
+    }
     if (el.dialog.open && !selectedProviderAvailable()) {
       showDialogError('No installed provider is available for this mode.')
     } else if (el.newError.textContent === 'No installed provider is available for this mode.') {
@@ -512,14 +557,19 @@
       showDialogError('No installed provider is available for this mode.')
       return
     }
+    const run = selectedRunForCreate()
+    if (createContext.kind === 'agent' && !run) {
+      showDialogError('This run is no longer active.')
+      return
+    }
     const payload = {
       provider,
       nickname: el.fNickname.value.trim(),
-      run_name: el.fRun.value ? undefined : el.fRunName.value.trim() || undefined,
       prompt: el.fPrompt.value,
-      run_id: el.fRun.value || undefined,
-      working_dir: el.fRun.value ? undefined : el.fCwd.value.trim() || undefined,
-      mode: el.fRun.value ? undefined : selectedCreateMode(),
+      run_id: createContext.kind === 'agent' ? createContext.runId : undefined,
+      run_name: createContext.kind === 'run' ? el.fRunName.value.trim() || undefined : undefined,
+      working_dir: createContext.kind === 'run' ? el.fCwd.value.trim() || undefined : undefined,
+      mode: createContext.kind === 'run' ? selectedCreateMode() : undefined,
     }
     el.newSubmit.disabled = true
     try {
@@ -542,9 +592,13 @@
 
   // --- wire up --------------------------------------------------------------
 
-  el.newBtn.addEventListener('click', openDialog)
+  el.newRunBtn.addEventListener('click', openRunDialog)
+  el.emptyNewRun.addEventListener('click', openRunDialog)
+  el.stageAddAgent.addEventListener('click', () => {
+    const selected = selectedId ? findAgent(selectedId) : null
+    if (selected) openAgentDialog(selected.run.id)
+  })
   el.newCancel.addEventListener('click', () => el.dialog.close())
-  el.fRun.addEventListener('change', syncCreateFields)
   el.fMode.addEventListener('change', syncCreateFields)
   el.form.addEventListener('submit', submitNew)
 
