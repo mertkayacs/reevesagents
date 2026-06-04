@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
 import { Row } from '../../src/components/Row.js'
+import { LayoutProvider } from '../../src/components/LayoutContext.js'
 import { colors } from '../../src/utils/tokens.js'
 import { glyphs } from '../../src/utils/glyphs.js'
 
@@ -92,6 +93,22 @@ describe('Row', () => {
     )
     const frame = lastFrame()
     expect(frame).toContain('5 min')
+  })
+
+  it('hides forced trailing text when the row is too narrow to fit it', () => {
+    const { lastFrame } = render(
+      <LayoutProvider columns={23}>
+        <Row
+          selected={false}
+          primary="Run"
+          trailing="important trailing value"
+          alwaysShowTrailing
+        />
+      </LayoutProvider>
+    )
+    const frame = lastFrame()
+    expect(frame).toContain('Run')
+    expect(frame).not.toContain('important trailing value')
   })
 
   it('renders disabled state with text.faint color', () => {

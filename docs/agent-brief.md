@@ -5,7 +5,7 @@ Read this first when returning to ReevesAgents after a context break or on a lat
 ## TL;DR
 
 - ReevesAgents is a local tmux-first workspace manager for AI CLI terminals.
-- The main package is spawner-only: one run owns one tmux session with multiple independent provider CLI terminals.
+- The main package uses agent runs: one run owns one tmux session with multiple independent provider CLI agents.
 - The main install is passive: no provider config writes, no background service, and no ReevesAgents context injected into provider CLIs.
 - The local JSON registry is the source of truth. tmux is the execution and viewing surface.
 - The TUI is the human dashboard. The CLI is a compact human/script operator surface.
@@ -94,7 +94,7 @@ CLI:
 - Per-run tmux sessions with independent provider terminals.
 - Local JSON registry under `~/.reeves/runs`.
 - Provider launch support for Claude Code, Codex CLI, OpenCode CLI, Hermes, Kimi Code, DeepSeek CLI, Pi, Qwen Code, and Aider.
-- Spawner CLI operator commands.
+- Agent-run CLI operator commands.
 - Fake-provider unit and smoke coverage.
 
 ## What Is Not Ready

@@ -96,8 +96,8 @@ describe('Frame', () => {
 // Tests here verify they match §15 of the spec; changing these constants
 // breaks the floor across every page.
 describe('Frame floor constants (spec §15)', () => {
-  it('FLOOR_COLS is 50', () => expect(FLOOR_COLS).toBe(50))
-  it('FLOOR_ROWS is 18', () => expect(FLOOR_ROWS).toBe(18))
+  it('FLOOR_COLS is 40', () => expect(FLOOR_COLS).toBe(40))
+  it('FLOOR_ROWS is 12', () => expect(FLOOR_ROWS).toBe(12))
   it('DETAIL_BREAKPOINT is 90', () => expect(DETAIL_BREAKPOINT).toBe(90))
 })
 
@@ -201,10 +201,11 @@ describe('StatusBar height tiers', () => {
     expect(at.lastFrame()).toContain('custom keys')
   })
 
-  it('shows context text on line 1', () => {
+  it('shows default key legend on tight height when context is present', () => {
     const { lastFrame } = render(
       wrap(<StatusBar context="my-run · running" rows={20} cols={80} />),
     )
-    expect(lastFrame()).toContain('my-run · running')
+    expect(lastFrame()).toContain('enter select')
+    expect(lastFrame()).not.toContain('my-run · running')
   })
 })

@@ -1,4 +1,4 @@
-// Programmatic API: stable spawner runtime, doctor, and run state.
+// Programmatic API: stable agent-run runtime, doctor, and run state.
 // Inputs: function arguments. Outputs: typed return values.
 // Invariant: all exports are pure functions or constants; no side effects on import.
 

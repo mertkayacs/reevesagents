@@ -2,8 +2,8 @@
 // Same inline editing pattern as the first-agent step.
 
 import React, { useState, useMemo } from 'react'
-import { useInput } from 'ink'
-import { Frame } from '../../components/Frame.js'
+import { useInput, useWindowSize } from 'ink'
+import { Frame, frameBodyRows } from '../../components/Frame.js'
 import { Row } from '../../components/Row.js'
 import { ModelOptionList } from '../../components/ModelOptionList.js'
 import { Section, SectionEnd } from '../../components/Section.js'
@@ -19,6 +19,10 @@ import type { Permissions, Effort, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
 const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
+
+function permissionDisplay(value: Permissions): string {
+  return value === 'skip' ? 'Skip prompts' : 'Ask first'
+}
 
 type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'effort'
 type ActionId = 'save' | 'remove' | 'cancel'
@@ -39,6 +43,9 @@ function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
 export function NewRunWorker() {
   const { pop, selectedWorkerIdx } = useRouter()
   const { state, updateWorker, removeWorker } = useWizard()
+  const { rows: termRows } = useWindowSize()
+  const bodyRows = frameBodyRows(termRows, true, false)
+  const compactBody = bodyRows <= 9
   const idx = selectedWorkerIdx ?? -1
   const worker: WorkerConfig | undefined = idx >= 0 ? state.workers[idx] : undefined
 
@@ -54,11 +61,19 @@ export function NewRunWorker() {
         current: worker.model,
         values: modelValuesForProvider(worker.provider),
         display: modelDisplayName(worker.model),
-        hint: 'optional · blank uses CLI default',
+        hint: 'optional · blank uses provider default',
       },
       { kind: 'text', id: 'prompt', label: 'Prompt', value: worker.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
       { kind: 'text', id: 'workingDir', label: 'Working Dir', value: worker.workingDir, helpText: 'optional, defaults to the run working dir', required: false },
-      { kind: 'picker', id: 'permissions', label: 'Permissions', current: worker.permissions, values: PERMISSIONS_VALUES },
+      {
+        kind: 'picker',
+        id: 'permissions',
+        label: 'Permissions',
+        current: worker.permissions,
+        values: PERMISSIONS_VALUES,
+        display: permissionDisplay(worker.permissions),
+        hint: worker.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
+      },
     ]
     if (worker.provider === 'cc' || worker.provider === 'codex') {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: worker.effort, values: EFFORT_VALUES })
@@ -73,10 +88,19 @@ export function NewRunWorker() {
   ]
 
   const totalRows = fields.length + actions.length
+  const visibleFormCount = Math.max(1, bodyRows - 3)
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [editingFieldId, setEditingFieldId] = useState<FieldId | null>(null)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [modelPickerIdx, setModelPickerIdx] = useState(0)
+  const firstVisible = Math.min(
+    Math.max(0, selectedIdx - visibleFormCount + 1),
+    Math.max(0, totalRows - visibleFormCount),
+  )
+  const visibleRows = Array.from(
+    { length: Math.min(visibleFormCount, totalRows - firstVisible) },
+    (_, rowIdx) => firstVisible + rowIdx,
+  )
 
   if (selectedIdx >= totalRows && totalRows > 0) {
     setSelectedIdx(totalRows - 1)
@@ -168,63 +192,88 @@ export function NewRunWorker() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Agents', worker.nickname || `agent-${idx + 2}`]}
-      tagline="Configure this independent CLI agent."
+      tagline="Configure this additional agent."
       statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
-      <StepIndicator step={3} total={4} name="Agent" />
+      {!compactBody && <StepIndicator step={3} total={4} name="Agent" />}
 
-      {fields.map((field, fIdx) => {
-        if (field.kind === 'text') {
-          return (
-            <TextField
-              key={field.id}
-              label={field.label}
-              value={field.value}
-              helpText={field.helpText}
-              required={field.required}
-              selected={selectedIdx === fIdx}
-              editing={editingFieldId === field.id}
-              multiline={field.id === 'prompt'}
-              onChange={(v) => commitText(field.id, v)}
-              onCommit={() => setEditingFieldId(null)}
-              onCancel={() => setEditingFieldId(null)}
-            />
-          )
-        }
-        const badge = pickerBadge(field, worker.provider)
-        return (
-          <Row
-            key={field.id}
-            selected={selectedIdx === fIdx}
-            primary={field.label}
-            badge={badge}
-            trailing={`‹ ${field.display ?? field.current} ›`}
-            hint={selectedIdx === fIdx ? field.hint ?? '← → cycle' : undefined}
-          />
-        )
-      })}
-
-      {modelPickerOpen && (
+      {compactBody && modelPickerOpen ? (
         <ModelOptionList
           provider={worker.provider}
           values={modelValuesForProvider(worker.provider)}
           current={worker.model}
           selectedIdx={modelPickerIdx}
+          visibleCount={Math.max(1, bodyRows - 3)}
         />
+      ) : (
+        <>
+          {compactBody && <Section label={selectedIdx < fields.length ? 'Agent' : 'Actions'} />}
+          {(compactBody ? visibleRows.filter(rowIdx => rowIdx < fields.length) : fields.map((_field, rowIdx) => rowIdx)).map((fIdx) => {
+            const field = fields[fIdx]!
+            if (field.kind === 'text') {
+              return (
+                <TextField
+                  key={field.id}
+                  label={field.label}
+                  value={field.value}
+                  helpText={field.helpText}
+                  required={field.required}
+                  selected={selectedIdx === fIdx}
+                  editing={editingFieldId === field.id}
+                  multiline={field.id === 'prompt'}
+                  onChange={(v) => commitText(field.id, v)}
+                  onCommit={() => setEditingFieldId(null)}
+                  onCancel={() => setEditingFieldId(null)}
+                />
+              )
+            }
+            const badge = pickerBadge(field, worker.provider)
+            return (
+              <Row
+                key={field.id}
+                selected={selectedIdx === fIdx}
+                primary={field.label}
+                badge={badge}
+                trailing={`‹ ${field.display ?? field.current} ›`}
+                hint={selectedIdx === fIdx ? field.hint ?? '← → cycle' : undefined}
+              />
+            )
+          })}
+
+          {modelPickerOpen && !compactBody && (
+            <ModelOptionList
+              provider={worker.provider}
+              values={modelValuesForProvider(worker.provider)}
+              current={worker.model}
+              selectedIdx={modelPickerIdx}
+            />
+          )}
+
+          {!compactBody && <Section label="Actions" />}
+
+          {compactBody ? visibleRows.filter(rowIdx => rowIdx >= fields.length).map(rowIdx => {
+            const action = actions[rowIdx - fields.length]!
+            return (
+              <Row
+                key={action.id}
+                selected={selectedIdx === rowIdx}
+                primary={action.label}
+                primaryWidth={ACTION_LABEL_WIDTH}
+                hint={action.hint}
+              />
+            )
+          }) : actions.map((action, aIdx) => (
+            <Row
+              key={action.id}
+              selected={selectedIdx === fields.length + aIdx}
+              primary={action.label}
+              primaryWidth={ACTION_LABEL_WIDTH}
+              hint={action.hint}
+            />
+          ))}
+          <SectionEnd />
+        </>
       )}
-
-      <Section label="Actions" />
-
-      {actions.map((action, aIdx) => (
-        <Row
-          key={action.id}
-          selected={selectedIdx === fields.length + aIdx}
-          primary={action.label}
-          primaryWidth={ACTION_LABEL_WIDTH}
-          hint={action.hint}
-        />
-      ))}
-      <SectionEnd />
     </Frame>
   )
 }

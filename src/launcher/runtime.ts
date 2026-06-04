@@ -1,4 +1,4 @@
-// Tmux spawner runtime: one run owns one tmux session with independent CLI agents.
+// Tmux agent-run runtime: one run owns one tmux session with independent CLI agents.
 // Inputs: run/agent configs. Outputs: run and agent JSON records plus tmux side effects.
 // Invariant: stored tmux targets use stable window/pane ids, never mutable indexes.
 
@@ -349,7 +349,7 @@ function validateAgents(configs: AgentLaunchConfig[], available: Record<Provider
 
 function assertSpawnerMode(mode: unknown): void {
   if (mode !== undefined && mode !== 'spawner') {
-    throw new Error('Only spawner runs are available in this package')
+    throw new Error('Only agent-run mode is available in this package')
   }
 }
 

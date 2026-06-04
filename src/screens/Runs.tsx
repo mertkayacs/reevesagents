@@ -4,7 +4,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { Box, useInput, useApp, useWindowSize } from 'ink'
-import { Frame } from '../components/Frame.js'
+import { Frame, frameBodyRows } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { Legend } from '../components/Legend.js'
@@ -18,7 +18,7 @@ import type { RunRecord } from '../state/types.js'
 const ACTIONS = ['NewRun', 'History', 'Main Menu', 'Quit'] as const
 const CHROME_ROWS = 18
 const ACTION_COPY: Record<typeof ACTIONS[number], { label: string; hint: string }> = {
-  NewRun: { label: 'New Run', hint: 'create a spawner workspace' },
+  NewRun: { label: 'New Run', hint: 'start a run with agents' },
   History: { label: 'History', hint: 'view ended and stale runs' },
   'Main Menu': { label: 'Main Menu', hint: 'settings, doctor, reference, credits' },
   Quit: { label: 'Quit', hint: 'exit the TUI' },
@@ -58,7 +58,9 @@ export function Runs() {
   const { exit } = useApp()
   const { push, resetStack, setSelectedRunId } = useRouter()
   const { rows: termRows } = useWindowSize()
-  const visibleRunCount = Math.max(2, termRows - CHROME_ROWS)
+  const bodyRows = frameBodyRows(termRows, true, true)
+  const compactBody = bodyRows <= 11
+  const visibleRunCount = Math.max(1, compactBody ? bodyRows - 3 : Math.min(termRows - CHROME_ROWS, bodyRows - 9))
 
   const [runs, setRuns] = useState<RunRecord[]>(() => {
     autoCleanupRuns()
@@ -108,6 +110,17 @@ export function Runs() {
   const visibleRuns = runs.slice(runScroll, runScroll + visibleRunCount)
   const runNameWidth = Math.max(8, ...visibleRuns.map(run => run.name.length))
   const actionStartIdx = runs.length + 1
+  const selectableEntries = [
+    ...runs.map(run => ({ type: 'run' as const, run })),
+    ...ACTIONS.map(action => ({ type: 'action' as const, action })),
+  ]
+  const activeEntryIdx = activeIdx < runs.length ? activeIdx : Math.max(0, activeIdx - 1)
+  const compactEntryCount = Math.max(1, bodyRows - 3)
+  const compactFirstEntry = Math.min(
+    Math.max(0, activeEntryIdx - compactEntryCount + 1),
+    Math.max(0, selectableEntries.length - compactEntryCount),
+  )
+  const compactEntries = selectableEntries.slice(compactFirstEntry, compactFirstEntry + compactEntryCount)
 
   useEffect(() => {
     setRunScroll(offset => {
@@ -167,26 +180,35 @@ export function Runs() {
         { label: 'running', value: String(runningCount) },
         { label: 'stale', value: String(staleCount) },
       ]}
-      tagline="Manage local tmux workspaces. Spawner runs are independent provider CLI agents."
+      tagline="Manage active runs and the agents inside them."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ scroll · esc main menu"
     >
-      <Box flexDirection="column">
-        <Section label="Runs" />
-        {runs.length === 0 ? (
-          <Row
-            selected={false}
-            primary="No runs yet"
-            trailing="choose New Run below"
-            disabled
-          />
-        ) : (
-          visibleRuns.map((run, idx) => {
-            const absoluteIdx = runScroll + idx
+      {compactBody ? (
+        <Box flexDirection="column">
+          <Section label={activeIdx < runs.length ? 'Runs' : 'Actions'} />
+          {runs.length === 0 && compactFirstEntry === 0 && (
+            <Row selected={false} primary="No runs yet" trailing="choose New Run" disabled />
+          )}
+          {compactEntries.map((entry, idx) => {
+            const absoluteEntryIdx = compactFirstEntry + idx
+            if (entry.type === 'action') {
+              const absoluteIdx = runs.length + 1 + ACTIONS.indexOf(entry.action)
+              return (
+                <Row
+                  key={entry.action}
+                  selected={activeIdx === absoluteIdx}
+                  primary={ACTION_COPY[entry.action].label}
+                  primaryWidth={ACTION_LABEL_WIDTH}
+                  hint={ACTION_COPY[entry.action].hint}
+                />
+              )
+            }
+            const run = entry.run
             const agents = listAgents(run.id)
             const root = agents.find(a => a.role === 'root')
             const badges = [
-              { label: 'spawn', color: colors.accent.primary },
+              { label: 'run', color: colors.accent.primary },
               ...(root
                 ? [
                   { label: providerDisplayName(root.provider), color: providerColor(root.provider) },
@@ -197,7 +219,7 @@ export function Runs() {
             return (
               <Row
                 key={run.id}
-                selected={activeIdx === absoluteIdx}
+                selected={activeEntryIdx === absoluteEntryIdx}
                 primary={run.name}
                 primaryWidth={runNameWidth}
                 glyph={statusGlyph(runStatus(run))}
@@ -205,38 +227,85 @@ export function Runs() {
                 hint={`${agents.length} agents`}
               />
             )
-          })
-        )}
-        {runs.length > visibleRunCount && (
-          <Row
-            selected={false}
-            primary={`${runScroll + 1}-${runScroll + visibleRuns.length} of ${runs.length}`}
-            trailing="scroll with arrows"
-            disabled
+          })}
+          {selectableEntries.length > compactEntryCount && (
+            <Row
+              selected={false}
+              primary={`${compactFirstEntry + 1}-${compactFirstEntry + compactEntries.length} of ${selectableEntries.length}`}
+              trailing="scroll with arrows"
+              disabled
+            />
+          )}
+          <SectionEnd />
+        </Box>
+      ) : (
+        <Box flexDirection="column">
+          <Section label="Runs" />
+          {runs.length === 0 ? (
+            <Row
+              selected={false}
+              primary="No runs yet"
+              trailing="choose New Run below"
+              disabled
+            />
+          ) : (
+            visibleRuns.map((run, idx) => {
+              const absoluteIdx = runScroll + idx
+              const agents = listAgents(run.id)
+              const root = agents.find(a => a.role === 'root')
+              const badges = [
+                { label: 'run', color: colors.accent.primary },
+                ...(root
+                  ? [
+                    { label: providerDisplayName(root.provider), color: providerColor(root.provider) },
+                    { label: modelBadgeLabel(root.model), color: modelColor(root.model, root.provider) },
+                  ]
+                  : []),
+              ]
+              return (
+                <Row
+                  key={run.id}
+                  selected={activeIdx === absoluteIdx}
+                  primary={run.name}
+                  primaryWidth={runNameWidth}
+                  glyph={statusGlyph(runStatus(run))}
+                  badges={badges}
+                  hint={`${agents.length} agents`}
+                />
+              )
+            })
+          )}
+          {runs.length > visibleRunCount && (
+            <Row
+              selected={false}
+              primary={`${runScroll + 1}-${runScroll + visibleRuns.length} of ${runs.length}`}
+              trailing="scroll with arrows"
+              disabled
+            />
+          )}
+          <SectionEnd />
+
+          <Legend
+            items={[
+              { glyph: glyphs.status.ok, label: 'running', color: colors.status.ok },
+              { glyph: glyphs.status.warn, label: 'stale', color: colors.status.warn },
+            ]}
           />
-        )}
-        <SectionEnd />
 
-        <Legend
-          items={[
-            { glyph: glyphs.status.ok, label: 'running', color: colors.status.ok },
-            { glyph: glyphs.status.warn, label: 'stale', color: colors.status.warn },
-          ]}
-        />
+          <Section label="Actions" />
 
-        <Section label="Actions" />
-
-        {ACTIONS.map((action, idx) => (
-          <Row
-            key={action}
-            selected={activeIdx === actionStartIdx + idx}
-            primary={ACTION_COPY[action].label}
-            primaryWidth={ACTION_LABEL_WIDTH}
-            hint={ACTION_COPY[action].hint}
-          />
-        ))}
-        <SectionEnd />
-      </Box>
+          {ACTIONS.map((action, idx) => (
+            <Row
+              key={action}
+              selected={activeIdx === actionStartIdx + idx}
+              primary={ACTION_COPY[action].label}
+              primaryWidth={ACTION_LABEL_WIDTH}
+              hint={ACTION_COPY[action].hint}
+            />
+          ))}
+          <SectionEnd />
+        </Box>
+      )}
     </Frame>
   )
 }

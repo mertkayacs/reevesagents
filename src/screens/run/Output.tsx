@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput, useWindowSize } from 'ink'
-import { Frame } from '../../components/Frame.js'
+import { Frame, frameBodyRows } from '../../components/Frame.js'
 import { Row } from '../../components/Row.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { Pagination } from '../../components/Pagination.js'
@@ -46,7 +46,11 @@ function peekAgents(agents: AgentRecord[]): Record<string, string> {
 export function RunOutput() {
   const { selectedRunId, pop, push, setSelectedAgentId } = useRouter()
   const { rows: termRows } = useWindowSize()
-  const pageSize = Math.max(1, Math.floor(Math.max(1, termRows - CHROME_ROWS) / AGENT_CARD_ROWS))
+  const bodyRows = frameBodyRows(termRows, true, true)
+  const compactBody = bodyRows <= 12
+  const pageSize = Math.max(1, compactBody
+    ? bodyRows - 3
+    : Math.floor(Math.max(1, Math.min(termRows - CHROME_ROWS, bodyRows - 5)) / AGENT_CARD_ROWS))
   const [run, setRun] = useState<RunRecord | null>(() =>
     selectedRunId ? (() => { try { return readRun(selectedRunId) } catch { return null } })() : null
   )
@@ -110,6 +114,19 @@ export function RunOutput() {
   ]
 
   const selected = items[selectedIdx]
+  const compactItems = [
+    ...pagedAgents.map((agent, idx) => ({ itemIdx: idx, item: { type: 'agent' as const, agent } })),
+    ...(totalPages > 1 ? [{ itemIdx: pagedAgents.length, item: { type: 'pagination' as const } }] : []),
+    { itemIdx: pagedAgents.length + paginOffset + 1, item: { type: 'action' as const, action: 'Refresh' as const } },
+    { itemIdx: pagedAgents.length + paginOffset + 2, item: { type: 'action' as const, action: 'Back' as const } },
+  ]
+  const compactSelectedIdx = Math.max(0, compactItems.findIndex(item => item.itemIdx === selectedIdx))
+  const compactEntryCount = Math.max(1, bodyRows - 2)
+  const compactFirstEntry = Math.min(
+    Math.max(0, compactSelectedIdx - compactEntryCount + 1),
+    Math.max(0, compactItems.length - compactEntryCount),
+  )
+  const visibleCompactItems = compactItems.slice(compactFirstEntry, compactFirstEntry + compactEntryCount)
 
   useEffect(() => {
     setPage(p => Math.min(p, totalPages))
@@ -209,84 +226,134 @@ export function RunOutput() {
         { label: 'agents', value: String(agents.length) },
         { label: 'last peek', value: lastPeekLabel },
       ]}
-      tagline="Recent output from each independent agent in this spawner run. Refreshes every 5 seconds."
+      tagline="Recent output from each agent in this run. Refreshes every 5 seconds."
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ page · enter open/refresh · esc back"
     >
-      <Box flexDirection="column">
-        {agents.length === 0 ? (
-          <Text color={colors.text.dim}>No agents in this run.</Text>
-        ) : (
-          pagedAgents.map((agent) => {
-            const peek = peeks[agent.id] || ''
-            const lines = peek ? peek.split('\n').slice(-PREVIEW_LINES) : []
-            const isSelected = selected?.type === 'agent' && selected.agent?.id === agent.id
-            const providerHue = providerColor(agent.provider)
-            const modelHue = modelColor(agent.model, agent.provider)
+      {compactBody ? (
+        <Box flexDirection="column">
+          <Section label={selected?.type === 'agent' ? 'Output' : 'Actions'} />
+          {agents.length === 0 && compactFirstEntry === 0 && (
+            <Row selected={false} primary="No agents" trailing="return to run" disabled />
+          )}
+          {visibleCompactItems.map(({ itemIdx, item }) => {
+            if (item.type === 'pagination') {
+              return (
+                <Pagination
+                  key="pagination"
+                  page={activePage}
+                  total={totalPages}
+                  focused={selectedIdx === itemIdx}
+                  onPrev={() => { setPage(p => Math.max(1, p - 1)); setSelectedIdx(0) }}
+                  onNext={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIdx(0) }}
+                />
+              )
+            }
+            if (item.type === 'action') {
+              const hint = item.action === 'Refresh' ? 'peek all agents now' : 'return to run hub'
+              return (
+                <Row
+                  key={item.action}
+                  selected={selectedIdx === itemIdx}
+                  primary={item.action}
+                  primaryWidth={ACTION_LABEL_WIDTH}
+                  hint={hint}
+                />
+              )
+            }
+            const agent = item.agent
             const providerLabel = providerDisplayName(agent.provider)
-
             return (
-              <Box key={agent.id} flexDirection="column" marginBottom={1}>
-                <Box borderStyle="single" borderColor={isSelected ? colors.accent.bright : providerHue} paddingX={space.sm}>
-                  <Box flexDirection="column">
-                    <Text bold>
-                      <Text color={isSelected ? colors.accent.bright : colors.text.primary}>{agent.nickname}</Text>
-                      <Text color={colors.text.dim}> </Text>
-                      <Text color={colors.surface.border}>[</Text>
-                      <Text color={providerHue}>{providerLabel}</Text>
-                      <Text color={colors.surface.border}>] [</Text>
-                      <Text color={modelHue}>{modelBadgeLabel(agent.model)}</Text>
-                      <Text color={colors.surface.border}>]</Text>
-                    </Text>
-                    <Box marginTop={space.sm}>
-                      {lines.length === 0 ? (
-                        <Text color={colors.text.dim}>(no output yet)</Text>
-                      ) : (
-                        <Box flexDirection="column">
-                          {lines.map((line, lineIdx) => (
-                            <Text key={lineIdx} color={colors.text.dim}>
-                              {line}
-                            </Text>
-                          ))}
-                        </Box>
-                      )}
+              <Row
+                key={agent.id}
+                selected={selectedIdx === itemIdx}
+                primary={agent.nickname}
+                badges={[
+                  { label: providerLabel, color: providerColor(agent.provider) },
+                  { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider) },
+                ]}
+                hint="enter opens output"
+              />
+            )
+          })}
+          <SectionEnd />
+        </Box>
+      ) : (
+        <Box flexDirection="column">
+          {agents.length === 0 ? (
+            <Text color={colors.text.dim}>No agents in this run.</Text>
+          ) : (
+            pagedAgents.map((agent) => {
+              const peek = peeks[agent.id] || ''
+              const lines = peek ? peek.split('\n').slice(-PREVIEW_LINES) : []
+              const isSelected = selected?.type === 'agent' && selected.agent?.id === agent.id
+              const providerHue = providerColor(agent.provider)
+              const modelHue = modelColor(agent.model, agent.provider)
+              const providerLabel = providerDisplayName(agent.provider)
+
+              return (
+                <Box key={agent.id} flexDirection="column" marginBottom={1}>
+                  <Box borderStyle="single" borderColor={isSelected ? colors.accent.bright : providerHue} paddingX={space.sm}>
+                    <Box flexDirection="column">
+                      <Text bold>
+                        <Text color={isSelected ? colors.accent.bright : colors.text.primary}>{agent.nickname}</Text>
+                        <Text color={colors.text.dim}> </Text>
+                        <Text color={colors.surface.border}>[</Text>
+                        <Text color={providerHue}>{providerLabel}</Text>
+                        <Text color={colors.surface.border}>] [</Text>
+                        <Text color={modelHue}>{modelBadgeLabel(agent.model)}</Text>
+                        <Text color={colors.surface.border}>]</Text>
+                      </Text>
+                      <Box marginTop={space.sm}>
+                        {lines.length === 0 ? (
+                          <Text color={colors.text.dim}>(no output yet)</Text>
+                        ) : (
+                          <Box flexDirection="column">
+                            {lines.map((line, lineIdx) => (
+                              <Text key={lineIdx} color={colors.text.dim}>
+                                {line}
+                              </Text>
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
                     </Box>
                   </Box>
                 </Box>
-              </Box>
-            )
-          })
-        )}
+              )
+            })
+          )}
 
-        {totalPages > 1 && (
-          <Pagination
-            page={activePage}
-            total={totalPages}
-            focused={selectedIdx === pagedAgents.length}
-            onPrev={() => { setPage(p => Math.max(1, p - 1)); setSelectedIdx(0) }}
-            onNext={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIdx(0) }}
-          />
-        )}
-
-        <Section label="Actions" />
-
-        {['Refresh', 'Back'].map((action, idx) => {
-          const actionRowIdx = pagedAgents.length + paginOffset + 1 + idx
-          const isSelected = selectedIdx === actionRowIdx
-          const hint = action === 'Refresh' ? 'peek all agents now' : 'return to run hub'
-
-          return (
-            <Row
-              key={action}
-              selected={isSelected}
-              primary={action}
-              primaryWidth={ACTION_LABEL_WIDTH}
-              hint={hint}
+          {totalPages > 1 && (
+            <Pagination
+              page={activePage}
+              total={totalPages}
+              focused={selectedIdx === pagedAgents.length}
+              onPrev={() => { setPage(p => Math.max(1, p - 1)); setSelectedIdx(0) }}
+              onNext={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIdx(0) }}
             />
-          )
-        })}
-        <SectionEnd />
-      </Box>
+          )}
+
+          <Section label="Actions" />
+
+          {['Refresh', 'Back'].map((action, idx) => {
+            const actionRowIdx = pagedAgents.length + paginOffset + 1 + idx
+            const isSelected = selectedIdx === actionRowIdx
+            const hint = action === 'Refresh' ? 'peek all agents now' : 'return to run hub'
+
+            return (
+              <Row
+                key={action}
+                selected={isSelected}
+                primary={action}
+                primaryWidth={ACTION_LABEL_WIDTH}
+                hint={hint}
+              />
+            )
+          })}
+          <SectionEnd />
+        </Box>
+      )}
     </Frame>
   )
 }

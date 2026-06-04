@@ -45,14 +45,14 @@ class FakeDriver implements RuntimeDriver {
   }
 }
 
-describe('spawner runtime', () => {
+describe('agent-run runtime', () => {
   it('parses stable tmux window and pane ids', async () => {
     const { parseTmuxIds } = await import('../src/launcher/runtime.js')
     expect(parseTmuxIds('@12 %34')).toEqual({ windowId: '@12', paneId: '%34' })
     expect(() => parseTmuxIds('0 1')).toThrow(/Could not parse/)
   })
 
-  it('starts spawner runs as independent agents without MCP or Reeves context injection', async () => {
+  it('starts agent runs as independent agents without MCP or Reeves context injection', async () => {
     const driver = new FakeDriver()
     const { startRun } = await import('../src/launcher/runtime.js')
     const { readRun, listAgents } = await import('../src/state/runs.js')
@@ -103,7 +103,7 @@ describe('spawner runtime', () => {
     expect(pasted.join('\n')).not.toContain('You are a worker agent')
   })
 
-  it('rejects non-spawner starts in the root package', async () => {
+  it('rejects non-agent-run starts in the root package', async () => {
     const driver = new FakeDriver()
     const { startRun } = await import('../src/launcher/runtime.js')
 
@@ -112,10 +112,10 @@ describe('spawner runtime', () => {
       name: 'beta',
       working_dir: '/tmp',
       root: { provider: 'codex', model: '', task: 'lead' },
-    } as never, { driver, available })).toThrow(/Only spawner runs/)
+    } as never, { driver, available })).toThrow(/Only agent-run mode/)
   })
 
-  it('spawns an agent into an existing spawner run session', async () => {
+  it('spawns an agent into an existing agent-run session', async () => {
     const driver = new FakeDriver()
     const { startRun, spawnWorker } = await import('../src/launcher/runtime.js')
     const { listAgents } = await import('../src/state/runs.js')

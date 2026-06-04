@@ -5,7 +5,7 @@ This is the practical checklist for taking the main `reevesagents` package from 
 ## Current State
 
 - Source install works through `pnpm install`, `pnpm build`, and `pnpm link --global`.
-- Package metadata exists in `package.json`: bin, exports, engines, repository, bugs, homepage, license, and publish workflow.
+- Package metadata exists in `package.json`: bin, exports, engines, license, package files, and publish workflow.
 - Install is passive. It does not write provider configs or start background services.
 - Spawner is the only stable mode in the main package: tmux, local state, provider CLIs, and optional loopback Web UI only.
 - Stable installs must include only the root package. Orchestrator/MCP ships only as the separate explicit PRE-BETA `reevesagents-orchestrator` package.
@@ -18,7 +18,7 @@ This is the practical checklist for taking the main `reevesagents` package from 
 Primary channels for the first public release:
 
 - npm registry, published with `pnpm publish`. This is the package source for npm, pnpm, yarn, and bun users.
-- Homebrew tap, preferably a personal tap first such as `mertkayacs/homebrew-tap`, not `homebrew/core`.
+- Homebrew tap, maintained outside `homebrew/core` until the formula is stable.
 - GitHub Releases, one release per tag with install commands, changelog notes, and known limitations.
 
 Defer these unless users ask for them:
@@ -40,9 +40,9 @@ Every stable install path must land on the same spawner-only root package:
 | npm global, all-in PRE-BETA | `npm install -g reevesagents reevesagents-orchestrator` | Explicit MCP/orchestrator add-on. |
 | pnpm global | `pnpm add -g reevesagents` | Uses npm package. |
 | one-off runners | `npx reevesagents`, `pnpm dlx reevesagents`, `yarn dlx reevesagents`, `bunx reevesagents` | Uses npm package. |
-| GitHub Release tarball | `npm install -g ./reevesagents-1.0.11.tgz` | Attach the root package tarball only. |
-| GitHub Release tarballs, all-in PRE-BETA | `npm install -g ./reevesagents-1.0.11.tgz ./reevesagents-orchestrator-1.0.0.tgz` | Attach both tarballs when pre-beta is part of the release. |
-| Homebrew tap | `brew install mertkayacs/tap/reevesagents` | Add after npm tarball URL and checksum are known. |
+| GitHub Release tarball | `npm install -g ./reevesagents-1.2.0.tgz` | Attach the root package tarball only. |
+| GitHub Release tarballs, all-in PRE-BETA | `npm install -g ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.0.0.tgz` | Attach both tarballs when pre-beta is part of the release. |
+| Homebrew tap | Use the command documented in the release tap. | Add after npm tarball URL and checksum are known. |
 | source | `pnpm install && pnpm build && pnpm link --global` | Root workspace only. |
 
 The root package and root Homebrew formula must not bundle orchestrator/MCP files. The all-in PRE-BETA path installs the separate package beside the stable package.
@@ -59,7 +59,7 @@ The root package and root Homebrew formula must not bundle orchestrator/MCP file
 - Check the install surface matrix: root CLI/TUI-only install, root Web install, root plus orchestrator PRE-BETA install, temp pnpm install, and Homebrew formula contents once the tap exists.
 - Run the manual TUI pass from `docs/testing.md`.
 - Run `pnpm check:package` and `pnpm pack --dry-run` to inspect the package contents.
-- Confirm the README clearly presents the stable spawner package as the default install.
+- Confirm the README clearly presents the stable agent-run package as the default install.
 - Confirm non-root package files are absent from the packed root tarball.
 - Confirm `reevesagents web --prebeta-orchestrator` fails clearly when the separate orchestrator package is not installed and works when it is installed.
 - Confirm npm provenance publishing works with the GitHub `publish` workflow and `NPM_TOKEN`.
@@ -71,7 +71,7 @@ The root package and root Homebrew formula must not bundle orchestrator/MCP file
 ## Release Blockers To Close
 
 - Create the Homebrew tap and formula.
-- Ship `1.0.11` only after the release install matrix and package content checks pass on macOS and Linux.
+- Ship `1.2.0` only after the release install matrix and package content checks pass on macOS and Linux.
 - Keep release-facing docs independent from local `specs/` working notes.
 - Keep the main package install passive and low-permission.
 - Keep non-root package files out of the root npm package.

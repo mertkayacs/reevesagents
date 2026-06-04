@@ -32,13 +32,12 @@ describe('StatusBar', () => {
     expect(stdout.lastFrame()).toContain('activate')
   })
 
-  it('shows only line 1 when rows < 22', () => {
+  it('shows key help instead of context when rows < 22', () => {
     const { stdout } = renderWithToast(
       <StatusBar context="context line" keys="move activate" rows={20} cols={80} />
     )
-    expect(stdout.lastFrame()).toContain('context line')
-    // Keys should not appear on tight height.
-    expect(stdout.lastFrame()).not.toContain('activate')
+    expect(stdout.lastFrame()).toContain('move activate')
+    expect(stdout.lastFrame()).not.toContain('context line')
   })
 
   it('uses default keys when not provided and rows >= 22', () => {
@@ -57,7 +56,7 @@ describe('StatusBar', () => {
     expect(stdout.lastFrame()).toBeDefined()
   })
 
-  it('does not show keys on tight height even when provided', () => {
+  it('keeps custom keys visible on tight height', () => {
     const { stdout } = renderWithToast(
       <StatusBar
         context="context"
@@ -65,8 +64,8 @@ describe('StatusBar', () => {
         rows={18} cols={80}
       />
     )
-    expect(stdout.lastFrame()).toContain('context')
-    expect(stdout.lastFrame()).not.toContain('custom keys')
+    expect(stdout.lastFrame()).toContain('custom keys')
+    expect(stdout.lastFrame()).not.toContain('context')
   })
 
   it('renders at boundary height (rows === 22)', () => {
@@ -81,7 +80,7 @@ describe('StatusBar', () => {
     const { stdout } = renderWithToast(
       <StatusBar context="context" keys="keys" rows={21} cols={80} />
     )
-    expect(stdout.lastFrame()).toContain('context')
-    expect(stdout.lastFrame()).not.toContain('keys')
+    expect(stdout.lastFrame()).toContain('keys')
+    expect(stdout.lastFrame()).not.toContain('context')
   })
 })

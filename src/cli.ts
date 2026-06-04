@@ -1,6 +1,6 @@
 // CLI entry point. No args launches TUI; subcommands provide operator control.
 // Inputs: process.argv. Outputs: TUI render or stdout text/JSON.
-// Invariant: this package exposes the stable spawner surface only.
+// Invariant: this package exposes the stable agent-run surface only.
 
 import { Command } from 'commander'
 import { execFileSync } from 'node:child_process'
@@ -207,8 +207,8 @@ function parseAgentSpec(spec: string): { provider: Provider; nickname?: string; 
 
 program
   .command('spawn [agent...]')
-  .description('start a spawner run with independent provider CLI agents')
-  .option('--name <name>', 'run name', 'spawner')
+  .description('start a run with one or more provider agents')
+  .option('--name <name>', 'run name', 'run')
   .option('--cwd <dir>', 'working directory', process.cwd())
   .option('--prompt <text>', 'initial prompt pasted into each agent', '')
   .action((agentSpecs: string[], opts) => {
@@ -259,7 +259,7 @@ program
       const root = agents.find(agent => agent.role === 'root')
       const note = agents.find(agent => agent.task_note.trim())?.task_note ?? ''
       const rootProvider = root ? providerDisplayName(root.provider) : '-'
-      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  spawn      ${rootProvider.padEnd(14)}  ${String(agents.length).padStart(2)} ${'agents'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
+      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  ${'agent run'.padEnd(9)}  ${rootProvider.padEnd(14)}  ${String(agents.length).padStart(2)} ${'agents'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
     }
   })
 
@@ -303,7 +303,7 @@ program
 
 program
   .command('kill <agent-id>')
-  .description('stop one spawner agent')
+  .description('stop one agent')
   .option('-y, --yes', 'confirm stop')
   .action((id, opts) => {
     requireDestructiveConfirmation(opts, 'stop agent')
@@ -331,7 +331,7 @@ program
 
 program
   .command('web')
-  .description('start the on-demand loopback web UI for spawner agents')
+  .description('start the on-demand loopback web UI for agents')
   .option('--port <n>', 'preferred port; falls back to the next free port')
   .option('--no-open', 'do not open the browser')
   .option('--prebeta-orchestrator', 'enable PRE-BETA orchestrator/MCP run controls when the separate package is installed')

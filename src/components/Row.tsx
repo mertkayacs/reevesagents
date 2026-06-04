@@ -24,6 +24,7 @@ interface Props {
   badges?: Badge[]
   hint?: string
   trailing?: string
+  alwaysShowTrailing?: boolean
   primaryWidth?: number
   disabled?: boolean
   danger?: boolean
@@ -43,6 +44,7 @@ export function Row({
   badges,
   hint,
   trailing,
+  alwaysShowTrailing,
   primaryWidth,
   disabled,
   danger,
@@ -56,7 +58,6 @@ export function Row({
   const inlineBadges = [...(badge ? [badge] : []), ...(badges ?? [])]
   const buttonLike = !glyph && inlineBadges.length === 0 && !trailing && !!hint
   const showHint = Boolean(hint) && !compact
-  const showTrailing = Boolean(trailing) && !compact
   const cursorColor = selected
     ? danger ? colors.status.error : colors.accent.bright
     : colors.text.faint
@@ -85,6 +86,8 @@ export function Row({
   const primaryText = buttonPrimaryWidth ? displayPrimary.padEnd(buttonPrimaryWidth) : displayPrimary
   const railColor = selected ? colors.accent.deep : colors.surface.border
   const availableWidth = Math.max(1, width - 6)
+  const canFitTrailing = availableWidth >= 24
+  const showTrailing = Boolean(trailing) && (!compact || alwaysShowTrailing) && canFitTrailing
   const trailingWidth = showTrailing
     ? Math.min(Math.max(16, Math.floor(availableWidth * 0.42)), Math.max(1, availableWidth - 16))
     : 0

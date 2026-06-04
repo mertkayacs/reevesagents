@@ -31,11 +31,17 @@ export function StatusBar({ context = '', keys, rows, cols }: StatusBarProps) {
   const hasContextLine = Boolean(line1Text)
   const showKeysOnSecondLine = rows >= 22 && hasContextLine
   const height = showKeysOnSecondLine ? 2 : 1
-  const firstLineText = hasContextLine ? line1Text : line2Text
+  const compactToast = Boolean(toast) && !showKeysOnSecondLine
+  const firstLineText = showKeysOnSecondLine || compactToast
+    ? (hasContextLine ? line1Text : line2Text)
+    : line2Text
+  const firstLineColor = showKeysOnSecondLine || compactToast
+    ? (hasContextLine ? line1Color : colors.text.muted)
+    : colors.text.muted
 
   return (
     <Box flexDirection="column" width={cols} height={height}>
-      <Text color={hasContextLine ? line1Color : colors.text.muted} wrap="truncate-end">{firstLineText}</Text>
+      <Text color={firstLineColor} wrap="truncate-end">{firstLineText}</Text>
       {showKeysOnSecondLine && <Text color={colors.text.muted} wrap="truncate-end">{line2Text}</Text>}
     </Box>
   )

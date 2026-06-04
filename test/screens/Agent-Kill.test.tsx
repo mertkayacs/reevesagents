@@ -4,10 +4,14 @@
 import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/router.js'
+import { Router, RouterContext } from '../../src/router.js'
+import { AgentKill } from '../../src/screens/run/agent/Kill.js'
+import { ToastProvider } from '../../src/state/ToastContext.js'
 import * as runsState from '../../src/state/runs.js'
 import * as runtime from '../../src/launcher/runtime.js'
-import type { AgentRecord, RunRecord } from '../../src/state/types.js'
+import type { AgentRecord, RouterContextValue, RunRecord } from '../../src/state/types.js'
+
+const waitForInput = () => new Promise(resolve => setTimeout(resolve, 75))
 
 const mockWorkerAgent: AgentRecord = {
   id: 'agent-2',
@@ -129,6 +133,47 @@ describe('AgentKill screen', () => {
     )
     const frame = lastFrame() ?? ''
     expect(frame).toContain('ReevesAgents')
+    unmount()
+  })
+
+  it('stopping the last live agent moves the run to history', async () => {
+    const resetStack = vi.fn()
+    vi.mocked(runsState.listAgents).mockReturnValue([mockWorkerAgent])
+    const router: RouterContextValue = {
+      screen: 'AgentKill',
+      push: vi.fn(),
+      pop: vi.fn(),
+      forward: vi.fn(),
+      replace: vi.fn(),
+      resetStack,
+      selectedRunId: 'run-1',
+      setSelectedRunId: vi.fn(),
+      selectedAgentId: 'agent-2',
+      setSelectedAgentId: vi.fn(),
+      selectedCheckName: null,
+      setSelectedCheckName: vi.fn(),
+      selectedWorkerIdx: null,
+      setSelectedWorkerIdx: vi.fn(),
+      canBack: true,
+      canForward: false,
+    }
+
+    const { stdin, lastFrame, unmount } = render(
+      <RouterContext.Provider value={router}>
+        <ToastProvider>
+          <AgentKill />
+        </ToastProvider>
+      </RouterContext.Provider>,
+    )
+
+    expect(lastFrame() ?? '').toContain('ends the run')
+    stdin.write('\u001B[C')
+    await waitForInput()
+    stdin.write('\r')
+    await waitForInput()
+
+    expect(runtime.killAgent).toHaveBeenCalledWith('agent-2')
+    expect(resetStack).toHaveBeenCalledWith('RunHistory')
     unmount()
   })
 })

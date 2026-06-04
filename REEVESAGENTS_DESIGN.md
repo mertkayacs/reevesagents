@@ -90,7 +90,7 @@ Provider command support:
 | `qwen` | Qwen Code | `qwen` |
 | `aider` | Aider | `aider` |
 
-Spawner launch rules:
+Agent-run launch rules:
 
 - pass only provider-supported launch flags
 - paste the optional initial prompt into the terminal
@@ -98,7 +98,7 @@ Spawner launch rules:
 - default permissions to `ask`
 - allow skip permissions only when the provider has a known CLI flag for it
 
-Spawner runs must not inject ReevesAgents runtime environment variables into provider CLIs.
+Agent runs must not inject ReevesAgents runtime environment variables into provider CLIs.
 
 ## TUI
 
@@ -116,10 +116,10 @@ Pages:
 - Welcome: persistent main menu, current run shortcut, and Start Web UI (beta).
 - Runs: sectioned run dashboard with stable, low-flicker rows.
 - Run: workspace view for one run.
-- Terminals: list provider windows in the run.
-- Terminal detail: inspect provider, status, working directory, ids, prompt, output, open, and close.
-- New Run: configure a run and its initial terminals.
-- Add Terminal: add one terminal to an existing run.
+- Agents: list provider windows in the run.
+- Agent detail: inspect provider, status, working directory, ids, prompt, output, open, and close.
+- New Run: configure a run and its initial agents.
+- Add Agent: add one agent to an existing run.
 - Settings: provider detection and state paths.
 - Doctor: environment health checks only.
 - Reference: compact in-app map.

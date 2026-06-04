@@ -138,7 +138,7 @@ describe('Run hub screen', () => {
 
     expect(frame).toContain('Agents')
     expect(frame).toContain('Output')
-    expect(frame).toContain('Open tmux tabs')
+    expect(frame).toContain('Switch to tmux tabs')
     expect(frame).toContain('Add Agent')
     unmount()
   })
@@ -166,7 +166,7 @@ describe('Run hub screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Return & Stop Run')
+    expect(frame).toContain('Stop Run')
     expect(frame).toContain('Back')
     unmount()
   })
@@ -193,7 +193,7 @@ describe('Run hub screen', () => {
     const frame = lastFrame() ?? ''
 
     expect(frame).toContain('Delete Run')
-    expect(frame).not.toContain('Return & Stop Run')
+    expect(frame).not.toContain('Stop Run')
     unmount()
   })
 
@@ -203,7 +203,7 @@ describe('Run hub screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Manage this spawner run')
+    expect(frame).toContain('Open, add, stop')
     expect(frame).toContain('reeves-123')
     unmount()
   })

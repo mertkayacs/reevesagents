@@ -155,7 +155,7 @@ describe('Run › Agents list screen', () => {
     )
     const frame = lastFrame() ?? ''
 
-    expect(frame).toContain('Independent CLI agents in this spawner run')
+    expect(frame).toContain('Agents in this run')
     unmount()
   })
 

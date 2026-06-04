@@ -15,11 +15,12 @@ import {
 import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
 import { modelValuesForProvider } from '../launcher/model-catalog.js'
 import { providerColor, providerDisplayName } from '../utils/display.js'
-import type { Provider, RunViewStatus, TaskStatus } from '../state/types.js'
+import type { Provider, RunRecord, RunViewStatus, TaskStatus } from '../state/types.js'
 import { isOrchestratorWebProvider } from './prebeta-orchestrator.js'
 
 export interface WebStateOptions {
   prebetaOrchestrator?: boolean
+  liveTmuxTarget?: (_run: RunRecord) => boolean
 }
 
 export interface WebTerminal {
@@ -90,13 +91,13 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
   const listForRun = options.prebetaOrchestrator ? listAgentsAny : listAgents
   const runs = runsSource.map<WebRun>(run => {
     const mode = run.mode === 'spawner' ? 'spawner' : 'orchestrator'
-    const live = runHasLiveTmuxTarget(run)
-    const status = computeRunStatus(run, live)
+    const live = options.liveTmuxTarget ? options.liveTmuxTarget(run) : runHasLiveTmuxTarget(run)
+    const runStatus = computeRunStatus(run, live)
     const terminals = listForRun(run.id).map<WebTerminal>(agent => {
       const status = agent.ended_at ? 'ended' : agent.task_status
       const hasWindow = !agent.headless && !!agent.tmux_window_id
-      const canAttach = hasWindow && status !== 'ended'
-      const canKill = status !== 'ended' && hasWindow && (mode === 'spawner' || agent.role !== 'root')
+      const canAttach = live && hasWindow && status !== 'ended'
+      const canKill = live && status !== 'ended' && hasWindow && (mode === 'spawner' || agent.role !== 'root')
       const canDelete = status === 'ended'
       return {
         id: agent.id,
@@ -111,7 +112,13 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
         canAttach,
         canKill,
         canDelete,
-        disabledReason: canAttach ? null : status === 'ended' ? 'agent has ended' : 'agent has no tmux window',
+        disabledReason: canAttach
+          ? null
+          : status === 'ended'
+          ? 'agent has ended'
+          : !live
+          ? 'run tmux session is unavailable'
+          : 'agent has no tmux window',
         monogram: monogram(agent.nickname, agent.provider),
         color: providerColor(agent.provider),
       }
@@ -120,7 +127,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       id: run.id,
       mode,
       name: run.name,
-      status,
+      status: runStatus,
       working_dir: run.working_dir,
       canStop: run.status === 'running' && !run.ended_at,
       canDelete: run.status === 'ended' || run.ended_at !== null,

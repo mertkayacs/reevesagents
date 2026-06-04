@@ -1,4 +1,4 @@
-// Isolated CLI smoke. Runs the built spawner CLI with fake provider binaries
+// Isolated CLI smoke. Runs the built CLI with fake provider binaries
 // and temp state so doctor and runs commands never touch real state.
 
 import { spawnSync } from 'node:child_process'

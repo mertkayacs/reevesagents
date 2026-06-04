@@ -152,7 +152,7 @@ describe('Runs screen', () => {
 
     expect(frame).toContain('ReevesAgents')
     expect(frame).toContain('Runs')
-    expect(frame).toContain('Manage local tmux workspaces')
+    expect(frame).toContain('Manage active runs')
     unmount()
   })
 })

@@ -51,7 +51,7 @@ describe('Welcome', () => {
     const { lastFrame } = render(<Welcome />)
     const output = lastFrame()
     expect(output).toContain('Local tmux-first workspace manager for AI CLI agents')
-    expect(output).toContain('Spawner')
+    expect(output).toContain('Runs')
     expect(output).toContain('TUI')
   })
 

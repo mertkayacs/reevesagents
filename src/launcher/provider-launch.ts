@@ -1,4 +1,4 @@
-// Spawner launch helpers shared by the TUI and CLI runtime.
+// Agent launch helpers shared by the TUI and CLI runtime.
 // Inputs: user paths and argv fragments. Outputs: shell-safe values.
 
 import { existsSync, statSync } from 'node:fs'

@@ -872,6 +872,30 @@ button { letter-spacing: 0; }
   letter-spacing: 0;
 }
 
+.card-open-hint {
+  min-width: 44px;
+  max-width: 92px;
+  min-height: 24px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 var(--s-2);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--agent-color) 28%, var(--border-faint));
+  border-radius: var(--r-1);
+  color: var(--dim);
+  background: color-mix(in srgb, var(--agent-color) 9%, transparent);
+  font-size: var(--fs-xs);
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card.is-disabled .card-open-hint {
+  border-color: var(--border-faint);
+  color: var(--faint);
+  background: rgba(255, 255, 255, 0.018);
+}
+
 .card-agent-action {
   min-width: 48px;
   max-width: 74px;
@@ -1253,6 +1277,13 @@ button { letter-spacing: 0; }
   color: var(--muted);
   font-size: var(--fs-xs);
   font-weight: 500;
+}
+
+.field-help {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .field input,
@@ -1659,6 +1690,11 @@ button { letter-spacing: 0; }
 
   .card-status {
     display: none;
+  }
+
+  .card-open-hint {
+    max-width: 72px;
+    padding-inline: var(--s-1);
   }
 
   .card-agent-action {

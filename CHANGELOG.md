@@ -2,20 +2,25 @@
 
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
-## Unreleased
+## 1.2.0 - Language And Web UX Polish
 
 ### Added
+- Added TUI and Web language switching with English, German, French, Spanish, Portuguese, Italian, Turkish, Simplified Chinese, and Arabic.
+- Added separate Web actions for New Run and New Agent with provider model and permission mode selection.
 - Added shared TUI/Web history for archived ended and stale runs.
+- Added the animated Web duck mark as the top-left brand asset.
 - Added contributor branch policy, issue templates, pull request template, and security policy.
 
 ### Changed
 - Runs pages now keep active runs separate from history.
-- Web beta uses click-to-attach agent selection without drag-and-drop attach behavior.
+- Web beta uses direct click-to-open agent selection without drag-and-drop behavior.
+- TUI pages are more responsive in narrow terminals and keep loaded pages scrollable with arrow keys.
+- Visible UI copy now uses agent wording for user-facing run controls.
 
 ## 1.0.11 - Web UI Workbench Polish
 
 ### Changed
-- Refined the Web beta into a compact terminal workbench with richer agent cards, improved stage framing, better responsive behavior, and drag-to-attach.
+- Refined the Web beta into a compact agent workbench with richer agent cards, improved stage framing, and better responsive behavior.
 - Set the root package, CLI smoke expectations, README, and release docs to `1.0.11`.
 
 ## 0.9.0 - Initial Public Prerelease

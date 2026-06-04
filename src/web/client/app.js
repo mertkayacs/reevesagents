@@ -29,18 +29,22 @@
     'web.activeAgents': 'active agents',
     'web.agents': 'Agents',
     'web.noAgents': 'No agents yet',
-    'web.noAgentsBody': 'Create a run, then add provider agents as the work grows.',
+    'web.noAgentsBody': 'Create a run first, then add agents as the work grows.',
+    'web.noActiveAgents': 'No active agents',
+    'web.noActiveAgentsBody': 'Start a new run when you are ready. Ended runs stay in History.',
     'web.noAgentSelected': 'No agent selected',
     'web.noAgentSub': 'Pick an agent on the left, or create a run.',
     'web.addAgent': 'Add agent',
     'web.stop': 'Stop',
     'web.newAgent': 'New agent',
     'web.newRun': 'New run',
+    'web.newRunTitle': 'create a new run',
     'web.webAgent': 'web agent',
     'web.noAgentAttached': 'No agent attached',
     'web.overlayBody': 'Select an agent to open its live pane. Closing the browser leaves the run active.',
-    'web.newRunSubtitle': 'Start a run with its first provider agent.',
-    'web.addAgentSubtitle': 'Add one provider agent to the selected run.',
+    'web.unavailableBody': 'This agent does not have a live tmux window to open.',
+    'web.newRunSubtitle': 'Create a run and start its first provider agent.',
+    'web.addAgentSubtitle': 'Add one provider agent to an active run.',
     'web.createRun': 'Create run',
     'web.run': 'Run',
     'web.runName': 'Run name',
@@ -58,13 +62,22 @@
     'web.cwdPlaceholder': 'defaults to the server directory',
     'web.initialPrompt': 'Initial prompt',
     'web.initialPromptOpt': 'optional, typed in on start',
+    'web.agentRunHelp': 'Choose the active run that will receive this agent.',
+    'web.runNameHelp': 'Shown in the run list and history.',
+    'web.providerHelp': 'Choose the provider CLI that will run this agent.',
+    'web.modelHelp': 'Provider default is safest when unsure.',
+    'web.permissionsHelp': 'Ask first is safer. Skip prompts only in trusted workspaces.',
+    'web.agentNameHelp': 'Optional display name and tmux window name.',
+    'web.modeHelp': 'Normal runs are direct agent workspaces. Orchestrator MCP is pre-beta.',
+    'web.cwdHelp': 'Agents start in this directory.',
+    'web.promptHelp': 'Sent to the agent after its window opens.',
     'web.promptPlaceholder': 'What should this agent start working on?',
     'web.orchestratorPromptPlaceholder': 'What should this orchestrator agent start working on?',
     'web.cancel': 'Cancel',
     'web.create': 'Create',
     'web.providerDefault': 'Provider default',
     'web.notInstalled': 'Not installed',
-    'web.spawnerOnly': 'Spawner only',
+    'web.spawnerOnly': 'Agent run only',
     'web.readyOrchestrator': 'Ready · Orchestrator',
     'web.ready': 'Ready',
     'web.history': 'History',
@@ -76,7 +89,12 @@
     'web.deleteHistoryTitle': 'delete archived run {{name}}',
     'web.stopAgentTitle': 'stop agent {{name}}',
     'web.deleteAgentTitle': 'delete stopped agent {{name}}',
+    'web.openAgent': 'Open',
+    'web.openAgentTitle': 'open agent {{name}}',
     'web.agentUnavailable': 'agent is unavailable',
+    'web.noAgentWindow': 'agent has no tmux window',
+    'web.noLiveTmuxTarget': 'run tmux session is unavailable',
+    'web.unavailable': 'Unavailable',
     'web.addAgentActiveTitle': 'add an agent to an active run',
     'web.createRunFirstTitle': 'create a run before adding agents',
     'web.connecting': 'connecting',
@@ -96,13 +114,13 @@
     'web.deleteHistoryConfirm': 'Delete archived run "{{name}}"? This only removes the saved history record.',
     'web.deleteHistoryError': 'Could not delete archived run: {{message}}',
     'web.agentEnded': 'agent has ended',
-    'web.createRunFirst': 'Create a run first, then add agents to it.',
+    'web.createRunFirst': 'Create a run first. Agents are added inside active runs.',
     'web.runInactive': 'This run is no longer active.',
     'web.noProvider': 'No installed provider is available for this mode.',
     'web.addingTo': 'Adding to {{name}} · {{mode}} · {{count}}',
     'web.oneAgent': '{{count}} agent',
     'web.manyAgents': '{{count}} agents',
-    'web.spawner': 'Spawner',
+    'web.spawner': 'Agent run',
     'web.orchestrator': 'Orchestrator MCP',
     'web.roleRoot': 'root',
     'web.roleWorker': 'worker',
@@ -176,6 +194,7 @@
   let selectedId = null
   let session = null // { id, ws, term, fit, observer }
   let createContext = { kind: 'run', runId: '' }
+  let createSubmitting = false
 
   // --- http helpers ---------------------------------------------------------
 
@@ -215,6 +234,8 @@
     applyLanguage(data.language)
     renderProviders()
     renderSidebar()
+    reconcileCreateDialog()
+    reconcileSelectedAgent()
   }
 
   function subscribe() {
@@ -229,6 +250,8 @@
         }
         if (Array.isArray(data.history)) history = data.history
         renderSidebar()
+        reconcileCreateDialog()
+        reconcileSelectedAgent()
       } catch { /* ignore malformed frame */ }
     }
   }
@@ -279,6 +302,7 @@
     el.languageSelect.parentElement.title = t('web.languageTitle')
     el.newAgentBtn.textContent = t('web.newAgent')
     el.newRunBtn.textContent = t('web.newRun')
+    el.newRunBtn.title = t('web.newRunTitle')
     el.emptyNewRun.textContent = t('web.newRun')
     el.overlayNewRun.textContent = t('web.newRun')
     el.overlayNewAgent.textContent = t('web.newAgent')
@@ -288,8 +312,16 @@
     document.querySelector('.empty-title').textContent = t('web.noAgents')
     document.querySelector('.empty-body').textContent = t('web.noAgentsBody')
     document.querySelector('.overlay-eyebrow').textContent = t('web.webAgent')
-    document.querySelector('.overlay-title').textContent = t('web.noAgentAttached')
-    document.querySelector('.overlay-body').textContent = t('web.overlayBody')
+    if (!selectedId) {
+      document.querySelector('.overlay-title').textContent = t('web.noAgentAttached')
+      document.querySelector('.overlay-body').textContent = t('web.overlayBody')
+    } else {
+      const found = findAgent(selectedId)
+      if (found && !found.terminal.canAttach) {
+        setOverlayCopy(disabledReasonLabel(found.terminal), t('web.unavailableBody'))
+        setStageStatus('closed', disabledReasonLabel(found.terminal))
+      }
+    }
     el.createRunTab.textContent = t('web.newRun')
     el.createAgentTab.textContent = t('web.newAgent')
     document.querySelector('#agent-run-field .field-label').textContent = t('web.run')
@@ -305,9 +337,20 @@
     document.querySelector('#f-permissions option[value="skip"]').textContent = t('web.skipPrompts')
     document.querySelector('#agent-name-field .field-label').innerHTML = `${t('web.agentName')} <span class="field-opt">${t('web.optional')}</span>`
     document.querySelector('#mode-field .field-label').textContent = t('web.newRunMode')
+    document.querySelector('#f-mode option[value="spawner"]').textContent = t('web.spawner')
+    document.querySelector('#f-mode option[value="orchestrator"]').textContent = `${t('web.orchestrator')} · pre-beta`
     document.querySelector('#cwd-field .field-label').textContent = t('web.workingDirectory')
     document.querySelector('#f-cwd').placeholder = t('web.cwdPlaceholder')
     document.querySelector('#prompt-field .field-label').innerHTML = `${t('web.initialPrompt')} <span class="field-opt">${t('web.initialPromptOpt')}</span>`
+    setText('#agent-run-help', t('web.agentRunHelp'))
+    setText('#run-name-help', t('web.runNameHelp'))
+    setText('#provider-help', t('web.providerHelp'))
+    setText('#model-help', t('web.modelHelp'))
+    setText('#permissions-help', t('web.permissionsHelp'))
+    setText('#agent-name-help', t('web.agentNameHelp'))
+    setText('#mode-help', t('web.modeHelp'))
+    setText('#cwd-help', t('web.cwdHelp'))
+    setText('#prompt-help', t('web.promptHelp'))
     el.newCancel.textContent = t('web.cancel')
     syncCreateFields()
     if (!selectedId) {
@@ -315,6 +358,11 @@
       el.stageSub.textContent = t('web.noAgentSub')
     }
     renderSidebar()
+  }
+
+  function setText(selector, value) {
+    const node = document.querySelector(selector)
+    if (node) node.textContent = value
   }
 
   // --- rendering ------------------------------------------------------------
@@ -368,12 +416,8 @@
       choice.style.setProperty('--provider-color', p.color)
       choice.disabled = opt.disabled
       choice.title = opt.disabled ? opt.textContent : t('web.useProvider', { name: p.name })
-      choice.addEventListener('click', () => {
-        if (choice.disabled) return
-        el.fProvider.value = p.id
-        updateProviderSelection()
-        renderModels()
-      })
+      choice.addEventListener('click', () => selectProvider(p.id))
+      choice.addEventListener('keydown', (ev) => handleProviderKeydown(ev, p.id))
 
       const swatch = document.createElement('span')
       swatch.className = 'provider-swatch'
@@ -398,13 +442,43 @@
     else if (firstAvailable) el.fProvider.value = firstAvailable.value
     updateProviderSelection()
     renderModels()
+    updateCreateSubmitState()
   }
 
   function providerMeta(provider, supported) {
     if (!provider.available) return t('web.notInstalled')
     if (!supported) return t('web.spawnerOnly')
-    if (provider.orchestrator) return t('web.readyOrchestrator')
+    if (selectedCreateMode() === 'orchestrator' && provider.orchestrator) return t('web.readyOrchestrator')
     return t('web.ready')
+  }
+
+  function selectProvider(providerId) {
+    const option = [...el.fProvider.options].find(item => item.value === providerId)
+    if (!option || option.disabled) return
+    el.fProvider.value = providerId
+    updateProviderSelection()
+    renderModels()
+    updateCreateSubmitState()
+  }
+
+  function handleProviderKeydown(ev, providerId) {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault()
+      selectProvider(providerId)
+      return
+    }
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown' || ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') {
+      ev.preventDefault()
+      focusProvider(providerId, ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : -1)
+    }
+  }
+
+  function focusProvider(providerId, delta) {
+    const choices = [...el.providerGrid.querySelectorAll('.provider-option')].filter(option => !option.disabled)
+    if (choices.length === 0) return
+    const currentIdx = Math.max(0, choices.findIndex(option => option.dataset.provider === providerId))
+    const next = choices[(currentIdx + delta + choices.length) % choices.length]
+    if (next) next.focus()
   }
 
   function updateProviderSelection() {
@@ -414,6 +488,7 @@
     for (const option of el.providerGrid.querySelectorAll('.provider-option')) {
       const active = option.dataset.provider === el.fProvider.value && !option.disabled
       option.setAttribute('aria-selected', String(active))
+      option.tabIndex = active ? 0 : -1
     }
   }
 
@@ -440,13 +515,38 @@
     if (hasCurrent) el.fModel.value = current
     else el.fModel.value = ''
     el.fModel.disabled = !selectedProviderAvailable()
+    updateCreateSubmitState()
   }
 
   function updatePermissionSelection() {
     for (const option of el.permissionGrid.querySelectorAll('.permission-option')) {
       const active = option.dataset.permission === el.fPermissions.value
       option.setAttribute('aria-checked', String(active))
+      option.tabIndex = active ? 0 : -1
     }
+  }
+
+  function selectPermission(value) {
+    if (value !== 'ask' && value !== 'skip') return
+    el.fPermissions.value = value
+    updatePermissionSelection()
+  }
+
+  function handlePermissionKeydown(ev) {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault()
+      selectPermission(ev.currentTarget.dataset.permission)
+      return
+    }
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowDown' && ev.key !== 'ArrowLeft' && ev.key !== 'ArrowUp') return
+    ev.preventDefault()
+    const values = ['ask', 'skip']
+    const currentIdx = Math.max(0, values.indexOf(el.fPermissions.value))
+    const delta = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : -1
+    const next = values[(currentIdx + delta + values.length) % values.length]
+    selectPermission(next)
+    const nextButton = el.permissionGrid.querySelector(`[data-permission="${next}"]`)
+    if (nextButton) nextButton.focus()
   }
 
   function selectedProviderAvailable() {
@@ -629,7 +729,11 @@
     const runsWithAgents = runs.filter(r => r.status !== 'ended' && r.terminals.length > 0)
     const agentCount = runsWithAgents.reduce((sum, run) => sum + run.terminals.length, 0)
     el.sidebarCount.textContent = String(agentCount)
-    el.sidebarEmpty.hidden = runsWithAgents.length > 0 || history.length > 0
+    el.sidebarEmpty.hidden = runsWithAgents.length > 0
+    if (!el.sidebarEmpty.hidden) {
+      document.querySelector('.empty-title').textContent = history.length > 0 ? t('web.noActiveAgents') : t('web.noAgents')
+      document.querySelector('.empty-body').textContent = history.length > 0 ? t('web.noActiveAgentsBody') : t('web.noAgentsBody')
+    }
     el.sidebarList.innerHTML = ''
 
     for (const run of runsWithAgents) {
@@ -649,7 +753,7 @@
       headBody.appendChild(name)
       const meta = document.createElement('span')
       meta.className = 'run-meta'
-      meta.textContent = `${modeLabel(run.mode)} · ${agentCountLabel(run.terminals.length)}`
+      meta.textContent = `${statusLabel(run.status)} · ${modeLabel(run.mode)} · ${agentCountLabel(run.terminals.length)}`
       headBody.appendChild(meta)
       head.appendChild(headBody)
 
@@ -794,6 +898,13 @@
     status.className = 'card-status'
     status.textContent = statusLabel(agent.status)
     tail.appendChild(status)
+    const availability = document.createElement('span')
+    availability.className = 'card-open-hint'
+    availability.textContent = agent.canAttach ? t('web.openAgent') : disabledReasonLabel(agent)
+    availability.title = agent.canAttach
+      ? t('web.openAgentTitle', { name: agent.nickname })
+      : disabledReasonLabel(agent)
+    tail.appendChild(availability)
     if (agent.canKill || agent.canDelete) {
       const lifecycle = document.createElement('button')
       const isDelete = agent.canDelete
@@ -809,13 +920,22 @@
     card.appendChild(tail)
 
     if (agent.canAttach) {
+      open.title = t('web.openAgentTitle', { name: agent.nickname })
       open.addEventListener('click', () => attach(agent.id))
     } else {
       open.disabled = true
       card.classList.add('is-disabled')
-      open.title = agent.disabledReason || t('web.agentUnavailable')
+      open.title = disabledReasonLabel(agent)
     }
     return card
+  }
+
+  function disabledReasonLabel(agent) {
+    if (!agent) return t('web.unavailable')
+    if (agent.status === 'ended' || agent.disabledReason === 'agent has ended') return t('web.agentEnded')
+    if (agent.disabledReason === 'run tmux session is unavailable') return t('web.noLiveTmuxTarget')
+    if (agent.disabledReason === 'agent has no tmux window' || agent.headless || !agent.hasWindow) return t('web.noAgentWindow')
+    return agent.disabledReason || t('web.unavailable')
   }
 
   function setStageStatus(kind, text) {
@@ -838,6 +958,12 @@
     el.newAgentBtn.title = hasRunningRun ? t('web.addAgentActiveTitle') : t('web.createRunFirstTitle')
     el.overlayNewAgent.hidden = !hasRunningRun
     el.createAgentTab.disabled = !hasRunningRun
+    updateCreateSubmitState()
+  }
+
+  function updateCreateSubmitState() {
+    const validRunTarget = createContext.kind !== 'agent' || !!selectedRunForCreate()
+    el.newSubmit.disabled = createSubmitting || !selectedProviderAvailable() || !validRunTarget
   }
 
   // --- agent attach ---------------------------------------------------------
@@ -852,9 +978,13 @@
 
   function attach(id) {
     if (session && session.id === id) return
+    const found = findAgent(id)
+    if (found && !found.terminal.canAttach) {
+      showUnavailableAgent(id, found)
+      return
+    }
     disposeSession()
 
-    const found = findAgent(id)
     selectedId = id
     renderSidebar()
     el.overlay.hidden = true
@@ -890,18 +1020,50 @@
     observer.observe(el.termHost)
 
     session = { id, ws, term, fit, observer }
+    let finalState = null
 
     ws.onopen = () => { setStageStatus('live', t('web.live')); fit.fit(); sendResize(); term.focus() }
     ws.onmessage = (e) => {
       let f
       try { f = JSON.parse(e.data) } catch { return }
       if (f.t === 'o') term.write(f.d)
-      else if (f.t === 'x') { setStageStatus('closed', t('web.exited')); term.write(`\r\n\x1b[2m[${t('web.exited')} ${f.code}]\x1b[0m\r\n`) }
-      else if (f.t === 'e') { setStageStatus('error', t('web.error')); term.write(`\r\n\x1b[31m[${f.m}]\x1b[0m\r\n`) }
+      else if (f.t === 'x') { finalState = 'exited'; setStageStatus('closed', t('web.exited')); term.write(`\r\n\x1b[2m[${t('web.exited')} ${f.code}]\x1b[0m\r\n`) }
+      else if (f.t === 'e') { finalState = 'error'; setStageStatus('error', t('web.error')); term.write(`\r\n\x1b[31m[${f.m}]\x1b[0m\r\n`) }
     }
-    ws.onerror = () => setStageStatus('error', t('web.connectionError'))
-    ws.onclose = () => { if (session && session.id === id) setStageStatus('closed', t('web.disconnected')) }
+    ws.onerror = () => { finalState = 'error'; setStageStatus('error', t('web.connectionError')) }
+    ws.onclose = () => { if (session && session.id === id && !finalState) setStageStatus('closed', t('web.disconnected')) }
     term.onData((d) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'i', d })) })
+  }
+
+  function showUnavailableAgent(id, found) {
+    disposeSession()
+    selectedId = id
+    renderSidebar()
+    el.termHost.innerHTML = ''
+    el.overlay.hidden = false
+    if (!found) {
+      showOverlay()
+      return
+    }
+    el.stageTitle.textContent = found.terminal.nickname
+    el.stageSub.textContent = `${modeLabel(found.run.mode)} · ${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}`
+    el.termWrap.style.setProperty('--agent-color', found.terminal.color)
+    setOverlayCopy(disabledReasonLabel(found.terminal), t('web.unavailableBody'))
+    setStageStatus('closed', disabledReasonLabel(found.terminal))
+    updateStageActions()
+  }
+
+  function reconcileSelectedAgent() {
+    if (!selectedId) return
+    const found = findAgent(selectedId)
+    if (!found) {
+      disposeSession()
+      showOverlay()
+      return
+    }
+    if (!found.terminal.canAttach) {
+      showUnavailableAgent(selectedId, found)
+    }
   }
 
   // --- actions --------------------------------------------------------------
@@ -1011,12 +1173,18 @@
   function showOverlay() {
     selectedId = null
     el.overlay.hidden = false
+    setOverlayCopy(t('web.noAgentAttached'), t('web.overlayBody'))
     el.termWrap.style.removeProperty('--agent-color')
     el.stageTitle.textContent = t('web.noAgentSelected')
     el.stageSub.textContent = t('web.noAgentSub')
     setStageStatus(null)
     updateStageActions()
     renderSidebar()
+  }
+
+  function setOverlayCopy(title, body) {
+    setText('.overlay-title', title)
+    setText('.overlay-body', body)
   }
 
   // --- create dialog --------------------------------------------------------
@@ -1126,6 +1294,11 @@
     } else if (el.newError.textContent === t('web.noProvider')) {
       el.newError.hidden = true
     }
+    updateCreateSubmitState()
+  }
+
+  function reconcileCreateDialog() {
+    if (el.dialog.open && createContext.kind === 'agent') syncCreateFields()
   }
 
   async function submitNew(ev) {
@@ -1152,7 +1325,8 @@
       working_dir: createContext.kind === 'run' ? el.fCwd.value.trim() || undefined : undefined,
       mode: createContext.kind === 'run' ? selectedCreateMode() : undefined,
     }
-    el.newSubmit.disabled = true
+    createSubmitting = true
+    updateCreateSubmitState()
     try {
       const created = await api('POST', '/api/terminals', payload)
       await refreshState()
@@ -1160,14 +1334,19 @@
       if (created && created.id) {
         selectedId = created.id
         renderSidebar()
-        // give the spawner a moment to create the tmux window before attaching
-        setTimeout(() => attach(created.id), 400)
+        setTimeout(async () => {
+          try { await refreshState() } catch { /* keep local state */ }
+          const found = findAgent(created.id)
+          if (found && found.terminal.canAttach) attach(created.id)
+          else showUnavailableAgent(created.id, found)
+        }, 400)
       }
     } catch (err) {
       el.newError.textContent = err.message
       el.newError.hidden = false
     } finally {
-      el.newSubmit.disabled = false
+      createSubmitting = false
+      updateCreateSubmitState()
     }
   }
 
@@ -1216,9 +1395,9 @@
   el.fPermissions.addEventListener('change', updatePermissionSelection)
   for (const option of el.permissionGrid.querySelectorAll('.permission-option')) {
     option.addEventListener('click', () => {
-      el.fPermissions.value = option.dataset.permission
-      updatePermissionSelection()
+      selectPermission(option.dataset.permission)
     })
+    option.addEventListener('keydown', handlePermissionKeydown)
   }
   el.form.addEventListener('submit', submitNew)
 

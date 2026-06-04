@@ -1,4 +1,4 @@
-// Wizard entry point. Wraps the wizard subtree and routes to the spawner flow.
+// Wizard entry point. Wraps the wizard subtree and routes to the agent-run flow.
 
 import React, { useEffect } from 'react'
 import { Text } from 'ink'
