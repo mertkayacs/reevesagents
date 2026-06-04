@@ -67,7 +67,7 @@ The matrix proves:
 
 - `npm install --omit=optional ./reevesagents-1.2.0.tgz` keeps CLI/TUI usable and disables Web cleanly.
 - `npm install ./reevesagents-1.2.0.tgz` starts the loopback Web beta.
-- `npm install ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.0.0.tgz` starts `reevesagents web --prebeta-orchestrator`, creates an orchestrator run through HTTP, shows it in `/api/state`, and stops it.
+- `npm install ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.2.0.tgz` starts `reevesagents web --prebeta-orchestrator`, creates an orchestrator run through HTTP, shows it in `/api/state`, and stops it.
 
 Use this to verify the packed package installs in a clean project without touching the real home directory:
 

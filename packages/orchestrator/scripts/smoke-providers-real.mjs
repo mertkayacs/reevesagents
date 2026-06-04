@@ -182,7 +182,7 @@ async function connectMcp(baseEnv) {
     env: baseEnv,
   })
   const client = new Client(
-    { name: 'reevesagents-providers-smoke', version: '1.0' },
+    { name: 'reevesagents-providers-smoke', version: '1.2.0' },
     { capabilities: {} },
   )
   await client.connect(transport)

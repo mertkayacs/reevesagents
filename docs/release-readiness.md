@@ -1,6 +1,6 @@
 # Release Readiness
 
-This is the practical checklist for taking the main `reevesagents` package from source-installable to a first public release.
+This is the practical checklist for taking the main `reevesagents` package from source-installable to the 1.2.0 release.
 
 ## Current State
 
@@ -15,7 +15,7 @@ This is the practical checklist for taking the main `reevesagents` package from 
 
 ## Release Channels
 
-Primary channels for the first public release:
+Primary channels for the 1.2.0 release:
 
 - npm registry, published with `pnpm publish`. This is the package source for npm, pnpm, yarn, and bun users.
 - Homebrew tap, maintained outside `homebrew/core` until the formula is stable.
@@ -41,7 +41,7 @@ Every stable install path must land on the same spawner-only root package:
 | pnpm global | `pnpm add -g reevesagents` | Uses npm package. |
 | one-off runners | `npx reevesagents`, `pnpm dlx reevesagents`, `yarn dlx reevesagents`, `bunx reevesagents` | Uses npm package. |
 | GitHub Release tarball | `npm install -g ./reevesagents-1.2.0.tgz` | Attach the root package tarball only. |
-| GitHub Release tarballs, all-in PRE-BETA | `npm install -g ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.0.0.tgz` | Attach both tarballs when pre-beta is part of the release. |
+| GitHub Release tarballs, all-in PRE-BETA | `npm install -g ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.2.0.tgz` | Attach both tarballs when pre-beta is part of the release. |
 | Homebrew tap | Use the command documented in the release tap. | Add after npm tarball URL and checksum are known. |
 | source | `pnpm install && pnpm build && pnpm link --global` | Root workspace only. |
 
@@ -50,7 +50,7 @@ The root package and root Homebrew formula must not bundle orchestrator/MCP file
 ## First Public Release Gate
 
 - Run `git status --short --branch` and make sure the release commit contains one coherent change set.
-- Use `release/v1.0` for release stabilization. Keep `git log --first-parent --oneline release/v1.0` easy to scan.
+- Use `release/v1.2` for release stabilization. Keep `git log --first-parent --oneline release/v1.2` easy to scan.
 - Run `pnpm install --frozen-lockfile`.
 - Run `pnpm verify`.
 - Run `CI=true pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace` and `pnpm --dir packages/orchestrator verify`.

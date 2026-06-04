@@ -7,14 +7,14 @@ This repository uses a simple open-source branch model.
 | Branch | Purpose | Who Targets It |
 | --- | --- | --- |
 | `master` | Default development branch. Feature, fix, Web beta, docs, and test work lands here after review. | Contributors and maintainers. |
-| `release/v1.0` | Stable 1.0 release line. Keep this branch boring: verified release fixes, release notes, packaging fixes, and version metadata only. | Maintainers. |
+| `release/v1.2` | Stable 1.2 release line. Keep this branch boring: verified release fixes, release notes, packaging fixes, and version metadata only. | Maintainers. |
 | `fix/*`, `feature/*`, `web/*`, `prebeta/*`, `docs/*` | Short-lived work branches. | Contributors and maintainers. |
 
 Avoid long-running personal branches in the public repository. If a branch is not active review or release work, delete it after merge.
 
 ## Release Branch Rules
 
-`release/v1.0` should stay easy to traverse:
+`release/v1.2` should stay easy to traverse:
 
 - Use linear history where possible.
 - Prefer cherry-picking one reviewed fix at a time from `master`.
@@ -23,7 +23,7 @@ Avoid long-running personal branches in the public repository. If a branch is no
 - Do not bundle pre-beta orchestrator changes into the root release unless the release explicitly includes the separate pre-beta package.
 - Run release verification before tagging.
 
-Release commits should be understandable from `git log --first-parent --oneline release/v1.0`.
+Release commits should be understandable from `git log --first-parent --oneline release/v1.2`.
 
 ## Normal Contributor Flow
 
@@ -46,14 +46,14 @@ Start or update the release branch from a verified development commit:
 ```sh
 git switch master
 git pull --ff-only origin master
-git switch -c release/v1.0
+git switch -c release/v1.2
 pnpm verify:release
 ```
 
 For a fix that is already reviewed on `master`, cherry-pick it:
 
 ```sh
-git switch release/v1.0
+git switch release/v1.2
 git cherry-pick <commit>
 pnpm verify:release
 ```

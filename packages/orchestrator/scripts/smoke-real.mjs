@@ -63,7 +63,7 @@ async function main() {
   })
 
   const client = new Client(
-    { name: 'reevesagents-smoke', version: '1.0' },
+    { name: 'reevesagents-smoke', version: '1.2.0' },
     { capabilities: {} },
   )
 

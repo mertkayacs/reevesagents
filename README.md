@@ -142,7 +142,7 @@ reevesagents doctor
 For an all-in pre-beta tarball install, install both release tarballs:
 
 ```sh
-npm install -g ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.0.0.tgz
+npm install -g ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.2.0.tgz
 reevesagents web --prebeta-orchestrator
 ```
 
@@ -258,7 +258,7 @@ pnpm build
 ```
 
 Contributors should open pull requests against `master`. Release stabilization
-uses `release/v1.0`; tags are cut only from verified release commits. See
+uses `release/v1.2`; tags are cut only from verified release commits. See
 [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/branching.md](docs/branching.md).
 
 Portable verification:
@@ -271,7 +271,7 @@ See [docs/testing.md](docs/testing.md) for the isolated test matrix and manual T
 
 See [docs/use-cases.md](docs/use-cases.md) for the product surface map used for careful refactors.
 
-See [docs/release-readiness.md](docs/release-readiness.md) for the first public release checklist.
+See [docs/release-readiness.md](docs/release-readiness.md) for the 1.2.0 release checklist.
 
 For future-agent handoff, start with [docs/agent-brief.md](docs/agent-brief.md).
 
