@@ -26,5 +26,3 @@ assignees: ""
 - Does this affect provider config, credentials, or permissions?
 
 ## Alternatives
-
-
