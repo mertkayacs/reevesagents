@@ -13,6 +13,7 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "docs/mcp-tools.md",
     "README.md"
   ],
@@ -37,11 +38,6 @@
     "node": ">=20.19"
   },
   "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mertkayacs/reevesagents.git",
-    "directory": "packages/orchestrator"
-  },
   "keywords": [
     "ai",
     "mcp",

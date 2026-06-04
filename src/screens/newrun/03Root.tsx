@@ -3,8 +3,8 @@
 // Pickers cycle inline with Left/Right. Text fields edit inline with Enter.
 
 import React, { useState, useMemo } from 'react'
-import { useInput } from 'ink'
-import { Frame } from '../../components/Frame.js'
+import { useInput, useWindowSize } from 'ink'
+import { Frame, frameBodyRows } from '../../components/Frame.js'
 import { Row } from '../../components/Row.js'
 import { ModelOptionList } from '../../components/ModelOptionList.js'
 import { Section, SectionEnd } from '../../components/Section.js'
@@ -19,6 +19,10 @@ import type { Permissions, Effort, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
 const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
+
+function permissionDisplay(value: Permissions): string {
+  return value === 'skip' ? 'Skip prompts' : 'Ask first'
+}
 
 type FieldId = 'provider' | 'model' | 'prompt' | 'permissions' | 'effort'
 type ActionId = 'continue' | 'back' | 'cancel'
@@ -54,6 +58,9 @@ function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
 export function NewRunRoot() {
   const { push, pop } = useRouter()
   const { state, updateRoot, reset } = useWizard()
+  const { rows: termRows } = useWindowSize()
+  const bodyRows = frameBodyRows(termRows, true, false)
+  const compactBody = bodyRows <= 9
 
   const fields: Field[] = useMemo(() => {
     const list: Field[] = [
@@ -65,10 +72,18 @@ export function NewRunRoot() {
         current: state.root.model,
         values: modelValuesForProvider(state.root.provider),
         display: modelDisplayName(state.root.model),
-        hint: 'optional · blank uses CLI default',
+        hint: 'optional · blank uses provider default',
       },
       { kind: 'text', id: 'prompt', label: 'Prompt', value: state.root.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
-      { kind: 'picker', id: 'permissions', label: 'Permissions', current: state.root.permissions, values: PERMISSIONS_VALUES },
+      {
+        kind: 'picker',
+        id: 'permissions',
+        label: 'Permissions',
+        current: state.root.permissions,
+        values: PERMISSIONS_VALUES,
+        display: permissionDisplay(state.root.permissions),
+        hint: state.root.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
+      },
     ]
     if (state.root.provider === 'cc' || state.root.provider === 'codex') {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: state.root.effort, values: EFFORT_VALUES })
@@ -83,10 +98,19 @@ export function NewRunRoot() {
   ]
 
   const totalRows = fields.length + actions.length
+  const visibleFormCount = Math.max(1, bodyRows - 3)
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [editingFieldId, setEditingFieldId] = useState<FieldId | null>(null)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [modelPickerIdx, setModelPickerIdx] = useState(0)
+  const firstVisible = Math.min(
+    Math.max(0, selectedIdx - visibleFormCount + 1),
+    Math.max(0, totalRows - visibleFormCount),
+  )
+  const visibleRows = Array.from(
+    { length: Math.min(visibleFormCount, totalRows - firstVisible) },
+    (_, idx) => firstVisible + idx,
+  )
 
   // Clamp selection if conditional fields disappear after a picker change.
   if (selectedIdx >= totalRows) {
@@ -177,63 +201,88 @@ export function NewRunRoot() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'First Agent']}
-      tagline="Configure the first independent CLI agent."
+      tagline="Choose the provider, model, permissions, and first prompt."
       statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
-      <StepIndicator step={2} total={4} name="First Agent" />
+      {!compactBody && <StepIndicator step={2} total={4} name="First Agent" />}
 
-      {fields.map((field, idx) => {
-        if (field.kind === 'text') {
-          return (
-            <TextField
-              key={field.id}
-              label={field.label}
-              value={field.value}
-              helpText={field.helpText}
-              required={field.required}
-              selected={selectedIdx === idx}
-              editing={editingFieldId === field.id}
-              multiline={field.id === 'prompt'}
-              onChange={(v) => commitText(field.id, v)}
-              onCommit={() => setEditingFieldId(null)}
-              onCancel={() => setEditingFieldId(null)}
-            />
-          )
-        }
-        const badge = pickerBadge(field, state.root.provider)
-        return (
-          <Row
-            key={field.id}
-            selected={selectedIdx === idx}
-            primary={field.label}
-            badge={badge}
-            trailing={`‹ ${field.display ?? field.current} ›`}
-            hint={selectedIdx === idx ? field.hint ?? '← → cycle' : undefined}
-          />
-        )
-      })}
-
-      {modelPickerOpen && (
+      {compactBody && modelPickerOpen ? (
         <ModelOptionList
           provider={state.root.provider}
           values={modelValuesForProvider(state.root.provider)}
           current={state.root.model}
           selectedIdx={modelPickerIdx}
+          visibleCount={Math.max(1, bodyRows - 3)}
         />
+      ) : (
+        <>
+          {compactBody && <Section label={selectedIdx < fields.length ? 'First Agent' : 'Actions'} />}
+          {(compactBody ? visibleRows.filter(idx => idx < fields.length) : fields.map((_field, idx) => idx)).map((idx) => {
+            const field = fields[idx]!
+            if (field.kind === 'text') {
+              return (
+                <TextField
+                  key={field.id}
+                  label={field.label}
+                  value={field.value}
+                  helpText={field.helpText}
+                  required={field.required}
+                  selected={selectedIdx === idx}
+                  editing={editingFieldId === field.id}
+                  multiline={field.id === 'prompt'}
+                  onChange={(v) => commitText(field.id, v)}
+                  onCommit={() => setEditingFieldId(null)}
+                  onCancel={() => setEditingFieldId(null)}
+                />
+              )
+            }
+            const badge = pickerBadge(field, state.root.provider)
+            return (
+              <Row
+                key={field.id}
+                selected={selectedIdx === idx}
+                primary={field.label}
+                badge={badge}
+                trailing={`‹ ${field.display ?? field.current} ›`}
+                hint={selectedIdx === idx ? field.hint ?? '← → cycle' : undefined}
+              />
+            )
+          })}
+
+          {modelPickerOpen && !compactBody && (
+            <ModelOptionList
+              provider={state.root.provider}
+              values={modelValuesForProvider(state.root.provider)}
+              current={state.root.model}
+              selectedIdx={modelPickerIdx}
+            />
+          )}
+
+          {!compactBody && <Section label="Actions" />}
+
+          {compactBody ? visibleRows.filter(idx => idx >= fields.length).map(idx => {
+            const action = actions[idx - fields.length]!
+            return (
+              <Row
+                key={action.id}
+                selected={selectedIdx === idx}
+                primary={action.label}
+                primaryWidth={ACTION_LABEL_WIDTH}
+                hint={action.hint}
+              />
+            )
+          }) : actions.map((action, idx) => (
+            <Row
+              key={action.id}
+              selected={selectedIdx === fields.length + idx}
+              primary={action.label}
+              primaryWidth={ACTION_LABEL_WIDTH}
+              hint={action.hint}
+            />
+          ))}
+          <SectionEnd />
+        </>
       )}
-
-      <Section label="Actions" />
-
-      {actions.map((action, idx) => (
-        <Row
-          key={action.id}
-          selected={selectedIdx === fields.length + idx}
-          primary={action.label}
-          primaryWidth={ACTION_LABEL_WIDTH}
-          hint={action.hint}
-        />
-      ))}
-      <SectionEnd />
     </Frame>
   )
 }

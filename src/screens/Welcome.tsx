@@ -31,6 +31,8 @@ export function Welcome() {
   const contentColumns = Math.max(1, columns - 2 - (pagePadding * 2))
   const menuColumns = Math.max(1, Math.min(contentColumns, 72))
   const compact = contentColumns < 58
+  const tinyRows = rows < 14
+  const tightRows = rows < 18
   const mascotVariant = pickMascotVariant(contentColumns)
   const actions = useMemo(() => {
     const rows: Array<{ label: string; hint: string; screen?: ScreenName; quit?: boolean; launchWeb?: boolean }> = [
@@ -52,7 +54,14 @@ export function Welcome() {
   const [webStarting, setWebStarting] = useState(false)
   const [webMessage, setWebMessage] = useState<string | null>(null)
   const previousSizeRef = useRef<{ columns: number; rows: number } | null>(null)
-  const visibleActionCount = Math.max(3, Math.min(actions.length, rows - 14))
+  const menuChromeRows = 4 + (webStarting || webMessage ? 1 : 0)
+  const heroRows = tinyRows ? 1 : tightRows ? 3 : 8
+  const topMarginRows = tinyRows ? 0 : 1
+  const availableActions = rows - 2 - heroRows - topMarginRows - menuChromeRows
+  const minimumActionRows = tightRows ? 1 : 3
+  const visibleActionCount = tightRows
+    ? Math.max(minimumActionRows, Math.min(actions.length, availableActions))
+    : Math.max(3, Math.min(actions.length, rows - 14))
   const firstVisibleAction = Math.min(
     Math.max(0, selectedIdx - visibleActionCount + 1),
     Math.max(0, actions.length - visibleActionCount),
@@ -107,25 +116,35 @@ export function Welcome() {
 
   return (
     <LayoutProvider columns={contentColumns}>
-      <Box flexDirection="column" paddingX={pagePadding} width={columns} borderStyle="single" borderColor={colors.surface.border} overflow="hidden">
-        <Box flexDirection="row" alignItems="flex-start">
-          <Box flexDirection="column">
-            <Wordmark compact={compact} animated small intervalMs={400} />
-            <Box marginTop={1}>
-              <Wordmark lines={AGENTS_LINES} compact={compact} animated small intervalMs={400} />
+      <Box flexDirection="column" paddingX={pagePadding} width={columns} maxHeight={tightRows ? rows : undefined} borderStyle="single" borderColor={colors.surface.border} overflow="hidden">
+        {tinyRows ? (
+          <Text color={colors.accent.primary} bold wrap="truncate-end">ReevesAgents</Text>
+        ) : (
+          <Box flexDirection="row" alignItems="flex-start">
+            <Box flexDirection="column">
+              <Wordmark compact={compact} animated small intervalMs={400} />
+              {!tightRows && (
+                <Box marginTop={1}>
+                  <Wordmark lines={AGENTS_LINES} compact={compact} animated small intervalMs={400} />
+                </Box>
+              )}
             </Box>
+            {!tightRows && (
+              <Box marginLeft={2}>
+                <Mascot variant={mascotVariant} />
+              </Box>
+            )}
           </Box>
-          <Box marginLeft={2}>
-            <Mascot variant={mascotVariant} />
+        )}
+
+        {!tightRows && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color={colors.text.dim} wrap="truncate-end">{t('welcome.tagline1')}</Text>
+            <Text color={colors.text.dim} wrap="truncate-end">{t('welcome.tagline2')}</Text>
           </Box>
-        </Box>
+        )}
 
-        <Box flexDirection="column" marginTop={1}>
-          <Text color={colors.text.dim} wrap="truncate-end">{t('welcome.tagline1')}</Text>
-          <Text color={colors.text.dim} wrap="truncate-end">{t('welcome.tagline2')}</Text>
-        </Box>
-
-        <Box flexDirection="column" marginTop={1}>
+        <Box flexDirection="column" marginTop={tinyRows ? 0 : 1}>
           <LayoutProvider columns={menuColumns}>
             <Section label={t('welcome.menu')} />
             {visibleActions.map((action, localIdx) => {

@@ -92,23 +92,27 @@
       <label class="field" id="agent-run-field" hidden>
         <span class="field-label">Run</span>
         <select id="f-agent-run"></select>
+        <span id="agent-run-help" class="field-help">Choose the active run that will receive this agent.</span>
       </label>
 
       <label class="field" id="run-name-field">
         <span class="field-label">Run name</span>
         <input id="f-run-name" type="text" maxlength="80" placeholder="release check" autocomplete="off" />
+        <span id="run-name-help" class="field-help">Shown in the run list and history.</span>
       </label>
 
       <div class="field provider-field">
         <div class="field-label">Provider</div>
         <select id="f-provider" required tabindex="-1" aria-hidden="true"></select>
         <div id="provider-grid" class="provider-grid" role="listbox" aria-label="Provider"></div>
+        <span id="provider-help" class="field-help">Choose the provider CLI that will run this agent.</span>
       </div>
 
       <div class="create-options-grid">
         <label class="field model-field">
           <span class="field-label">Model</span>
           <select id="f-model"></select>
+          <span id="model-help" class="field-help">Provider default is safest when unsure.</span>
         </label>
 
         <div class="field permissions-field">
@@ -127,30 +131,35 @@
               <span class="permission-meta">Use only in trusted workspaces</span>
             </button>
           </div>
+          <span id="permissions-help" class="field-help">Ask first is safer. Skip prompts only in trusted workspaces.</span>
         </div>
       </div>
 
       <label class="field" id="agent-name-field">
         <span class="field-label">Agent name <span class="field-opt">optional</span></span>
         <input id="f-nickname" type="text" maxlength="40" placeholder="planner" autocomplete="off" />
+        <span id="agent-name-help" class="field-help">Optional display name and tmux window name.</span>
       </label>
 
       <label class="field" id="mode-field" hidden>
         <span class="field-label">New run mode</span>
         <select id="f-mode">
-          <option value="spawner">Spawner</option>
+          <option value="spawner">Agent run</option>
           <option value="orchestrator">Orchestrator MCP · pre-beta</option>
         </select>
+        <span id="mode-help" class="field-help">Normal runs are direct agent workspaces. Orchestrator MCP is pre-beta.</span>
       </label>
 
       <label class="field" id="cwd-field">
         <span class="field-label">Working directory</span>
         <input id="f-cwd" type="text" placeholder="defaults to the server's directory" autocomplete="off" />
+        <span id="cwd-help" class="field-help">Agents start in this directory.</span>
       </label>
 
       <label class="field" id="prompt-field">
         <span class="field-label">Initial prompt <span class="field-opt">optional, typed in on start</span></span>
         <textarea id="f-prompt" rows="3" placeholder="What should this agent start working on?"></textarea>
+        <span id="prompt-help" class="field-help">Sent to the agent after its window opens.</span>
       </label>
 
       <div id="new-error" class="dialog-error" hidden></div>

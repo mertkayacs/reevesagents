@@ -85,7 +85,7 @@ describe('v1 run state', () => {
     expect(listRunsAny().map(run => run.id)).toEqual(['active'])
   })
 
-  it('hides non-spawner run records from the root package', async () => {
+  it('hides non-agent-run records from the root package', async () => {
     const { writeRun, listRuns, readRun } = await import('../src/state/runs.js')
     writeRun(makeRun('stable'))
     writeRun({ ...makeRun('prebeta'), mode: 'orchestrator' as any })
@@ -94,7 +94,7 @@ describe('v1 run state', () => {
     expect(() => readRun('prebeta')).toThrow('Run not found: prebeta')
   })
 
-  it('exposes non-spawner run records through explicit all-mode helpers', async () => {
+  it('exposes non-agent-run records through explicit all-mode helpers', async () => {
     const { writeRun, writeAgent, listRunsAny, listAgentsAny, readRunAny, findAgentAny } = await import('../src/state/runs.js')
     writeRun(makeRun('stable'))
     writeRun({ ...makeRun('prebeta'), mode: 'orchestrator' })
@@ -314,7 +314,7 @@ describe('v1 run state', () => {
       expect(existsSync(join(tmpDir, 'runs', 'alive'))).toBe(true)
     })
 
-    it('keeps spawner runs with no root agent when the tmux session is alive', async () => {
+    it('keeps agent runs with no root agent when the tmux session is alive', async () => {
       const { writeRun, autoCleanupRuns } = await import('../src/state/runs.js')
       writeRun(makeRun('missing-root'))
       const result = autoCleanupRuns({ sessionExists: () => true })

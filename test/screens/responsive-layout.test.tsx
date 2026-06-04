@@ -2,14 +2,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
 import stripAnsi from 'strip-ansi'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { Text } from 'ink'
 import { Frame } from '../../src/components/Frame.js'
 import { Row } from '../../src/components/Row.js'
 import { Section, SectionEnd } from '../../src/components/Section.js'
 import { Welcome } from '../../src/screens/Welcome.js'
+import { NewRunReview } from '../../src/screens/newrun/05Review.js'
+import { AgentOutput } from '../../src/screens/run/agent/Output.js'
 import { RouterContext } from '../../src/router.js'
 import { ToastProvider } from '../../src/state/ToastContext.js'
-import type { RouterContextValue } from '../../src/state/types.js'
+import { WizardProvider } from '../../src/state/WizardContext.js'
+import { writeAgent, writeRun } from '../../src/state/runs.js'
+import type { AgentRecord, RouterContextValue, RunRecord } from '../../src/state/types.js'
 
 const viewport = vi.hoisted(() => ({
   current: { columns: 100, rows: 24 },
@@ -87,6 +94,22 @@ describe('responsive layout', () => {
     unmount()
   })
 
+  it('opens the welcome menu in a 40x12 compact terminal', () => {
+    setViewport(40, 12)
+    const { lastFrame, unmount } = render(
+      <RouterContext.Provider value={routerContext()}>
+        <Welcome />
+      </RouterContext.Provider>,
+    )
+
+    const frame = lastFrame() ?? ''
+    expect(frame).toContain('ReevesAgents')
+    expect(frame).toContain('Main Menu')
+    expect(frame).toContain('enter select')
+    assertFits(frame, 40)
+    unmount()
+  })
+
   it('packs the welcome menu card and closes the frame below the key hint', () => {
     setViewport(120, 40)
     const { lastFrame, unmount } = render(
@@ -142,7 +165,7 @@ describe('responsive layout', () => {
     await new Promise(resolve => setTimeout(resolve, 30))
     frame = lastFrame() ?? ''
     expect(frame).toContain('Main Menu')
-    expect(frame).not.toContain('start a spawner workspace')
+    expect(frame).not.toContain('start a run with agents')
     expect(frame).toContain('1-')
     assertFits(frame, 60)
 
@@ -150,7 +173,7 @@ describe('responsive layout', () => {
     rerender(content())
     await new Promise(resolve => setTimeout(resolve, 30))
     frame = lastFrame() ?? ''
-    expect(frame).toContain('start a spawner workspace')
+    expect(frame).toContain('start a run with agents')
     expect(new Set(menuSeparatorColumns(frame)).size).toBe(1)
     assertFits(frame, 120)
     expect(writeSpy).toHaveBeenCalledWith('\x1b[3J\x1b[2J\x1b[H')
@@ -235,5 +258,105 @@ describe('responsive layout', () => {
     expect(frame).not.toContain('needs at least')
     assertFits(frame, 80)
     unmount()
+  })
+
+  it('renders framed page content at the 40x12 floor', () => {
+    setViewport(40, 12)
+    const { lastFrame, unmount } = render(
+      <ToastProvider>
+        <Frame breadcrumb={['ReevesAgents', 'Runs']} tagline="Compact page.">
+          <Text>ready body</Text>
+        </Frame>
+      </ToastProvider>,
+    )
+
+    const frame = lastFrame() ?? ''
+    expect(frame).toContain('ready body')
+    expect(frame).not.toContain('needs at least')
+    assertFits(frame, 40)
+    unmount()
+  })
+
+  it('keeps New Run review actions visible at the 40x12 floor', () => {
+    setViewport(40, 12)
+    const { lastFrame, unmount } = render(
+      <RouterContext.Provider value={routerContext({ screen: 'NewRunReview' })}>
+        <ToastProvider>
+          <WizardProvider>
+            <NewRunReview />
+          </WizardProvider>
+        </ToastProvider>
+      </RouterContext.Provider>,
+    )
+
+    const frame = lastFrame() ?? ''
+    expect(frame).toContain('Start Run')
+    expect(frame).toContain('Back to Edit')
+    expect(frame).toContain('Reset Wizard')
+    assertFits(frame, 40)
+    unmount()
+  })
+
+  it('keeps Agent Output actions visible at the 40x12 floor', () => {
+    const registry = mkdtempSync(join(tmpdir(), 'reeves-agent-output-compact-'))
+    process.env.REEVES_REGISTRY = registry
+    const run: RunRecord = {
+      id: 'run-compact',
+      mode: 'spawner',
+      name: 'compact',
+      status: 'running',
+      tmux_session: 'reeves_compact',
+      reeves_window_id: '@0',
+      reeves_pane_id: '%0',
+      root_agent_id: 'agent-compact',
+      working_dir: '/tmp',
+      preset_name: null,
+      started_at: '2026-01-01T00:00:00.000Z',
+      ended_at: null,
+    }
+    const agent: AgentRecord = {
+      id: 'agent-compact',
+      run_id: run.id,
+      nickname: 'agent',
+      provider: 'codex',
+      model: '',
+      role: 'root',
+      working_dir: '/tmp',
+      task: '',
+      task_status: 'working',
+      task_note: '',
+      tmux_session: run.tmux_session,
+      tmux_window_id: '@1',
+      tmux_pane_id: '%1',
+      rc_enabled: false,
+      permissions: 'ask',
+      inbox: [],
+      last_seen: 0,
+      started_at: '2026-01-01T00:00:01.000Z',
+      ended_at: null,
+    }
+    writeRun(run)
+    writeAgent(agent)
+    setViewport(40, 12)
+
+    try {
+      const { lastFrame, unmount } = render(
+        <RouterContext.Provider value={routerContext({ screen: 'AgentOutput', selectedRunId: run.id, selectedAgentId: agent.id })}>
+          <ToastProvider>
+            <AgentOutput />
+          </ToastProvider>
+        </RouterContext.Provider>,
+      )
+
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('Refresh Now')
+      expect(frame).toContain('Open Agent')
+      expect(frame).toContain('Back')
+      assertFits(frame, 40)
+      unmount()
+    } finally {
+      delete process.env.REEVES_REGISTRY
+      rmSync(registry, { recursive: true, force: true })
+    }
   })
 })

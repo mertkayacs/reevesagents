@@ -1,11 +1,11 @@
-// Add an agent to an existing spawner run. Single screen, inline editing.
+// Add an agent to an existing agent run. Single screen, inline editing.
 // Same Field union + picker cycling pattern as NewRun's 04Worker.
 // On Add Agent, validates provider and model, then calls spawnWorker.
 // On Cancel, resets the worker draft and pops back to Run hub.
 
 import React, { useState, useMemo } from 'react'
-import { useInput } from 'ink'
-import { Frame } from '../../components/Frame.js'
+import { useInput, useWindowSize } from 'ink'
+import { Frame, frameBodyRows } from '../../components/Frame.js'
 import { Row } from '../../components/Row.js'
 import { ModelOptionList } from '../../components/ModelOptionList.js'
 import { Section, SectionEnd } from '../../components/Section.js'
@@ -21,6 +21,10 @@ import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from 
 import type { Permissions, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
+
+function permissionDisplay(value: Permissions): string {
+  return value === 'skip' ? 'Skip prompts' : 'Ask first'
+}
 
 type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions'
 type ActionId = 'add' | 'cancel'
@@ -42,6 +46,9 @@ export function AddWorker() {
   const { selectedRunId, pop } = useRouter()
   const { toast } = useToast()
   const { draft, update, reset } = useWorkerDraft()
+  const { rows: termRows } = useWindowSize()
+  const bodyRows = frameBodyRows(termRows, true, false)
+  const compactBody = bodyRows <= 9
   const run = selectedRunId ? safeReadRun(selectedRunId) : null
 
   const fields: Field[] = useMemo(() => [
@@ -54,23 +61,40 @@ export function AddWorker() {
       current: draft.model,
       values: modelValuesForProvider(draft.provider),
       display: modelDisplayName(draft.model),
-      hint: 'optional · blank uses CLI default',
+      hint: 'optional · blank uses provider default',
     },
     { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
     { kind: 'text', id: 'workingDir', label: 'Working Dir', value: draft.workingDir, helpText: 'defaults to the run working dir', required: false },
-    { kind: 'picker', id: 'permissions', label: 'Permissions', current: draft.permissions, values: PERMISSIONS_VALUES },
+    {
+      kind: 'picker',
+      id: 'permissions',
+      label: 'Permissions',
+      current: draft.permissions,
+      values: PERMISSIONS_VALUES,
+      display: permissionDisplay(draft.permissions),
+      hint: draft.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
+    },
   ], [draft])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
-    { id: 'add', label: 'Add Agent', hint: 'spawn an independent CLI agent' },
+    { id: 'add', label: 'Add Agent', hint: 'add this agent to the run' },
     { id: 'cancel', label: 'Cancel', hint: 'discard and return' },
   ]
 
   const totalRows = fields.length + actions.length
+  const visibleFormCount = Math.max(1, bodyRows - 3)
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [editingFieldId, setEditingFieldId] = useState<FieldId | null>(null)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [modelPickerIdx, setModelPickerIdx] = useState(0)
+  const firstVisible = Math.min(
+    Math.max(0, selectedIdx - visibleFormCount + 1),
+    Math.max(0, totalRows - visibleFormCount),
+  )
+  const visibleRows = Array.from(
+    { length: Math.min(visibleFormCount, totalRows - firstVisible) },
+    (_, rowIdx) => firstVisible + rowIdx,
+  )
 
   function moveUp(): void { setSelectedIdx(i => Math.max(0, i - 1)) }
   function moveDown(): void { setSelectedIdx(i => Math.min(totalRows - 1, i + 1)) }
@@ -174,61 +198,86 @@ export function AddWorker() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'Runs', run.name, 'Add Agent']}
-      tagline={`Configure an independent CLI agent for ${run.name}.`}
+      tagline={`Configure a new agent for ${run.name}.`}
       statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
-      {fields.map((field, fIdx) => {
-        if (field.kind === 'text') {
-          return (
-            <TextField
-              key={field.id}
-              label={field.label}
-              value={field.value}
-              helpText={field.helpText}
-              required={field.required}
-              selected={selectedIdx === fIdx}
-              editing={editingFieldId === field.id}
-              multiline={field.id === 'prompt'}
-              onChange={(v) => commitText(field.id, v)}
-              onCommit={() => setEditingFieldId(null)}
-              onCancel={() => setEditingFieldId(null)}
-            />
-          )
-        }
-        const badge = pickerBadge(field, draft.provider)
-        return (
-          <Row
-            key={field.id}
-            selected={selectedIdx === fIdx}
-            primary={field.label}
-            badge={badge}
-            trailing={`‹ ${field.display ?? field.current} ›`}
-            hint={selectedIdx === fIdx ? field.hint ?? '← → cycle' : undefined}
-          />
-        )
-      })}
-
-      {modelPickerOpen && (
+      {compactBody && modelPickerOpen ? (
         <ModelOptionList
           provider={draft.provider}
           values={modelValuesForProvider(draft.provider)}
           current={draft.model}
           selectedIdx={modelPickerIdx}
+          visibleCount={Math.max(1, bodyRows - 3)}
         />
+      ) : (
+        <>
+          {compactBody && <Section label={selectedIdx < fields.length ? 'Add Agent' : 'Actions'} />}
+          {(compactBody ? visibleRows.filter(rowIdx => rowIdx < fields.length) : fields.map((_field, rowIdx) => rowIdx)).map((fIdx) => {
+            const field = fields[fIdx]!
+            if (field.kind === 'text') {
+              return (
+                <TextField
+                  key={field.id}
+                  label={field.label}
+                  value={field.value}
+                  helpText={field.helpText}
+                  required={field.required}
+                  selected={selectedIdx === fIdx}
+                  editing={editingFieldId === field.id}
+                  multiline={field.id === 'prompt'}
+                  onChange={(v) => commitText(field.id, v)}
+                  onCommit={() => setEditingFieldId(null)}
+                  onCancel={() => setEditingFieldId(null)}
+                />
+              )
+            }
+            const badge = pickerBadge(field, draft.provider)
+            return (
+              <Row
+                key={field.id}
+                selected={selectedIdx === fIdx}
+                primary={field.label}
+                badge={badge}
+                trailing={`‹ ${field.display ?? field.current} ›`}
+                hint={selectedIdx === fIdx ? field.hint ?? '← → cycle' : undefined}
+              />
+            )
+          })}
+
+          {modelPickerOpen && !compactBody && (
+            <ModelOptionList
+              provider={draft.provider}
+              values={modelValuesForProvider(draft.provider)}
+              current={draft.model}
+              selectedIdx={modelPickerIdx}
+            />
+          )}
+
+          {!compactBody && <Section label="Actions" />}
+
+          {compactBody ? visibleRows.filter(rowIdx => rowIdx >= fields.length).map(rowIdx => {
+            const action = actions[rowIdx - fields.length]!
+            return (
+              <Row
+                key={action.id}
+                selected={selectedIdx === rowIdx}
+                primary={action.label}
+                primaryWidth={ACTION_LABEL_WIDTH}
+                hint={action.hint}
+              />
+            )
+          }) : actions.map((action, aIdx) => (
+            <Row
+              key={action.id}
+              selected={selectedIdx === fields.length + aIdx}
+              primary={action.label}
+              primaryWidth={ACTION_LABEL_WIDTH}
+              hint={action.hint}
+            />
+          ))}
+          <SectionEnd />
+        </>
       )}
-
-      <Section label="Actions" />
-
-      {actions.map((action, aIdx) => (
-        <Row
-          key={action.id}
-          selected={selectedIdx === fields.length + aIdx}
-          primary={action.label}
-          primaryWidth={ACTION_LABEL_WIDTH}
-          hint={action.hint}
-        />
-      ))}
-      <SectionEnd />
     </Frame>
   )
 }

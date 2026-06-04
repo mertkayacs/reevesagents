@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Box, useInput, useWindowSize } from 'ink'
-import { Frame } from '../components/Frame.js'
+import { Frame, frameBodyRows } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Dialog } from '../components/Dialog.js'
 import { Section, SectionEnd } from '../components/Section.js'
@@ -10,6 +10,7 @@ import { useRouter } from '../router.js'
 import { deleteRunHistory, listRunHistory } from '../state/runs.js'
 import { useToast } from '../state/ToastContext.js'
 import { useLanguage } from '../state/LanguageContext.js'
+import { translatePhrase } from '../i18n/catalog.js'
 import type { RunHistoryRecord } from '../state/types.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
@@ -57,16 +58,18 @@ function shortIso(value: string | null): string {
   return `${value.replace('T', ' ').slice(0, 16)}Z`
 }
 
-function modeLabel(mode: RunHistoryRecord['mode']): string {
-  return mode === 'orchestrator' ? 'orchestrator' : 'spawner'
+function modeLabel(mode: RunHistoryRecord['mode'], language: ReturnType<typeof useLanguage>['language']): string {
+  return translatePhrase(language, mode === 'orchestrator' ? 'orchestrator' : 'Agent run')
 }
 
 export function RunHistory() {
   const { pop, resetStack } = useRouter()
   const { toast } = useToast()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { rows: termRows } = useWindowSize()
-  const visibleRecordCount = Math.max(3, termRows - CHROME_ROWS)
+  const bodyRows = frameBodyRows(termRows, true, true)
+  const compactBody = bodyRows <= 10
+  const visibleRecordCount = Math.max(1, compactBody ? bodyRows - 3 : Math.min(termRows - CHROME_ROWS, bodyRows - 7))
   const [records, setRecords] = useState<RunHistoryRecord[]>(() => listRunHistory({ includeAllModes: true }))
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [recordScroll, setRecordScroll] = useState(0)
@@ -93,6 +96,17 @@ export function RunHistory() {
   const visibleRecords = records.slice(recordScroll, recordScroll + visibleRecordCount)
   const recordNameWidth = Math.max(8, ...visibleRecords.map(record => record.name.length))
   const actionStartIdx = records.length + 1
+  const selectableEntries = [
+    ...records.map(record => ({ type: 'record' as const, record })),
+    ...ACTIONS.map(action => ({ type: 'action' as const, action })),
+  ]
+  const activeEntryIdx = activeIdx < records.length ? activeIdx : Math.max(0, activeIdx - 1)
+  const compactEntryCount = Math.max(1, bodyRows - 3)
+  const compactFirstEntry = Math.min(
+    Math.max(0, activeEntryIdx - compactEntryCount + 1),
+    Math.max(0, selectableEntries.length - compactEntryCount),
+  )
+  const compactEntries = selectableEntries.slice(compactFirstEntry, compactFirstEntry + compactEntryCount)
 
   function refreshRecords(): void {
     const next = listRunHistory({ includeAllModes: true })
@@ -191,21 +205,32 @@ export function RunHistory() {
       statusContext={statusContext}
       statusKeys="enter action · ↑↓ scroll · esc back"
     >
-      <Box flexDirection="column">
-        <Section label="History" />
-        {records.length === 0 ? (
-          <Row
-            selected={false}
-            primary="No history yet"
-            trailing="ended runs appear here"
-            disabled
-          />
-        ) : (
-          visibleRecords.map((record, idx) => {
-            const absoluteIdx = recordScroll + idx
+      {compactBody ? (
+        <Box flexDirection="column">
+          <Section label={activeIdx < records.length ? 'History' : 'Actions'} />
+          {records.length === 0 && compactFirstEntry === 0 && (
+            <Row selected={false} primary="No history yet" trailing="ended runs appear here" disabled />
+          )}
+          {compactEntries.map((entry, idx) => {
+            const absoluteEntryIdx = compactFirstEntry + idx
+            if (entry.type === 'action') {
+              const absoluteIdx = records.length + 1 + ACTIONS.indexOf(entry.action)
+              return (
+                <Row
+                  key={entry.action}
+                  selected={activeIdx === absoluteIdx}
+                  primary={ACTION_COPY[entry.action].label}
+                  primaryWidth={ACTION_LABEL_WIDTH}
+                  hint={ACTION_COPY[entry.action].hint}
+                  disabled={entry.action === 'DeleteSelected' && !deleteTarget}
+                  danger={entry.action === 'DeleteSelected'}
+                />
+              )
+            }
+            const record = entry.record
             const badges = [
-              { label: modeLabel(record.mode), color: colors.accent.primary },
-              { label: record.status, color: record.status === 'stale' ? colors.status.warn : colors.status.error },
+              { label: modeLabel(record.mode, language), color: colors.accent.primary },
+              { label: translatePhrase(language, record.status), color: record.status === 'stale' ? colors.status.warn : colors.status.error },
               ...(record.root_provider
                 ? [{ label: providerDisplayName(record.root_provider), color: providerColor(record.root_provider) }]
                 : []),
@@ -213,7 +238,7 @@ export function RunHistory() {
             return (
               <Row
                 key={record.id}
-                selected={activeIdx === absoluteIdx}
+                selected={activeEntryIdx === absoluteEntryIdx}
                 primary={record.name}
                 primaryWidth={recordNameWidth}
                 glyph={statusGlyph(record.status)}
@@ -222,32 +247,76 @@ export function RunHistory() {
                 trailing={shortIso(record.ended_at ?? record.archived_at)}
               />
             )
-          })
-        )}
-        {records.length > visibleRecordCount && (
-          <Row
-            selected={false}
-            primary={`${recordScroll + 1}-${recordScroll + visibleRecords.length} of ${records.length}`}
-            trailing="scroll with arrows"
-            disabled
-          />
-        )}
-        <SectionEnd />
+          })}
+          {selectableEntries.length > compactEntryCount && (
+            <Row
+              selected={false}
+              primary={`${compactFirstEntry + 1}-${compactFirstEntry + compactEntries.length} of ${selectableEntries.length}`}
+              trailing="scroll with arrows"
+              disabled
+            />
+          )}
+          <SectionEnd />
+        </Box>
+      ) : (
+        <Box flexDirection="column">
+          <Section label="History" />
+          {records.length === 0 ? (
+            <Row
+              selected={false}
+              primary="No history yet"
+              trailing="ended runs appear here"
+              disabled
+            />
+          ) : (
+            visibleRecords.map((record, idx) => {
+              const absoluteIdx = recordScroll + idx
+              const badges = [
+                { label: modeLabel(record.mode, language), color: colors.accent.primary },
+                { label: translatePhrase(language, record.status), color: record.status === 'stale' ? colors.status.warn : colors.status.error },
+                ...(record.root_provider
+                  ? [{ label: providerDisplayName(record.root_provider), color: providerColor(record.root_provider) }]
+                  : []),
+              ]
+              return (
+                <Row
+                  key={record.id}
+                  selected={activeIdx === absoluteIdx}
+                  primary={record.name}
+                  primaryWidth={recordNameWidth}
+                  glyph={statusGlyph(record.status)}
+                  badges={badges}
+                  hint={`${record.agent_count} agents`}
+                  trailing={shortIso(record.ended_at ?? record.archived_at)}
+                />
+              )
+            })
+          )}
+          {records.length > visibleRecordCount && (
+            <Row
+              selected={false}
+              primary={`${recordScroll + 1}-${recordScroll + visibleRecords.length} of ${records.length}`}
+              trailing="scroll with arrows"
+              disabled
+            />
+          )}
+          <SectionEnd />
 
-        <Section label="Actions" />
-        {ACTIONS.map((action, idx) => (
-          <Row
-            key={action}
-            selected={activeIdx === actionStartIdx + idx}
-            primary={ACTION_COPY[action].label}
-            primaryWidth={ACTION_LABEL_WIDTH}
-            hint={ACTION_COPY[action].hint}
-            disabled={action === 'DeleteSelected' && !deleteTarget}
-            danger={action === 'DeleteSelected'}
-          />
-        ))}
-        <SectionEnd />
-      </Box>
+          <Section label="Actions" />
+          {ACTIONS.map((action, idx) => (
+            <Row
+              key={action}
+              selected={activeIdx === actionStartIdx + idx}
+              primary={ACTION_COPY[action].label}
+              primaryWidth={ACTION_LABEL_WIDTH}
+              hint={ACTION_COPY[action].hint}
+              disabled={action === 'DeleteSelected' && !deleteTarget}
+              danger={action === 'DeleteSelected'}
+            />
+          ))}
+          <SectionEnd />
+        </Box>
+      )}
     </Frame>
   )
 }

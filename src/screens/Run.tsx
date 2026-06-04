@@ -2,8 +2,8 @@
 // Reads selectedRunId from router; displays run metadata and primary actions.
 
 import React, { useEffect, useState } from 'react'
-import { Box, Text, useInput } from 'ink'
-import { Frame } from '../components/Frame.js'
+import { Box, Text, useInput, useWindowSize } from 'ink'
+import { Frame, frameBodyRows } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
@@ -19,9 +19,9 @@ type RowItem = 'Agents' | 'Output' | 'OpenTabs' | 'AddWorker' | '__section__' | 
 const LABELS: Record<RowItem, string> = {
   Agents: 'Agents',
   Output: 'Output',
-  OpenTabs: 'Open tmux tabs',
+  OpenTabs: 'Switch to tmux tabs',
   AddWorker: 'Add Agent',
-  StopRun: 'Return & Stop Run',
+  StopRun: 'Stop Run',
   Back: 'Back',
   '__section__': '',
 }
@@ -38,6 +38,9 @@ interface SelectableItem {
 export function Run() {
   const { selectedRunId, push, pop } = useRouter()
   const { toast } = useToast()
+  const { rows: termRows } = useWindowSize()
+  const bodyRows = frameBodyRows(termRows, true, true)
+  const compactBody = bodyRows <= 8
   const [run, setRun] = useState<RunRecord | null>(() =>
     selectedRunId ? (() => { try { return readRun(selectedRunId) } catch { return null } })() : null
   )
@@ -66,6 +69,16 @@ export function Run() {
   ]
 
   const selected = items[selectedIdx]
+  const compactItems = items
+    .map((item, itemIdx) => ({ item, itemIdx }))
+    .filter(({ item }) => item.action !== '__section__')
+  const compactSelectedIdx = Math.max(0, compactItems.findIndex(item => item.itemIdx === selectedIdx))
+  const compactEntryCount = Math.max(1, bodyRows - 2)
+  const compactFirstEntry = Math.min(
+    Math.max(0, compactSelectedIdx - compactEntryCount + 1),
+    Math.max(0, compactItems.length - compactEntryCount),
+  )
+  const visibleCompactItems = compactItems.slice(compactFirstEntry, compactFirstEntry + compactEntryCount)
 
   function handleActivate(): void {
     if (!selected || !run) return
@@ -160,8 +173,8 @@ export function Run() {
       Agents: 'view agents',
       Output: 'peek across agents',
       OpenTabs: isRunEnded ? 'run is ended' : 'switch to this run tmux session',
-      AddWorker: isRunEnded ? 'run is ended' : 'spawn new agent',
-      StopRun: isRunEnded ? 'delete stopped run from the active list' : 'return to Reeves and stop run windows',
+      AddWorker: isRunEnded ? 'run is ended' : 'add an agent to this run',
+      StopRun: isRunEnded ? 'delete stopped run' : 'stop the run and move it to history',
       Back: 'return to runs',
     }
     statusContext = actionLabels[selected.action] || ''
@@ -174,55 +187,87 @@ export function Run() {
         { label: 'status', value: run.status },
         { label: 'agents', value: String(agents.length) },
       ]}
-      tagline="Manage this spawner run. Agents are independent provider CLIs."
+      tagline="Open, add, stop, or inspect agents in this run."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
-      <Box flexDirection="column">
-        <Box marginBottom={1}>
-          <Text color={colors.text.dim} wrap="truncate-end">{summaryLine}</Text>
-        </Box>
-        <Section label="Actions" />
-        {items.map((item, idx) => {
-          const isSelected = selectedIdx === idx
-
-          if (item.action === '__section__') {
+      {compactBody ? (
+        <Box flexDirection="column">
+          <Section label={selectedIdx < 4 ? 'Actions' : 'Lifecycle'} />
+          {visibleCompactItems.map(({ item, itemIdx }) => {
+            const isDisabledAddWorker = item.action === 'AddWorker' && isRunEnded
+            const primary = item.action === 'StopRun' && isRunEnded ? 'Delete Run' : LABELS[item.action]
+            const hints: Record<RowItem, string> = {
+              Agents: `${agents.length} agents`,
+              Output: 'peek across all agents',
+              OpenTabs: isRunEnded ? 'run is ended' : 'switch to tmux tabs for this run',
+              AddWorker: isRunEnded ? 'run is ended' : 'add an agent to this run',
+              StopRun: isRunEnded ? 'delete stopped run' : 'stop the run and move it to history',
+              Back: 'return to all runs',
+              '__section__': '',
+            }
+            const isDisabledOpenTabs = item.action === 'OpenTabs' && isRunEnded
             return (
-              <React.Fragment key="__section__">
-                <SectionEnd />
-                <Section label="Lifecycle" />
-              </React.Fragment>
+              <Row
+                key={item.action}
+                selected={selectedIdx === itemIdx}
+                primary={primary}
+                primaryWidth={ACTION_LABEL_WIDTH}
+                hint={hints[item.action]}
+                disabled={isDisabledAddWorker || isDisabledOpenTabs}
+                danger={item.action === 'StopRun'}
+              />
             )
-          }
+          })}
+          <SectionEnd />
+        </Box>
+      ) : (
+        <Box flexDirection="column">
+          <Box marginBottom={1}>
+            <Text color={colors.text.dim} wrap="truncate-end">{summaryLine}</Text>
+          </Box>
+          <Section label="Actions" />
+          {items.map((item, idx) => {
+            const isSelected = selectedIdx === idx
 
-          const isDisabledAddWorker = item.action === 'AddWorker' && isRunEnded
-          const primary = item.action === 'StopRun' && isRunEnded ? 'Delete Run' : LABELS[item.action]
+            if (item.action === '__section__') {
+              return (
+                <React.Fragment key="__section__">
+                  <SectionEnd />
+                  <Section label="Lifecycle" />
+                </React.Fragment>
+              )
+            }
 
-          const hints: Record<RowItem, string> = {
-            Agents: `${agents.length} agents`,
-            Output: 'peek across all agents',
-            OpenTabs: isRunEnded ? 'run is ended' : 'switch to tmux tabs for this run',
-            AddWorker: isRunEnded ? 'run is ended' : 'spawn new agent',
-            StopRun: isRunEnded ? 'move stopped run to history' : 'return to Reeves and stop run windows',
-            Back: 'return to all runs',
-            '__section__': '',
-          }
-          const isDisabledOpenTabs = item.action === 'OpenTabs' && isRunEnded
+            const isDisabledAddWorker = item.action === 'AddWorker' && isRunEnded
+            const primary = item.action === 'StopRun' && isRunEnded ? 'Delete Run' : LABELS[item.action]
 
-          return (
-            <Row
-              key={item.action}
-              selected={isSelected}
-              primary={primary}
-              primaryWidth={ACTION_LABEL_WIDTH}
-              hint={hints[item.action]}
-              disabled={isDisabledAddWorker || isDisabledOpenTabs}
-              danger={item.action === 'StopRun'}
-            />
-          )
-        })}
-        <SectionEnd />
-      </Box>
+            const hints: Record<RowItem, string> = {
+              Agents: `${agents.length} agents`,
+              Output: 'peek across all agents',
+              OpenTabs: isRunEnded ? 'run is ended' : 'switch to tmux tabs for this run',
+              AddWorker: isRunEnded ? 'run is ended' : 'add an agent to this run',
+              StopRun: isRunEnded ? 'delete stopped run' : 'stop the run and move it to history',
+              Back: 'return to all runs',
+              '__section__': '',
+            }
+            const isDisabledOpenTabs = item.action === 'OpenTabs' && isRunEnded
+
+            return (
+              <Row
+                key={item.action}
+                selected={isSelected}
+                primary={primary}
+                primaryWidth={ACTION_LABEL_WIDTH}
+                hint={hints[item.action]}
+                disabled={isDisabledAddWorker || isDisabledOpenTabs}
+                danger={item.action === 'StopRun'}
+              />
+            )
+          })}
+          <SectionEnd />
+        </Box>
+      )}
     </Frame>
   )
 }

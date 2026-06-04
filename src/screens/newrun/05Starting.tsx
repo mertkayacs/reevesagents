@@ -118,7 +118,7 @@ export function NewRunStarting() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'New Run', 'Starting']}
-      tagline="Creating the tmux workspace and launching independent CLI agents."
+      tagline="Creating the run and launching its agents."
     >
       <Box flexDirection="row" marginY={1}>
         <Spinner />

@@ -72,7 +72,7 @@ describe('buildWebState', () => {
     writeAgent(makeAgent('planner', 'r1', { provider: 'cc', role: 'root', model: 'opus' }))
     writeAgent(makeAgent('worker', 'r1', { provider: 'codex', task_status: 'working' }))
 
-    const state = buildWebState()
+    const state = buildWebState({ liveTmuxTarget: () => true })
     expect(state.runs).toHaveLength(1)
 
     const run = state.runs[0]!
@@ -103,11 +103,25 @@ describe('buildWebState', () => {
     writeRun(makeRun('r2'))
     writeAgent(makeAgent('gone', 'r2', { task_status: 'working', ended_at: '2026-01-01T01:00:00.000Z' }))
 
-    const term = buildWebState().runs[0]!.terminals[0]!
+    const term = buildWebState({ liveTmuxTarget: () => true }).runs[0]!.terminals[0]!
     expect(term.status).toBe('ended')
     expect(term.canAttach).toBe(false)
     expect(term.canKill).toBe(false)
     expect(term.canDelete).toBe(true)
+  })
+
+  it('does not offer attach or kill actions for stale tmux targets', () => {
+    writeRun(makeRun('stale'))
+    writeAgent(makeAgent('worker', 'stale', { task_status: 'working' }))
+
+    const run = buildWebState({ liveTmuxTarget: () => false }).runs[0]!
+    const term = run.terminals[0]!
+
+    expect(run.status).toBe('stale')
+    expect(term.canAttach).toBe(false)
+    expect(term.canKill).toBe(false)
+    expect(term.canDelete).toBe(false)
+    expect(term.disabledReason).toBe('run tmux session is unavailable')
   })
 
   it('excludes ended run records from active web runs', () => {
@@ -116,7 +130,7 @@ describe('buildWebState', () => {
     writeRun({ ...makeRun('ended'), status: 'ended', ended_at: '2026-01-01T01:00:00.000Z' })
     writeAgent(makeAgent('ended-root', 'ended', { role: 'root', ended_at: '2026-01-01T01:00:00.000Z' }))
 
-    expect(buildWebState().runs.map(run => run.id)).toEqual(['active'])
+    expect(buildWebState({ liveTmuxTarget: () => true }).runs.map(run => run.id)).toEqual(['active'])
   })
 
   it('hides orchestrator runs by default and shows them in pre-beta mode', () => {
@@ -131,9 +145,9 @@ describe('buildWebState', () => {
     }))
     writeAgent(makeAgent('worker', 'prebeta', { role: 'worker', provider: 'codex' }))
 
-    expect(buildWebState().runs.map(run => run.id)).toEqual(['stable'])
+    expect(buildWebState({ liveTmuxTarget: () => true }).runs.map(run => run.id)).toEqual(['stable'])
 
-    const state = buildWebState({ prebetaOrchestrator: true })
+    const state = buildWebState({ prebetaOrchestrator: true, liveTmuxTarget: () => true })
     expect(state.runs.map(run => [run.id, run.mode]).sort()).toEqual([
       ['prebeta', 'orchestrator'],
       ['stable', 'spawner'],
@@ -153,7 +167,7 @@ describe('buildWebState', () => {
     writeAgent(makeAgent('root', 'old', { role: 'root', provider: 'codex' }))
     archiveAndRemoveRun('old', 'ended')
 
-    const state = buildWebState()
+    const state = buildWebState({ liveTmuxTarget: () => true })
     expect(state.runs).toEqual([])
     expect(state.history).toHaveLength(1)
     expect(state.history[0]).toMatchObject({

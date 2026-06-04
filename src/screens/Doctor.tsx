@@ -4,7 +4,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { Box, useInput, useWindowSize } from 'ink'
-import { Frame } from '../components/Frame.js'
+import { Frame, frameBodyRows } from '../components/Frame.js'
 import { Primary } from '../components/Primary.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
@@ -27,7 +27,9 @@ function statusGlyph(status: 'ok' | 'warn' | 'fail'): { char: string; color: str
 export function Doctor() {
   const { pop, push, setSelectedCheckName } = useRouter()
   const { rows: termRows } = useWindowSize()
-  const pageSize = Math.max(2, termRows - CHROME_ROWS)
+  const bodyRows = frameBodyRows(termRows, true, true)
+  const compactBody = bodyRows <= 10
+  const pageSize = Math.max(1, compactBody ? bodyRows - 3 : Math.min(termRows - CHROME_ROWS, bodyRows - 7))
 
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -50,6 +52,15 @@ export function Doctor() {
   const paginOffset = totalPages > 1 ? 1 : 0
   const actionOffset = pagedChecks.length + paginOffset
   const totalItems = actionOffset + 2  // Recheck, Back
+  const compactEntryCount = Math.max(1, bodyRows - 2)
+  const compactFirstEntry = Math.min(
+    Math.max(0, selectedIdx - compactEntryCount + 1),
+    Math.max(0, totalItems - compactEntryCount),
+  )
+  const compactEntryIndexes = Array.from(
+    { length: Math.min(compactEntryCount, totalItems - compactFirstEntry) },
+    (_, idx) => compactFirstEntry + idx,
+  )
 
   const selectedCheck = selectedIdx < pagedChecks.length ? pagedChecks[selectedIdx] : null
   const checkLabelWidth = Math.max(...checks.map(check => check.name.length), 'Recheck'.length, 'Back'.length)
@@ -83,51 +94,91 @@ export function Doctor() {
         { label: 'warn', value: String(counts.warn) },
         { label: 'fail', value: String(counts.fail) },
       ]}
-      tagline="Setup and environment health for the spawner TUI and CLI."
+      tagline="Setup and environment health for TUI, CLI, Web UI, and tmux."
       statusContext={selectedCheck ? `${selectedCheck.name}: ${selectedCheck.detail}` : ''}
     >
-      <Primary>
-        {isSpinning && <Spinner label="checking..." color={colors.accent.bright} />}
-        {!isSpinning && pagedChecks.map((check, idx) => (
-          <Row
-            key={check.name}
-            selected={idx === selectedIdx}
-            glyph={statusGlyph(check.status)}
-            primary={check.name}
-            primaryWidth={checkLabelWidth}
-            hint={check.detail}
-          />
-        ))}
-
-        {!isSpinning && totalPages > 1 && (
-          <Pagination
-            page={page}
-            total={totalPages}
-            focused={selectedIdx === pagedChecks.length}
-            onPrev={() => setPage(p => Math.max(1, p - 1))}
-            onNext={() => setPage(p => Math.min(totalPages, p + 1))}
-          />
-        )}
-
-        {!isSpinning && (
-          <>
-            <Box marginTop={1} />
-            <Legend
-              items={[
-                { glyph: glyphs.status.ok, label: 'ok', color: colors.status.ok },
-                { glyph: glyphs.status.warn, label: 'warn', color: colors.status.warn },
-                { glyph: glyphs.status.fail, label: 'fail', color: colors.status.error },
-              ]}
+      {compactBody ? (
+        <Primary>
+          <Section label={selectedIdx < pagedChecks.length ? 'Checks' : 'Actions'} />
+          {isSpinning ? (
+            <Spinner label="checking..." color={colors.accent.bright} />
+          ) : compactEntryIndexes.map(idx => {
+            if (idx < pagedChecks.length) {
+              const check = pagedChecks[idx]!
+              return (
+                <Row
+                  key={check.name}
+                  selected={idx === selectedIdx}
+                  glyph={statusGlyph(check.status)}
+                  primary={check.name}
+                  primaryWidth={checkLabelWidth}
+                  hint={check.detail}
+                />
+              )
+            }
+            if (totalPages > 1 && idx === pagedChecks.length) {
+              return (
+                <Pagination
+                  key="pagination"
+                  page={page}
+                  total={totalPages}
+                  focused={selectedIdx === pagedChecks.length}
+                  onPrev={() => setPage(p => Math.max(1, p - 1))}
+                  onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+                />
+              )
+            }
+            if (idx === actionOffset) {
+              return <Row key="recheck" selected={selectedIdx === actionOffset} primary="Recheck" primaryWidth={checkLabelWidth} hint="run doctor again" />
+            }
+            return <Row key="back" selected={selectedIdx === actionOffset + 1} primary="Back" primaryWidth={checkLabelWidth} hint="return to previous page" />
+          })}
+          <SectionEnd />
+        </Primary>
+      ) : (
+        <Primary>
+          {isSpinning && <Spinner label="checking..." color={colors.accent.bright} />}
+          {!isSpinning && pagedChecks.map((check, idx) => (
+            <Row
+              key={check.name}
+              selected={idx === selectedIdx}
+              glyph={statusGlyph(check.status)}
+              primary={check.name}
+              primaryWidth={checkLabelWidth}
+              hint={check.detail}
             />
-          </>
-        )}
+          ))}
 
-        <Box marginTop={1} />
-        <Section label="Actions" />
-        <Row selected={selectedIdx === actionOffset} primary="Recheck" primaryWidth={checkLabelWidth} hint="run doctor again" />
-        <Row selected={selectedIdx === actionOffset + 1} primary="Back" primaryWidth={checkLabelWidth} hint="return to previous page" />
-        <SectionEnd />
-      </Primary>
+          {!isSpinning && totalPages > 1 && (
+            <Pagination
+              page={page}
+              total={totalPages}
+              focused={selectedIdx === pagedChecks.length}
+              onPrev={() => setPage(p => Math.max(1, p - 1))}
+              onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+            />
+          )}
+
+          {!isSpinning && (
+            <>
+              <Box marginTop={1} />
+              <Legend
+                items={[
+                  { glyph: glyphs.status.ok, label: 'ok', color: colors.status.ok },
+                  { glyph: glyphs.status.warn, label: 'warn', color: colors.status.warn },
+                  { glyph: glyphs.status.fail, label: 'fail', color: colors.status.error },
+                ]}
+              />
+            </>
+          )}
+
+          <Box marginTop={1} />
+          <Section label="Actions" />
+          <Row selected={selectedIdx === actionOffset} primary="Recheck" primaryWidth={checkLabelWidth} hint="run doctor again" />
+          <Row selected={selectedIdx === actionOffset + 1} primary="Back" primaryWidth={checkLabelWidth} hint="return to previous page" />
+          <SectionEnd />
+        </Primary>
+      )}
     </Frame>
   )
 }

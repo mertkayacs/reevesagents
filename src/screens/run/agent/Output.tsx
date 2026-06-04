@@ -3,11 +3,12 @@
 
 import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput, useWindowSize } from 'ink'
-import { Frame } from '../../../components/Frame.js'
+import { Frame, frameBodyRows } from '../../../components/Frame.js'
 import { Row } from '../../../components/Row.js'
 import { Section, SectionEnd } from '../../../components/Section.js'
 import { Pagination } from '../../../components/Pagination.js'
 import { useRouter } from '../../../router.js'
+import { useToast } from '../../../state/ToastContext.js'
 import { colors, space } from '../../../utils/tokens.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import { findAgent, readRun } from '../../../state/runs.js'
@@ -16,7 +17,6 @@ import type { AgentRecord } from '../../../state/types.js'
 
 const PEEK_INTERVAL_MS = 5000
 const DETAIL_LINES = 50
-const CHROME_ROWS = 16
 const ACTION_LABEL_WIDTH = Math.max('Refresh Now'.length, 'Open Agent'.length, 'Back'.length)
 
 type RowItem = 'RefreshNow' | 'OpenCLI' | 'Back'
@@ -27,8 +27,13 @@ type SelectableItem =
 
 export function AgentOutput() {
   const { selectedAgentId, pop } = useRouter()
+  const { toast } = useToast()
   const { rows: termRows } = useWindowSize()
-  const visibleLineCount = Math.max(3, Math.min(DETAIL_LINES, termRows - CHROME_ROWS - 1))
+  const bodyRows = frameBodyRows(termRows, true, true)
+  const compactBody = bodyRows <= 9
+  const visibleLineCount = compactBody
+    ? Math.max(1, Math.min(DETAIL_LINES, bodyRows - 6))
+    : Math.max(3, Math.min(DETAIL_LINES, bodyRows - 8))
   const [agent] = useState<AgentRecord | null>(() =>
     selectedAgentId ? (() => { try { return findAgent(selectedAgentId) } catch { return null } })() : null
   )
@@ -43,7 +48,8 @@ export function AgentOutput() {
 
   const outputLines = output ? output.split('\n').slice(-DETAIL_LINES) : []
   const totalPages = Math.max(1, Math.ceil(Math.max(1, outputLines.length) / visibleLineCount))
-  const paginOffset = totalPages > 1 ? 1 : 0
+  const showPagination = totalPages > 1 && !compactBody
+  const paginOffset = showPagination ? 1 : 0
   const activePage = Math.min(page, totalPages)
   const pageStart = activePage === totalPages
     ? Math.max(0, outputLines.length - visibleLineCount)
@@ -51,7 +57,7 @@ export function AgentOutput() {
   const visibleOutputLines = outputLines.slice(pageStart, pageStart + visibleLineCount)
 
   const items: SelectableItem[] = [
-    ...(totalPages > 1 ? [{ type: 'pagination' as const }] : []),
+    ...(showPagination ? [{ type: 'pagination' as const }] : []),
     { type: 'action' as const, action: 'RefreshNow' },
     { type: 'action' as const, action: 'OpenCLI' },
     { type: 'action' as const, action: 'Back' },
@@ -93,8 +99,12 @@ export function AgentOutput() {
         refreshOutput()
         break
       case 'OpenCLI':
-        if (agent.headless) return
-        openAgent(agent.id)
+        if (!canOpenAgent) return
+        try {
+          openAgent(agent.id)
+        } catch (err) {
+          toast(err instanceof Error ? err.message : String(err), 'error')
+        }
         break
       case 'Back':
         pop()
@@ -153,13 +163,16 @@ export function AgentOutput() {
   }
 
   const isHeadless = !!agent.headless
+  const isAgentEnded = agent.ended_at !== null
+  const canOpenAgent = !isAgentEnded && !isHeadless && !!agent.tmux_window_id
+  const openDisabledHint = isAgentEnded ? 'agent has ended' : 'no tmux window'
   let statusContext = `${agent.nickname} · output`
   if (selected?.type === 'pagination') {
     statusContext = `output page ${activePage} of ${totalPages} · ← → turn page`
   } else if (selected?.type === 'action') {
     const actionLabels: Record<RowItem, string> = {
       RefreshNow: 'fetch output now',
-      OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this agent window',
+      OpenCLI: canOpenAgent ? 'switch tmux to this agent window' : openDisabledHint,
       Back: 'return to agent detail',
     }
     statusContext = actionLabels[selected.action]
@@ -182,43 +195,47 @@ export function AgentOutput() {
       statusContext={statusContext}
       statusKeys="↑↓ move · ←→ output pages · enter select · esc back"
     >
-      <Box flexDirection="column" marginBottom={2}>
-        <Box marginBottom={1}>
-          <Text wrap="truncate-end">
-            <Text color={colors.text.primary} bold>{agent.nickname}</Text>
-            <Text color={colors.text.dim}> </Text>
-            <Text color={colors.surface.border}>[</Text>
-            <Text color={providerHue}>{providerLabel}</Text>
-            <Text color={colors.surface.border}>] [</Text>
-            <Text color={modelHue}>{modelBadgeLabel(agent.model)}</Text>
-            <Text color={colors.surface.border}>]</Text>
-          </Text>
-        </Box>
-        <Box
-          borderStyle="round"
-          borderColor={providerHue}
-          paddingX={space.sm}
-          flexDirection="column"
-          height={visibleLineCount + 2}
-          overflow="hidden"
-        >
-          {visibleOutputLines.map((line, idx) => (
-            <Text key={idx} color={colors.text.dim}>{line}</Text>
-          ))}
-          {visibleOutputLines.length === 0 && (
-            <Text color={colors.text.muted}>(no output yet)</Text>
-          )}
-        </Box>
-      </Box>
+      {!compactBody && (
+        <>
+          <Box flexDirection="column" marginBottom={2}>
+            <Box marginBottom={1}>
+              <Text wrap="truncate-end">
+                <Text color={colors.text.primary} bold>{agent.nickname}</Text>
+                <Text color={colors.text.dim}> </Text>
+                <Text color={colors.surface.border}>[</Text>
+                <Text color={providerHue}>{providerLabel}</Text>
+                <Text color={colors.surface.border}>] [</Text>
+                <Text color={modelHue}>{modelBadgeLabel(agent.model)}</Text>
+                <Text color={colors.surface.border}>]</Text>
+              </Text>
+            </Box>
+            <Box
+              borderStyle="round"
+              borderColor={providerHue}
+              paddingX={space.sm}
+              flexDirection="column"
+              height={visibleLineCount + 2}
+              overflow="hidden"
+            >
+              {visibleOutputLines.map((line, idx) => (
+                <Text key={idx} color={colors.text.dim}>{line}</Text>
+              ))}
+              {visibleOutputLines.length === 0 && (
+                <Text color={colors.text.muted}>(no output yet)</Text>
+              )}
+            </Box>
+          </Box>
 
-      {totalPages > 1 && (
-        <Pagination
-          page={activePage}
-          total={totalPages}
-          focused={selectedIdx === 0}
-          onPrev={() => setPage(p => Math.max(1, p - 1))}
-          onNext={() => setPage(p => Math.min(totalPages, p + 1))}
-        />
+          {showPagination && (
+            <Pagination
+              page={activePage}
+              total={totalPages}
+              focused={selectedIdx === 0}
+              onPrev={() => setPage(p => Math.max(1, p - 1))}
+              onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+            />
+          )}
+        </>
       )}
 
       <Section label="Actions" />
@@ -230,7 +247,7 @@ export function AgentOutput() {
 
           const hints: Record<RowItem, string> = {
             RefreshNow: 'fetch output now',
-            OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this agent window',
+            OpenCLI: canOpenAgent ? 'switch tmux to this agent window' : openDisabledHint,
             Back: 'return to agent detail',
           }
 
@@ -247,7 +264,7 @@ export function AgentOutput() {
               primary={labels[item.action]}
               primaryWidth={ACTION_LABEL_WIDTH}
               hint={hints[item.action]}
-              disabled={item.action === 'OpenCLI' && isHeadless}
+              disabled={item.action === 'OpenCLI' && !canOpenAgent}
             />
           )
         })}

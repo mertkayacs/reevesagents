@@ -67,7 +67,7 @@ describe('RunStop screen', () => {
   it('moves to history after stopping the run', async () => {
     const { stdin, lastFrame, unmount } = render(<Router initialScreen="RunStop" />)
 
-    expect(lastFrame() ?? '').toContain('Return and stop "test-run"?')
+    expect(lastFrame() ?? '').toContain('Stop run "test-run"?')
     stdin.write('\u001B[C')
     await waitForInput()
     stdin.write('\r')

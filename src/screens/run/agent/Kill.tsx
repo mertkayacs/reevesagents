@@ -69,6 +69,7 @@ export function AgentKill() {
   }
 
   const isAgentEnded = agent.ended_at !== null
+  const isLastLiveAgent = !isAgentEnded && listAgents(agent.run_id).filter(item => !item.ended_at).length <= 1
 
   return (
     <Frame
@@ -77,7 +78,7 @@ export function AgentKill() {
     >
       <Dialog
         title={t(isAgentEnded ? 'agentKill.deleteTitle' : 'agentKill.stopTitle', { name: agent.nickname })}
-        body={t(isAgentEnded ? 'agentKill.deleteBody' : 'agentKill.stopBody')}
+        body={t(isAgentEnded ? 'agentKill.deleteBody' : isLastLiveAgent ? 'agentKill.stopLastBody' : 'agentKill.stopBody')}
         intent="danger"
         confirmLabel={translatePhrase(language, isAgentEnded ? 'Delete Agent' : 'Stop Agent')}
         cancelLabel={t('common.cancel')}

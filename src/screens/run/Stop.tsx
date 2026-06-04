@@ -66,7 +66,7 @@ export function RunStop() {
         title={t(isRunEnded ? 'runStop.deleteTitle' : 'runStop.stopTitle', { name: run.name })}
         body={t(isRunEnded ? 'runStop.deleteBody' : 'runStop.stopBody')}
         intent="danger"
-        confirmLabel={isRunEnded ? translatePhrase(language, 'Delete Run') : translatePhrase(language, 'Return & Stop')}
+        confirmLabel={translatePhrase(language, isRunEnded ? 'Delete Run' : 'Stop Run')}
         cancelLabel={t('common.cancel')}
         onConfirm={handleConfirm}
         onCancel={() => pop()}

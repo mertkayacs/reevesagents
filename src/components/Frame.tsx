@@ -1,9 +1,8 @@
 // Outer chassis for every page (except Welcome which has its own layout).
 // Three vertical regions: Header, optional Tagline, Body row (Primary + optional Detail),
-// StatusBar. The Frame locks to width=cols, height=rows so Ink's reconciler always
-// knows the exact extent; this is what keeps arrow-key re-renders from leaving stale
-// border/row artifacts (ink#907). The outer border is part of the fixed chassis.
-// Floor: refuses below 50x18; narrow/standard/wide tiers per spec §15.
+// StatusBar. The Frame locks width to cols and clamps the body to the computed
+// terminal budget so arrow-key re-renders do not leave stale border artifacts.
+// Floor: refuses below 40x12; narrow/standard/wide tiers per spec §15.
 
 import React, { useInsertionEffect, useRef } from 'react'
 import { Box, Text, useWindowSize } from 'ink'
@@ -16,8 +15,8 @@ import { colors, space } from '../utils/tokens.js'
 import { translatePhrase } from '../i18n/catalog.js'
 import { useLanguage } from '../state/LanguageContext.js'
 
-export const FLOOR_COLS = 50
-export const FLOOR_ROWS = 18
+export const FLOOR_COLS = 40
+export const FLOOR_ROWS = 12
 export const DETAIL_BREAKPOINT = 90
 const CLEAR_TERMINAL = '\x1b[3J\x1b[2J\x1b[H'
 
@@ -47,6 +46,13 @@ function Rule({ cols }: { cols: number }) {
       {'┄'.repeat(Math.max(1, cols - 1))}
     </Text>
   )
+}
+
+export function frameBodyRows(rows: number, hasTagline: boolean, hasStatusContext: boolean): number {
+  const innerRows = Math.max(1, rows - 2)
+  const taglineRows = hasTagline ? (innerRows < 22 ? 1 : 2) : 0
+  const statusRows = hasStatusContext && innerRows >= 22 ? 2 : 1
+  return Math.max(1, innerRows - 1 - 1 - taglineRows - 1 - statusRows)
 }
 
 function useResizeClear(cols: number, rows: number, tooSmall: boolean): void {
@@ -103,6 +109,7 @@ export function Frame({
   const displayDetailTitle = detailTitle ? translatePhrase(language, detailTitle) : detailTitle
   const displayStatusContext = statusContext ? translatePhrase(language, statusContext) : statusContext
   const displayStatusKeys = statusKeys ? translatePhrase(language, statusKeys) : statusKeys
+  const bodyRows = frameBodyRows(rows, Boolean(displayTagline), Boolean(displayStatusContext))
 
   return (
     <Box flexDirection="column" width={cols} borderStyle="single" borderColor={colors.surface.border}>
@@ -115,9 +122,9 @@ export function Frame({
       <Rule cols={innerCols} />
       {displayTagline ? <Tagline text={displayTagline} rows={innerRows} cols={innerCols} /> : null}
 
-      <Box flexDirection="row">
-        <LayoutProvider columns={bodyColumns}>
-          <Box flexDirection="column" flexGrow={1} paddingX={bodyPadding} overflow="hidden">
+      <Box flexDirection="row" maxHeight={bodyRows} overflow="hidden">
+        <LayoutProvider columns={bodyColumns} rows={bodyRows}>
+          <Box flexDirection="column" flexGrow={1} maxHeight={bodyRows} paddingX={bodyPadding} overflow="hidden">
             {children}
           </Box>
         </LayoutProvider>

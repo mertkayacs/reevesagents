@@ -1,4 +1,4 @@
-// Core type definitions for spawner run state, presets, and TUI routing.
+// Core type definitions for agent-run state, presets, and TUI routing.
 
 export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes' | 'kimi' | 'deepseek' | 'pi' | 'qwen' | 'aider'
 
