@@ -16,8 +16,28 @@ import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
 import { startRun, spawnWorker, killAgent, stopRun } from '../launcher/runtime.js'
 import { normalizeProvider } from '../launcher/providers.js'
+import { modelValuesForProvider } from '../launcher/model-catalog.js'
 import { providerDisplayName } from '../utils/display.js'
-import { autoCleanupRuns, findAgent, readRun } from '../state/runs.js'
+import type { Permissions, Provider } from '../state/types.js'
+import { loadConfig, saveConfig } from '../state/config.js'
+import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
+import { localeCatalog } from '../i18n/catalog.js'
+import {
+  archiveAndRemoveRun,
+  autoCleanupRuns,
+  deleteAgent,
+  deleteRunHistory,
+  findAgent,
+  findAgentAny,
+  listRunHistory,
+  readRun,
+  readRunAny,
+} from '../state/runs.js'
+import {
+  isOrchestratorWebProvider,
+  loadWebOrchestratorRuntime,
+  type WebOrchestratorRuntime,
+} from './prebeta-orchestrator.js'
 
 const HOST = '127.0.0.1'
 const DEFAULT_PORT = 8080
@@ -34,6 +54,7 @@ const STATIC_ROUTES: Record<string, { file: string; type: string }> = {
   '/xterm.css': { file: 'xterm.css', type: 'text/css; charset=utf-8' },
   '/xterm.js': { file: 'xterm.js', type: 'text/javascript; charset=utf-8' },
   '/addon-fit.js': { file: 'addon-fit.js', type: 'text/javascript; charset=utf-8' },
+  '/brand-duck.json': { file: 'brand-duck.json', type: 'application/json; charset=utf-8' },
 }
 
 export interface WebServerOptions {
@@ -41,6 +62,8 @@ export interface WebServerOptions {
   range?: number
   open?: boolean
   webRoot?: string
+  prebetaOrchestrator?: boolean
+  orchestratorRuntime?: WebOrchestratorRuntime
 }
 
 export interface WebServerHandle {
@@ -54,6 +77,8 @@ interface RequestContext {
   webRoot: string
   cache: Map<string, Buffer>
   sse: SseHub
+  prebetaOrchestrator: boolean
+  orchestratorRuntime?: WebOrchestratorRuntime
 }
 
 function errMessage(err: unknown): string {
@@ -71,6 +96,15 @@ function send(res: ServerResponse, status: number, body: string | Buffer, conten
 
 function sendJson(res: ServerResponse, status: number, obj: unknown): void {
   send(res, status, JSON.stringify(obj), 'application/json; charset=utf-8')
+}
+
+function webLanguagePayload(): unknown {
+  const current = loadConfig().global.language
+  return {
+    current,
+    languages: LANGUAGE_OPTIONS,
+    translations: localeCatalog(current),
+  }
 }
 
 function serveAsset(res: ServerResponse, file: string, type: string, ctx: RequestContext): void {
@@ -111,14 +145,14 @@ interface SseHub {
 // Pushes the run/terminal state to connected browsers. The poller starts when the
 // first client connects and stops when the last disconnects: connection-scoped, not
 // a daemon. fs.watch is avoided because recursive watch is unreliable across platforms.
-function createSseHub(): SseHub {
+function createSseHub(prebetaOrchestrator: boolean): SseHub {
   const clients = new Set<ServerResponse>()
   let timer: ReturnType<typeof setInterval> | null = null
   let last = ''
 
   const snapshot = (): string => {
-    autoCleanupRuns({ cleanStale: false })
-    return JSON.stringify(buildWebState())
+    autoCleanupRuns({ includeAllModes: prebetaOrchestrator, cleanStale: false })
+    return JSON.stringify(buildWebState({ prebetaOrchestrator }))
   }
   const write = (res: ServerResponse, payload: string): void => {
     try { res.write(`data: ${payload}\n\n`) } catch { /* client gone; close handler will drop it */ }
@@ -186,33 +220,77 @@ function sanitizeRunName(raw: string): string {
   return raw.trim().replace(/[^\p{L}\p{N} _.-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim()
 }
 
+function normalizeModel(provider: Provider, raw: unknown): string {
+  const model = typeof raw === 'string' ? raw.trim() : ''
+  if (!modelValuesForProvider(provider).includes(model)) {
+    throw new Error('unknown model for provider')
+  }
+  return model
+}
+
+function normalizePermissionsInput(raw: unknown): Permissions | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (raw === 'ask' || raw === 'skip') return raw
+  throw new Error('unknown permission mode')
+}
+
 // Creates a terminal: a worker in an existing run, or a fresh single-terminal run.
 // Provider is validated against the known set (it maps to the launched binary);
 // nickname is sanitized; the prompt is typed into the pane by the runtime, not shelled.
-async function createTerminal(body: Record<string, unknown>): Promise<{ id: string; run_id: string }> {
+async function createTerminal(body: Record<string, unknown>, ctx: RequestContext): Promise<{ id: string; run_id: string }> {
   const provider = body.provider
   const normalizedProvider = normalizeProvider(provider)
   if (!normalizedProvider) throw new Error('unknown provider')
+  const model = normalizeModel(normalizedProvider, body.model)
+  const permissions = normalizePermissionsInput(body.permissions)
   const nickname = sanitizeNickname(typeof body.nickname === 'string' ? body.nickname : '')
   const runName = sanitizeRunName(typeof body.run_name === 'string' ? body.run_name : '')
   const prompt = typeof body.prompt === 'string' ? body.prompt : ''
   const runId = typeof body.run_id === 'string' && body.run_id ? body.run_id : null
 
   if (runId) {
-    readRun(runId)
-    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt })
+    const run = ctx.prebetaOrchestrator ? readRunAny(runId) : readRun(runId)
+    const mode = run.mode === 'spawner' ? 'spawner' : 'orchestrator'
+    if (mode === 'orchestrator') {
+      if (!ctx.orchestratorRuntime) throw new Error('PRE-BETA orchestrator web mode is not enabled')
+      if (!isOrchestratorWebProvider(normalizedProvider)) throw new Error('provider is not supported in PRE-BETA orchestrator mode')
+      const agent = ctx.orchestratorRuntime.spawnWorker({
+        run_id: runId,
+        provider: normalizedProvider,
+        nickname: nickname || undefined,
+        model,
+        permissions,
+        task: prompt,
+      })
+      return { id: agent.id, run_id: agent.run_id }
+    }
+    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model, permissions, task: prompt })
     return { id: agent.id, run_id: agent.run_id }
   }
 
+  const mode = body.mode === 'orchestrator' ? 'orchestrator' : 'spawner'
   const workingDir = typeof body.working_dir === 'string' && body.working_dir.trim()
     ? body.working_dir.trim()
     : process.cwd()
+  if (mode === 'orchestrator') {
+    if (!ctx.prebetaOrchestrator || !ctx.orchestratorRuntime) throw new Error('PRE-BETA orchestrator web mode is not enabled')
+    if (!isOrchestratorWebProvider(normalizedProvider)) throw new Error('provider is not supported in PRE-BETA orchestrator mode')
+    const result = ctx.orchestratorRuntime.startRun({
+      mode: 'orchestrator',
+      name: runName || nickname || providerDisplayName(normalizedProvider),
+      working_dir: workingDir,
+      root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, task: prompt },
+    })
+    const root = result.agents[0]
+    if (!root) throw new Error('run created no agent')
+    return { id: root.id, run_id: result.run.id }
+  }
 
   const result = startRun({
     mode: 'spawner',
     name: runName || nickname || providerDisplayName(normalizedProvider),
     working_dir: workingDir,
-    root: { provider: normalizedProvider, nickname: nickname || undefined, model: '', task: prompt },
+    root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, task: prompt },
   })
   const root = result.agents[0]
   if (!root) throw new Error('run created no agent')
@@ -223,15 +301,51 @@ function requireConfirm(body: Record<string, unknown>): void {
   if (body.confirm !== true) throw new Error('confirmation required')
 }
 
-function killTerminal(id: string): void {
-  const agent = findAgent(id)
-  readRun(agent.run_id)
-  killAgent(id)
+function updateLanguage(body: Record<string, unknown>): unknown {
+  if (!isLanguageCode(body.language)) throw new Error('unknown language')
+  const cfg = loadConfig()
+  cfg.global.language = body.language
+  saveConfig(cfg)
+  return webLanguagePayload()
 }
 
-function stopWebRun(id: string): void {
-  readRun(id)
-  stopRun(id)
+function killTerminal(id: string, ctx: RequestContext): void {
+  const agent = ctx.prebetaOrchestrator ? findAgentAny(id) : findAgent(id)
+  const run = ctx.prebetaOrchestrator ? readRunAny(agent.run_id) : readRun(agent.run_id)
+  if (run.mode === 'spawner') {
+    killAgent(id)
+    return
+  }
+  if (!ctx.orchestratorRuntime) throw new Error('PRE-BETA orchestrator web mode is not enabled')
+  ctx.orchestratorRuntime.killAgent(id)
+}
+
+function deleteTerminal(id: string, ctx: RequestContext): void {
+  const agent = ctx.prebetaOrchestrator ? findAgentAny(id) : findAgent(id)
+  if (!agent.ended_at) throw new Error('Stop agent before deleting it')
+  deleteAgent(id, { includeAllModes: ctx.prebetaOrchestrator })
+}
+
+function stopWebRun(id: string, ctx: RequestContext): void {
+  const run = ctx.prebetaOrchestrator ? readRunAny(id) : readRun(id)
+  if (run.mode === 'spawner') {
+    stopRun(id)
+    return
+  }
+  if (!ctx.orchestratorRuntime) throw new Error('PRE-BETA orchestrator web mode is not enabled')
+  ctx.orchestratorRuntime.stopRun(id)
+}
+
+function deleteWebRun(id: string, ctx: RequestContext): void {
+  const run = ctx.prebetaOrchestrator ? readRunAny(id) : readRun(id)
+  if (run.status !== 'ended' && run.ended_at === null) throw new Error('Stop run before deleting it')
+  archiveAndRemoveRun(id, 'ended')
+}
+
+function deleteHistoryRecord(id: string, ctx: RequestContext): void {
+  const history = listRunHistory({ includeAllModes: ctx.prebetaOrchestrator })
+  if (!history.some(record => record.id === id)) throw new Error('history record not found')
+  deleteRunHistory(id)
 }
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
@@ -257,10 +371,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     return
   }
   if (method === 'GET' && path === '/api/state') {
-    autoCleanupRuns({ cleanStale: false })
+    autoCleanupRuns({ includeAllModes: ctx.prebetaOrchestrator, cleanStale: false })
     sendJson(res, 200, {
-      ...buildWebState(),
+      ...buildWebState({ prebetaOrchestrator: ctx.prebetaOrchestrator }),
       providers: listWebProviders(),
+      prebeta: { orchestrator: ctx.prebetaOrchestrator },
+      language: webLanguagePayload(),
     })
     return
   }
@@ -276,7 +392,16 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
   if (method === 'POST' && path === '/api/terminals') {
     try {
       const body = await readJsonBody(req)
-      sendJson(res, 200, await createTerminal(body))
+      sendJson(res, 200, await createTerminal(body, ctx))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/language') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, updateLanguage(body))
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }
@@ -287,7 +412,19 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     try {
       const body = await readJsonBody(req)
       requireConfirm(body)
-      killTerminal(decodeURIComponent(killMatch[1]!))
+      killTerminal(decodeURIComponent(killMatch[1]!), ctx)
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deleteTerminalMatch = path.match(/^\/api\/terminals\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteTerminalMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteTerminal(decodeURIComponent(deleteTerminalMatch[1]!), ctx)
       sendJson(res, 200, { ok: true })
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
@@ -299,7 +436,31 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     try {
       const body = await readJsonBody(req)
       requireConfirm(body)
-      stopWebRun(decodeURIComponent(stopMatch[1]!))
+      stopWebRun(decodeURIComponent(stopMatch[1]!), ctx)
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deleteRunMatch = path.match(/^\/api\/runs\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteRunMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteWebRun(decodeURIComponent(deleteRunMatch[1]!), ctx)
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deleteHistoryMatch = path.match(/^\/api\/history\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteHistoryMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteHistoryRecord(decodeURIComponent(deleteHistoryMatch[1]!), ctx)
       sendJson(res, 200, { ok: true })
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
@@ -336,8 +497,12 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
   const basePort = options.port && Number.isFinite(options.port) ? options.port : DEFAULT_PORT
   const range = options.range && options.range > 0 ? options.range : DEFAULT_RANGE
   const webRoot = options.webRoot ?? DEFAULT_WEB_ROOT
+  const prebetaOrchestrator = options.prebetaOrchestrator === true
+  const orchestratorRuntime = prebetaOrchestrator
+    ? await loadWebOrchestratorRuntime(options.orchestratorRuntime)
+    : undefined
   const cache = new Map<string, Buffer>()
-  const sse = createSseHub()
+  const sse = createSseHub(prebetaOrchestrator)
 
   const sockets = new Set<Socket>()
   let boundPort = basePort
@@ -346,6 +511,8 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
     webRoot,
     cache,
     sse,
+    prebetaOrchestrator,
+    orchestratorRuntime,
   }
   const server = createServer((req, res) => {
     handleRequest(req, res, ctx).catch(() => {
@@ -356,7 +523,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
     sockets.add(socket)
     socket.on('close', () => sockets.delete(socket))
   })
-  const bridge = attachTerminalBridge(server, () => boundPort)
+  const bridge = attachTerminalBridge(server, () => boundPort, { prebetaOrchestrator })
 
   boundPort = await listenWithFallback(server, basePort, range)
   const url = `http://${HOST}:${boundPort}`

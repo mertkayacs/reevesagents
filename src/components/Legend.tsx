@@ -4,6 +4,8 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import { colors } from '../utils/tokens.js'
+import { translatePhrase } from '../i18n/catalog.js'
+import { useLanguage } from '../state/LanguageContext.js'
 
 interface LegendItem {
   glyph: string
@@ -16,18 +18,23 @@ interface Props {
 }
 
 export function Legend({ items }: Props) {
+  const { language } = useLanguage()
+
   return (
     <Box>
-      {items.map((item, idx) => (
-        <Box key={`${item.glyph}-${idx}`}>
-          {idx > 0 && <Text color={colors.text.dim}>   </Text>}
-          <Text color={item.color}>{item.glyph}</Text>
-          <Text color={colors.text.dim}>
-            {' '}
-            {item.label}
-          </Text>
-        </Box>
-      ))}
+      {items.map((item, idx) => {
+        const displayLabel = translatePhrase(language, item.label)
+        return (
+          <Box key={`${item.glyph}-${idx}`}>
+            {idx > 0 && <Text color={colors.text.dim}>   </Text>}
+            <Text color={item.color}>{item.glyph}</Text>
+            <Text color={colors.text.dim}>
+              {' '}
+              {displayLabel}
+            </Text>
+          </Box>
+        )
+      })}
     </Box>
   )
 }

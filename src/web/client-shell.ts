@@ -74,7 +74,7 @@ export function placeholderPage(): string {
       const res = await fetch('/api/state', { headers: { accept: 'application/json' } });
       const state = await res.json();
       if (!state.runs || state.runs.length === 0) {
-        app.innerHTML = '<p class="empty">No runs yet. Start one with: reevesagents spawn</p>';
+        app.innerHTML = '<p class="empty">No runs yet. Start a run from the TUI or CLI.</p>';
         return;
       }
       app.innerHTML = state.runs.map(run => {

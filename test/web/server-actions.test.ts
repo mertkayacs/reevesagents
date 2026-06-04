@@ -6,9 +6,17 @@ import { tmpdir } from 'node:os'
 import { startWebServer, type WebServerHandle } from '../../src/web/server.js'
 import {
   listAgents,
+  listRunHistory,
   readAgent,
   readRun,
+  readRunAny,
+  updateAgent,
+  updateRun,
+  writeAgent,
+  writeRun,
 } from '../../src/state/runs.js'
+import type { AgentRecord, Provider, RunRecord } from '../../src/state/types.js'
+import type { WebOrchestratorRuntime } from '../../src/web/prebeta-orchestrator.js'
 
 let tmpDir: string
 let handles: WebServerHandle[]
@@ -37,10 +45,14 @@ afterEach(async () => {
 
 async function start(opts: {
   webRoot?: string
+  prebetaOrchestrator?: boolean
+  orchestratorRuntime?: WebOrchestratorRuntime
 } = {}): Promise<WebServerHandle> {
   const handle = await startWebServer({
     open: false,
     webRoot: opts.webRoot,
+    prebetaOrchestrator: opts.prebetaOrchestrator,
+    orchestratorRuntime: opts.orchestratorRuntime,
   })
   handles.push(handle)
   return handle
@@ -132,6 +144,85 @@ function installFakeRuntimeBins(): void {
   }
 }
 
+function makeRun(id: string, mode: RunRecord['mode']): RunRecord {
+  return {
+    id,
+    mode,
+    name: `run-${id}`,
+    status: 'running',
+    tmux_session: `reeves_${id}`,
+    reeves_window_id: '@0',
+    reeves_pane_id: '%0',
+    root_agent_id: `${id}-root`,
+    working_dir: tmpDir,
+    preset_name: null,
+    started_at: '2026-01-01T00:00:00.000Z',
+    ended_at: null,
+  }
+}
+
+function makeAgent(id: string, runId: string, provider: Provider, role: AgentRecord['role']): AgentRecord {
+  return {
+    id,
+    run_id: runId,
+    nickname: id,
+    provider,
+    model: '',
+    role,
+    working_dir: tmpDir,
+    task: '',
+    task_status: 'queued',
+    task_note: '',
+    tmux_session: `reeves_${runId}`,
+    tmux_window_id: role === 'root' ? '@1' : '@2',
+    tmux_pane_id: role === 'root' ? '%1' : '%2',
+    rc_enabled: false,
+    permissions: 'ask',
+    inbox: [],
+    last_seen: 0,
+    started_at: '2026-01-01T00:00:01.000Z',
+    ended_at: null,
+  }
+}
+
+function fakeOrchestratorRuntime(): WebOrchestratorRuntime {
+  return {
+    startRun(request) {
+      const run = makeRun('orch', 'orchestrator')
+      run.name = request.name
+      run.working_dir = request.working_dir
+      run.root_agent_id = 'root'
+      const root = makeAgent('root', run.id, request.root.provider, 'root')
+      root.nickname = request.root.nickname || 'root'
+      root.model = request.root.model
+      root.permissions = request.root.permissions ?? 'ask'
+      root.task = request.root.task
+      writeRun(run)
+      writeAgent(root)
+      return { run, agents: [root] }
+    },
+    spawnWorker(request) {
+      const worker = makeAgent('worker', request.run_id, request.provider, 'worker')
+      worker.nickname = request.nickname || 'worker'
+      worker.model = request.model
+      worker.permissions = request.permissions ?? 'ask'
+      worker.task = request.task
+      writeAgent(worker)
+      return worker
+    },
+    killAgent(agentId) {
+      const agent = readAgent('orch', agentId)
+      if (agent.role === 'root') throw new Error('Root agent cannot be killed directly')
+      updateAgent(agent.run_id, agent.id, { ended_at: '2026-01-01T00:05:00.000Z', task_status: 'done' })
+      return readAgent(agent.run_id, agent.id)
+    },
+    stopRun(runId) {
+      updateRun(runId, { status: 'ended', ended_at: '2026-01-01T00:10:00.000Z' })
+      return readRunAny(runId)
+    },
+  }
+}
+
 // Reads only the first SSE frame, then tears the request down (the stream never ends).
 function firstSseFrame(port: number, path: string): Promise<{ contentType?: string; frame: string }> {
   return new Promise((resolve, reject) => {
@@ -164,6 +255,8 @@ describe('create terminal', () => {
 
     const created = await post(handle.port, '/api/terminals', {
       provider: 'codex-cli',
+      model: 'gpt-5-codex',
+      permissions: 'skip',
       nickname: 'Builder One',
       run_name: 'Release Check',
       working_dir: tmpDir,
@@ -171,10 +264,15 @@ describe('create terminal', () => {
     expect(created.status).toBe(200)
     const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
     expect(readRun(createdBody.run_id).name).toBe('Release Check')
-    expect(readAgent(createdBody.run_id, createdBody.id).nickname).toBe('Builder-One')
+    const root = readAgent(createdBody.run_id, createdBody.id)
+    expect(root.nickname).toBe('Builder-One')
+    expect(root.model).toBe('gpt-5-codex')
+    expect(root.permissions).toBe('skip')
 
     const added = await post(handle.port, '/api/terminals', {
       provider: 'claude-code',
+      model: 'sonnet',
+      permissions: 'ask',
       nickname: 'Reviewer',
       run_id: createdBody.run_id,
     })
@@ -182,19 +280,54 @@ describe('create terminal', () => {
     const addedBody = JSON.parse(added.body) as { id: string; run_id: string }
     expect(addedBody.run_id).toBe(createdBody.run_id)
     expect(listAgents(createdBody.run_id).map(agent => agent.nickname)).toEqual(['Builder-One', 'Reviewer'])
+    expect(readAgent(createdBody.run_id, addedBody.id).model).toBe('sonnet')
+    expect(readAgent(createdBody.run_id, addedBody.id).permissions).toBe('ask')
 
     const killed = await post(handle.port, `/api/terminals/${encodeURIComponent(addedBody.id)}/kill`, { confirm: true })
     expect(killed.status).toBe(200)
     expect(JSON.parse(killed.body)).toEqual({ ok: true })
     expect(readAgent(createdBody.run_id, addedBody.id).ended_at).not.toBeNull()
 
+    const deletedAgent = await post(handle.port, `/api/terminals/${encodeURIComponent(addedBody.id)}/delete`, { confirm: true })
+    expect(deletedAgent.status).toBe(200)
+    expect(JSON.parse(deletedAgent.body)).toEqual({ ok: true })
+    expect(listAgents(createdBody.run_id).map(agent => agent.id)).not.toContain(addedBody.id)
+
     const stopped = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/stop`, { confirm: true })
     expect(stopped.status).toBe(200)
     expect(JSON.parse(stopped.body)).toEqual({ ok: true })
-    expect(readRun(createdBody.run_id).status).toBe('ended')
+    expect(() => readRun(createdBody.run_id)).toThrow(/Run not found/)
 
     const stateAfterStop = await get(handle.port, '/api/state')
     const parsed = JSON.parse(stateAfterStop.body)
+    expect(parsed.runs).toEqual([])
+    expect(parsed.history.map((record: { id: string }) => record.id)).toContain(createdBody.run_id)
+
+    const deleted = await post(handle.port, `/api/history/${encodeURIComponent(createdBody.run_id)}/delete`, { confirm: true })
+    expect(deleted.status).toBe(200)
+    expect(JSON.parse(deleted.body)).toEqual({ ok: true })
+    expect(listRunHistory()).toEqual([])
+  })
+
+  it('ends a run when its only web terminal is killed', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+
+    const created = await post(handle.port, '/api/terminals', {
+      provider: 'codex-cli',
+      nickname: 'Solo',
+      run_name: 'Solo Run',
+      working_dir: tmpDir,
+    })
+    expect(created.status).toBe(200)
+    const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
+
+    const killed = await post(handle.port, `/api/terminals/${encodeURIComponent(createdBody.id)}/kill`, { confirm: true })
+    expect(killed.status).toBe(200)
+    expect(() => readRun(createdBody.run_id)).toThrow(/Run not found/)
+
+    const stateAfterKill = await get(handle.port, '/api/state')
+    const parsed = JSON.parse(stateAfterKill.body)
     expect(parsed.runs).toEqual([])
     expect(parsed.history.map((record: { id: string }) => record.id)).toContain(createdBody.run_id)
   })
@@ -213,6 +346,90 @@ describe('create terminal', () => {
     expect(JSON.parse(res.body).error).toMatch(/unknown provider/i)
   })
 
+  it('rejects unknown model and permission values', async () => {
+    const handle = await start()
+
+    const badModel = await post(handle.port, '/api/terminals', {
+      provider: 'codex',
+      model: 'not-a-codex-model',
+    })
+    expect(badModel.status).toBe(400)
+    expect(JSON.parse(badModel.body).error).toMatch(/unknown model/i)
+
+    const badPermissions = await post(handle.port, '/api/terminals', {
+      provider: 'codex',
+      permissions: 'always',
+    })
+    expect(badPermissions.status).toBe(400)
+    expect(JSON.parse(badPermissions.body).error).toMatch(/unknown permission mode/i)
+  })
+
+  it('rejects orchestrator creation unless pre-beta mode is enabled', async () => {
+    const handle = await start()
+    const res = await post(handle.port, '/api/terminals', {
+      provider: 'codex',
+      mode: 'orchestrator',
+      working_dir: tmpDir,
+    })
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/pre-beta orchestrator web mode is not enabled/i)
+  })
+
+  it('creates and controls orchestrator runs when pre-beta mode is enabled', async () => {
+    const handle = await start({
+      prebetaOrchestrator: true,
+      orchestratorRuntime: fakeOrchestratorRuntime(),
+    })
+
+    const state = await get(handle.port, '/api/state')
+    expect(JSON.parse(state.body).prebeta).toEqual({ orchestrator: true })
+
+    const created = await post(handle.port, '/api/terminals', {
+      provider: 'codex-cli',
+      model: 'gpt-5',
+      permissions: 'skip',
+      nickname: 'Lead',
+      run_name: 'Orchestrator Check',
+      mode: 'orchestrator',
+      working_dir: tmpDir,
+    })
+    expect(created.status).toBe(200)
+    const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
+    expect(readRunAny(createdBody.run_id).mode).toBe('orchestrator')
+    expect(readRunAny(createdBody.run_id).name).toBe('Orchestrator Check')
+    expect(readAgent(createdBody.run_id, createdBody.id).model).toBe('gpt-5')
+    expect(readAgent(createdBody.run_id, createdBody.id).permissions).toBe('skip')
+
+    const added = await post(handle.port, '/api/terminals', {
+      provider: 'claude-code',
+      model: 'opus',
+      permissions: 'ask',
+      nickname: 'Worker',
+      run_id: createdBody.run_id,
+    })
+    expect(added.status).toBe(200)
+    const addedBody = JSON.parse(added.body) as { id: string; run_id: string }
+    expect(addedBody.run_id).toBe(createdBody.run_id)
+    expect(readAgent(createdBody.run_id, addedBody.id).model).toBe('opus')
+    expect(readAgent(createdBody.run_id, addedBody.id).permissions).toBe('ask')
+
+    const rootKill = await post(handle.port, `/api/terminals/${encodeURIComponent(createdBody.id)}/kill`, { confirm: true })
+    expect(rootKill.status).toBe(400)
+    expect(JSON.parse(rootKill.body).error).toMatch(/root agent cannot be killed/i)
+
+    const workerKill = await post(handle.port, `/api/terminals/${encodeURIComponent(addedBody.id)}/kill`, { confirm: true })
+    expect(workerKill.status).toBe(200)
+    expect(readAgent(createdBody.run_id, addedBody.id).ended_at).not.toBeNull()
+
+    const stopped = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/stop`, { confirm: true })
+    expect(stopped.status).toBe(200)
+    expect(readRunAny(createdBody.run_id).status).toBe('ended')
+
+    const stateAfterStop = await get(handle.port, '/api/state')
+    const parsed = JSON.parse(stateAfterStop.body)
+    expect(parsed.runs).toEqual([])
+    expect(parsed.history.map((record: { id: string; mode: string }) => [record.id, record.mode])).toContainEqual([createdBody.run_id, 'orchestrator'])
+  })
 })
 
 describe('kill terminal', () => {
@@ -228,6 +445,31 @@ describe('kill terminal', () => {
     const res = await post(handle.port, '/api/terminals/ghost/kill', { confirm: true })
     expect(res.status).toBe(400)
     expect(JSON.parse(res.body).error).toMatch(/not found/i)
+  })
+})
+
+describe('delete terminal', () => {
+  it('requires confirmation', async () => {
+    const handle = await start()
+    const res = await post(handle.port, '/api/terminals/ghost/delete', {})
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/confirmation required/i)
+  })
+
+  it('requires the terminal to be stopped first', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+    const created = await post(handle.port, '/api/terminals', {
+      provider: 'codex-cli',
+      nickname: 'Live Delete Guard',
+      working_dir: tmpDir,
+    })
+    const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
+
+    const res = await post(handle.port, `/api/terminals/${encodeURIComponent(createdBody.id)}/delete`, { confirm: true })
+
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/stop agent before deleting/i)
   })
 })
 
@@ -247,6 +489,31 @@ describe('stop run', () => {
   })
 })
 
+describe('delete run', () => {
+  it('requires confirmation', async () => {
+    const handle = await start()
+    const res = await post(handle.port, '/api/runs/ghost/delete', {})
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/confirmation required/i)
+  })
+
+  it('requires the run to be stopped first', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+    const created = await post(handle.port, '/api/terminals', {
+      provider: 'codex-cli',
+      nickname: 'Run Delete Guard',
+      working_dir: tmpDir,
+    })
+    const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
+
+    const res = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/delete`, { confirm: true })
+
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/stop run before deleting/i)
+  })
+})
+
 describe('state stream', () => {
   it('serves an event-stream that opens with the current state', async () => {
     const handle = await start()
@@ -260,11 +527,17 @@ describe('state stream', () => {
 describe('static assets', () => {
   it('serves an allowlisted asset from the web root and 404s a missing one', async () => {
     writeFileSync(join(tmpDir, 'app.js'), '// fixture\n')
+    writeFileSync(join(tmpDir, 'brand-duck.json'), '{"ok":true}\n')
     const handle = await start({ webRoot: tmpDir })
 
     const present = await get(handle.port, '/app.js')
     expect(present.status).toBe(200)
     expect(present.contentType).toContain('text/javascript')
+
+    const brandDuck = await get(handle.port, '/brand-duck.json')
+    expect(brandDuck.status).toBe(200)
+    expect(brandDuck.contentType).toContain('application/json')
+    expect(JSON.parse(brandDuck.body)).toEqual({ ok: true })
 
     const missing = await get(handle.port, '/xterm.js')
     expect(missing.status).toBe(404)

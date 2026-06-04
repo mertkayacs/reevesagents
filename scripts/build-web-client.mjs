@@ -1,5 +1,5 @@
 // Copies the web client assets into dist/web/ after tsup builds the server.
-// Input: xterm UMD files from node_modules + the hand-written client in src/web/client.
+// Input: xterm UMD files from node_modules + the hand-written client and brand asset in src/web/client.
 // Output: a flat dist/web/ the server serves from a fixed allowlist.
 // Invariant: xterm ships from devDependencies, so end users install nothing extra.
 
@@ -17,6 +17,7 @@ const copies = [
   ['src/web/client/index.html', 'index.html'],
   ['src/web/client/app.css', 'app.css'],
   ['src/web/client/app.js', 'app.js'],
+  ['src/web/client/brand-duck.json', 'brand-duck.json'],
 ]
 
 mkdirSync(outDir, { recursive: true })

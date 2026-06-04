@@ -1,6 +1,6 @@
 // CLI entry point. No args launches TUI; subcommands provide operator control.
 // Inputs: process.argv. Outputs: TUI render or stdout text/JSON.
-// Invariant: this package exposes the stable spawner surface only.
+// Invariant: this package exposes the stable agent-run surface only.
 
 import { Command } from 'commander'
 import { execFileSync } from 'node:child_process'
@@ -8,7 +8,7 @@ import { prepareTuiColorEnv } from './utils/color-env.js'
 import { runDoctor } from './launcher/doctor.js'
 import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
 import { normalizeProvider, PROVIDERS } from './launcher/providers.js'
-import { listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
+import { autoCleanupRuns, listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
 import { providerDisplayName } from './utils/display.js'
@@ -56,7 +56,7 @@ function resolveAgent(id: string): AgentRecord {
 function resolveOpenTarget(id: string): { run: RunRecord, session: string, windowId: string, label: string } {
   try {
     const run = resolveRun(id)
-    return { run, session: run.reeves_session ?? run.tmux_session, windowId: run.reeves_window_id, label: run.name }
+    return { run, session: run.tmux_session, windowId: 'reeves', label: run.name }
   } catch {
     const agent = resolveAgent(id)
     return { run: readRun(agent.run_id), session: agent.tmux_session, windowId: agent.tmux_window_id, label: agent.nickname }
@@ -207,8 +207,8 @@ function parseAgentSpec(spec: string): { provider: Provider; nickname?: string; 
 
 program
   .command('spawn [agent...]')
-  .description('start a spawner run with independent provider CLI agents')
-  .option('--name <name>', 'run name', 'spawner')
+  .description('start a run with one or more provider agents')
+  .option('--name <name>', 'run name', 'run')
   .option('--cwd <dir>', 'working directory', process.cwd())
   .option('--prompt <text>', 'initial prompt pasted into each agent', '')
   .action((agentSpecs: string[], opts) => {
@@ -244,6 +244,7 @@ program
   .description('list runs')
   .option('--json', 'output JSON array')
   .action((opts) => {
+    autoCleanupRuns()
     const runs = listRuns().map(run => ({ ...run, view_status: computeRunStatus(run, runHasLiveTmuxTarget(run)) }))
     if (opts.json) {
       console.log(JSON.stringify(runs, null, 2))
@@ -258,13 +259,13 @@ program
       const root = agents.find(agent => agent.role === 'root')
       const note = agents.find(agent => agent.task_note.trim())?.task_note ?? ''
       const rootProvider = root ? providerDisplayName(root.provider) : '-'
-      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  spawn      ${rootProvider.padEnd(14)}  ${String(agents.length).padStart(2)} ${'agents'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
+      console.log(`${run.id.slice(0, 8)}  ${run.view_status.padEnd(7)}  ${'agent run'.padEnd(9)}  ${rootProvider.padEnd(14)}  ${String(agents.length).padStart(2)} ${'agents'.padEnd(9)}  ${age(run.started_at).padEnd(4)}  ${run.name}  ${run.working_dir}${note ? `  ${note}` : ''}`)
     }
   })
 
 program
   .command('open <id>')
-  .description('open a run reeves window or an agent window')
+  .description('open a run tmux tab set or an agent window')
   .action((id) => {
     openTarget(id)
   })
@@ -302,13 +303,13 @@ program
 
 program
   .command('kill <agent-id>')
-  .description('close one spawner agent')
-  .option('-y, --yes', 'confirm close')
+  .description('stop one agent')
+  .option('-y, --yes', 'confirm stop')
   .action((id, opts) => {
-    requireDestructiveConfirmation(opts, 'close agent')
+    requireDestructiveConfirmation(opts, 'stop agent')
     const agent = resolveAgent(id)
     const killed = killAgent(agent.id)
-    console.log(`closed ${killed.id.slice(0, 8)}  ${killed.nickname}`)
+    console.log(`stopped ${killed.id.slice(0, 8)}  ${killed.nickname}`)
   })
 
 program
@@ -330,17 +331,18 @@ program
 
 program
   .command('web')
-  .description('start the on-demand loopback web UI for spawner agents')
+  .description('start the on-demand loopback web UI for agents')
   .option('--port <n>', 'preferred port; falls back to the next free port')
   .option('--no-open', 'do not open the browser')
-  .action((opts: { port?: string; open?: boolean }) => {
+  .option('--prebeta-orchestrator', 'enable PRE-BETA orchestrator/MCP run controls when the separate package is installed')
+  .action((opts: { port?: string; open?: boolean; prebetaOrchestrator?: boolean }) => {
     runWeb(opts).catch(err => {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)
     })
   })
 
-async function runWeb(opts: { port?: string; open?: boolean }): Promise<void> {
+async function runWeb(opts: { port?: string; open?: boolean; prebetaOrchestrator?: boolean }): Promise<void> {
   const { checkWebExtras, webExtrasMessage } = await import('./web/extras.js')
   const extras = await checkWebExtras()
   if (!extras.ok) {
@@ -352,8 +354,10 @@ async function runWeb(opts: { port?: string; open?: boolean }): Promise<void> {
   const handle = await startWebServer({
     port: parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined,
     open: opts.open !== false,
+    prebetaOrchestrator: opts.prebetaOrchestrator === true,
   })
   console.log(`reevesagents web running at ${handle.url}`)
+  if (opts.prebetaOrchestrator) console.log('PRE-BETA orchestrator/MCP controls enabled.')
   console.log('press Ctrl+C to stop. agents keep running.')
   const shutdown = (): void => { handle.close().finally(() => process.exit(0)) }
   process.on('SIGINT', shutdown)
@@ -370,13 +374,11 @@ async function renderTui(): Promise<void> {
     import('ink'),
     import('./router.js'),
   ])
-  await render(React.createElement(Router), { alternateScreen: false }).waitUntilExit()
-  const { consumeWebLaunch } = await import('./web/launch-intent.js')
-  if (consumeWebLaunch()) {
-    // The menu asked to hand off to the web UI: launch it in this freed terminal.
-    // runWeb keeps the process alive (server + signal handlers); do not exit here.
-    await runWeb({ open: true })
-    return
+  try {
+    await render(React.createElement(Router), { alternateScreen: false }).waitUntilExit()
+  } finally {
+    const { closeTuiWebServer } = await import('./web/tui-launch.js')
+    await closeTuiWebServer()
   }
   process.exit(0)
 }

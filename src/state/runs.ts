@@ -132,7 +132,7 @@ function normalizePermissions(value: unknown): Permissions {
 }
 
 function normalizeRunMode(value: unknown): RunMode | undefined {
-  if (value === 'spawner') return value
+  if (value === 'spawner' || value === 'orchestrator') return value
   return undefined
 }
 
@@ -187,6 +187,7 @@ function normalizeRunHistory(raw: Record<string, unknown>): RunHistoryRecord {
   return {
     id: asString(raw.id),
     name: asString(raw.name).trim() || fallbackRunName(asString(raw.id)),
+    mode: normalizeRunMode(raw.mode) ?? 'spawner',
     status: raw.status === 'stale' ? 'stale' : 'ended',
     working_dir: asString(raw.working_dir),
     started_at: asString(raw.started_at, nowIso()),
@@ -272,6 +273,12 @@ export function writeRun(run: RunRecord): string {
 }
 
 export function readRun(runId: string): RunRecord {
+  const run = readRunUnlocked(runId)
+  if (run.mode !== 'spawner') throw new Error(`Run not found: ${runId}`)
+  return run
+}
+
+export function readRunAny(runId: string): RunRecord {
   return readRunUnlocked(runId)
 }
 
@@ -281,7 +288,11 @@ export function updateRun(runId: string, patch: Partial<RunRecord>): void {
   })
 }
 
-function listRunsUnlocked(): RunRecord[] {
+function isRunEnded(run: RunRecord): boolean {
+  return run.status === 'ended' || run.ended_at !== null
+}
+
+function listRunsUnlocked(includeAllModes: boolean, includeEnded = false): RunRecord[] {
   let entries: string[]
   try {
     entries = readdirSync(runsDir())
@@ -293,7 +304,9 @@ function listRunsUnlocked(): RunRecord[] {
   for (const entry of entries) {
     if (!existsSync(runPath(entry))) continue
     try {
-      runs.push(readRunUnlocked(entry))
+      const run = readRunUnlocked(entry)
+      if (!includeEnded && isRunEnded(run)) continue
+      if (includeAllModes || run.mode === 'spawner') runs.push(run)
     } catch {
       // skip malformed run folders
     }
@@ -301,7 +314,7 @@ function listRunsUnlocked(): RunRecord[] {
   return runs.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
 }
 
-function listRunHistoryUnlocked(): RunHistoryRecord[] {
+function listRunHistoryUnlocked(includeAllModes: boolean): RunHistoryRecord[] {
   let entries: string[]
   try {
     entries = readdirSync(historyDir())
@@ -313,7 +326,8 @@ function listRunHistoryUnlocked(): RunHistoryRecord[] {
   for (const entry of entries) {
     if (!entry.endsWith('.json')) continue
     try {
-      history.push(normalizeRunHistory(JSON.parse(readFileSync(join(historyDir(), entry), 'utf-8')) as Record<string, unknown>))
+      const record = normalizeRunHistory(JSON.parse(readFileSync(join(historyDir(), entry), 'utf-8')) as Record<string, unknown>)
+      if (includeAllModes || record.mode === 'spawner') history.push(record)
     } catch {
       // skip malformed history records
     }
@@ -322,16 +336,51 @@ function listRunHistoryUnlocked(): RunHistoryRecord[] {
 }
 
 export function listRuns(): RunRecord[] {
-  return listRunsUnlocked()
+  return listRunsUnlocked(false)
 }
 
-export function listRunHistory(): RunHistoryRecord[] {
-  return listRunHistoryUnlocked()
+export function listRunsAny(): RunRecord[] {
+  return listRunsUnlocked(true)
+}
+
+export interface RunHistoryOptions {
+  includeAllModes?: boolean
+}
+
+export function listRunHistory(options: RunHistoryOptions = {}): RunHistoryRecord[] {
+  return listRunHistoryUnlocked(options.includeAllModes === true)
 }
 
 export function removeRun(runId: string): void {
   withRunsLock(() => {
     rmSync(runDir(runId), { recursive: true, force: true })
+  })
+}
+
+export interface DeleteAgentOptions {
+  includeAllModes?: boolean
+}
+
+export function deleteAgent(agentId: string, options: DeleteAgentOptions = {}): AgentRecord {
+  return withRunsLock(() => {
+    const runs = listRunsUnlocked(options.includeAllModes === true)
+    for (const run of runs) {
+      try {
+        const agent = readAgentUnlocked(run.id, agentId)
+        if (!agent.ended_at) throw new Error('Stop agent before deleting it')
+        rmSync(agentPath(run.id, agent.id), { force: true })
+        return agent
+      } catch (err) {
+        if (err instanceof Error && err.message === 'Stop agent before deleting it') throw err
+      }
+    }
+    throw new Error(`Agent not found: ${agentId}`)
+  })
+}
+
+export function deleteRunHistory(runId: string): void {
+  withRunsLock(() => {
+    rmSync(runHistoryPath(runId), { force: true })
   })
 }
 
@@ -389,6 +438,7 @@ function buildRunHistoryRecord(run: RunRecord, status: RunHistoryStatus): RunHis
   return {
     id: run.id,
     name: run.name,
+    mode: run.mode === 'orchestrator' ? 'orchestrator' : 'spawner',
     status,
     working_dir: run.working_dir,
     started_at: run.started_at,
@@ -409,12 +459,39 @@ export function archiveAndRemoveRun(runId: string, status: RunHistoryStatus): Ru
   })
 }
 
+export function endRunIfNoLiveAgents(runId: string, endedAt = nowIso()): RunRecord {
+  return withRunsLock(() => {
+    const run = readRunUnlocked(runId)
+    if (run.status === 'ended' || run.ended_at !== null) return run
+    const liveAgents = listAgentsForRunIds([runId]).filter(agent => !agent.ended_at)
+    if (liveAgents.length > 0) return run
+    const endedRun: RunRecord = { ...run, status: 'ended', ended_at: endedAt }
+    writeRunUnlocked(endedRun)
+    return endedRun
+  })
+}
+
 export function listAgents(runId?: string): AgentRecord[] {
   return listAgentsForRunIds(runId ? [runId] : listRuns().map(run => run.id))
 }
 
+export function listAgentsAny(runId?: string): AgentRecord[] {
+  return listAgentsForRunIds(runId ? [runId] : listRunsAny().map(run => run.id))
+}
+
 export function findAgent(agentId: string): AgentRecord {
   for (const run of listRuns()) {
+    try {
+      return readAgentUnlocked(run.id, agentId)
+    } catch {
+      // agent belongs to another run
+    }
+  }
+  throw new Error(`Agent not found: ${agentId}`)
+}
+
+export function findAgentAny(agentId: string): AgentRecord {
+  for (const run of listRunsAny()) {
     try {
       return readAgentUnlocked(run.id, agentId)
     } catch {
@@ -480,6 +557,7 @@ export interface AutoCleanupOptions {
   sessionExists?: (_session: string) => boolean
   targetExists?: (_target: string) => boolean
   tmuxAvailable?: () => boolean
+  includeAllModes?: boolean
   cleanStale?: boolean
 }
 
@@ -487,8 +565,17 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
   const targetExists = options.targetExists ?? defaultTmuxTargetExists
   const sessionExists = options.sessionExists ?? defaultTmuxSessionExists
   const agents = listAgents(run.id).filter(agent => !agent.ended_at)
+  if (run.mode === 'spawner') {
+    const windowedAgents = agents.filter(agent => !agent.headless && agent.tmux_window_id)
+    if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id))
+    return sessionExists(run.tmux_session)
+  }
+  const rootAgent = agents.find(agent => agent.role === 'root' && (!run.root_agent_id || agent.id === run.root_agent_id))
+  if (!rootAgent) return false
   const windowedAgents = agents.filter(agent => !agent.headless && agent.tmux_window_id)
-  if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id))
+  if (windowedAgents.length > 0) {
+    return windowedAgents.some(agent => targetExists(agent.tmux_window_id))
+  }
   return sessionExists(run.tmux_session)
 }
 
@@ -506,9 +593,9 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
   const haveTmux = options.cleanStale === false ? false : tmuxAvailable()
   const removed: string[] = []
   const archived: string[] = []
-  const runs = listRuns()
+  const runs = listRunsUnlocked(options.includeAllModes === true, true)
   for (const run of runs) {
-    const isEnded = run.status === 'ended' || run.ended_at !== null
+    const isEnded = isRunEnded(run)
     const isStale = !isEnded && haveTmux && !runHasLiveTmuxTarget(run, { sessionExists, targetExists })
     if (!isEnded && !isStale) continue
     try {

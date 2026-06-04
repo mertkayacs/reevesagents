@@ -5,14 +5,18 @@ import React from 'react'
 import { Box, Text } from 'ink'
 import { colors } from '../utils/tokens.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
+import { translatePhrase } from '../i18n/catalog.js'
+import { useLanguage } from '../state/LanguageContext.js'
 
 interface Props {
   label: string
 }
 
 export function Section({ label }: Props) {
+  const { language } = useLanguage()
   const columns = useLayoutColumns()
-  const labelTextWidth = label ? label.length + 2 : 0
+  const displayLabel = translatePhrase(language, label)
+  const labelTextWidth = displayLabel ? displayLabel.length + 2 : 0
   const width = Math.max(labelTextWidth + 7, panelWidth(columns))
   const suffix = '─'.repeat(Math.max(2, width - labelTextWidth - 5))
 
@@ -21,10 +25,10 @@ export function Section({ label }: Props) {
       <Text color={colors.surface.border} wrap="truncate-end">
         {'  '}
         ╭─
-        {label ? (
+        {displayLabel ? (
           <>
             {' '}
-            <Text color={colors.accent.primary} bold>{label}</Text>
+            <Text color={colors.accent.primary} bold>{displayLabel}</Text>
             {' '}
           </>
         ) : null}

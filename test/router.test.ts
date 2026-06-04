@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { nextHistoryOnPush, nextHistoryOnReset } from '../src/router.js'
 import { Router } from '../src/router.js'
 import type { ScreenName } from '../src/state/types.js'
@@ -69,6 +72,9 @@ describe('nextHistoryOnReset', () => {
 
 describe('Router startup', () => {
   it('starts at the main menu even when launched from a run context', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'reeves-router-test-'))
+    process.env.REEVES_CONFIG = join(tmp, 'config.json')
+    writeFileSync(process.env.REEVES_CONFIG, JSON.stringify({ version: 2, global: { language: 'en' } }), 'utf8')
     process.env.REEVES_RUN_ID = 'run-1'
     try {
       const { lastFrame, unmount } = render(React.createElement(Router))
@@ -79,6 +85,46 @@ describe('Router startup', () => {
       unmount()
     } finally {
       delete process.env.REEVES_RUN_ID
+      delete process.env.REEVES_CONFIG
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('asks for language on first launch when config is missing', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'reeves-router-language-test-'))
+    process.env.REEVES_CONFIG = join(tmp, 'config.json')
+    try {
+      const { lastFrame, unmount } = render(React.createElement(Router))
+      const frame = lastFrame() ?? ''
+
+      expect(frame).toContain('Choose language')
+      expect(frame).toContain('English')
+      unmount()
+    } finally {
+      delete process.env.REEVES_CONFIG
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('localizes shared TUI chrome from the saved language', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'reeves-router-i18n-test-'))
+    process.env.REEVES_CONFIG = join(tmp, 'config.json')
+    process.env.REEVES_REGISTRY = tmp
+    writeFileSync(process.env.REEVES_CONFIG, JSON.stringify({ version: 2, global: { language: 'tr' } }), 'utf8')
+    try {
+      const Component = Router as React.ComponentType<{ initialScreen?: ScreenName }>
+      const { lastFrame, unmount } = render(React.createElement(Component, { initialScreen: 'Runs' }))
+      const frame = lastFrame() ?? ''
+
+      expect(frame).toContain('Runlar')
+      expect(frame).toContain('İşlemler')
+      expect(frame).toContain('Yeni run')
+      expect(frame).not.toContain('New Run')
+      unmount()
+    } finally {
+      delete process.env.REEVES_CONFIG
+      delete process.env.REEVES_REGISTRY
+      rmSync(tmp, { recursive: true, force: true })
     }
   })
 })

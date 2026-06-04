@@ -3,10 +3,14 @@
 import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/router.js'
+import { Router, RouterContext } from '../../src/router.js'
+import { AgentDetail } from '../../src/screens/AgentDetail.js'
+import { ToastProvider } from '../../src/state/ToastContext.js'
 import * as runsState from '../../src/state/runs.js'
 import * as runtime from '../../src/launcher/runtime.js'
-import type { RunRecord, AgentRecord } from '../../src/state/types.js'
+import type { RunRecord, AgentRecord, RouterContextValue } from '../../src/state/types.js'
+
+const waitForInput = () => new Promise(resolve => setTimeout(resolve, 75))
 
 vi.mock('../../src/state/runs.js', async () => {
   const actual = await vi.importActual('../../src/state/runs.js')
@@ -51,11 +55,16 @@ vi.mock('../../src/state/runs.js', async () => {
   }
 })
 
-vi.mock('../../src/launcher/runtime.js', () => ({
-  openAgent: vi.fn(),
-  peekAgent: vi.fn(() => 'sample output'),
-  killAgent: vi.fn(),
-}))
+vi.mock('../../src/launcher/runtime.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/launcher/runtime.js')>('../../src/launcher/runtime.js')
+  return {
+    ...actual,
+    openRunTabs: vi.fn(),
+    openAgent: vi.fn(),
+    peekAgent: vi.fn(() => 'sample output'),
+    killAgent: vi.fn(),
+  }
+})
 
 describe('AgentDetail screen', () => {
   beforeEach(() => {
@@ -128,6 +137,82 @@ describe('AgentDetail screen', () => {
 
     expect(frame).toBeTruthy()
     expect(frame.length > 0).toBe(true)
+    unmount()
+  })
+
+  it('does not open an ended agent', async () => {
+    const endedAgent: AgentRecord = {
+      id: 'agent-1',
+      run_id: 'run-1',
+      nickname: 'root',
+      provider: 'cc',
+      model: 'claude-3-5-sonnet',
+      role: 'root',
+      working_dir: '/tmp/test',
+      task: 'test task',
+      task_status: 'done',
+      task_note: '',
+      tmux_session: 'reeves-123',
+      tmux_window_id: '1',
+      tmux_pane_id: '0',
+      rc_enabled: false,
+      permissions: 'ask',
+      inbox: [],
+      last_seen: Date.now(),
+      started_at: '2026-05-22T10:00:00Z',
+      ended_at: '2026-05-22T10:10:00Z',
+    }
+    vi.mocked(runsState.findAgent).mockReturnValue(endedAgent)
+    vi.mocked(runsState.readRun).mockReturnValue({
+      id: 'run-1',
+      name: 'test-run',
+      status: 'running',
+      tmux_session: 'reeves-123',
+      reeves_window_id: '0',
+      reeves_pane_id: '0',
+      root_agent_id: 'agent-1',
+      working_dir: '/tmp/test',
+      preset_name: null,
+      started_at: '2026-05-22T10:00:00Z',
+      ended_at: null,
+    } as RunRecord)
+    vi.mocked(runsState.listAgents).mockReturnValue([endedAgent])
+    const router: RouterContextValue = {
+      screen: 'AgentDetail',
+      push: vi.fn(),
+      pop: vi.fn(),
+      forward: vi.fn(),
+      replace: vi.fn(),
+      resetStack: vi.fn(),
+      selectedRunId: 'run-1',
+      setSelectedRunId: vi.fn(),
+      selectedAgentId: 'agent-1',
+      setSelectedAgentId: vi.fn(),
+      selectedCheckName: null,
+      setSelectedCheckName: vi.fn(),
+      selectedWorkerIdx: null,
+      setSelectedWorkerIdx: vi.fn(),
+      canBack: true,
+      canForward: false,
+    }
+
+    const { stdin, lastFrame, unmount } = render(
+      <RouterContext.Provider value={router}>
+        <ToastProvider>
+          <AgentDetail />
+        </ToastProvider>
+      </RouterContext.Provider>,
+    )
+
+    stdin.write('\u001B[B')
+    await waitForInput()
+    stdin.write('\u001B[B')
+    await waitForInput()
+    expect(lastFrame() ?? '').toContain('agent has ended')
+    stdin.write('\r')
+    await waitForInput()
+
+    expect(runtime.openAgent).not.toHaveBeenCalled()
     unmount()
   })
 })

@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import type { Config, GlobalConfig, Permissions } from './types.js'
+import { DEFAULT_LANGUAGE, isLanguageCode } from '../i18n/languages.js'
 
 const SCHEMA_VERSION = 2
 
@@ -14,7 +15,8 @@ const DEFAULT_GLOBAL: GlobalConfig = {
   max_depth: 5,
   max_agents: 10,
   ready_delay_ms: 5000,
-  default_permissions: 'ask'
+  default_permissions: 'ask',
+  language: DEFAULT_LANGUAGE,
 }
 
 export function configPath(): string {
@@ -56,6 +58,7 @@ function mergeDefaults(raw: unknown): Config {
     if (typeof g.max_agents === 'number' && g.max_agents > 0) merged.global.max_agents = g.max_agents
     if (typeof g.ready_delay_ms === 'number' && g.ready_delay_ms >= 0) merged.global.ready_delay_ms = g.ready_delay_ms
     if (g.default_permissions === 'skip' || g.default_permissions === 'ask') merged.global.default_permissions = g.default_permissions as Permissions
+    if (isLanguageCode(g.language)) merged.global.language = g.language
   }
 
   return merged

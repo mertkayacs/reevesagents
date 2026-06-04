@@ -12,7 +12,7 @@ import type { Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket, type RawData } from 'ws'
 import pty from '@lydell/node-pty'
-import { findAgent, readRun } from '../state/runs.js'
+import { findAgent, findAgentAny, readRun, readRunAny } from '../state/runs.js'
 import { isAllowedHostHeader, isAllowedOrigin } from './guards.js'
 
 type Pty = ReturnType<typeof pty.spawn>
@@ -31,12 +31,17 @@ export interface TerminalTarget {
 
 export type ClientFrame = { t: 'i'; d: string } | { t: 'r'; c: number; r: number }
 
+export interface BridgeOptions {
+  prebetaOrchestrator?: boolean
+}
+
 // Resolves an agent id to its tmux target using only the registry record.
 // Throws a user-facing message when the agent cannot be bridged.
-export function resolveTerminalTarget(id: string): TerminalTarget {
+export function resolveTerminalTarget(id: string, options: BridgeOptions = {}): TerminalTarget {
   if (!id) throw new Error('missing agent id')
-  const agent = findAgent(id)
-  readRun(agent.run_id)
+  const agent = options.prebetaOrchestrator ? findAgentAny(id) : findAgent(id)
+  if (options.prebetaOrchestrator) readRunAny(agent.run_id)
+  else readRun(agent.run_id)
   if (agent.ended_at) throw new Error('agent has ended')
   if (agent.headless || !agent.tmux_window_id) throw new Error('agent has no tmux window')
   return { session: agent.tmux_session, windowId: agent.tmux_window_id, nickname: agent.nickname }
@@ -87,10 +92,10 @@ function disposeBridge(bridge: Bridge): void {
   try { if (bridge.ws.readyState === bridge.ws.OPEN) bridge.ws.close() } catch { /* already closing */ }
 }
 
-function openBridge(ws: WebSocket, id: string, bridges: Set<Bridge>): void {
+function openBridge(ws: WebSocket, id: string, bridges: Set<Bridge>, options: BridgeOptions): void {
   let target: TerminalTarget
   try {
-    target = resolveTerminalTarget(id)
+    target = resolveTerminalTarget(id, options)
   } catch (err) {
     send(ws, { t: 'e', m: err instanceof Error ? err.message : 'agent not found' })
     ws.close()
@@ -160,7 +165,7 @@ export interface BridgeHandle {
 
 // Attaches the websocket terminal bridge to an existing HTTP server. No separate
 // network port is opened. getPort returns the bound port for the origin check.
-export function attachTerminalBridge(server: Server, getPort: () => number): BridgeHandle {
+export function attachTerminalBridge(server: Server, getPort: () => number, options: BridgeOptions = {}): BridgeHandle {
   const wss = new WebSocketServer({ noServer: true })
   const bridges = new Set<Bridge>()
 
@@ -184,7 +189,7 @@ export function attachTerminalBridge(server: Server, getPort: () => number): Bri
       socket.destroy()
       return
     }
-    wss.handleUpgrade(req, socket, head, ws => openBridge(ws, id, bridges))
+    wss.handleUpgrade(req, socket, head, ws => openBridge(ws, id, bridges, options))
   })
 
   return {

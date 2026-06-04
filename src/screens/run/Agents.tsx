@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput, useWindowSize } from 'ink'
-import { Frame } from '../../components/Frame.js'
+import { Frame, frameBodyRows } from '../../components/Frame.js'
 import { Row } from '../../components/Row.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { Pagination } from '../../components/Pagination.js'
@@ -36,7 +36,9 @@ function statusGlyph(status: string): { char: string; color: string } {
 export function RunAgents() {
   const { selectedRunId, setSelectedAgentId, push, pop } = useRouter()
   const { rows: termRows } = useWindowSize()
-  const pageSize = Math.max(2, termRows - CHROME_ROWS)
+  const bodyRows = frameBodyRows(termRows, true, true)
+  const compactBody = bodyRows <= 9
+  const pageSize = Math.max(1, compactBody ? bodyRows - 3 : Math.min(termRows - CHROME_ROWS, bodyRows - 6))
 
   const [run, setRun] = useState<RunRecord | null>(() =>
     selectedRunId ? (() => { try { return readRun(selectedRunId) } catch { return null } })() : null
@@ -79,6 +81,19 @@ export function RunAgents() {
   ]
 
   const selected = items[selectedIdx]
+  const compactItems = [
+    ...pagedData.map((item, idx) => ({ itemIdx: idx, item })),
+    ...(totalPages > 1 ? [{ itemIdx: pagedData.length, item: { type: 'pagination' as const } }] : []),
+    { itemIdx: pagedData.length + paginOffset + 1, item: { type: 'action' as const, action: 'AddWorker' as const } },
+    { itemIdx: pagedData.length + paginOffset + 2, item: { type: 'action' as const, action: 'Back' as const } },
+  ]
+  const compactSelectedIdx = Math.max(0, compactItems.findIndex(item => item.itemIdx === selectedIdx))
+  const compactEntryCount = Math.max(1, bodyRows - 2)
+  const compactFirstEntry = Math.min(
+    Math.max(0, compactSelectedIdx - compactEntryCount + 1),
+    Math.max(0, compactItems.length - compactEntryCount),
+  )
+  const visibleCompactItems = compactItems.slice(compactFirstEntry, compactFirstEntry + compactEntryCount)
 
   function handleActivate(): void {
     if (!selected) return
@@ -144,7 +159,7 @@ export function RunAgents() {
   )
   let statusContext = `${run.name} · ${agents.length} agents`
   if (selected?.type === 'pagination') statusContext = `page ${page} of ${totalPages} · ← → turn page`
-  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : 'spawn new agent'
+  if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : 'add an agent to this run'
   if (selected?.type === 'action' && selected.action === 'Back') statusContext = 'return to run hub'
 
   return (
@@ -154,20 +169,42 @@ export function RunAgents() {
         { label: 'count', value: String(agents.length) },
         { label: 'status', value: run.status },
       ]}
-      tagline="Independent CLI agents in this spawner run."
+      tagline="Agents in this run."
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
-      <Box flexDirection="column">
-        <Section label="Agents" />
-        {agents.length === 0 && (
-          <Row selected={false} primary="No agents" trailing="add an agent below" disabled />
-        )}
-        {pagedData.map((item, idx) => {
-          const isSelected = selectedIdx === idx
-
-          if (item.type === 'agent' && item.agent) {
-            const agent = item.agent
+      {compactBody ? (
+        <Box flexDirection="column">
+          <Section label={selected?.type === 'agent' ? 'Agents' : 'Actions'} />
+          {agents.length === 0 && compactFirstEntry === 0 && (
+            <Row selected={false} primary="No agents" trailing="add an agent" disabled />
+          )}
+          {visibleCompactItems.map(({ itemIdx, item }) => {
+            if (item.type === 'pagination') {
+              return (
+                <Pagination
+                  key="pagination"
+                  page={page}
+                  total={totalPages}
+                  focused={selectedIdx === itemIdx}
+                  onPrev={() => { setPage(p => Math.max(1, p - 1)); setSelectedIdx(0) }}
+                  onNext={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIdx(0) }}
+                />
+              )
+            }
+            if (item.type === 'action') {
+              return (
+                <Row
+                  key={item.action}
+                  selected={selectedIdx === itemIdx}
+                  primary={item.action === 'AddWorker' ? 'Add Agent' : 'Back'}
+                  primaryWidth={agentLabelWidth}
+                  hint={item.action === 'AddWorker' ? isRunEnded ? 'run is ended' : 'add an agent to this run' : 'return to run hub'}
+                  disabled={item.action === 'AddWorker' && isRunEnded}
+                />
+              )
+            }
+            const agent = item.agent!
             const providerLabel = providerDisplayName(agent.provider)
             const badges = [
               { label: providerLabel, color: providerColor(agent.provider), width: providerBadgeWidth },
@@ -176,7 +213,7 @@ export function RunAgents() {
             return (
               <Row
                 key={agent.id}
-                selected={isSelected}
+                selected={selectedIdx === itemIdx}
                 primary={agent.nickname}
                 primaryWidth={agentLabelWidth}
                 glyph={statusGlyph(agent.task_status)}
@@ -184,38 +221,69 @@ export function RunAgents() {
                 hint={agent.task_note || agent.task_status}
               />
             )
-          }
-          return null
-        })}
+          })}
+          <SectionEnd />
+        </Box>
+      ) : (
+        <Box flexDirection="column">
+          <Section label="Agents" />
+          {agents.length === 0 && (
+            <Row selected={false} primary="No agents" trailing="add an agent below" disabled />
+          )}
+          {pagedData.map((item, idx) => {
+            const isSelected = selectedIdx === idx
 
-        {totalPages > 1 && (
-          <Pagination
-            page={page}
-            total={totalPages}
-            focused={selectedIdx === pagedData.length}
-            onPrev={() => { setPage(p => Math.max(1, p - 1)); setSelectedIdx(0) }}
-            onNext={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIdx(0) }}
+            if (item.type === 'agent' && item.agent) {
+              const agent = item.agent
+              const providerLabel = providerDisplayName(agent.provider)
+              const badges = [
+                { label: providerLabel, color: providerColor(agent.provider), width: providerBadgeWidth },
+                { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider), width: modelBadgeWidth },
+              ]
+              return (
+                <Row
+                  key={agent.id}
+                  selected={isSelected}
+                  primary={agent.nickname}
+                  primaryWidth={agentLabelWidth}
+                  glyph={statusGlyph(agent.task_status)}
+                  badges={badges}
+                  hint={agent.task_note || agent.task_status}
+                />
+              )
+            }
+            return null
+          })}
+
+          {totalPages > 1 && (
+            <Pagination
+              page={page}
+              total={totalPages}
+              focused={selectedIdx === pagedData.length}
+              onPrev={() => { setPage(p => Math.max(1, p - 1)); setSelectedIdx(0) }}
+              onNext={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIdx(0) }}
+            />
+          )}
+          <SectionEnd />
+
+          <Section label="Actions" />
+
+          <Row
+            selected={selectedIdx === pagedData.length + paginOffset + 1}
+            primary="Add Agent"
+            primaryWidth={agentLabelWidth}
+            hint={isRunEnded ? 'run is ended' : 'add an agent to this run'}
+            disabled={isRunEnded}
           />
-        )}
-        <SectionEnd />
-
-        <Section label="Actions" />
-
-        <Row
-          selected={selectedIdx === pagedData.length + paginOffset + 1}
-          primary="Add Agent"
-          primaryWidth={agentLabelWidth}
-          hint={isRunEnded ? 'run is ended' : 'spawn new agent'}
-          disabled={isRunEnded}
-        />
-        <Row
-          selected={selectedIdx === pagedData.length + paginOffset + 2}
-          primary="Back"
-          primaryWidth={agentLabelWidth}
-          hint="return to run hub"
-        />
-        <SectionEnd />
-      </Box>
+          <Row
+            selected={selectedIdx === pagedData.length + paginOffset + 2}
+            primary="Back"
+            primaryWidth={agentLabelWidth}
+            hint="return to run hub"
+          />
+          <SectionEnd />
+        </Box>
+      )}
     </Frame>
   )
 }

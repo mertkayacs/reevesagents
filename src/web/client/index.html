@@ -11,17 +11,7 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <svg class="brand-duck" aria-hidden="true" focusable="false" viewBox="0 0 64 48">
-        <ellipse cx="36" cy="28" rx="24" ry="13" fill="#ffcc33" />
-        <ellipse cx="22" cy="14" rx="13" ry="12" fill="#ffcc33" />
-        <polygon points="3,12 12,9 12,19 3,20" fill="#ff7a1a" />
-        <polygon points="3,17 12,15 12,19 3,20" fill="#d65510" />
-        <circle cx="22" cy="12" r="3.2" fill="#ffffff" />
-        <circle cx="21" cy="12" r="2" fill="#101010" />
-        <circle cx="20.3" cy="11.3" r="0.8" fill="#ffffff" />
-        <ellipse cx="42" cy="30" rx="13" ry="5" fill="#e6b020" />
-        <polygon points="56,22 62,19 60,28 56,28" fill="#ffcc33" />
-      </svg>
+      <div id="brand-duck" class="brand-duck" aria-hidden="true"></div>
       <span class="brand-lockup">
         <span class="brand-name">ReevesAgents</span>
         <span id="brand-beta" class="brand-beta">web · beta</span>
@@ -29,7 +19,12 @@
     </div>
     <div class="topbar-actions">
       <span id="conn" class="conn" data-state="idle" title="live update stream">live</span>
-      <button id="new-btn" class="btn btn-accent" type="button">New agent</button>
+      <label class="language-picker" title="Language">
+        <span id="language-label" class="language-label">Language</span>
+        <select id="language-select" aria-label="Language"></select>
+      </label>
+      <button id="new-agent-btn" class="btn btn-agent" type="button">New agent</button>
+      <button id="new-run-btn" class="btn btn-accent" type="button">New run</button>
     </div>
   </header>
 
@@ -45,7 +40,8 @@
       <div id="sidebar-list" class="sidebar-list"></div>
       <div id="sidebar-empty" class="sidebar-empty">
         <div class="empty-title">No agents yet</div>
-        <div class="empty-body">Create a run to spawn a provider CLI agent in its own tmux window.</div>
+        <div class="empty-body">Create a run, then add provider agents as the work grows.</div>
+        <button id="empty-new-run" class="btn btn-accent empty-action" type="button">New run</button>
       </div>
     </aside>
 
@@ -53,9 +49,12 @@
       <div class="stage-head">
         <div>
           <div id="stage-title" class="stage-title">No agent selected</div>
-          <div id="stage-sub" class="stage-sub">Pick an agent on the left, or create one.</div>
+          <div id="stage-sub" class="stage-sub">Pick an agent on the left, or create a run.</div>
         </div>
-        <div id="stage-status" class="stage-status" hidden></div>
+        <div class="stage-head-actions">
+          <button id="stage-add-agent" class="btn btn-secondary" type="button" hidden>Add agent</button>
+          <div id="stage-status" class="stage-status" hidden></div>
+        </div>
       </div>
       <div id="term-wrap" class="term-wrap">
         <div id="term-host" class="term-host"></div>
@@ -64,7 +63,11 @@
             <div class="overlay-eyebrow">web agent</div>
             <div class="overlay-title">No agent attached</div>
             <div class="overlay-body">
-              Select an agent to open its live pane. The browser can close without stopping the run.
+              Select an agent to open its live pane. Closing the browser leaves the run active.
+            </div>
+            <div class="overlay-actions">
+              <button id="overlay-new-run" class="btn btn-accent" type="button">New run</button>
+              <button id="overlay-new-agent" class="btn btn-agent" type="button" hidden>New agent</button>
             </div>
           </div>
         </div>
@@ -74,36 +77,89 @@
 
   <dialog id="new-dialog" class="dialog">
     <form id="new-form" method="dialog">
-      <div id="new-dialog-title" class="dialog-title">New agent</div>
+      <div class="dialog-header">
+        <div id="new-dialog-title" class="dialog-title">New run</div>
+        <div id="new-dialog-subtitle" class="dialog-subtitle">Start a run with its first agent.</div>
+      </div>
 
-      <label class="field">
-        <span class="field-label">Target run</span>
-        <select id="f-run"></select>
+      <div class="create-switch" role="tablist" aria-label="Create type">
+        <button id="create-run-tab" class="create-tab" type="button" role="tab">New run</button>
+        <button id="create-agent-tab" class="create-tab" type="button" role="tab">New agent</button>
+      </div>
+
+      <div id="target-run-note" class="dialog-note" hidden></div>
+
+      <label class="field" id="agent-run-field" hidden>
+        <span class="field-label">Run</span>
+        <select id="f-agent-run"></select>
+        <span id="agent-run-help" class="field-help">Choose the active run that will receive this agent.</span>
       </label>
 
       <label class="field" id="run-name-field">
-        <span class="field-label">Run name <span class="field-opt">new run only</span></span>
+        <span class="field-label">Run name</span>
         <input id="f-run-name" type="text" maxlength="80" placeholder="release check" autocomplete="off" />
+        <span id="run-name-help" class="field-help">Shown in the run list and history.</span>
       </label>
 
-      <label class="field">
-        <span class="field-label">Provider</span>
-        <select id="f-provider" required></select>
-      </label>
+      <div class="field provider-field">
+        <div class="field-label">Provider</div>
+        <select id="f-provider" required tabindex="-1" aria-hidden="true"></select>
+        <div id="provider-grid" class="provider-grid" role="listbox" aria-label="Provider"></div>
+        <span id="provider-help" class="field-help">Choose the provider CLI that will run this agent.</span>
+      </div>
 
-      <label class="field">
+      <div class="create-options-grid">
+        <label class="field model-field">
+          <span class="field-label">Model</span>
+          <select id="f-model"></select>
+          <span id="model-help" class="field-help">Provider default is safest when unsure.</span>
+        </label>
+
+        <div class="field permissions-field">
+          <div class="field-label">Permission mode</div>
+          <select id="f-permissions" required tabindex="-1" aria-hidden="true">
+            <option value="ask">Ask first</option>
+            <option value="skip">Skip prompts</option>
+          </select>
+          <div id="permission-grid" class="permission-grid" role="radiogroup" aria-label="Permission mode">
+            <button class="permission-option" type="button" role="radio" data-permission="ask">
+              <span class="permission-title">Ask first</span>
+              <span class="permission-meta">Keep provider approval prompts</span>
+            </button>
+            <button class="permission-option" type="button" role="radio" data-permission="skip">
+              <span class="permission-title">Skip prompts</span>
+              <span class="permission-meta">Use only in trusted workspaces</span>
+            </button>
+          </div>
+          <span id="permissions-help" class="field-help">Ask first is safer. Skip prompts only in trusted workspaces.</span>
+        </div>
+      </div>
+
+      <label class="field" id="agent-name-field">
         <span class="field-label">Agent name <span class="field-opt">optional</span></span>
         <input id="f-nickname" type="text" maxlength="40" placeholder="planner" autocomplete="off" />
+        <span id="agent-name-help" class="field-help">Optional display name and tmux window name.</span>
+      </label>
+
+      <label class="field" id="mode-field" hidden>
+        <span class="field-label">New run mode</span>
+        <select id="f-mode">
+          <option value="spawner">Agent run</option>
+          <option value="orchestrator">Orchestrator MCP · pre-beta</option>
+        </select>
+        <span id="mode-help" class="field-help">Normal runs are direct agent workspaces. Orchestrator MCP is pre-beta.</span>
       </label>
 
       <label class="field" id="cwd-field">
-        <span class="field-label">Working directory <span class="field-opt">new run only</span></span>
+        <span class="field-label">Working directory</span>
         <input id="f-cwd" type="text" placeholder="defaults to the server's directory" autocomplete="off" />
+        <span id="cwd-help" class="field-help">Agents start in this directory.</span>
       </label>
 
-      <label class="field">
+      <label class="field" id="prompt-field">
         <span class="field-label">Initial prompt <span class="field-opt">optional, typed in on start</span></span>
         <textarea id="f-prompt" rows="3" placeholder="What should this agent start working on?"></textarea>
+        <span id="prompt-help" class="field-help">Sent to the agent after its window opens.</span>
       </label>
 
       <div id="new-error" class="dialog-error" hidden></div>

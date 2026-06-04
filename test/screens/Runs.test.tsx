@@ -71,6 +71,7 @@ describe('Runs screen', () => {
     vi.mocked(runsState.listRunHistory).mockReturnValue([{
       id: 'old',
       name: 'old run',
+      mode: 'spawner',
       status: 'ended',
       working_dir: '/tmp',
       started_at: '2026-01-01T00:00:00.000Z',
@@ -151,7 +152,7 @@ describe('Runs screen', () => {
 
     expect(frame).toContain('ReevesAgents')
     expect(frame).toContain('Runs')
-    expect(frame).toContain('Manage local tmux workspaces')
+    expect(frame).toContain('Manage active runs')
     unmount()
   })
 })

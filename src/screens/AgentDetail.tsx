@@ -1,27 +1,33 @@
-// Agent detail overview: summary plus output, prompt, open, close, and back actions.
+// Agent detail overview: summary plus output, prompt, open, lifecycle, and back actions.
 
 import React, { useState } from 'react'
-import { Box, Text, useInput } from 'ink'
-import { Frame } from '../components/Frame.js'
+import { Box, Text, useInput, useWindowSize } from 'ink'
+import { Frame, frameBodyRows } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../utils/display.js'
-import { findAgent, readRun } from '../state/runs.js'
+import { findAgent, listAgents, readRun } from '../state/runs.js'
 import { openAgent } from '../launcher/runtime.js'
+import { useToast } from '../state/ToastContext.js'
 import type { AgentRecord } from '../state/types.js'
 
-type RowItem = 'Output' | 'Task' | '__section__' | 'OpenCLI' | 'CloseAgent' | 'Back'
+type RowItem = 'Output' | 'Task' | '__section__' | 'OpenCLI' | 'AgentLifecycle' | 'Back'
 const LABELS: Record<RowItem, string> = {
   Output: 'Output',
   Task: 'Prompt',
   OpenCLI: 'Open Agent',
-  CloseAgent: 'Close Agent',
+  AgentLifecycle: 'Stop Agent',
   Back: 'Back',
   '__section__': '',
 }
-const ACTION_LABEL_WIDTH = Math.max(...Object.values(LABELS).map(label => label.length), 'Open Agent'.length, 'Close Agent'.length)
+const ACTION_LABEL_WIDTH = Math.max(
+  ...Object.values(LABELS).map(label => label.length),
+  'Open Agent'.length,
+  'Stop Agent'.length,
+  'Delete Agent'.length,
+)
 
 interface SelectableItem {
   type: 'action'
@@ -30,6 +36,10 @@ interface SelectableItem {
 
 export function AgentDetail() {
   const { selectedAgentId, push, pop } = useRouter()
+  const { toast } = useToast()
+  const { rows: termRows } = useWindowSize()
+  const bodyRows = frameBodyRows(termRows, true, true)
+  const compactBody = bodyRows <= 8
   const [agent] = useState<AgentRecord | null>(() =>
     selectedAgentId ? (() => { try { return findAgent(selectedAgentId) } catch { return null } })() : null
   )
@@ -43,11 +53,21 @@ export function AgentDetail() {
     { type: 'action', action: 'Task' },
     { type: 'action', action: '__section__' },
     { type: 'action', action: 'OpenCLI' },
-    { type: 'action', action: 'CloseAgent' },
+    { type: 'action', action: 'AgentLifecycle' },
     { type: 'action', action: 'Back' },
   ]
 
   const selected = items[selectedIdx]
+  const compactItems = items
+    .map((item, itemIdx) => ({ item, itemIdx }))
+    .filter(({ item }) => item.action !== '__section__')
+  const compactSelectedIdx = Math.max(0, compactItems.findIndex(item => item.itemIdx === selectedIdx))
+  const compactEntryCount = Math.max(1, bodyRows - 2)
+  const compactFirstEntry = Math.min(
+    Math.max(0, compactSelectedIdx - compactEntryCount + 1),
+    Math.max(0, compactItems.length - compactEntryCount),
+  )
+  const visibleCompactItems = compactItems.slice(compactFirstEntry, compactFirstEntry + compactEntryCount)
 
   function handleActivate(): void {
     if (!selected || !agent) return
@@ -60,11 +80,15 @@ export function AgentDetail() {
         push('AgentTask')
         break
       case 'OpenCLI':
-        if (agent.headless) return
-        openAgent(agent.id)
+        if (!canOpenAgent) return
+        try {
+          openAgent(agent.id)
+        } catch (err) {
+          toast(err instanceof Error ? err.message : String(err), 'error')
+        }
         break
-      case 'CloseAgent':
-        if (agent.role === 'root' || agent.ended_at !== null) return
+      case 'AgentLifecycle':
+        if (agent.role === 'root' && liveAgents.length > 1) return
         push('AgentKill')
         break
       case 'Back':
@@ -126,17 +150,22 @@ export function AgentDetail() {
   if (agent.task_note) summaryParts.push(`note ${agent.task_note}`)
   summaryParts.push(`workdir ${agent.working_dir}`)
   const summaryLine = summaryParts.join(' · ')
-  const isCloseAgentDisabled = agent.ended_at !== null
+  const isAgentEnded = agent.ended_at !== null
   const isHeadless = !!agent.headless
+  const canOpenAgent = !isAgentEnded && !isHeadless && !!agent.tmux_window_id
+  const openDisabledHint = isAgentEnded ? 'agent has ended' : 'no tmux window'
   const providerLabel = providerDisplayName(agent.provider)
+  const liveAgents = listAgents(agent.run_id).filter(item => item.ended_at === null)
+  const isRootLocked = agent.role === 'root' && liveAgents.length > 1
+  const agentLifecycleHint = isRootLocked ? 'stop workers first' : isAgentEnded ? 'delete stopped agent' : 'stop this agent'
 
   let statusContext = `${agent.nickname} · ${providerLabel} · ${agent.task_status}`
   if (selected && selected.action !== '__section__') {
     const actionLabels: Record<RowItem, string> = {
       Output: 'view recent output',
       Task: 'view initial prompt and status',
-      OpenCLI: isHeadless ? 'no tmux window' : 'switch to this agent window',
-      CloseAgent: isCloseAgentDisabled ? 'agent already ended' : 'close this agent',
+      OpenCLI: canOpenAgent ? 'switch to this agent window' : openDisabledHint,
+      AgentLifecycle: agentLifecycleHint,
       Back: 'return to agents list',
       '__section__': '',
     }
@@ -150,56 +179,86 @@ export function AgentDetail() {
         { label: 'provider', value: providerLabel },
         { label: 'status', value: agent.task_status },
       ]}
-      tagline={`${providerLabel} agent in ${run.name}. It is independent and has no ReevesAgents context.`}
+      tagline={`${providerLabel} agent in ${run.name}. Open output, prompt, or lifecycle actions.`}
       statusContext={statusContext}
       statusKeys="↑↓ move · enter select · esc back"
     >
-      <Box flexDirection="column">
-        <Box flexDirection="column" marginBottom={1}>
-          <Text wrap="truncate-end">
-            <Text color={colors.surface.border}>[</Text>
-            <Text color={providerColor(agent.provider)}>{providerLabel}</Text>
-            <Text color={colors.surface.border}>] [</Text>
-            <Text color={modelColor(agent.model, agent.provider)}>{modelBadgeLabel(agent.model)}</Text>
-            <Text color={colors.surface.border}>]</Text>
-          </Text>
-          <Text color={colors.text.dim} wrap="truncate-end">{summaryLine}</Text>
-        </Box>
-        <Section label="Agent" />
-        {items.map((item, idx) => {
-          const isSelected = selectedIdx === idx
-
-          if (item.action === '__section__') {
+      {compactBody ? (
+        <Box flexDirection="column">
+          <Section label={selectedIdx < 2 ? 'Agent' : 'Actions'} />
+          {visibleCompactItems.map(({ item, itemIdx }) => {
+            const hints: Record<RowItem, string> = {
+              Output: isHeadless ? 'no output' : 'live peek of the tmux pane',
+              Task: 'initial prompt and status',
+              OpenCLI: canOpenAgent ? 'switch tmux to this agent window' : openDisabledHint,
+              AgentLifecycle: agentLifecycleHint,
+              Back: 'return to agents list',
+              '__section__': '',
+            }
+            const primary = item.action === 'AgentLifecycle' && isAgentEnded ? 'Delete Agent' : LABELS[item.action]
             return (
-              <React.Fragment key="__section__">
-                <SectionEnd />
-                <Section label="Actions" />
-              </React.Fragment>
+              <Row
+                key={item.action}
+                selected={selectedIdx === itemIdx}
+                primary={primary}
+                primaryWidth={ACTION_LABEL_WIDTH}
+                hint={hints[item.action]}
+                disabled={(item.action === 'AgentLifecycle' && isRootLocked) || (item.action === 'OpenCLI' && !canOpenAgent)}
+                danger={item.action === 'AgentLifecycle'}
+              />
             )
-          }
+          })}
+          <SectionEnd />
+        </Box>
+      ) : (
+        <Box flexDirection="column">
+          <Box flexDirection="column" marginBottom={1}>
+            <Text wrap="truncate-end">
+              <Text color={colors.surface.border}>[</Text>
+              <Text color={providerColor(agent.provider)}>{providerLabel}</Text>
+              <Text color={colors.surface.border}>] [</Text>
+              <Text color={modelColor(agent.model, agent.provider)}>{modelBadgeLabel(agent.model)}</Text>
+              <Text color={colors.surface.border}>]</Text>
+            </Text>
+            <Text color={colors.text.dim} wrap="truncate-end">{summaryLine}</Text>
+          </Box>
+          <Section label="Agent" />
+          {items.map((item, idx) => {
+            const isSelected = selectedIdx === idx
 
-          const hints: Record<RowItem, string> = {
-            Output: isHeadless ? 'no output' : 'live peek of the tmux pane',
-            Task: 'initial prompt and status',
-            OpenCLI: isHeadless ? 'no tmux window' : 'switch tmux to this agent window',
-            CloseAgent: 'close this agent',
-            Back: 'return to agents list',
-            '__section__': '',
-          }
-          return (
-            <Row
-              key={item.action}
-              selected={isSelected}
-              primary={LABELS[item.action]}
-              primaryWidth={ACTION_LABEL_WIDTH}
-              hint={hints[item.action]}
-              disabled={(item.action === 'CloseAgent' && isCloseAgentDisabled) || (item.action === 'OpenCLI' && isHeadless)}
-              danger={item.action === 'CloseAgent'}
-            />
-          )
-        })}
-        <SectionEnd />
-      </Box>
+            if (item.action === '__section__') {
+              return (
+                <React.Fragment key="__section__">
+                  <SectionEnd />
+                  <Section label="Actions" />
+                </React.Fragment>
+              )
+            }
+
+            const hints: Record<RowItem, string> = {
+              Output: isHeadless ? 'no output' : 'live peek of the tmux pane',
+              Task: 'initial prompt and status',
+              OpenCLI: canOpenAgent ? 'switch tmux to this agent window' : openDisabledHint,
+              AgentLifecycle: agentLifecycleHint,
+              Back: 'return to agents list',
+              '__section__': '',
+            }
+            const primary = item.action === 'AgentLifecycle' && isAgentEnded ? 'Delete Agent' : LABELS[item.action]
+            return (
+              <Row
+                key={item.action}
+                selected={isSelected}
+                primary={primary}
+                primaryWidth={ACTION_LABEL_WIDTH}
+                hint={hints[item.action]}
+                disabled={(item.action === 'AgentLifecycle' && isRootLocked) || (item.action === 'OpenCLI' && !canOpenAgent)}
+                danger={item.action === 'AgentLifecycle'}
+              />
+            )
+          })}
+          <SectionEnd />
+        </Box>
+      )}
     </Frame>
   )
 }

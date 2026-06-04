@@ -11,6 +11,7 @@ Recommended branch names:
 - `fix/<short-name>` for bug fixes.
 - `feature/<short-name>` for stable root package work.
 - `web/<short-name>` for Web UI beta work.
+- `prebeta/<short-name>` for orchestrator or MCP work.
 - `docs/<short-name>` for contributor, release, or user docs.
 
 Long-lived branches:
@@ -41,9 +42,17 @@ pnpm check:package
 pnpm check:install-matrix
 ```
 
+For orchestrator package changes, run:
+
+```sh
+pnpm --dir packages/orchestrator verify
+```
+
 ## Package Boundaries
 
-The root package is the stable CLI, TUI, and Web beta.
+The root package is the stable CLI, TUI, and Web beta. It must not bundle the pre-beta orchestrator package.
+
+The pre-beta orchestrator package lives under `packages/orchestrator` and is installed explicitly as `reevesagents-orchestrator`.
 
 Keep generated build output, private notes, local screenshots, and debugging artifacts out of pull requests.
 

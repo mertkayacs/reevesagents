@@ -7,16 +7,21 @@ import { startWebServer, type WebServerHandle } from '../../src/web/server.js'
 
 let tmpDir: string
 let handles: WebServerHandle[]
+let originalConfig: string | undefined
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'reeves-web-server-'))
+  originalConfig = process.env.REEVES_CONFIG
   process.env.REEVES_REGISTRY = tmpDir
+  process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
   handles = []
 })
 
 afterEach(async () => {
   for (const handle of handles) await handle.close()
   delete process.env.REEVES_REGISTRY
+  if (originalConfig === undefined) delete process.env.REEVES_CONFIG
+  else process.env.REEVES_CONFIG = originalConfig
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -43,6 +48,33 @@ function raw(port: number, opts: { path?: string; method?: string; headers?: Rec
   })
 }
 
+function post(port: number, path: string, body: unknown): Promise<RawResponse> {
+  const payload = JSON.stringify(body)
+  return new Promise((resolve, reject) => {
+    const req = request(
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method: 'POST',
+        agent: false,
+        headers: {
+          origin: `http://127.0.0.1:${port}`,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(payload),
+        },
+      },
+      res => {
+        let responseBody = ''
+        res.on('data', chunk => { responseBody += chunk })
+        res.on('end', () => resolve({ status: res.statusCode, body: responseBody }))
+      },
+    )
+    req.on('error', reject)
+    req.end(payload)
+  })
+}
+
 describe('startWebServer', () => {
   it('binds loopback and serves the page, state, and health', async () => {
     const handle = await start()
@@ -61,6 +93,11 @@ describe('startWebServer', () => {
     expect(parsed.providers).toHaveLength(9)
     expect(parsed.providers[0]).toHaveProperty('available')
     expect(parsed.providers[0]).toHaveProperty('name')
+    expect(parsed.providers[0]).toHaveProperty('models')
+    expect(parsed.providers[0].models).toContain('')
+    expect(parsed.language.current).toBe('en')
+    expect(parsed.language.languages).toHaveLength(9)
+    expect(parsed.language.translations['web.newRun']).toBe('New run')
 
     const health = await raw(handle.port, { path: '/healthz' })
     expect(health.status).toBe(200)
@@ -97,10 +134,29 @@ describe('startWebServer', () => {
     expect(res.status).toBe(404)
   })
 
+  it('saves the shared web language setting', async () => {
+    const handle = await start()
+    const changed = await post(handle.port, '/api/language', { language: 'tr' })
+    expect(changed.status).toBe(200)
+    const parsed = JSON.parse(changed.body)
+    expect(parsed.current).toBe('tr')
+    expect(parsed.translations['web.newRun']).toBe('Yeni run')
+
+    const state = await raw(handle.port, { path: '/api/state' })
+    expect(JSON.parse(state.body).language.current).toBe('tr')
+  })
+
   it('falls back to the next free port when the preferred one is taken', async () => {
     const first = await start()
     const second = await start(first.port)
     expect(second.port).toBe(first.port + 1)
   })
 
+  it('requires the separate orchestrator package for pre-beta orchestrator mode', async () => {
+    await expect(startWebServer({
+      open: false,
+      port: 19085,
+      prebetaOrchestrator: true,
+    })).rejects.toThrow(/requires the separate orchestrator package/i)
+  })
 })

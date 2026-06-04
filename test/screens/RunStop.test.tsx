@@ -27,6 +27,18 @@ vi.mock('../../src/state/runs.js', async () => {
   return {
     ...actual,
     readRun: vi.fn(() => mockRun),
+    archiveAndRemoveRun: vi.fn(() => ({
+      id: mockRun.id,
+      name: mockRun.name,
+      mode: 'spawner',
+      status: 'ended',
+      working_dir: mockRun.working_dir,
+      started_at: mockRun.started_at,
+      ended_at: '2026-05-22T10:01:00Z',
+      archived_at: '2026-05-22T10:02:00Z',
+      agent_count: 1,
+      root_provider: 'cc',
+    })),
     listRuns: vi.fn(() => []),
     listAgents: vi.fn(() => []),
     autoCleanupRuns: vi.fn(() => ({ removed: [], archived: [] })),
@@ -52,10 +64,10 @@ describe('RunStop screen', () => {
     delete process.env.REEVES_RUN_ID
   })
 
-  it('returns to the runs list after stopping the run', async () => {
+  it('moves to history after stopping the run', async () => {
     const { stdin, lastFrame, unmount } = render(<Router initialScreen="RunStop" />)
 
-    expect(lastFrame() ?? '').toContain('Return and stop "test-run"?')
+    expect(lastFrame() ?? '').toContain('Stop run "test-run"?')
     stdin.write('\u001B[C')
     await waitForInput()
     stdin.write('\r')
@@ -63,7 +75,28 @@ describe('RunStop screen', () => {
 
     expect(runtime.openReeves).toHaveBeenCalledWith('run-1')
     expect(runtime.stopRun).toHaveBeenCalledWith('run-1')
-    expect(lastFrame() ?? '').toContain('No runs yet')
+    expect(lastFrame() ?? '').toContain('History')
+    unmount()
+  })
+
+  it('deletes an already stopped run into history', async () => {
+    const runs = await import('../../src/state/runs.js')
+    vi.mocked(runs.readRun).mockReturnValue({
+      ...mockRun,
+      status: 'ended',
+      ended_at: '2026-05-22T10:01:00Z',
+    })
+
+    const { stdin, lastFrame, unmount } = render(<Router initialScreen="RunStop" />)
+
+    expect(lastFrame() ?? '').toContain('Delete stopped run "test-run"?')
+    stdin.write('\u001B[C')
+    await waitForInput()
+    stdin.write('\r')
+    await waitForInput()
+
+    expect(runs.archiveAndRemoveRun).toHaveBeenCalledWith('run-1', 'ended')
+    expect(lastFrame() ?? '').toContain('History')
     unmount()
   })
 })

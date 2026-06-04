@@ -8,7 +8,7 @@ This repository uses a simple open-source branch model.
 | --- | --- | --- |
 | `master` | Default development branch. Feature, fix, Web beta, docs, and test work lands here after review. | Contributors and maintainers. |
 | `release/v1.0` | Stable 1.0 release line. Keep this branch boring: verified release fixes, release notes, packaging fixes, and version metadata only. | Maintainers. |
-| `fix/*`, `feature/*`, `web/*`, `docs/*` | Short-lived work branches. | Contributors and maintainers. |
+| `fix/*`, `feature/*`, `web/*`, `prebeta/*`, `docs/*` | Short-lived work branches. | Contributors and maintainers. |
 
 Avoid long-running personal branches in the public repository. If a branch is not active review or release work, delete it after merge.
 
@@ -20,6 +20,7 @@ Avoid long-running personal branches in the public repository. If a branch is no
 - Prefer cherry-picking one reviewed fix at a time from `master`.
 - Do not land exploratory work on the release branch.
 - Do not land unrelated refactors on the release branch.
+- Do not bundle pre-beta orchestrator changes into the root release unless the release explicitly includes the separate pre-beta package.
 - Run release verification before tagging.
 
 Release commits should be understandable from `git log --first-parent --oneline release/v1.0`.
@@ -75,3 +76,6 @@ The root npm package is guarded by `pnpm check:package`. It must include only th
 - `scripts/`
 - `.github/`
 - `packages/`
+- orchestrator or MCP internals
+
+The separate pre-beta orchestrator package has its own package-content check under `packages/orchestrator`.

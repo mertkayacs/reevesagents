@@ -2,7 +2,7 @@
 
 Local tmux-first workspace manager for AI CLI agents.
 
-The main `reevesagents` package is the stable spawner install:
+The main `reevesagents` package is the stable agent-run install:
 
 - Start one tmux workspace with multiple independent provider CLI agents.
 - Keep the human in charge of coordination.
@@ -34,7 +34,7 @@ Provider runtime:
 - At least one provider CLI for the provider you launch: `claude`, `codex`, `opencode`, `hermes`, `kimi`, `deepseek`, `pi`, `qwen`, or `aider`
 - Provider authentication handled by that provider CLI
 
-Spawner mode needs only the core runtime plus the provider CLIs you launch.
+Agent-run mode needs only the core runtime plus the provider CLIs you launch.
 The Web UI beta also needs the optional `ws` and `@lydell/node-pty` packages,
 which npm installs by default. The TUI and CLI do not need those optional
 packages.
@@ -85,7 +85,7 @@ message explaining which optional Web package is missing.
 ### CLI/TUI Plus Web Beta
 
 This is the default stable install. It includes the CLI, TUI, and loopback-only
-Web UI beta.
+Web UI beta. It does not install MCP orchestration.
 
 After npm publish:
 
@@ -105,29 +105,60 @@ yarn dlx reevesagents doctor
 bunx reevesagents doctor
 ```
 
-After the Homebrew tap exists:
+### All-In PRE-BETA Orchestrator/MCP
+
+Use this only when you explicitly want MCP-connected root/worker orchestration.
+It installs the stable app plus the separate pre-beta orchestrator package:
 
 ```sh
-brew install mertkayacs/tap/reevesagents
+npm install -g reevesagents reevesagents-orchestrator
 reevesagents doctor
+reevesagents web --prebeta-orchestrator
 ```
+
+The pre-beta Web mode can show and control both stable agent runs and
+orchestrator runs. It can create orchestrator runs, add workers, stop runs, and
+control windowed worker agents. Headless orchestrator roots are shown but
+cannot be opened in the browser agent view.
+
+Provider MCP config setup remains explicit:
+
+```sh
+reevesagents-orchestrator setup
+```
+
+That setup command is pre-beta and may write provider MCP config entries. The
+stable `reevesagents` install never does that by itself.
+
+After the Homebrew tap exists, use the tap command documented in that release.
 
 From a GitHub Release tarball:
 
 ```sh
-npm install -g ./reevesagents-1.0.11.tgz
+npm install -g ./reevesagents-1.2.0.tgz
 reevesagents doctor
+```
+
+For an all-in pre-beta tarball install, install both release tarballs:
+
+```sh
+npm install -g ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.0.0.tgz
+reevesagents web --prebeta-orchestrator
 ```
 
 From source:
 
 ```sh
-git clone https://github.com/mertkayacs/reevesagents.git
+git clone <repository-url>
 cd reevesagents
 pnpm install
 pnpm build
 pnpm link --global
 ```
+
+The source repository includes the pre-beta orchestrator package for development
+and verification, but the root workspace and root npm tarball still ship only
+the stable app and Web beta assets.
 
 Verify:
 
@@ -143,9 +174,9 @@ reevesagents doctor
 reevesagents
 ```
 
-The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Reference, Credits, or Quit. New Run starts the spawner wizard directly. When launched with run context, Welcome also shows Current Run. Runs auto-archives ended and stale run records on refresh.
+The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Reference, Credits, or Quit. New Run starts the agent-run wizard directly. When launched with run context, Welcome also shows Current Run. Runs auto-archives ended and stale run records on refresh.
 
-Spawner mode can also start from the CLI:
+Agent-run mode can also start from the CLI:
 
 ```sh
 reevesagents spawn codex-cli:builder claude-code:reviewer --name "release check" --prompt "Inspect the release state."
@@ -157,12 +188,12 @@ Agent specs can include an optional model as `provider:nickname:model`:
 reevesagents spawn claude-code:planner:sonnet codex-cli:builder:gpt-5-codex
 ```
 
-Leave the model off to use the provider CLI default.
+Leave the model off to use the provider default.
 
 ## TUI Pages
 
 - Welcome: animated `REEVES AGENTS` block logo, chafa-rendered blocky duck mascot, and persistent main menu.
-- Runs: list active runs, spawn new runs, and open shared run history.
+- Runs: list active runs, start new runs, and open shared run history.
 - History: show archived ended and stale runs with simple metadata.
 - Run hub: show agents, output, add-agent, stop, and back actions.
 - Agent detail: inspect provider, status, working directory, tmux ids, recent output, prompt, open window, and close window.
@@ -187,7 +218,7 @@ The TUI is visible-menu first: arrows navigate, Enter selects, and Esc/Backspace
 
 ```sh
 reevesagents                 # open TUI
-reevesagents spawn [spec...] # start a low-permission multi-agent spawner run
+reevesagents spawn [spec...] # start a run with one or more agents
 reevesagents runs            # list runs
 reevesagents open <id>       # open a run's reeves window or an agent window
 reevesagents peek <agent-id> # print recent agent output
@@ -195,6 +226,7 @@ reevesagents stop <run-id>   # stop one run, requires --yes or ALLOW_DESTRUCTIVE
 reevesagents kill <agent-id> # close one agent, requires --yes or ALLOW_DESTRUCTIVE=1
 reevesagents doctor          # setup checks
 reevesagents web             # start loopback Web UI beta
+reevesagents web --prebeta-orchestrator # opt into MCP/orchestrator Web controls
 ```
 
 ## State Layout
@@ -243,13 +275,11 @@ See [docs/release-readiness.md](docs/release-readiness.md) for the first public 
 
 For future-agent handoff, start with [docs/agent-brief.md](docs/agent-brief.md).
 
-See [docs/implementation-report.md](docs/implementation-report.md) for the end-to-end v1 implementation notes, removed legacy surfaces, UI changes, and verification record.
-
 ## Status
 
-The TUI was redesigned in May 2026 with Spawner as the default low-permission path, a unified color system, responsive frame component, focused pages, auto-cleanup of ended runs, and a visible-menu interaction model. The current source of truth is this README plus [REEVESAGENTS_DESIGN.md](REEVESAGENTS_DESIGN.md).
+The TUI was redesigned in May 2026 with agent runs as the default low-permission path, a unified color system, responsive frame component, focused pages, auto-cleanup of ended runs, and a visible-menu interaction model. The current release-facing source of truth is this README.
 
-- Version: `1.0.11`
+- Version: `1.2.0`
 - npm package: not published yet
 - Homebrew formula: not available yet
 

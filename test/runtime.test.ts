@@ -45,14 +45,14 @@ class FakeDriver implements RuntimeDriver {
   }
 }
 
-describe('spawner runtime', () => {
+describe('agent-run runtime', () => {
   it('parses stable tmux window and pane ids', async () => {
     const { parseTmuxIds } = await import('../src/launcher/runtime.js')
     expect(parseTmuxIds('@12 %34')).toEqual({ windowId: '@12', paneId: '%34' })
     expect(() => parseTmuxIds('0 1')).toThrow(/Could not parse/)
   })
 
-  it('starts spawner runs as independent agents without MCP or Reeves context injection', async () => {
+  it('starts agent runs as independent agents without MCP or Reeves context injection', async () => {
     const driver = new FakeDriver()
     const { startRun } = await import('../src/launcher/runtime.js')
     const { readRun, listAgents } = await import('../src/state/runs.js')
@@ -95,13 +95,27 @@ describe('spawner runtime', () => {
     expect(launchCommands).not.toContain('REEVES_SESSION_ID')
     expect(launchCommands).not.toContain('REEVES_AGENT_ID')
     expect(launchCommands).not.toContain('REEVES_RUN_ID')
+    expect(launchCommands).not.toContain('--mcp-config')
+    expect(launchCommands).not.toContain('mcp_servers.reevesagents')
     expect(pasted).toEqual(['build the thing', 'review the thing'])
     expect(pasted.join('\n')).not.toContain('ReevesAgents context')
     expect(pasted.join('\n')).not.toContain('You are the root agent')
     expect(pasted.join('\n')).not.toContain('You are a worker agent')
   })
 
-  it('spawns an agent into an existing spawner run session', async () => {
+  it('rejects non-agent-run starts in the root package', async () => {
+    const driver = new FakeDriver()
+    const { startRun } = await import('../src/launcher/runtime.js')
+
+    expect(() => startRun({
+      mode: 'orchestrator',
+      name: 'beta',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead' },
+    } as never, { driver, available })).toThrow(/Only agent-run mode/)
+  })
+
+  it('spawns an agent into an existing agent-run session', async () => {
     const driver = new FakeDriver()
     const { startRun, spawnWorker } = await import('../src/launcher/runtime.js')
     const { listAgents } = await import('../src/state/runs.js')
@@ -130,8 +144,14 @@ describe('spawner runtime', () => {
   it('opens, peeks, sends input, interrupts, closes agents, and stops runs by stable ids', async () => {
     const driver = new FakeDriver()
     const {
+      listRunHistory,
+      readRun,
+    } = await import('../src/state/runs.js')
+
+    const {
       startRun,
       openReeves,
+      openRunTabs,
       openAgent,
       peekAgent,
       sendText,
@@ -151,6 +171,7 @@ describe('spawner runtime', () => {
     const terminal = result.agents.find(agent => agent.role === 'worker')!
 
     openReeves(result.run.id, { driver })
+    openRunTabs(result.run.id, { driver })
     openAgent(terminal.id, { driver })
     expect(peekAgent(terminal.id, 5, { driver })).toBe('ready [REDACTED]')
     sendText(terminal.id, 'hello', { driver })
@@ -161,8 +182,11 @@ describe('spawner runtime', () => {
     interrupt(terminal.id, { driver })
     expect(killAgent(terminal.id, { driver }).ended_at).not.toBeNull()
     expect(stopRun(result.run.id, { driver }).status).toBe('ended')
+    expect(() => readRun(result.run.id)).toThrow(/Run not found/)
+    expect(listRunHistory().map(record => record.id)).toContain(result.run.id)
 
     expect(driver.calls).toEqual(expect.arrayContaining([
+      { args: ['select-window', '-t', `${result.run.tmux_session}:reeves`] },
       { args: ['select-window', '-t', `${terminal.tmux_session}:${terminal.tmux_window_id}`] },
       { args: ['capture-pane', '-p', '-e', '-S', '-5', '-t', terminal.tmux_pane_id] },
       { args: ['paste-buffer', '-b', helloBuffer, '-t', terminal.tmux_pane_id] },
@@ -170,6 +194,28 @@ describe('spawner runtime', () => {
       { args: ['send-keys', '-t', terminal.tmux_pane_id, 'Enter'] },
       { args: ['send-keys', '-t', terminal.tmux_pane_id, 'C-c'] },
       { args: ['kill-window', '-t', terminal.tmux_window_id] },
+      { args: ['kill-session', '-t', result.run.tmux_session] },
+    ]))
+  })
+
+  it('ends a run when the last live agent is closed', async () => {
+    const driver = new FakeDriver()
+    const { startRun, killAgent } = await import('../src/launcher/runtime.js')
+    const { listRunHistory, readRun } = await import('../src/state/runs.js')
+
+    const result = startRun({
+      mode: 'spawner',
+      name: 'solo',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+
+    killAgent(result.agents[0]!.id, { driver })
+
+    expect(() => readRun(result.run.id)).toThrow(/Run not found/)
+    expect(listRunHistory()).toHaveLength(1)
+    expect(listRunHistory()[0]).toMatchObject({ id: result.run.id, status: 'ended' })
+    expect(driver.calls).toEqual(expect.arrayContaining([
       { args: ['kill-session', '-t', result.run.tmux_session] },
     ]))
   })

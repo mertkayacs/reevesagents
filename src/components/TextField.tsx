@@ -7,6 +7,8 @@ import { Box, Text, useInput } from 'ink'
 import { colors, sep, space } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
+import { translatePhrase } from '../i18n/catalog.js'
+import { useLanguage } from '../state/LanguageContext.js'
 
 interface Props {
   label: string
@@ -33,6 +35,7 @@ export function TextField({
   onCommit,
   onCancel,
 }: Props) {
+  const { language } = useLanguage()
   const columns = useLayoutColumns()
   const width = panelWidth(columns)
   const [editValue, setEditValue] = useState(value)
@@ -94,7 +97,9 @@ export function TextField({
   const labelColor = selected && editing ? colors.accent.primary : colors.text.dim
   const valueColor = editing ? colors.accent.bright : colors.text.primary
   const displayValue = editing ? `${editValue}_` : value
-  const labelText = `${label}${required ? ' *' : ''}`
+  const displayLabel = translatePhrase(language, label)
+  const displayHelpText = helpText ? translatePhrase(language, helpText) : helpText
+  const labelText = `${displayLabel}${required ? ' *' : ''}`
   const contentWidth = Math.max(1, width - 6)
   const labelWidth = Math.max(1, Math.min(Math.max(12, labelText.length), Math.floor(contentWidth * 0.35)))
   const valueWidth = Math.max(1, contentWidth - labelWidth - sep.pipe.length)
@@ -136,9 +141,9 @@ export function TextField({
           </Box>
         </Box>
       ))}
-      {selected && helpText && (
+      {selected && displayHelpText && (
         <Box marginLeft={4} marginTop={space.sm} width={Math.max(1, width - 4)}>
-          <Text color={colors.text.dim} wrap="truncate-end">{helpText}</Text>
+          <Text color={colors.text.dim} wrap="truncate-end">{displayHelpText}</Text>
         </Box>
       )}
     </Box>

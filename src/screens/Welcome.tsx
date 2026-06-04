@@ -12,8 +12,9 @@ import { colors } from '../utils/tokens.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { Row } from '../components/Row.js'
 import { LayoutProvider } from '../components/LayoutContext.js'
-import { requestWebLaunch } from '../web/launch-intent.js'
+import { startWebFromTui } from '../web/tui-launch.js'
 import type { ScreenName } from '../state/types.js'
+import { useLanguage } from '../state/LanguageContext.js'
 
 function pickMascotVariant(columns: number): MascotVariant {
   if (columns < 50) return 'mini'
@@ -24,31 +25,43 @@ function pickMascotVariant(columns: number): MascotVariant {
 export function Welcome() {
   const { exit } = useApp()
   const { push, selectedRunId } = useRouter()
+  const { t, language } = useLanguage()
   const { columns, rows } = useWindowSize()
   const pagePadding = 1
   const contentColumns = Math.max(1, columns - 2 - (pagePadding * 2))
   const menuColumns = Math.max(1, Math.min(contentColumns, 72))
   const compact = contentColumns < 58
+  const tinyRows = rows < 14
+  const tightRows = rows < 18
   const mascotVariant = pickMascotVariant(contentColumns)
   const actions = useMemo(() => {
     const rows: Array<{ label: string; hint: string; screen?: ScreenName; quit?: boolean; launchWeb?: boolean }> = [
-      { label: 'New Run', hint: 'start a spawner workspace', screen: 'NewRun' },
-      { label: 'Runs', hint: 'open active and recent runs', screen: 'Runs' },
-      { label: 'Doctor', hint: 'check local setup', screen: 'Doctor' },
-      { label: 'Start Web UI (beta)', hint: 'open the browser agent UI', launchWeb: true },
-      { label: 'Settings', hint: 'providers and paths', screen: 'Settings' },
-      { label: 'Reference', hint: 'Spawner, TUI, CLI, tmux', screen: 'Reference' },
-      { label: 'Credits', hint: 'about ReevesAgents', screen: 'Credits' },
-      { label: 'Quit', hint: 'exit the TUI', quit: true },
+      { label: t('welcome.newRun'), hint: t('welcome.newRunHint'), screen: 'NewRun' },
+      { label: t('welcome.runs'), hint: t('welcome.runsHint'), screen: 'Runs' },
+      { label: t('welcome.doctor'), hint: t('welcome.doctorHint'), screen: 'Doctor' },
+      { label: `${t('welcome.startWeb')} (beta)`, hint: t('welcome.startWebHint'), launchWeb: true },
+      { label: t('common.settings'), hint: t('welcome.settingsHint'), screen: 'Settings' },
+      { label: t('welcome.reference'), hint: t('welcome.referenceHint'), screen: 'Reference' },
+      { label: t('welcome.credits'), hint: t('welcome.creditsHint'), screen: 'Credits' },
+      { label: t('welcome.quit'), hint: t('welcome.quitHint'), quit: true },
     ]
     if (selectedRunId) {
-      rows.splice(1, 0, { label: 'Current Run', hint: 'return to selected run', screen: 'Run' })
+      rows.splice(1, 0, { label: t('welcome.currentRun'), hint: t('welcome.currentRunHint'), screen: 'Run' })
     }
     return rows
-  }, [selectedRunId])
+  }, [selectedRunId, t, language])
   const [selectedIdx, setSelectedIdx] = useState(0)
+  const [webStarting, setWebStarting] = useState(false)
+  const [webMessage, setWebMessage] = useState<string | null>(null)
   const previousSizeRef = useRef<{ columns: number; rows: number } | null>(null)
-  const visibleActionCount = Math.max(3, Math.min(actions.length, rows - 14))
+  const menuChromeRows = 4 + (webStarting || webMessage ? 1 : 0)
+  const heroRows = tinyRows ? 1 : tightRows ? 3 : 8
+  const topMarginRows = tinyRows ? 0 : 1
+  const availableActions = rows - 2 - heroRows - topMarginRows - menuChromeRows
+  const minimumActionRows = tightRows ? 1 : 3
+  const visibleActionCount = tightRows
+    ? Math.max(minimumActionRows, Math.min(actions.length, availableActions))
+    : Math.max(3, Math.min(actions.length, rows - 14))
   const firstVisibleAction = Math.min(
     Math.max(0, selectedIdx - visibleActionCount + 1),
     Math.max(0, actions.length - visibleActionCount),
@@ -67,6 +80,19 @@ export function Welcome() {
     process.stdout.write('\x1b[3J\x1b[2J\x1b[H')
   }, [columns, rows])
 
+  async function launchWeb(): Promise<void> {
+    if (webStarting) return
+    setWebStarting(true)
+    try {
+      const url = await startWebFromTui()
+      setWebMessage(t('welcome.webRunning', { url }))
+    } catch (err) {
+      setWebMessage(err instanceof Error ? err.message : String(err))
+    } finally {
+      setWebStarting(false)
+    }
+  }
+
   function activate(): void {
     const action = actions[selectedIdx]
     if (!action) return
@@ -75,10 +101,7 @@ export function Welcome() {
       return
     }
     if (action.launchWeb) {
-      // Hand the terminal to the web server: signal intent, then exit the TUI so
-      // the CLI launches it in this same terminal (foreground, no daemon).
-      requestWebLaunch()
-      exit()
+      void launchWeb()
       return
     }
     if (action.screen) push(action.screen)
@@ -93,27 +116,37 @@ export function Welcome() {
 
   return (
     <LayoutProvider columns={contentColumns}>
-      <Box flexDirection="column" paddingX={pagePadding} width={columns} borderStyle="single" borderColor={colors.surface.border} overflow="hidden">
-        <Box flexDirection="row" alignItems="flex-start">
-          <Box flexDirection="column">
-            <Wordmark compact={compact} animated small intervalMs={400} />
-            <Box marginTop={1}>
-              <Wordmark lines={AGENTS_LINES} compact={compact} animated small intervalMs={400} />
+      <Box flexDirection="column" paddingX={pagePadding} width={columns} maxHeight={tightRows ? rows : undefined} borderStyle="single" borderColor={colors.surface.border} overflow="hidden">
+        {tinyRows ? (
+          <Text color={colors.accent.primary} bold wrap="truncate-end">ReevesAgents</Text>
+        ) : (
+          <Box flexDirection="row" alignItems="flex-start">
+            <Box flexDirection="column">
+              <Wordmark compact={compact} animated small intervalMs={400} />
+              {!tightRows && (
+                <Box marginTop={1}>
+                  <Wordmark lines={AGENTS_LINES} compact={compact} animated small intervalMs={400} />
+                </Box>
+              )}
             </Box>
+            {!tightRows && (
+              <Box marginLeft={2}>
+                <Mascot variant={mascotVariant} />
+              </Box>
+            )}
           </Box>
-          <Box marginLeft={2}>
-            <Mascot variant={mascotVariant} />
+        )}
+
+        {!tightRows && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color={colors.text.dim} wrap="truncate-end">{t('welcome.tagline1')}</Text>
+            <Text color={colors.text.dim} wrap="truncate-end">{t('welcome.tagline2')}</Text>
           </Box>
-        </Box>
+        )}
 
-        <Box flexDirection="column" marginTop={1}>
-          <Text color={colors.text.dim} wrap="truncate-end">Local tmux-first workspace manager for AI CLI agents.</Text>
-          <Text color={colors.text.dim} wrap="truncate-end">Spawner · TUI · CLI · tmux</Text>
-        </Box>
-
-        <Box flexDirection="column" marginTop={1}>
+        <Box flexDirection="column" marginTop={tinyRows ? 0 : 1}>
           <LayoutProvider columns={menuColumns}>
-            <Section label="Main Menu" />
+            <Section label={t('welcome.menu')} />
             {visibleActions.map((action, localIdx) => {
               const idx = firstVisibleAction + localIdx
               return (
@@ -130,8 +163,15 @@ export function Welcome() {
             <SectionEnd />
 
             <Box>
-              <Text color={colors.text.muted}>↑↓ move · enter select · q quit{rangeText}</Text>
+              <Text color={colors.text.muted}>{t('welcome.keys')}{rangeText}</Text>
             </Box>
+            {webStarting || webMessage ? (
+              <Box>
+                <Text color={webStarting ? colors.status.warn : colors.accent.bright} wrap="truncate-end">
+                  {webStarting ? t('welcome.webStarting') : webMessage}
+                </Text>
+              </Box>
+            ) : null}
           </LayoutProvider>
         </Box>
       </Box>

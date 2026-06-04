@@ -1,6 +1,8 @@
-// Core type definitions for spawner run state, presets, and TUI routing.
+// Core type definitions for agent-run state, presets, and TUI routing.
 
 export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes' | 'kimi' | 'deepseek' | 'pi' | 'qwen' | 'aider'
+
+export type LanguageCode = 'en' | 'de' | 'fr' | 'es' | 'pt' | 'it' | 'tr' | 'zh-Hans' | 'ar'
 
 export type Permissions = 'skip' | 'ask'
 
@@ -16,12 +18,13 @@ export type RunStatus = 'running' | 'ended'
 
 export type RunViewStatus = RunStatus | 'stale'
 
-export type RunMode = 'spawner'
+export type RunMode = 'spawner' | 'orchestrator'
 
 export type RunHistoryStatus = 'ended' | 'stale'
 
 export type ScreenName =
   | 'Welcome'
+  | 'LanguageSelect'
   | 'Runs'
   | 'RunHistory'
   | 'Run'
@@ -75,6 +78,7 @@ export interface RunRecord {
 export interface RunHistoryRecord {
   id: string
   name: string
+  mode: RunMode
   status: RunHistoryStatus
   working_dir: string
   started_at: string
@@ -167,6 +171,7 @@ export interface GlobalConfig {
   max_agents: number                // tree size cap; default 10
   ready_delay_ms: number            // ms to wait after session start before task injection; default 5000
   default_permissions: Permissions  // default 'ask'
+  language: LanguageCode            // default 'en'
 }
 
 export interface Config {

@@ -1,4 +1,4 @@
-// Tmux spawner runtime: one run owns one tmux session with independent CLI agents.
+// Tmux agent-run runtime: one run owns one tmux session with independent CLI agents.
 // Inputs: run/agent configs. Outputs: run and agent JSON records plus tmux side effects.
 // Invariant: stored tmux targets use stable window/pane ids, never mutable indexes.
 
@@ -16,6 +16,8 @@ import type {
 } from '../state/types.js'
 import {
   agentPath,
+  archiveAndRemoveRun,
+  endRunIfNoLiveAgents,
   findAgent,
   listAgents,
   nowIso,
@@ -347,7 +349,7 @@ function validateAgents(configs: AgentLaunchConfig[], available: Record<Provider
 
 function assertSpawnerMode(mode: unknown): void {
   if (mode !== undefined && mode !== 'spawner') {
-    throw new Error('Only spawner runs are available in this package')
+    throw new Error('Only agent-run mode is available in this package')
   }
 }
 
@@ -432,6 +434,14 @@ export function openReeves(runId: string, options: RuntimeOptions = {}): void {
   driver.tmux(['select-window', '-t', target])
 }
 
+export function openRunTabs(runId: string, options: RuntimeOptions = {}): void {
+  const driver = options.driver ?? realDriver
+  const run = readRun(runId)
+  const target = `${run.tmux_session}:reeves`
+  try { driver.tmux(['switch-client', '-t', target]) } catch { /* no attached client */ }
+  driver.tmux(['select-window', '-t', target])
+}
+
 export function openAgent(agentId: string, options: RuntimeOptions = {}): void {
   const driver = options.driver ?? realDriver
   const agent = findAgent(agentId)
@@ -511,8 +521,19 @@ export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentR
   } catch {
     // already gone
   }
-  updateAgent(agent.run_id, agent.id, { ended_at: nowIso(), task_status: 'done' })
-  return findAgent(agentId)
+  const endedAt = nowIso()
+  updateAgent(agent.run_id, agent.id, { ended_at: endedAt, task_status: 'done' })
+  const updatedAgent = readAgent(agent.run_id, agent.id)
+  const endedRun = endRunIfNoLiveAgents(agent.run_id, endedAt)
+  if (endedRun.status === 'ended' || endedRun.ended_at !== null) {
+    try {
+      driver.tmux(['kill-session', '-t', run.tmux_session])
+    } catch {
+      // session may already be gone
+    }
+    archiveAndRemoveRun(run.id, 'ended')
+  }
+  return updatedAgent
 }
 
 export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord {
@@ -538,8 +559,10 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
     }
     updateAgent(run.id, agent.id, { ended_at: endedAt })
   }
-  updateRun(run.id, { status: 'ended', ended_at: endedAt })
-  return readRun(run.id)
+  const endedRun: RunRecord = { ...run, status: 'ended', ended_at: endedAt }
+  updateRun(run.id, { status: endedRun.status, ended_at: endedRun.ended_at })
+  archiveAndRemoveRun(run.id, 'ended')
+  return endedRun
 }
 
 export function agentJsonPath(runId: string, agentId: string): string {
