@@ -38,6 +38,15 @@
     "node": ">=20.19"
   },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mertkayacs/reevesagents",
+    "directory": "packages/orchestrator"
+  },
+  "bugs": {
+    "url": "https://github.com/mertkayacs/reevesagents/issues"
+  },
+  "homepage": "https://github.com/mertkayacs/reevesagents/tree/master/packages/orchestrator#readme",
   "keywords": [
     "ai",
     "mcp",
