@@ -142,7 +142,7 @@ async function connectMcp(baseEnv, extraEnv = {}) {
     env: { ...baseEnv, ...extraEnv },
   })
   const client = new Client(
-    { name: 'reevesagents-tmux-smoke', version: '1.0' },
+    { name: 'reevesagents-tmux-smoke', version: '1.2.0' },
     { capabilities: {} },
   )
   await client.connect(transport)

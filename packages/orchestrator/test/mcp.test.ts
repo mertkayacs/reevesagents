@@ -240,7 +240,7 @@ describe('mcp tools', () => {
     const requested = await handleMcpTool('request_approval', {
       action: 'publish',
       summary: 'publish package',
-      details: { version: '1.0.0' },
+      details: { version: '1.2.0' },
       risk: 'high',
     }, worker.id)
     const approval = jsonText(requested)

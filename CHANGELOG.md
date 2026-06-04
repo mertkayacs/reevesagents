@@ -17,11 +17,11 @@ Entries before `0.9.0` describe internal development milestones from the reorgan
 - TUI pages are more responsive in narrow terminals and keep loaded pages scrollable with arrow keys.
 - Visible UI copy now uses agent wording for user-facing run controls.
 
-## 1.0.11 - Web UI Workbench Polish
+## Pre-1.2.0 - Web UI Workbench Polish
 
 ### Changed
 - Refined the Web beta into a compact agent workbench with richer agent cards, improved stage framing, and better responsive behavior.
-- Set the root package, CLI smoke expectations, README, and release docs to `1.0.11`.
+- Prepared the root package, CLI smoke expectations, README, and release docs for the release candidate.
 
 ## 0.9.0 - Initial Public Prerelease
 

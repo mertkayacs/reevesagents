@@ -17,9 +17,9 @@ Recommended branch names:
 Long-lived branches:
 
 - `master`: default development branch and normal pull request target.
-- `release/v1.0`: current stable release line. Use this only for verified release fixes, release notes, and packaging corrections.
+- `release/v1.2`: current stable release line. Use this only for verified release fixes, release notes, and packaging corrections.
 
-Tags use `v<version>`, for example `v1.0.11`, and should point at a verified release commit.
+Tags use `v<version>`, for example `v1.2.0`, and should point at a verified release commit.
 
 More detail is in [docs/branching.md](docs/branching.md).
 
