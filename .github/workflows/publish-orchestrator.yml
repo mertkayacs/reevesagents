@@ -39,7 +39,17 @@ jobs:
 
       - run: pnpm --dir packages/orchestrator verify
 
-      - run: npm publish --provenance --access public --tag "$NPM_TAG" --no-git-checks
+      - run: |
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            npm dist-tag add "$PACKAGE_NAME@$PACKAGE_VERSION" "$NPM_TAG"
+          else
+            npm publish --provenance --access public --tag "$NPM_TAG" --no-git-checks
+          fi
+          if [ "$NPM_TAG" != "latest" ]; then
+            npm dist-tag rm "$PACKAGE_NAME" latest || true
+          fi
         working-directory: packages/orchestrator
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
