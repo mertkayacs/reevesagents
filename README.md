@@ -48,14 +48,23 @@ CLIs alive.
 
 ## Screenshots And GIFs
 
-Media slots are reserved for the first screenshot and GIF pass:
+A short launch-week run shows the main idea: one workspace, several provider
+CLIs, and a clear view of what each agent is doing.
 
-| Slot | Suggested file |
-| --- | --- |
-| TUI walkthrough GIF | `docs/assets/reevesagents-tui.gif` |
-| Web UI screenshot | `docs/assets/reevesagents-web.png` |
-| Multi-agent tmux run GIF | `docs/assets/reevesagents-tmux.gif` |
-| Pre-beta orchestrator diagram | `docs/assets/reevesagents-orchestrator.png` |
+### TUI
+
+First run language selection, the ReevesAgents ASCII art, and the active run
+list.
+
+![ReevesAgents TUI language selection, welcome screen, and runs page](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
+
+### Web UI Beta
+
+A live local Web UI view with four agents in one run: DeepSeek for backend,
+Claude Code for product and web direction, Codex for implementation review, and
+Hermes waiting on research approval.
+
+![ReevesAgents Web UI showing a live multi-agent run](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web.png)
 
 ## Install
 
@@ -184,7 +193,7 @@ reevesagents
 Start a named run from the CLI:
 
 ```sh
-reevesagents spawn deepseek-cli:backend codex-cli:system claude-code:product --name "app build" --prompt "Plan and build the first useful slice."
+reevesagents spawn deepseek:backend claude-code:product codex:system hermes:research --name "launch week build" --prompt "Plan the backend, product surface, design system, and research notes."
 ```
 
 Open the local Web UI:
