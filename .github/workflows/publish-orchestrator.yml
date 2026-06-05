@@ -48,7 +48,8 @@ jobs:
             npm publish --provenance --access public --tag "$NPM_TAG" --no-git-checks
           fi
           if [ "$NPM_TAG" != "latest" ]; then
-            npm dist-tag rm "$PACKAGE_NAME" latest || true
+            echo "Published $PACKAGE_NAME@$PACKAGE_VERSION under npm tag $NPM_TAG."
+            echo "Install docs intentionally use @$NPM_TAG for this pre-beta package."
           fi
         working-directory: packages/orchestrator
         env:
