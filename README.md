@@ -1,288 +1,203 @@
-# reevesagents
+# ReevesAgents
 
-Local tmux-first workspace manager for AI CLI agents.
+Version: `1.2.0`
 
-The main `reevesagents` package is the stable agent-run install:
+GitHub: https://github.com/mertkayacs/reevesagents
 
-- Start one tmux workspace with multiple independent provider CLI agents.
-- Keep the human in charge of coordination.
-- Do not write provider config, inject ReevesAgents environment variables, or create agent roles.
+ReevesAgents is a free and open source workspace manager for AI CLI agents. It
+helps you run several provider CLIs side by side in tmux, keep each agent in its
+own window, and control the work from a clean CLI, TUI, or local Web UI.
 
-ReevesAgents tracks each run in local state and opens every agent in its own tmux window. The registry is the source of truth; tmux is the execution and viewing surface. The TUI stays in the current or fallback `reeves` session, while each run gets its own tmux session to keep tabs uncluttered.
-
-## What It Does
-
-- Shows active runs plus shared TUI/Web history for ended and stale runs.
-- Starts multiple independent provider CLI agents.
-- Opens the real provider CLI window for each agent.
-- Stores local JSON state under `~/.reeves/runs`.
-- Uses a small animated Welcome screen, page-specific TUI layouts, and a static Runs dashboard to reduce terminal flicker.
-
-ReevesAgents does not store provider credentials, proxy model traffic, embed a terminal emulator, or replace provider authentication.
-
-## Requirements
-
-Core runtime:
-
-- macOS, Linux, or WSL
-- Node.js 20.19+
-- tmux, 3.0+ recommended
-- A normal interactive shell on `PATH`
-
-Provider runtime:
-
-- At least one provider CLI for the provider you launch: `claude`, `codex`, `opencode`, `hermes`, `kimi`, `deepseek`, `pi`, `qwen`, or `aider`
-- Provider authentication handled by that provider CLI
-
-Agent-run mode needs only the core runtime plus the provider CLIs you launch.
-The Web UI beta also needs the optional `ws` and `@lydell/node-pty` packages,
-which npm installs by default. The TUI and CLI do not need those optional
-packages.
-
-Not required:
-
-- Provider API keys in ReevesAgents config
-- Database, Docker, browser runtime, background service, or daemon
-- MCP or approval setup
-
-Install is passive: no postinstall, no provider config writes, no background service.
-
-## Providers
-
-| Provider spec | CLI | Launch | Notes |
-| --- | --- | --- | --- |
-| `claude-code` | Claude Code | `claude` | Supports model, API-key auth mode, effort, and skip permissions |
-| `codex-cli` | Codex CLI | `codex` | Supports model and skip permissions; Codex app-server remote control is managed outside agent launches |
-| `opencode-cli` | OpenCode CLI | `opencode` | Supports `--prompt` and `--model`; ReevesAgents does not add undocumented skip flags |
-| `hermes` | Hermes | `hermes chat` | Supports model and `--yolo` skip permissions |
-| `kimi-code` | Kimi Code | `kimi` | Supports model and `--yolo` skip permissions |
-| `deepseek-cli` | DeepSeek CLI | `deepseek` | Supports model; ReevesAgents does not add undocumented skip flags |
-| `pi` | Pi | `pi` | Supports model; ReevesAgents does not add undocumented skip flags |
-| `qwen-code` | Qwen Code | `qwen` | Supports model and `--approval-mode yolo` skip permissions |
-| `aider` | Aider | `aider` | Supports model and `--yes-always` skip confirmations |
-
-The TUI model picker is provider-scoped and intentionally small. Choosing `provider default` leaves the provider CLI to use its own configured default and ReevesAgents does not pass `--model`. The curated optional values live in `src/launcher/model-data/*.ts`, with one source file per provider.
-
-Default permissions are `ask`. Use `skip` only in trusted disposable workspaces.
+The goal is simple: use the CLIs you already like more effectively. You can ask
+DeepSeek to work on backend code, keep Claude focused on product design, use
+Codex for a design system or implementation pass, and keep Hermes agents busy
+with mail, web, X, or academic-search tasks when those CLIs are configured for
+that work. ReevesAgents coordinates the local workspace; provider login, tools,
+models, and permissions stay with each provider CLI.
 
 ## Install
 
-Choose the smallest install surface that matches what you want to run.
+Requirements:
 
-### Core CLI/TUI Only
+- macOS, Linux, or WSL
+- Node.js `20.19+`
+- tmux
+- At least one supported provider CLI on your `PATH`
 
-Use this when you do not want the optional browser agent bridge:
+Supported provider CLIs include Claude Code, Codex CLI, OpenCode, Hermes, Kimi,
+DeepSeek, Pi, Qwen, and Aider.
+
+### npm
 
 ```sh
-npm install -g --omit=optional reevesagents
+npm install -g reevesagents@1.2.0
 reevesagents doctor
 reevesagents
 ```
 
-This installs the stable CLI and TUI. `reevesagents web` will print a clear
-message explaining which optional Web package is missing.
-
-### CLI/TUI Plus Web Beta
-
-This is the default stable install. It includes the CLI, TUI, and loopback-only
-Web UI beta. It does not install MCP orchestration.
-
-After npm publish:
+One-shot run:
 
 ```sh
-npm install -g reevesagents
+npx reevesagents@1.2.0 doctor
+```
+
+### pnpm
+
+```sh
+pnpm add -g reevesagents@1.2.0
 reevesagents doctor
+reevesagents
+```
+
+One-shot run:
+
+```sh
+pnpm dlx reevesagents@1.2.0 doctor
+```
+
+### Yarn
+
+Modern Yarn one-shot run:
+
+```sh
+yarn dlx reevesagents@1.2.0 doctor
+```
+
+Yarn Classic global install:
+
+```sh
+yarn global add reevesagents@1.2.0
+reevesagents doctor
+reevesagents
+```
+
+### Bun
+
+```sh
+bun add -g reevesagents@1.2.0
+reevesagents doctor
+reevesagents
+```
+
+One-shot run:
+
+```sh
+bunx reevesagents@1.2.0 doctor
+```
+
+### Homebrew
+
+```sh
+brew tap mertkayacs/reevesagents
+brew install reevesagents
+reevesagents doctor
+reevesagents
+```
+
+### Source
+
+Use source when you want to inspect the code, contribute, or run the pre-beta
+research package from the repository.
+
+```sh
+git clone https://github.com/mertkayacs/reevesagents.git
+cd reevesagents
+pnpm install
+pnpm build
+pnpm link --global
+reevesagents doctor
+reevesagents
+```
+
+## Web UI
+
+The Web UI is local and loopback-only.
+
+```sh
 reevesagents web
 ```
 
-Other npm-registry clients consume the same package:
+It lets you create runs, add agents, stop agents, delete ended work, and inspect
+history from the browser while the real CLIs keep running in tmux.
+
+## Pre-Beta Research: MCP Orchestrator
+
+The normal `reevesagents` package is the stable CLI, TUI, and Web UI. The
+MCP-connected root/child orchestration mode is separate and pre-beta.
+
+Use it only when you want to test root/worker agent coordination, MCP setup, and
+prompt injection that tells the root and child agents how to work inside the
+ReevesAgents registry.
+
+From npm-registry clients:
 
 ```sh
-pnpm add -g reevesagents
-npx reevesagents doctor
-pnpm dlx reevesagents doctor
-yarn dlx reevesagents doctor
-bunx reevesagents doctor
-```
-
-### All-In PRE-BETA Orchestrator/MCP
-
-Use this only when you explicitly want MCP-connected root/worker orchestration.
-It installs the stable app plus the separate pre-beta orchestrator package:
-
-```sh
-npm install -g reevesagents reevesagents-orchestrator
-reevesagents doctor
-reevesagents web --prebeta-orchestrator
-```
-
-The pre-beta Web mode can show and control both stable agent runs and
-orchestrator runs. It can create orchestrator runs, add workers, stop runs, and
-control windowed worker agents. Headless orchestrator roots are shown but
-cannot be opened in the browser agent view.
-
-Provider MCP config setup remains explicit:
-
-```sh
+npm install -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
 reevesagents-orchestrator setup
-```
-
-That setup command is pre-beta and may write provider MCP config entries. The
-stable `reevesagents` install never does that by itself.
-
-After the Homebrew tap exists, use the tap command documented in that release.
-
-From a GitHub Release tarball:
-
-```sh
-npm install -g ./reevesagents-1.2.0.tgz
-reevesagents doctor
-```
-
-For an all-in pre-beta tarball install, install both release tarballs:
-
-```sh
-npm install -g ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.2.0.tgz
 reevesagents web --prebeta-orchestrator
+```
+
+Equivalent package managers:
+
+```sh
+pnpm add -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
+yarn global add reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
+bun add -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
 ```
 
 From source:
 
 ```sh
-git clone <repository-url>
+git clone https://github.com/mertkayacs/reevesagents.git
 cd reevesagents
 pnpm install
 pnpm build
+pnpm --dir packages/orchestrator build
 pnpm link --global
+pnpm --dir packages/orchestrator link --global
+reevesagents-orchestrator setup
+reevesagents web --prebeta-orchestrator
 ```
 
-The source repository includes the pre-beta orchestrator package for development
-and verification, but the root workspace and root npm tarball still ship only
-the stable app and Web beta assets.
-
-Verify:
-
-```sh
-reevesagents --version
-reevesagents doctor
-```
+The setup command may write MCP entries into provider CLI configuration. Run
+`reevesagents doctor` and `reevesagents-orchestrator setup --help` first if you
+want to review what will happen.
 
 ## Quick Start
 
+Start the TUI:
+
 ```sh
-reevesagents doctor
 reevesagents
 ```
 
-The first screen is always Welcome. It is a persistent main menu: use arrows and Enter to choose New Run, Runs, Doctor, Settings, Reference, Credits, or Quit. New Run starts the agent-run wizard directly. When launched with run context, Welcome also shows Current Run. Runs auto-archives ended and stale run records on refresh.
-
-Agent-run mode can also start from the CLI:
+Start a named run from the CLI:
 
 ```sh
-reevesagents spawn codex-cli:builder claude-code:reviewer --name "release check" --prompt "Inspect the release state."
+reevesagents spawn deepseek-cli:backend codex-cli:system claude-code:product --name "app build" --prompt "Plan and build the first useful slice."
 ```
 
-Agent specs can include an optional model as `provider:nickname:model`:
+Open the local Web UI:
 
 ```sh
-reevesagents spawn claude-code:planner:sonnet codex-cli:builder:gpt-5-codex
+reevesagents web
 ```
 
-Leave the model off to use the provider default.
-
-## TUI Pages
-
-- Welcome: animated `REEVES AGENTS` block logo, chafa-rendered blocky duck mascot, and persistent main menu.
-- Runs: list active runs, start new runs, and open shared run history.
-- History: show archived ended and stale runs with simple metadata.
-- Run hub: show agents, output, add-agent, stop, and back actions.
-- Agent detail: inspect provider, status, working directory, tmux ids, recent output, prompt, open window, and close window.
-- New Run wizard: configure providers, prompts, and windows.
-- Settings: provider detection and state paths.
-- Doctor: setup and environment health checks only.
-- Reference: compact in-app map of the TUI, CLI, and tmux workflow.
-- Credits: package metadata, stack, providers, license, and repository.
-
-The TUI is visible-menu first: arrows navigate, Enter selects, and Esc/Backspace goes back. Text fields accept normal typing, non-model pickers use Left/Right, and model fields open a selectable model list with Enter. Welcome also accepts `q` to quit. There are no slash commands, Tab-driven focus panes, hidden command palette, or embedded terminal.
-
-## Visual Design
-
-- The Welcome page animates the blue block logo and shows the duck hero variant.
-- The Runs page uses a static sectioned list to reduce flicker during normal use.
-- The interactive TUI enables color even when the parent shell exports `NO_COLOR` or `TERM=dumb`; set `REEVES_NO_COLOR=1` to force monochrome.
-- The mascot is an in-house chafa-rendered blocky duck (src/brand/assets/duck.svg).
-- Layouts adapt by page and terminal width instead of forcing one three-pane layout everywhere.
-- The design reference is Claude Code style terminal UX: simple visible controls, compact status, and low redraw noise.
-
-## CLI
+Check your machine:
 
 ```sh
-reevesagents                 # open TUI
-reevesagents spawn [spec...] # start a run with one or more agents
-reevesagents runs            # list runs
-reevesagents open <id>       # open a run's reeves window or an agent window
-reevesagents peek <agent-id> # print recent agent output
-reevesagents stop <run-id>   # stop one run, requires --yes or ALLOW_DESTRUCTIVE=1
-reevesagents kill <agent-id> # close one agent, requires --yes or ALLOW_DESTRUCTIVE=1
-reevesagents doctor          # setup checks
-reevesagents web             # start loopback Web UI beta
-reevesagents web --prebeta-orchestrator # opt into MCP/orchestrator Web controls
+reevesagents doctor
 ```
 
-## State Layout
+## What ReevesAgents Does
 
-```text
-~/.reeves/
-  config.json
-  presets/
-  history/
-    runs/
-      <run-id>.json
-  runs/
-    <run-id>/
-      run.json
-      agents/
-        <agent-id>.json
-```
-
-`REEVES_REGISTRY` can point at an isolated state root for tests and smoke runs.
-
-## Development
-
-```sh
-pnpm install
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-```
-
-Contributors should open pull requests against `master`. Release stabilization
-uses `release/v1.2`; tags are cut only from verified release commits. See
-[CONTRIBUTING.md](CONTRIBUTING.md) and [docs/branching.md](docs/branching.md).
-
-Portable verification:
-
-```sh
-pnpm verify
-```
-
-See [docs/testing.md](docs/testing.md) for the isolated test matrix and manual TUI check.
-
-See [docs/use-cases.md](docs/use-cases.md) for the product surface map used for careful refactors.
-
-See [docs/release-readiness.md](docs/release-readiness.md) for the 1.2.0 release checklist.
-
-For future-agent handoff, start with [docs/agent-brief.md](docs/agent-brief.md).
-
-## Status
-
-The TUI was redesigned in May 2026 with agent runs as the default low-permission path, a unified color system, responsive frame component, focused pages, auto-cleanup of ended runs, and a visible-menu interaction model. The current release-facing source of truth is this README.
-
-- Version: `1.2.0`
-- npm package: not published yet
-- Homebrew formula: not available yet
+- Starts and tracks multi-agent CLI runs.
+- Opens each agent in tmux.
+- Keeps run history in local JSON files under `~/.reeves`.
+- Provides a terminal TUI, normal CLI commands, and a local Web UI.
+- Keeps provider authentication and model traffic inside the provider CLIs.
+- Does not run a cloud service, database, daemon, or proxy.
 
 ## License
 
-Apache 2.0
+Apache-2.0
