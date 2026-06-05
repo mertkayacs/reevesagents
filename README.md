@@ -5,27 +5,33 @@ Version: `1.2.0`
 GitHub: https://github.com/mertkayacs/reevesagents
 
 ReevesAgents is a free and open source workspace manager for AI CLI agents. It
-helps you run several provider CLIs side by side in tmux, keep each agent in its
-own window, and control the work from a clean CLI, TUI, or local Web UI.
+helps you use several vendor CLIs at the same time, without turning your local
+machine into a heavy platform or locking the work into one model.
 
-The goal is simple: use the CLIs you already like more effectively. You can ask
-DeepSeek to work on backend code, keep Claude focused on product design, use
-Codex for a design system or implementation pass, and keep Hermes agents busy
-with mail, web, X, or academic-search tasks when those CLIs are configured for
-that work. ReevesAgents coordinates the local workspace; provider login, tools,
-models, and permissions stay with each provider CLI.
+The project is built for people who want the best parts of multiple providers
+while keeping the workflow economical. Put each CLI where it is strongest: ask
+DeepSeek to work on backend code, use Claude for product and website direction,
+use Codex for a design system or implementation pass, and keep Hermes agents on
+mail, web, search, or research tasks when those CLIs are configured for that
+work.
+ReevesAgents gives the work a shared local shape: runs, agents, tmux windows,
+history, a TUI, and a local Web UI.
+
+The UI is available in 9 languages: English, German, French, Spanish,
+Portuguese, Italian, Turkish, Simplified Chinese, and Arabic.
+
+## Screenshots And GIFs
+
+Media slots are reserved for the first screenshot and GIF pass:
+
+| Slot | Suggested file |
+| --- | --- |
+| TUI walkthrough GIF | `docs/assets/reevesagents-tui.gif` |
+| Web UI screenshot | `docs/assets/reevesagents-web.png` |
+| Multi-agent tmux run GIF | `docs/assets/reevesagents-tmux.gif` |
+| Pre-beta orchestrator diagram | `docs/assets/reevesagents-orchestrator.png` |
 
 ## Install
-
-Requirements:
-
-- macOS, Linux, or WSL
-- Node.js `20.19+`
-- tmux
-- At least one supported provider CLI on your `PATH`
-
-Supported provider CLIs include Claude Code, Codex CLI, OpenCode, Hermes, Kimi,
-DeepSeek, Pi, Qwen, and Aider.
 
 ### npm
 
@@ -35,7 +41,7 @@ reevesagents doctor
 reevesagents
 ```
 
-One-shot run:
+One-shot:
 
 ```sh
 npx reevesagents@1.2.0 doctor
@@ -49,15 +55,13 @@ reevesagents doctor
 reevesagents
 ```
 
-One-shot run:
+One-shot:
 
 ```sh
 pnpm dlx reevesagents@1.2.0 doctor
 ```
 
 ### Yarn
-
-Modern Yarn one-shot run:
 
 ```sh
 yarn dlx reevesagents@1.2.0 doctor
@@ -79,7 +83,7 @@ reevesagents doctor
 reevesagents
 ```
 
-One-shot run:
+One-shot:
 
 ```sh
 bunx reevesagents@1.2.0 doctor
@@ -96,7 +100,7 @@ reevesagents
 
 ### Source
 
-Use source when you want to inspect the code, contribute, or run the pre-beta
+Use source when you want to inspect the code, contribute, or test the pre-beta
 research package from the repository.
 
 ```sh
@@ -109,59 +113,39 @@ reevesagents doctor
 reevesagents
 ```
 
-## Web UI
+## Prerequisites
 
-The Web UI is local and loopback-only.
+ReevesAgents is local-first. It expects a normal developer machine with tmux and
+at least one provider CLI already installed.
 
-```sh
-reevesagents web
-```
+### Core Requirements
 
-It lets you create runs, add agents, stop agents, delete ended work, and inspect
-history from the browser while the real CLIs keep running in tmux.
+- macOS, Linux, or WSL.
+- Node.js `20.19+`.
+- tmux. Version `3.0+` is recommended.
+- A normal interactive shell on `PATH`.
+- At least one supported provider CLI on `PATH`.
 
-## Pre-Beta Research: MCP Orchestrator
+Native Windows is not the target runtime. Use WSL for Windows machines.
 
-The normal `reevesagents` package is the stable CLI, TUI, and Web UI. The
-MCP-connected root/child orchestration mode is separate and pre-beta.
+### Provider CLIs
 
-Use it only when you want to test root/worker agent coordination, MCP setup, and
-prompt injection that tells the root and child agents how to work inside the
-ReevesAgents registry.
+ReevesAgents can launch these provider CLIs when they are installed and
+authenticated on your machine:
 
-From npm-registry clients:
+- Claude Code
+- Codex CLI
+- OpenCode
+- Hermes
+- Kimi
+- DeepSeek
+- Pi
+- Qwen
+- Aider
 
-```sh
-npm install -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
-reevesagents-orchestrator setup
-reevesagents web --prebeta-orchestrator
-```
-
-Equivalent package managers:
-
-```sh
-pnpm add -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
-yarn global add reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
-bun add -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
-```
-
-From source:
-
-```sh
-git clone https://github.com/mertkayacs/reevesagents.git
-cd reevesagents
-pnpm install
-pnpm build
-pnpm --dir packages/orchestrator build
-pnpm link --global
-pnpm --dir packages/orchestrator link --global
-reevesagents-orchestrator setup
-reevesagents web --prebeta-orchestrator
-```
-
-The setup command may write MCP entries into provider CLI configuration. Run
-`reevesagents doctor` and `reevesagents-orchestrator setup --help` first if you
-want to review what will happen.
+Provider login, models, tools, quotas, and permission prompts stay with each
+provider. ReevesAgents does not store provider API keys and does not proxy model
+traffic.
 
 ## Quick Start
 
@@ -189,14 +173,94 @@ Check your machine:
 reevesagents doctor
 ```
 
-## What ReevesAgents Does
+## What It Feels Like
 
-- Starts and tracks multi-agent CLI runs.
-- Opens each agent in tmux.
-- Keeps run history in local JSON files under `~/.reeves`.
-- Provides a terminal TUI, normal CLI commands, and a local Web UI.
-- Keeps provider authentication and model traffic inside the provider CLIs.
-- Does not run a cloud service, database, daemon, or proxy.
+Instead of running one model and hoping it is the right one for every task, you
+can split work by strength and cost. One run can hold a backend agent, a design
+agent, a research agent, and a review agent. Each one stays in its own tmux
+window, while the TUI and Web UI give you a calmer way to see what is alive,
+what ended, and what needs attention.
+
+This is not a cloud agent platform. It is a small local layer around real CLIs.
+
+## Web UI Beta
+
+The Web UI is local and loopback-only.
+
+```sh
+reevesagents web
+```
+
+It lets you create runs, add agents, choose provider models and permission
+modes, stop agents, delete ended work, and inspect history from the browser
+while the real CLIs keep running in tmux.
+
+The Web UI uses optional runtime packages that npm installs by default. If you
+install with optional dependencies omitted, the CLI and TUI still work and the
+Web command explains what is missing.
+
+## Pre-Beta Research: MCP Orchestrator
+
+The stable `reevesagents` package is the CLI, TUI, and Web UI for direct agent
+runs. MCP-connected root/child orchestration is separate and pre-beta.
+
+Use this mode only if you want to test root/worker coordination, MCP setup, and
+prompt injection that teaches agents how to use the ReevesAgents registry.
+
+```sh
+npm install -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
+reevesagents-orchestrator setup
+reevesagents web --prebeta-orchestrator
+```
+
+Equivalent global installs:
+
+```sh
+pnpm add -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
+yarn global add reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
+bun add -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
+```
+
+From source:
+
+```sh
+git clone https://github.com/mertkayacs/reevesagents.git
+cd reevesagents
+pnpm install
+pnpm build
+pnpm --dir packages/orchestrator build
+pnpm link --global
+pnpm --dir packages/orchestrator link --global
+reevesagents-orchestrator setup
+reevesagents web --prebeta-orchestrator
+```
+
+`reevesagents-orchestrator setup` may write MCP entries into provider CLI
+configuration. Run `reevesagents doctor` and
+`reevesagents-orchestrator setup --help` first if you want to review the path
+before changing local provider config.
+
+## Not Required
+
+You do not need:
+
+- ReevesAgents-stored API keys.
+- A database.
+- Docker.
+- A background service or daemon.
+- MCP setup for normal stable agent runs.
+- Provider config writes during the stable `reevesagents` install.
+
+Install is passive. The stable package has no postinstall script and does not
+rewrite provider configuration.
+
+## Contributor Notes
+
+End users do not need the development toolchain. Contributors use pnpm,
+TypeScript, tsup, Vitest, ESLint, and Prettier from the repository.
+
+The duck art is already committed. Re-rendering brand assets is a maintainer
+task, not a user prerequisite.
 
 ## License
 
