@@ -233,6 +233,13 @@ runs. MCP-connected root/child orchestration is separate and pre-beta.
 Use this mode only if you want to test root/worker coordination, MCP setup, and
 prompt injection that teaches agents how to use the ReevesAgents registry.
 
+**Research-only disclaimer:** orchestrator mode is experimental. Do not use it
+to create unattended fully autonomous agent systems. Be careful when routing
+outputs between different provider CLIs, especially if one provider output is
+used to prompt or evaluate another provider. Provider terms, data policies, and
+automation rules differ, and some combinations may violate a provider's rules.
+Review the terms for the CLIs you use and keep a human in control.
+
 ```sh
 npm install -g reevesagents@1.2.0 reevesagents-orchestrator@pre-beta-research
 reevesagents-orchestrator setup
