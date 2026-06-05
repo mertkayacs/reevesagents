@@ -8,8 +8,8 @@ ReevesAgents is a free and open source workspace manager for AI CLI agents. It
 helps you use several vendor CLIs at the same time, without turning your local
 machine into a heavy platform or locking the work into one model.
 
-The project is built for people who want the best parts of multiple providers
-while keeping the workflow economical. Put each CLI where it is strongest: ask
+It is built for people who want the best parts of multiple providers while
+keeping the workflow economical. Put each CLI where it is strongest: ask
 DeepSeek to work on backend code, use Claude for product and website direction,
 use Codex for a design system or implementation pass, and keep Hermes agents on
 mail, web, search, or research tasks when those CLIs are configured for that
@@ -19,6 +19,32 @@ history, a TUI, and a local Web UI.
 
 The UI is available in 9 languages: English, German, French, Spanish,
 Portuguese, Italian, Turkish, Simplified Chinese, and Arabic.
+
+## Why ReevesAgents
+
+**Use more than one CLI without losing the thread.** If you already jump between
+Claude, Codex, DeepSeek, Hermes, OpenCode, or other agent CLIs, ReevesAgents
+puts those sessions into one local workspace.
+
+**Stay vendor-flexible.** Provider login still belongs to each provider CLI, but
+ReevesAgents does not become another place for credentials or model traffic. You
+can add, remove, or switch CLIs without rebuilding the way you manage runs.
+
+**Keep cost practical.** Route work to the CLI that makes sense for the task
+instead of pushing everything through one expensive default.
+
+**See the work at a glance.** The Web UI is especially useful when several
+agents are running: active runs, agents, models, permission modes, stop/delete
+actions, and history are visible from one browser view while tmux keeps the real
+CLIs alive.
+
+| Surface | What it is good for |
+| --- | --- |
+| **TUI** | Fast keyboard-first control inside the terminal. |
+| **Web UI beta** | One visual view of runs, agents, live panes, and history. |
+| **CLI** | Scripts, quick spawn commands, doctor checks, and tmux opening. |
+| **tmux** | Real provider CLI windows that keep running locally. |
+| **Pre-beta MCP** | Experimental root/child orchestration for research workflows. |
 
 ## Screenshots And GIFs
 
