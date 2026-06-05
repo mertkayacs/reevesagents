@@ -1,0 +1,46 @@
+name: publish pre-beta orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: npm dist-tag to publish under
+        required: true
+        default: pre-beta-research
+        type: choice
+        options:
+          - pre-beta-research
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace
+        env:
+          CI: 'true'
+
+      - run: pnpm --dir packages/orchestrator verify
+
+      - run: npm publish --provenance --access public --tag "$NPM_TAG" --no-git-checks
+        working-directory: packages/orchestrator
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ inputs.npm_tag }}
