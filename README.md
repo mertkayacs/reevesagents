@@ -1,6 +1,9 @@
 # ReevesAgents
 
-Version: `1.2.0`
+[![npm version](https://img.shields.io/npm/v/reevesagents?color=blue&label=npm)](https://www.npmjs.com/package/reevesagents)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![Node.js ≥ 20.19](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen)](https://nodejs.org)
+[![tmux ≥ 3.0](https://img.shields.io/badge/tmux-%3E%3D3.0-yellow)](https://github.com/tmux/tmux)
 
 GitHub: https://github.com/mertkayacs/reevesagents
 
