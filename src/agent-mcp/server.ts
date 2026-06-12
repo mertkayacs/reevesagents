@@ -21,6 +21,7 @@ import {
 } from '../launcher/runtime.js'
 import { findAgent, listAgents, listRuns } from '../state/runs.js'
 import { isProvider } from '../launcher/providers.js'
+import { loadConfig } from '../state/config.js'
 import {
   createRunApproval,
   listRunApprovals,
@@ -214,6 +215,9 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
         working_dir: typeof a.working_dir === 'string' ? a.working_dir : undefined,
       }
       if (typeof a.run_id === 'string' && a.run_id.trim()) {
+        const cap = loadConfig().global.max_agents
+        const live = listAgents(a.run_id).filter(agent => !agent.ended_at).length
+        if (live >= cap) return fail(`run ${a.run_id} is at the agent cap (${cap}); raise max_agents in config to add more`)
         return ok(spawnWorker({ ...config, run_id: a.run_id }))
       }
       const result = startRun({
