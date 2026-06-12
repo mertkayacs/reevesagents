@@ -342,6 +342,19 @@ program
     })
   })
 
+program
+  .command('mcp')
+  .description('start the agent control MCP server over stdio (for CLIs that have it attached)')
+  .action(async () => {
+    try {
+      const { startAgentMcpServer } = await import('./agent-mcp/server.js')
+      await startAgentMcpServer()
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
 async function runWeb(opts: { port?: string; open?: boolean; prebetaOrchestrator?: boolean }): Promise<void> {
   const { checkWebExtras, webExtrasMessage } = await import('./web/extras.js')
   const extras = await checkWebExtras()
