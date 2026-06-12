@@ -19,7 +19,7 @@ import {
   stopRun,
   type AllowedKey,
 } from '../launcher/runtime.js'
-import { listAgents, listRuns } from '../state/runs.js'
+import { findAgent, listAgents, listRuns } from '../state/runs.js'
 import { isProvider } from '../launcher/providers.js'
 import {
   createRunApproval,
@@ -243,6 +243,9 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
     }
 
     if (name === 'read') {
+      // peekAgent swallows a missing-agent error and returns '', so validate
+      // first to give callers a clean "agent not found" instead of empty output.
+      findAgent(String(a.agent_id))
       return ok(peekAgent(String(a.agent_id), typeof a.lines === 'number' ? a.lines : 20))
     }
 
