@@ -32,6 +32,7 @@
     "verify:release": "pnpm verify && CI=true pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir packages/orchestrator verify && pnpm check:install-matrix"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
     "ink": "^7.0.2",
