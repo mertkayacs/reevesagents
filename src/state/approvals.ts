@@ -126,7 +126,13 @@ function writeApprovalUnlocked(approval: RunApproval): string {
 }
 
 function readApprovalUnlocked(runId: string, approvalId: string): RunApproval {
-  return normalizeApproval(JSON.parse(readFileSync(runApprovalPath(runId, approvalId), 'utf-8')) as Record<string, unknown>)
+  try {
+    return normalizeApproval(JSON.parse(readFileSync(runApprovalPath(runId, approvalId), 'utf-8')) as Record<string, unknown>)
+  } catch {
+    // A missing or unreadable approval reads as "not found", not a raw fs error
+    // that would leak the path.
+    throw new Error(`Approval not found: ${approvalId}`)
+  }
 }
 
 export function createRunApproval(input: CreateRunApprovalInput): RunApproval {
@@ -146,7 +152,7 @@ export function createRunApproval(input: CreateRunApprovalInput): RunApproval {
       resolved_at: null,
     }
     writeApprovalUnlocked(approval)
-    return approval
+    return redactApproval(approval)
   })
 }
 
@@ -192,7 +198,7 @@ export function resolveRunApproval(approvalId: string, decision: 'approved' | 'd
       resolved_at: nowIso(),
     }
     writeApprovalUnlocked(updated)
-    return updated
+    return redactApproval(updated)
   })
 }
 
