@@ -404,6 +404,93 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
   }
 }
 
+function createHeadlessHeadAgent(
+  runId: string,
+  tmuxSession: string,
+  provider: Provider,
+  workingDir: string,
+): AgentRecord {
+  const cfg = loadConfig()
+  const agent: AgentRecord = {
+    id: randomUUID(),
+    run_id: runId,
+    nickname: providerDisplayName(provider),
+    provider,
+    model: '',
+    role: 'root',
+    working_dir: workingDir,
+    task: '',
+    task_status: 'working',
+    task_note: '',
+    tmux_session: tmuxSession,
+    tmux_window_id: '',
+    tmux_pane_id: '',
+    rc_enabled: false,
+    permissions: cfg.global.default_permissions,
+    headless: true,
+    inbox: [],
+    last_seen: nowMs(),
+    started_at: nowIso(),
+    ended_at: null,
+  }
+  writeAgent(agent)
+  return agent
+}
+
+// Start a run whose head is the host CLI itself (headless, no tmux window) and
+// whose first worker gets a real window. Used when the MCP server was launched
+// by a recognized host CLI so that host sits at the top of one shared run.
+export function startRunWithHead(
+  headProvider: Provider,
+  firstWorker: AgentLaunchConfig,
+  options: RuntimeOptions = {},
+): { run: RunRecord, agents: AgentRecord[] } {
+  const cfg = loadConfig()
+  const driver = options.driver ?? realDriver
+  const available = options.available ?? detectAvailable()
+  validateAgents([firstWorker], available)
+
+  const runId = randomUUID()
+  const readyDelayMs = cfg.global.ready_delay_ms
+  const workingDir = resolveWorkingDir(firstWorker.working_dir, process.cwd())
+
+  const reevesAnchor = pickReevesAnchor(driver)
+  const tmuxSession = tmuxRunSessionName(runId, providerDisplayName(headProvider))
+  let createdRunSession = false
+
+  try {
+    createRunSessionWithReevesTab(driver, tmuxSession, reevesAnchor, workingDir)
+    createdRunSession = true
+
+    const head = createHeadlessHeadAgent(runId, tmuxSession, headProvider, workingDir)
+    const run: RunRecord = {
+      id: runId,
+      mode: 'spawner',
+      name: providerDisplayName(headProvider),
+      status: 'running',
+      tmux_session: tmuxSession,
+      reeves_session: reevesAnchor.sessionName,
+      reeves_window_id: reevesAnchor.windowId,
+      reeves_pane_id: reevesAnchor.paneId,
+      root_agent_id: head.id,
+      working_dir: workingDir,
+      preset_name: null,
+      started_at: nowIso(),
+      ended_at: null,
+    }
+    writeRun(run)
+    const worker = createAgentWindow(runId, tmuxSession, 'worker', firstWorker, workingDir, readyDelayMs, driver)
+    return { run, agents: [head, worker] }
+  } catch (err) {
+    if (createdRunSession) {
+      try { driver.tmux(['kill-session', '-t', tmuxSession]) } catch { /* session may not exist */ }
+    }
+    removeRun(runId)
+    const detail = childProcessOutput(err) || (err instanceof Error ? err.message : 'tmux returned a non-zero exit code')
+    throw new Error(`Failed to start run ${providerDisplayName(headProvider)}: ${detail}`, { cause: err })
+  }
+}
+
 export function spawnWorker(request: SpawnWorkerRequest, options: RuntimeOptions = {}): AgentRecord {
   const cfg = loadConfig()
   const driver = options.driver ?? realDriver

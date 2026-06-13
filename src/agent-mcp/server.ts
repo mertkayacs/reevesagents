@@ -16,9 +16,11 @@ import {
   sendText,
   spawnWorker,
   startRun,
+  startRunWithHead,
   stopRun,
   type AllowedKey,
 } from '../launcher/runtime.js'
+import { detectHostProvider } from './host.js'
 import { findAgent, listAgents, listRuns } from '../state/runs.js'
 import { isProvider } from '../launcher/providers.js'
 import { loadConfig } from '../state/config.js'
@@ -32,6 +34,14 @@ import {
 } from '../state/approvals.js'
 import type { Provider } from '../state/types.js'
 import { REEVESAGENTS_VERSION } from '../version.js'
+
+// Read-only at module load: which host CLI launched us, if any. Used to make the
+// host the head of one shared run instead of starting a fresh run per spawn.
+const hostProvider = detectHostProvider()
+
+// The single run this MCP session drives when callers omit run_id. Set on the
+// first headless spawn and reused for every later run_id-less spawn.
+let sessionRunId: string | null = null
 
 function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] }
@@ -70,7 +80,7 @@ function parseApprovalStatus(value: unknown): ApprovalStatus | undefined {
 export const MCP_TOOLS = [
   {
     name: 'spawn',
-    description: 'Start a CLI agent. With run_id, add the agent to that run; without run_id, create a new run with this agent as its head.',
+    description: 'Start a CLI agent. With run_id, add it to that run. Without run_id, add it to this session\'s run, which is created on the first spawn.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -222,11 +232,28 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
         if (live >= cap) return fail(`run ${a.run_id} is at the agent cap (${cap}); raise max_agents in config to add more`)
         return ok(spawnWorker({ ...config, run_id: a.run_id }))
       }
+      // No run_id but this session already owns a run: add the agent to it under
+      // the same cap as the run_id branch.
+      if (sessionRunId) {
+        const cap = loadConfig().global.max_agents
+        const live = listAgents(sessionRunId).filter(agent => !agent.ended_at).length
+        if (live >= cap) return fail(`run ${sessionRunId} is at the agent cap (${cap}); raise max_agents in config to add more`)
+        return ok(spawnWorker({ ...config, run_id: sessionRunId }))
+      }
+      // First spawn of this session. If a host CLI launched us, that host becomes
+      // the headless head and this agent is its first worker. Otherwise keep the
+      // original behavior: a new run with this agent as its head.
+      if (hostProvider) {
+        const result = startRunWithHead(hostProvider, config)
+        sessionRunId = result.run.id
+        return ok({ run: result.run, agents: result.agents })
+      }
       const result = startRun({
         name: asString(a.name, config.nickname ?? provider),
         working_dir: asString(a.working_dir, process.cwd()),
         root: config,
       })
+      sessionRunId = result.run.id
       return ok({ run: result.run, agents: result.agents })
     }
 
