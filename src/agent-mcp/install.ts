@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process'
 const SERVER_NAME = 'reevesagents'
 const SERVER_BIN = 'reevesagents'
 const SERVER_ARG = 'mcp'
-const LIST_TIMEOUT_MS = 15_000
+const MGMT_TIMEOUT_MS = 15_000
 
 // A CLI that can host an MCP server, with the argument lists for its own
 // management commands. `add` is undefined for CLIs we cannot drive without an
@@ -104,10 +104,12 @@ function isAttached(host: HostCli): boolean {
   try {
     const out = execFileSync(host.bin, host.list, {
       encoding: 'utf8',
-      timeout: LIST_TIMEOUT_MS,
+      timeout: MGMT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    return out.toLowerCase().includes(SERVER_NAME)
+    // Match the reevesagents name as a token; the reevesagents-orchestrator
+    // sibling must not count as attached.
+    return /reevesagents(?![-\w])/i.test(out)
   } catch {
     return false
   }
@@ -116,9 +118,19 @@ function isAttached(host: HostCli): boolean {
 function runManagement(host: HostCli, args: string[]): void {
   execFileSync(host.bin, args, {
     encoding: 'utf8',
-    timeout: LIST_TIMEOUT_MS,
+    timeout: MGMT_TIMEOUT_MS,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+}
+
+// Prefer the host CLI's own stderr (it explains why an add or remove failed)
+// over the bare "command failed with exit code" message.
+function cliError(err: unknown): string {
+  const stderr = err && typeof err === 'object' ? (err as { stderr?: unknown }).stderr : undefined
+  const text = typeof stderr === 'string'
+    ? stderr.trim()
+    : Buffer.isBuffer(stderr) ? stderr.toString('utf8').trim() : ''
+  return text || (err instanceof Error ? err.message : String(err))
 }
 
 function findHost(key: string): HostCli {
@@ -155,7 +167,7 @@ export function attach(key: string): AttachResult {
     runManagement(host, host.add)
     return { key, label: host.label, ok: true, message: 'attached' }
   } catch (err) {
-    return { key, label: host.label, ok: false, message: err instanceof Error ? err.message : String(err) }
+    return { key, label: host.label, ok: false, message: cliError(err) }
   }
 }
 
@@ -172,7 +184,7 @@ export function detach(key: string): AttachResult {
     runManagement(host, host.remove)
     return { key, label: host.label, ok: true, message: 'detached' }
   } catch (err) {
-    return { key, label: host.label, ok: false, message: err instanceof Error ? err.message : String(err) }
+    return { key, label: host.label, ok: false, message: cliError(err) }
   }
 }
 
