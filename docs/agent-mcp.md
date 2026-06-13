@@ -1,7 +1,10 @@
 # Agent Control MCP (design)
 
-Status: design. No code yet. This document is the plan we agreed on; the
-implementation follows it step by step.
+Status: in progress. The mechanism is implemented: the MCP server and its tools,
+the `reevesagents mcp` subcommand, the per-run agent cap, and the installer
+engine that attaches it to host CLIs. Still to come: the TUI/Web installer
+screen, the run-head model, the recursion-depth cap, and tests. The
+implementation steps at the end track what is done.
 
 ## What this is
 
@@ -58,8 +61,8 @@ agent").
 - `read`: read an agent's recent output
 - `list`: list runs and agents with their status
 - `request_approval`: ask for approval before an action
-- `resolve_approval`: approve or deny a request (plus `check` and `list` for
-  reading approval state)
+- `resolve_approval`: approve or deny a request
+- `check_approval` and `list_approvals`: read approval state
 
 No inbox, no task-status protocol, no role scoping here. Those belong to the
 orchestrator package.
@@ -72,11 +75,14 @@ The TUI and Web UI gain an "Agent control" screen that lists the CLIs on this
 machine that can host an MCP server: claude, codex, kimi, qwen, opencode,
 hermes. For each one you can attach, detach, or attach all.
 
-- Attach runs that CLI's own command, for example:
-  `claude mcp add reevesagents -- reevesagents mcp`. Every supported CLI has its
-  own `mcp add` / `mcp remove`, so reeves never edits provider config files by
-  hand; it calls the CLI's own command.
+- Attach runs that CLI's own command. The exact form varies per CLI, for example
+  `claude mcp add reevesagents -- reevesagents mcp` (claude, codex, kimi),
+  `qwen mcp add reevesagents reevesagents mcp` (qwen), and the `--command` /
+  `--args` form for hermes. reeves only calls the CLI's own command and never
+  edits provider config files by hand.
 - Detach runs the matching remove.
+- OpenCode is the exception: its `mcp add` is interactive and it has no remove
+  subcommand, so the screen marks it attach-by-hand rather than driving it.
 
 Installing it is your explicit choice. That choice is the consent. After that,
 the CLI you attached has the reeves tools whenever it starts, and nothing else
@@ -102,8 +108,11 @@ spawn/drive runtime.
 The control is intentionally full: any key, any text. So the guardrails sit at
 the resource level, not the control level.
 
-- A cap on how many agents can be spawned at once.
-- A cap on spawn recursion depth (A spawns B spawns C ...).
+- A cap on how many agents a run may hold (`max_agents`), enforced when the
+  spawn tool adds to a run.
+- A cap on spawn recursion depth (A spawns B spawns C ...). The `max_depth`
+  config field exists for this but is not enforced yet; it lands with the
+  run-head tree model.
 
 OS isolation comes for free: each agent is a real CLI process in its own tmux
 pane. And off-by-default plus explicit install is the first guardrail.
