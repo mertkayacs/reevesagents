@@ -215,6 +215,8 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
         working_dir: typeof a.working_dir === 'string' ? a.working_dir : undefined,
       }
       if (typeof a.run_id === 'string' && a.run_id.trim()) {
+        // Adding to an existing run: enforce the size cap. A new run (no run_id,
+        // handled below) starts with one agent, so it is always under it.
         const cap = loadConfig().global.max_agents
         const live = listAgents(a.run_id).filter(agent => !agent.ended_at).length
         if (live >= cap) return fail(`run ${a.run_id} is at the agent cap (${cap}); raise max_agents in config to add more`)
@@ -250,7 +252,8 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
       // peekAgent swallows a missing-agent error and returns '', so validate
       // first to give callers a clean "agent not found" instead of empty output.
       findAgent(String(a.agent_id))
-      return ok(peekAgent(String(a.agent_id), typeof a.lines === 'number' ? a.lines : 20))
+      const lines = typeof a.lines === 'number' && a.lines > 0 ? Math.floor(a.lines) : 20
+      return ok(peekAgent(String(a.agent_id), lines))
     }
 
     if (name === 'list') {
