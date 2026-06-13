@@ -8,17 +8,30 @@ import * as RuntimeModule from '../../../src/launcher/runtime.js'
 
 const tick = (ms = 5) => new Promise(resolve => setTimeout(resolve, ms))
 
-// A keystroke can trigger several React state updates and re-renders (for example
-// entering edit mode re-registers a field's useInput handler), and Ink buffers a
-// lone Esc for ~20ms to disambiguate it from arrow-key sequences. Wait until the
-// rendered frame has stayed unchanged for a span that clears that buffer, instead
-// of guessing a fixed delay. A short fixed delay raced both handoffs and silently
-// dropped the next keystroke (the committed Run Name and the Esc that ends a prompt).
-const STABLE_MS = 50
-async function settleFrame(lastFrame: () => string | undefined): Promise<void> {
+// Drive keystrokes deterministically without guessing a fixed delay. A single
+// fixed sleep is fragile two ways at once: too short under GC load and the next
+// key races in before this one is processed; the dropped key is usually the lone
+// Esc that commits a prompt, and because the arrow keys are themselves Esc
+// sequences ("[B"), the in-flight Esc then collides with the next arrow.
+//
+// So settle in two phases. First wait until the keystroke has visibly landed (the
+// frame differs from what it was when the key was sent), which guarantees we never
+// send the next key while this one is still in Ink's input buffer. Then wait until
+// the burst of re-renders stops changing the frame. The change wait is bounded so a
+// key that legitimately changes nothing cannot hang the test.
+const STABLE_MS = 40
+const CHANGE_WAIT_MS = 1500
+const SETTLE_DEADLINE_MS = 3000
+async function settleFrame(lastFrame: () => string | undefined, before?: string): Promise<void> {
+  const start = Date.now()
+  // Phase 1: wait for this keystroke to take visible effect before moving on.
+  if (before !== undefined) {
+    while (lastFrame() === before && Date.now() - start < CHANGE_WAIT_MS) await tick()
+  }
+  // Phase 2: wait for the re-render burst to settle.
   let previous = lastFrame()
   let stableSince = Date.now()
-  const deadline = Date.now() + 2000
+  const deadline = start + SETTLE_DEADLINE_MS
   while (Date.now() < deadline) {
     await tick()
     const current = lastFrame()
@@ -49,8 +62,9 @@ async function press(
   lastFrame: () => string | undefined,
   input: string,
 ): Promise<void> {
+  const before = lastFrame()
   stdin.write(input)
-  await settleFrame(lastFrame)
+  await settleFrame(lastFrame, before)
 }
 
 async function waitForFrame(lastFrame: () => string | undefined, text: string): Promise<void> {
