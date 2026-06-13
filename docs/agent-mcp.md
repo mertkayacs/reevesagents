@@ -1,10 +1,10 @@
 # Agent Control MCP (design)
 
-Status: in progress. The mechanism is implemented: the MCP server and its tools,
-the `reevesagents mcp` subcommand, the per-run agent cap, and the installer
-engine that attaches it to host CLIs. Still to come: the TUI/Web installer
-screen, the run-head model, the recursion-depth cap, and tests. The
-implementation steps at the end track what is done.
+Status: implemented. The MCP server and its tools, the `reevesagents mcp`
+subcommand, the per-run agent cap, the installer engine, the run-head model, the
+Agent Control TUI screen, and unit tests are all in place. Still open: the Web UI
+installer (the TUI is the primary surface; Web stays beta), the recursion-depth
+cap, and the user-facing README. The steps at the end track this.
 
 ## What this is
 
@@ -125,15 +125,20 @@ pane. And off-by-default plus explicit install is the first guardrail.
 - No roles and no autonomous loops here. Those are the orchestrator package's
   job.
 
-## Implementation steps (each one a commit)
+## Implementation steps
 
+Done:
 1. This design doc.
-2. Lean MCP server module: the tool handlers, reusing the existing runtime
-   primitives (spawn, send, peek, and so on).
+2. Lean MCP server module: the tool handlers over the existing runtime.
 3. `reevesagents mcp` subcommand, lazily loaded.
-4. Run head model: record the spawning agent as the run head (top of the run),
-   including the headless-head case for external callers.
-5. Activation installer in the TUI and Web UI, using each CLI's native
-   `mcp add` / `mcp remove`.
-6. Guardrails: spawn-count and recursion-depth caps.
-7. Tests, and a README update for the new feature.
+4. Run head model: a recognized host CLI becomes the headless head of one run.
+5. Agent Control TUI screen, using each CLI's own `mcp add` / `mcp remove`.
+6. The per-run agent cap (`max_agents`).
+7. Unit tests for the server, the installer, and the run-head model.
+
+Open:
+- Web UI installer section (the TUI is the primary surface; Web stays beta).
+- The recursion-depth cap (`max_depth`), once a spawn tree is tracked.
+- A user-facing README entry for the feature.
+- Fold the orchestrator package onto this package's approval store, dropping its
+  own copy.
