@@ -16,7 +16,7 @@ Current boundaries:
 Test it only when you intentionally want provider CLIs or host agents to call the ReevesAgents MCP control plane.
 
 ```sh
-cd packages/orchestrator
+cd beta/orchestrator
 pnpm install --frozen-lockfile
 pnpm verify
 ```

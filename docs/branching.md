@@ -78,4 +78,4 @@ The root npm package is guarded by `pnpm check:package`. It must include only th
 - `packages/`
 - orchestrator or MCP internals
 
-The separate pre-beta orchestrator package has its own package-content check under `packages/orchestrator`.
+The separate pre-beta orchestrator package has its own package-content check under `beta/orchestrator`.

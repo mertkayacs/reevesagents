@@ -274,9 +274,9 @@ git clone https://github.com/mertkayacs/reevesagents.git
 cd reevesagents
 pnpm install
 pnpm build
-pnpm --dir packages/orchestrator build
+pnpm --dir beta/orchestrator build
 pnpm link --global
-pnpm --dir packages/orchestrator link --global
+pnpm --dir beta/orchestrator link --global
 reevesagents-orchestrator setup
 reevesagents web --prebeta-orchestrator
 ```

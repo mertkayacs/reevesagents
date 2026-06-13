@@ -33,11 +33,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace
+      - run: pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace
         env:
           CI: 'true'
 
-      - run: pnpm --dir packages/orchestrator verify
+      - run: pnpm --dir beta/orchestrator verify
 
       - run: |
           PACKAGE_NAME="$(node -p "require('./package.json').name")"
@@ -51,7 +51,7 @@ jobs:
             echo "Published $PACKAGE_NAME@$PACKAGE_VERSION under npm tag $NPM_TAG."
             echo "Install docs intentionally use @$NPM_TAG for this pre-beta package."
           fi
-        working-directory: packages/orchestrator
+        working-directory: beta/orchestrator
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TAG: ${{ inputs.npm_tag }}

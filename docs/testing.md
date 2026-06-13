@@ -21,7 +21,7 @@ This document covers the stable main package. The current release path is spawne
 | CLI smoke | `pnpm smoke:cli` | Built CLI runs `runs` and `doctor` against fake providers. | Temp registry/config and fake `tmux`/provider bins. |
 | Package contents | `pnpm check:package` | Root npm tarball contains only the spawner package surface. | `npm pack --dry-run`, no install. |
 | Install matrix | `pnpm check:install-matrix` | CLI/TUI-only install, Web install, and all-in PRE-BETA orchestrator install work from tarballs. | Temp npm projects, temp registry/config, fake `tmux`/provider bins for pre-beta Web create/stop. |
-| Orchestrator package | `CI=true pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir packages/orchestrator verify` | PRE-BETA MCP package typechecks, tests, builds, and packs as a separate package. | Separate package config and temp state in tests. |
+| Orchestrator package | `CI=true pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir beta/orchestrator verify` | PRE-BETA MCP package typechecks, tests, builds, and packs as a separate package. | Separate package config and temp state in tests. |
 | Manual TUI smoke | `node dist/cli.js` with temp env | Welcome menu, Runs page, Main Menu return, narrow terminal behavior, and visible action flow. | Temp registry/config. |
 
 ## Acceptance Criteria
@@ -58,8 +58,8 @@ Use this for the full release install matrix:
 
 ```sh
 pnpm verify
-CI=true pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace
-pnpm --dir packages/orchestrator verify
+CI=true pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace
+pnpm --dir beta/orchestrator verify
 pnpm check:install-matrix
 ```
 

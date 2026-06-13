@@ -45,14 +45,14 @@ pnpm check:install-matrix
 For orchestrator package changes, run:
 
 ```sh
-pnpm --dir packages/orchestrator verify
+pnpm --dir beta/orchestrator verify
 ```
 
 ## Package Boundaries
 
 The root package is the stable CLI, TUI, and Web beta. It must not bundle the pre-beta orchestrator package.
 
-The pre-beta orchestrator package lives under `packages/orchestrator` and is installed explicitly as `reevesagents-orchestrator`.
+The pre-beta orchestrator package lives under `beta/orchestrator` and is installed explicitly as `reevesagents-orchestrator`.
 
 Keep generated build output, private notes, local screenshots, and debugging artifacts out of pull requests.
 

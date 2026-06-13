@@ -18,7 +18,7 @@
 - [ ] `pnpm smoke:cli`
 - [ ] `pnpm check:package`
 - [ ] `pnpm check:install-matrix`
-- [ ] `pnpm --dir packages/orchestrator verify`
+- [ ] `pnpm --dir beta/orchestrator verify`
 
 ## Notes
 

@@ -140,5 +140,3 @@ Open:
 - Web UI installer section (the TUI is the primary surface; Web stays beta).
 - The recursion-depth cap (`max_depth`), once a spawn tree is tracked.
 - A user-facing README entry for the feature.
-- Fold the orchestrator package onto this package's approval store, dropping its
-  own copy.

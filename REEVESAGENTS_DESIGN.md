@@ -249,7 +249,7 @@ Rules:
 
 Connected agent coordination is intentionally outside the default main install and root release package. The main package should not depend on it and should not expose setup for it in normal flows.
 
-`packages/orchestrator` may exist in the repository as PRE-BETA code for MCP-connected root/worker flows. It is not part of the root npm tarball, root Homebrew formula, or stable default app. It may ship as the separate `reevesagents-orchestrator` package for users who explicitly choose the all-in PRE-BETA option.
+`beta/orchestrator` may exist in the repository as PRE-BETA code for MCP-connected root/worker flows. It is not part of the root npm tarball, root Homebrew formula, or stable default app. It may ship as the separate `reevesagents-orchestrator` package for users who explicitly choose the all-in PRE-BETA option.
 
 Install choices:
 
@@ -278,7 +278,7 @@ A release-ready main package must pass:
 
 ```sh
 pnpm verify
-pnpm --dir packages/orchestrator verify
+pnpm --dir beta/orchestrator verify
 pnpm check:install-matrix
 pnpm pack --dry-run
 ```

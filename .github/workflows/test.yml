@@ -46,8 +46,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm --dir packages/orchestrator install --frozen-lockfile --ignore-workspace
+      - run: pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace
         env:
           CI: 'true'
 
-      - run: pnpm --dir packages/orchestrator verify
+      - run: pnpm --dir beta/orchestrator verify
