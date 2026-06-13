@@ -67,7 +67,7 @@ function parseApprovalStatus(value: unknown): ApprovalStatus | undefined {
   return undefined
 }
 
-export const TOOLS = [
+export const MCP_TOOLS = [
   {
     name: 'spawn',
     description: 'Start a CLI agent. With run_id, add the agent to that run; without run_id, create a new run with this agent as its head.',
@@ -302,7 +302,7 @@ export async function startAgentMcpServer(): Promise<void> {
     { capabilities: { tools: {} } },
   )
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }))
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args = {} } = request.params

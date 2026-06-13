@@ -55,6 +55,8 @@ function runApprovalPath(runId: string, approvalId: string): string {
   return join(runApprovalsDir(runId), `${approvalId}.json`)
 }
 
+// Write to a temp file then rename, so a reader never sees a half-written record.
+// Mode 600 because approval details can hold sensitive action data.
 function atomicWriteJson(path: string, data: unknown): void {
   mkdirSync(dirname(path), { recursive: true })
   const tmpPath = `${path}.tmp`
@@ -109,6 +111,8 @@ function normalizeApproval(raw: Record<string, unknown>): RunApproval {
   }
 }
 
+// Redaction runs both before writing and on every value returned, so secrets
+// never land on disk and never leave this module.
 function redactApproval(approval: RunApproval): RunApproval {
   return {
     ...approval,
@@ -190,6 +194,7 @@ export function resolveRunApproval(approvalId: string, decision: 'approved' | 'd
   return withRunsLock(() => {
     const approval = listRunApprovals().find(item => item.id === approvalId)
     if (!approval) throw new Error(`Approval not found: ${approvalId}`)
+    // Decide once: a resolved approval is returned as-is, never re-decided.
     if (approval.status !== 'pending') return approval
     const updated: RunApproval = {
       ...approval,

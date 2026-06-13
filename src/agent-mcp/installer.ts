@@ -115,7 +115,7 @@ function isAttached(host: HostCli): boolean {
   }
 }
 
-function runManagement(host: HostCli, args: string[]): void {
+function runHostCommand(host: HostCli, args: string[]): void {
   execFileSync(host.bin, args, {
     encoding: 'utf8',
     timeout: MGMT_TIMEOUT_MS,
@@ -139,8 +139,9 @@ function findHost(key: string): HostCli {
   return host
 }
 
-// List every MCP-capable CLI with whether it is installed and currently attached.
-export function status(): HostStatus[] {
+// One row per known host CLI: is it installed, is reevesagents currently
+// attached, and can we drive it automatically (manual when add is undefined).
+export function hostStatus(): HostStatus[] {
   return HOSTS.map(host => {
     const installed = isInstalled(host.bin)
     return {
@@ -164,7 +165,7 @@ export function attach(key: string): AttachResult {
     return { key, label: host.label, ok: false, message: `${host.bin} is not installed` }
   }
   try {
-    runManagement(host, host.add)
+    runHostCommand(host, host.add)
     return { key, label: host.label, ok: true, message: 'attached' }
   } catch (err) {
     return { key, label: host.label, ok: false, message: cliError(err) }
@@ -181,7 +182,7 @@ export function detach(key: string): AttachResult {
     return { key, label: host.label, ok: false, message: `${host.bin} is not installed` }
   }
   try {
-    runManagement(host, host.remove)
+    runHostCommand(host, host.remove)
     return { key, label: host.label, ok: true, message: 'detached' }
   } catch (err) {
     return { key, label: host.label, ok: false, message: cliError(err) }
