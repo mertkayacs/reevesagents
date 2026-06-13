@@ -3,8 +3,8 @@
 Status: implemented. The MCP server and its tools, the `reevesagents mcp`
 subcommand, the per-run agent cap, the installer engine, the run-head model, the
 Agent Control TUI screen, and unit tests are all in place. Still open: the Web UI
-installer (the TUI is the primary surface; Web stays beta), the recursion-depth
-cap, and the user-facing README. The steps at the end track this.
+installer (the TUI is the primary surface; Web stays beta) and the user-facing
+README. The steps at the end track this.
 
 ## What this is
 
@@ -88,9 +88,9 @@ Installing it is your explicit choice. That choice is the consent. After that,
 the CLI you attached has the reeves tools whenever it starts, and nothing else
 does.
 
-For agents reeves launches itself, the MCP can also be attached per run (scoped,
-no global footprint), so a spawned worker can spawn its own sub-workers without
-touching your everyday CLI config.
+Spawned workers do not receive the MCP by default, so they cannot spawn further
+agents. To let a worker orchestrate its own sub-workers, attach the MCP to that
+worker's CLI from this same screen; it is the same explicit opt-in.
 
 ## Packaging
 
@@ -110,9 +110,13 @@ the resource level, not the control level.
 
 - A cap on how many agents a run may hold (`max_agents`), enforced when the
   spawn tool adds to a run.
-- A cap on spawn recursion depth (A spawns B spawns C ...). The `max_depth`
-  config field exists for this but is not enforced yet; it lands with the
-  run-head tree model.
+- A cap on spawn recursion depth (A spawns B spawns C ...). Within one run the
+  tree is flat (the head and its workers are all depth one), so a depth cap is
+  trivially satisfied. Bounding cross-run recursion would require injecting the
+  parent depth into spawned workers, which this design deliberately avoids, so
+  recursion is instead bounded by `max_agents` per run plus the fact that spawned
+  workers are MCP-free by default (a worker can only recurse if the user globally
+  attached the MCP to that worker's CLI).
 
 OS isolation comes for free: each agent is a real CLI process in its own tmux
 pane. And off-by-default plus explicit install is the first guardrail.
@@ -138,5 +142,4 @@ Done:
 
 Open:
 - Web UI installer section (the TUI is the primary surface; Web stays beta).
-- The recursion-depth cap (`max_depth`), once a spawn tree is tracked.
 - A user-facing README entry for the feature.

@@ -117,6 +117,39 @@ describe('startRunWithHead', () => {
       .toThrow(/not found on PATH/)
   })
 
+  it('coerces a non-positive lines value to the default when peeking a worker', async () => {
+    const driver = new FakeDriver()
+    const { startRunWithHead, peekAgent } = await import('../src/launcher/runtime.js')
+
+    const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
+    const worker = result.agents[1]!
+
+    // Pull only the capture-pane start args (-S <value>) recorded for this worker.
+    function capturedStarts(): string[] {
+      return driver.calls
+        .filter(call => call.args[0] === 'capture-pane' && call.args.includes(worker.tmux_pane_id))
+        .map(call => call.args[call.args.indexOf('-S') + 1]!)
+    }
+
+    // A negative count must not flip to reading from the wrong end; it falls back
+    // to the default of 10 -> -S -10, never a positive start.
+    driver.calls = []
+    peekAgent(worker.id, -5, { driver })
+    expect(capturedStarts()).toContain('-10')
+    expect(capturedStarts().some(start => !start.startsWith('-'))).toBe(false)
+
+    // Zero is non-positive too: same fallback to -S -10.
+    driver.calls = []
+    peekAgent(worker.id, 0, { driver })
+    expect(capturedStarts()).toContain('-10')
+    expect(capturedStarts().some(start => !start.startsWith('-'))).toBe(false)
+
+    // A normal positive count is used as-is: 30 -> -S -30.
+    driver.calls = []
+    peekAgent(worker.id, 30, { driver })
+    expect(capturedStarts()).toContain('-30')
+  })
+
   it('tears the head-run down once its last worker is killed', async () => {
     const driver = new FakeDriver()
     const { startRunWithHead, killAgent } = await import('../src/launcher/runtime.js')

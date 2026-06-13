@@ -174,6 +174,31 @@ describe('handleAgentMcpTool', () => {
     })
   })
 
+  describe('empty run-name fallback', () => {
+    // The first-spawn startRun path is real-tmux heavy and takes the real driver
+    // with no injection point, so we cannot exercise the handler cleanly here.
+    // This locks the load-bearing reason for the fix instead: asString treats an
+    // empty string as a present value, so name='' would slip past the fallback.
+    // The handler now trim-checks a.name explicitly, mirrored below.
+    it('keeps an empty name from defeating the nickname/provider fallback', () => {
+      const asString = (value: unknown, fallback = ''): string =>
+        typeof value === 'string' ? value : fallback
+
+      // The trap: a blank name is a string, so asString returns it verbatim.
+      expect(asString('', 'fallback-name')).toBe('')
+
+      // The fix: trim-check before falling back, so a blank name resolves to the
+      // nickname (or provider). A real name is passed through unchanged.
+      const runName = (name: unknown, nickname: string | undefined, provider: string): string =>
+        typeof name === 'string' && (name as string).trim() ? (name as string) : (nickname ?? provider)
+
+      expect(runName('', 'nick', 'cc')).toBe('nick')
+      expect(runName('   ', undefined, 'cc')).toBe('cc')
+      expect(runName('my run', 'nick', 'cc')).toBe('my run')
+      expect(runName(undefined, undefined, 'cc')).toBe('cc')
+    })
+  })
+
   describe('approval lifecycle', () => {
     it('creates, lists, resolves, and rereads an approval, redacting secrets in the return value', async () => {
       const { writeRun, writeAgent } = await import('../src/state/runs.js')

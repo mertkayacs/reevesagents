@@ -540,12 +540,15 @@ export function openAgent(agentId: string, options: RuntimeOptions = {}): void {
 
 export function peekAgent(agentId: string, lines = 10, options: RuntimeOptions = {}): string {
   const driver = options.driver ?? realDriver
+  // Coerce to a positive integer: a zero/negative/NaN count would otherwise read
+  // from the wrong end of history (lines=-5 -> capture-pane -S 5).
+  const n = Number.isFinite(lines) && lines > 0 ? Math.floor(lines) : 10
   try {
     const agent = findAgent(agentId)
     if (agent.headless || !agent.tmux_pane_id) return '(headless agent - no output)'
-    let output = driver.tmux(['capture-pane', '-p', '-e', '-S', String(-lines), '-t', agent.tmux_pane_id])
+    let output = driver.tmux(['capture-pane', '-p', '-e', '-S', String(-n), '-t', agent.tmux_pane_id])
     if (!output.trim()) {
-      try { output = driver.tmux(['capture-pane', '-p', '-e', '-a', '-S', String(-lines), '-t', agent.tmux_pane_id]) } catch { /* no alternate screen */ }
+      try { output = driver.tmux(['capture-pane', '-p', '-e', '-a', '-S', String(-n), '-t', agent.tmux_pane_id]) } catch { /* no alternate screen */ }
     }
     return redactSecrets(stripAnsi(output).trim())
   } catch {

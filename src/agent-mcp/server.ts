@@ -263,8 +263,11 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
         sessionRunId = result.run.id
         return ok({ run: result.run, agents: result.agents })
       }
+      // asString returns '' for an empty string, so a blank name would defeat the
+      // fallback; trim-check it explicitly before falling back to nickname/provider.
+      const runName = typeof a.name === 'string' && a.name.trim() ? a.name : (config.nickname ?? provider)
       const result = startRun({
-        name: asString(a.name, config.nickname ?? provider),
+        name: runName,
         working_dir: asString(a.working_dir, process.cwd()),
         root: config,
       })
