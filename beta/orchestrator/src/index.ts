@@ -12,7 +12,9 @@ export {
   killAgent,
   stopRun,
 } from './runtime.js'
-export { listRunApprovals, readRunApproval, resolveRunApproval } from './approvals.js'
+// Approvals live in the main package; the orchestrator reuses them rather than
+// keeping its own copy.
+export { listRunApprovals, readRunApproval, resolveRunApproval } from '../../../src/state/approvals.js'
 export type { CliRegistration } from './mcp-setup.js'
 export type { StartRunRequest, SpawnWorkerRequest, RuntimeOptions, AllowedKey } from './runtime.js'
-export type { RunApproval, ApprovalRisk, ApprovalStatus } from './approvals.js'
+export type { RunApproval, ApprovalRisk, ApprovalStatus } from '../../../src/state/approvals.js'

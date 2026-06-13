@@ -2,24 +2,29 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, RunRecord } from '../../../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../src/state/types.js'
 
 let tmpDir: string
+let originalConfig: string | undefined
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'reeves-approvals-test-'))
+  originalConfig = process.env.REEVES_CONFIG
   process.env.REEVES_REGISTRY = tmpDir
+  process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
 })
 
 afterEach(() => {
   delete process.env.REEVES_REGISTRY
+  if (originalConfig === undefined) delete process.env.REEVES_CONFIG
+  else process.env.REEVES_CONFIG = originalConfig
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
 function makeRun(id: string): RunRecord {
   return {
     id,
-    mode: 'orchestrator',
+    mode: 'spawner',
     name: `run-${id}`,
     status: 'running',
     tmux_session: `reeves_${id}`,
@@ -57,15 +62,15 @@ function makeAgent(id: string, runId: string): AgentRecord {
   }
 }
 
-describe('orchestrator approvals', () => {
+describe('approvals', () => {
   it('creates, lists, and resolves approvals inside the run folder', async () => {
-    const { writeRun, writeAgent } = await import('../../../src/state/runs.js')
+    const { writeRun, writeAgent } = await import('../src/state/runs.js')
     const {
       createRunApproval,
       listRunApprovals,
       resolveRunApproval,
       readRunApproval,
-    } = await import('../src/approvals.js')
+    } = await import('../src/state/approvals.js')
     writeRun(makeRun('r9'))
     writeAgent(makeAgent('a4', 'r9'))
 
@@ -87,8 +92,8 @@ describe('orchestrator approvals', () => {
   })
 
   it('redacts approval text and details before writing', async () => {
-    const { writeRun, writeAgent } = await import('../../../src/state/runs.js')
-    const { createRunApproval, readRunApproval } = await import('../src/approvals.js')
+    const { writeRun, writeAgent } = await import('../src/state/runs.js')
+    const { createRunApproval, readRunApproval } = await import('../src/state/approvals.js')
     writeRun(makeRun('r10'))
     writeAgent(makeAgent('a5', 'r10'))
     const approval = createRunApproval({
@@ -101,5 +106,25 @@ describe('orchestrator approvals', () => {
     const loaded = readRunApproval('r10', approval.id)
     expect(loaded.summary).toContain('[REDACTED]')
     expect(String(loaded.details.token)).toContain('[REDACTED]')
+  })
+
+  it('returns the created approval already redacted, not just on reload', async () => {
+    const { writeRun, writeAgent } = await import('../src/state/runs.js')
+    const { createRunApproval } = await import('../src/state/approvals.js')
+    writeRun(makeRun('r11'))
+    writeAgent(makeAgent('a6', 'r11'))
+    const approval = createRunApproval({
+      agent_id: 'a6',
+      action: 'use token',
+      summary: 'token sk-ant-api03-abcdefghij1234567890abcdef',
+      details: { token: 'sk-ant-api03-abcdefghij1234567890abcdef' },
+    })
+    expect(approval.summary).toContain('[REDACTED]')
+    expect(String(approval.details.token)).toContain('[REDACTED]')
+  })
+
+  it('reads a missing approval as not found without leaking the path', async () => {
+    const { readRunApproval } = await import('../src/state/approvals.js')
+    expect(() => readRunApproval('r12', 'no-such-id')).toThrow('Approval not found: no-such-id')
   })
 })

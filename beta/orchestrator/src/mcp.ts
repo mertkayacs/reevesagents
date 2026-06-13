@@ -49,7 +49,7 @@ import {
   resolveRunApproval,
   type ApprovalRisk,
   type ApprovalStatus,
-} from './approvals.js'
+} from '../../../src/state/approvals.js'
 import { ORCHESTRATOR_VERSION } from './version.js'
 
 type Caller =
