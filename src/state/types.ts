@@ -44,6 +44,7 @@ export type ScreenName =
   | 'NewRunStarting'
   | 'AddWorker'
   | 'Settings'
+  | 'AgentControl'
   | 'Reference'
   | 'Credits'
   | 'Doctor'

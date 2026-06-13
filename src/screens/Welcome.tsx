@@ -39,6 +39,7 @@ export function Welcome() {
       { label: t('welcome.newRun'), hint: t('welcome.newRunHint'), screen: 'NewRun' },
       { label: t('welcome.runs'), hint: t('welcome.runsHint'), screen: 'Runs' },
       { label: t('welcome.doctor'), hint: t('welcome.doctorHint'), screen: 'Doctor' },
+      { label: t('welcome.agentControl'), hint: t('welcome.agentControlHint'), screen: 'AgentControl' },
       { label: `${t('welcome.startWeb')} (beta)`, hint: t('welcome.startWebHint'), launchWeb: true },
       { label: t('common.settings'), hint: t('welcome.settingsHint'), screen: 'Settings' },
       { label: t('welcome.reference'), hint: t('welcome.referenceHint'), screen: 'Reference' },

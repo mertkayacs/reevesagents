@@ -32,6 +32,7 @@ import { NewRunStarting } from './screens/newrun/05Starting.js'
 import { AddWorker } from './screens/run/AddWorker.js'
 import { RunStop } from './screens/run/Stop.js'
 import { Settings } from './screens/Settings.js'
+import { AgentControl } from './screens/AgentControl.js'
 import { Reference } from './screens/Reference.js'
 import { Credits } from './screens/Credits.js'
 import { Doctor } from './screens/Doctor.js'
@@ -73,6 +74,7 @@ function renderScreen(screen: ScreenName) {
     case 'NewRunStarting': return <NewRunStarting />
     case 'AddWorker': return <AddWorker />
     case 'Settings':    return <Settings />
+    case 'AgentControl': return <AgentControl />
     case 'Reference':   return <Reference />
     case 'Credits':     return <Credits />
     case 'Doctor':      return <Doctor />
