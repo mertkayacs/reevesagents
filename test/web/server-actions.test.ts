@@ -524,6 +524,66 @@ describe('state stream', () => {
   })
 })
 
+describe('agent control (mcp hosts)', () => {
+  // Every case installs fake host bins on PATH first, so attach/detach/list run
+  // the fakes (which just exit 0) and never touch the real CLIs' MCP config.
+  it('lists the MCP-capable host CLIs with their status', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+
+    const res = await get(handle.port, '/api/mcp-hosts')
+    expect(res.status).toBe(200)
+    const body = JSON.parse(res.body) as { hosts: Array<{ key: string; bin: string; installed: boolean; attached: boolean; manual: boolean }> }
+    const cc = body.hosts.find(h => h.key === 'cc')!
+    expect(cc).toMatchObject({ key: 'cc', bin: 'claude', installed: true, attached: false, manual: false })
+    const opencode = body.hosts.find(h => h.key === 'opencode')!
+    expect(opencode.manual).toBe(true)
+  })
+
+  it('attaches and detaches a drivable host', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+
+    const attached = await post(handle.port, '/api/mcp-hosts/attach', { key: 'cc' })
+    expect(attached.status).toBe(200)
+    const attachBody = JSON.parse(attached.body) as { result: { ok: boolean }; hosts: unknown[] }
+    expect(attachBody.result.ok).toBe(true)
+    expect(Array.isArray(attachBody.hosts)).toBe(true)
+
+    const detached = await post(handle.port, '/api/mcp-hosts/detach', { key: 'cc' })
+    expect(detached.status).toBe(200)
+    expect((JSON.parse(detached.body) as { result: { ok: boolean } }).result.ok).toBe(true)
+  })
+
+  it('attaches every installed drivable host at once', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+
+    const res = await post(handle.port, '/api/mcp-hosts/attach-all', {})
+    expect(res.status).toBe(200)
+    const body = JSON.parse(res.body) as { results: Array<{ key: string; ok: boolean }>; hosts: unknown[] }
+    expect(body.results.length).toBeGreaterThan(0)
+    expect(body.results.every(r => r.ok)).toBe(true)
+    // opencode is manual, so attach-all never drives it.
+    expect(body.results.find(r => r.key === 'opencode')).toBeUndefined()
+  })
+
+  it('rejects an unknown host key', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+    const res = await post(handle.port, '/api/mcp-hosts/attach', { key: 'nope' })
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/unknown cli/i)
+  })
+
+  it('rejects a missing host key', async () => {
+    const handle = await start()
+    const res = await post(handle.port, '/api/mcp-hosts/attach', {})
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/host key is required/i)
+  })
+})
+
 describe('static assets', () => {
   it('serves an allowlisted asset from the web root and 404s a missing one', async () => {
     writeFileSync(join(tmpDir, 'app.js'), '// fixture\n')

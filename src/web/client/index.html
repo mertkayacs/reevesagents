@@ -23,6 +23,7 @@
         <span id="language-label" class="language-label">Language</span>
         <select id="language-select" aria-label="Language"></select>
       </label>
+      <button id="agent-control-btn" class="btn btn-secondary" type="button">Agent control</button>
       <button id="new-agent-btn" class="btn btn-agent" type="button">New agent</button>
       <button id="new-run-btn" class="btn btn-accent" type="button">New run</button>
     </div>
@@ -169,6 +170,24 @@
         <button type="submit" id="new-submit" class="btn btn-accent">Create</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="mcp-dialog" class="dialog mcp-dialog">
+    <div class="mcp-panel">
+      <div class="dialog-header">
+        <div id="mcp-dialog-title" class="dialog-title">Agent control</div>
+        <div id="mcp-dialog-subtitle" class="dialog-subtitle">Attach the reevesagents MCP to your CLIs so an agent can spawn and drive other agents.</div>
+      </div>
+
+      <div id="mcp-host-list" class="mcp-host-list" aria-label="MCP host CLIs"></div>
+      <div id="mcp-empty" class="mcp-empty" hidden>No MCP-capable CLI was found on this machine.</div>
+      <div id="mcp-error" class="dialog-error" hidden></div>
+
+      <div class="dialog-actions">
+        <button type="button" id="mcp-attach-all" class="btn btn-agent">Attach all</button>
+        <button type="button" id="mcp-close" class="btn">Close</button>
+      </div>
+    </div>
   </dialog>
 
   <script src="xterm.js"></script>

@@ -2,9 +2,8 @@
 
 Status: implemented. The MCP server and its tools, the `reevesagents mcp`
 subcommand, the per-run agent cap, the installer engine, the run-head model, the
-Agent Control TUI screen, and unit tests are all in place. Still open: the Web UI
-installer (the TUI is the primary surface; Web stays beta) and the user-facing
-README. The steps at the end track this.
+Agent Control screen in both the TUI and the Web UI, and unit tests are all in
+place. Still open: the user-facing README. The steps at the end track this.
 
 ## What this is
 
@@ -139,7 +138,9 @@ Done:
 5. Agent Control TUI screen, using each CLI's own `mcp add` / `mcp remove`.
 6. The per-run agent cap (`max_agents`).
 7. Unit tests for the server, the installer, and the run-head model.
+8. Agent Control in the Web UI: an "Agent control" dialog over the same installer
+   engine (`GET /api/mcp-hosts` plus attach / detach / attach-all POSTs), gated to
+   loopback by the same origin guard as every other action.
 
 Open:
-- Web UI installer section (the TUI is the primary surface; Web stays beta).
 - A user-facing README entry for the feature.

@@ -38,6 +38,12 @@ import {
   loadWebOrchestratorRuntime,
   type WebOrchestratorRuntime,
 } from './prebeta-orchestrator.js'
+import {
+  hostStatus as mcpHostStatus,
+  attach as attachMcpHost,
+  detach as detachMcpHost,
+  attachAll as attachAllMcpHosts,
+} from '../agent-mcp/installer.js'
 
 const HOST = '127.0.0.1'
 const DEFAULT_PORT = 8080
@@ -309,6 +315,32 @@ function updateLanguage(body: Record<string, unknown>): unknown {
   return webLanguagePayload()
 }
 
+// Agent control: list the MCP-capable host CLIs and attach/detach the
+// reevesagents MCP per host by calling that CLI's own mcp add/remove. This only
+// touches the host CLI's own config and is gated to loopback by the same origin
+// guard as every other state-changing route.
+function mcpHostsPayload(): unknown {
+  return { hosts: mcpHostStatus() }
+}
+
+function attachMcpHostAction(body: Record<string, unknown>): unknown {
+  const key = typeof body.key === 'string' ? body.key : ''
+  if (!key) throw new Error('host key is required')
+  const result = attachMcpHost(key)
+  return { result, hosts: mcpHostStatus() }
+}
+
+function detachMcpHostAction(body: Record<string, unknown>): unknown {
+  const key = typeof body.key === 'string' ? body.key : ''
+  if (!key) throw new Error('host key is required')
+  const result = detachMcpHost(key)
+  return { result, hosts: mcpHostStatus() }
+}
+
+function attachAllMcpHostsAction(): unknown {
+  return { results: attachAllMcpHosts(), hosts: mcpHostStatus() }
+}
+
 function killTerminal(id: string, ctx: RequestContext): void {
   const agent = ctx.prebetaOrchestrator ? findAgentAny(id) : findAgent(id)
   const run = ctx.prebetaOrchestrator ? readRunAny(agent.run_id) : readRun(agent.run_id)
@@ -380,6 +412,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     })
     return
   }
+  if (method === 'GET' && path === '/api/mcp-hosts') {
+    try {
+      sendJson(res, 200, mcpHostsPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
   if (method === 'GET' && path === '/api/events') {
     ctx.sse.add(res)
     return
@@ -402,6 +442,32 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     try {
       const body = await readJsonBody(req)
       sendJson(res, 200, updateLanguage(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/mcp-hosts/attach') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, attachMcpHostAction(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/mcp-hosts/detach') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, detachMcpHostAction(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/mcp-hosts/attach-all') {
+    try {
+      sendJson(res, 200, attachAllMcpHostsAction())
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }

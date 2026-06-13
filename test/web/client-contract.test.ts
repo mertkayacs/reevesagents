@@ -104,4 +104,26 @@ describe('web client create flow', () => {
     expect(css).toContain('.permission-option[aria-checked="true"]')
     expect(css).not.toContain('.topbar .btn-accent {\n    position: absolute;')
   })
+
+  it('exposes the agent control (MCP installer) surface', () => {
+    const html = readClientFile('index.html')
+    const js = readClientFile('app.js')
+    const css = readClientFile('app.css')
+
+    expect(html).toContain('id="agent-control-btn"')
+    expect(html).toContain('id="mcp-dialog"')
+    expect(html).toContain('id="mcp-host-list"')
+    expect(html).toContain('id="mcp-attach-all"')
+
+    expect(js).toContain("api('GET', '/api/mcp-hosts')")
+    expect(js).toContain("api('POST', '/api/mcp-hosts/attach'")
+    expect(js).toContain("api('POST', '/api/mcp-hosts/detach'")
+    expect(js).toContain("api('POST', '/api/mcp-hosts/attach-all'")
+    expect(js).toContain('function renderMcpHosts()')
+    expect(js).toContain('function openMcpDialog()')
+    expect(js).toContain("'web.mcpTitle': 'Agent control'")
+
+    expect(css).toContain('.mcp-host-row')
+    expect(css).toContain('.mcp-host-action')
+  })
 })

@@ -134,6 +134,26 @@
     'web.statusRunning': 'running',
     'web.unknown': 'unknown',
     'web.useProvider': 'use {{name}}',
+    'web.agentControl': 'Agent control',
+    'web.agentControlTitle': 'attach the reevesagents MCP to your CLIs',
+    'web.mcpTitle': 'Agent control',
+    'web.mcpSubtitle': 'Attach the reevesagents MCP to your CLIs so an agent can spawn and drive other agents.',
+    'web.mcpEmpty': 'No MCP-capable CLI was found on this machine.',
+    'web.mcpAttachAll': 'Attach all',
+    'web.mcpClose': 'Close',
+    'web.mcpAttach': 'Attach',
+    'web.mcpDetach': 'Detach',
+    'web.mcpAttached': 'Attached',
+    'web.mcpDetached': 'Not attached',
+    'web.mcpManual': 'Manual setup',
+    'web.mcpNotInstalled': 'Not installed',
+    'web.mcpManualHint': 'add it from this CLI by hand',
+    'web.mcpAttachHint': 'add the MCP to this CLI',
+    'web.mcpDetachHint': 'remove the MCP from this CLI',
+    'web.mcpAttachError': 'Could not attach {{name}}: {{message}}',
+    'web.mcpDetachError': 'Could not detach {{name}}: {{message}}',
+    'web.mcpAttachAllError': 'Could not attach all: {{message}}',
+    'web.mcpLoadError': 'Could not load MCP hosts: {{message}}',
   }
 
   const el = {
@@ -182,6 +202,15 @@
     newError: document.getElementById('new-error'),
     newCancel: document.getElementById('new-cancel'),
     newSubmit: document.getElementById('new-submit'),
+    agentControlBtn: document.getElementById('agent-control-btn'),
+    mcpDialog: document.getElementById('mcp-dialog'),
+    mcpDialogTitle: document.getElementById('mcp-dialog-title'),
+    mcpDialogSubtitle: document.getElementById('mcp-dialog-subtitle'),
+    mcpHostList: document.getElementById('mcp-host-list'),
+    mcpEmpty: document.getElementById('mcp-empty'),
+    mcpError: document.getElementById('mcp-error'),
+    mcpAttachAll: document.getElementById('mcp-attach-all'),
+    mcpClose: document.getElementById('mcp-close'),
   }
 
   let runs = []
@@ -195,6 +224,8 @@
   let session = null // { id, ws, term, fit, observer }
   let createContext = { kind: 'run', runId: '' }
   let createSubmitting = false
+  let mcpHosts = []
+  let mcpBusy = false
 
   // --- http helpers ---------------------------------------------------------
 
@@ -303,6 +334,14 @@
     el.newAgentBtn.textContent = t('web.newAgent')
     el.newRunBtn.textContent = t('web.newRun')
     el.newRunBtn.title = t('web.newRunTitle')
+    el.agentControlBtn.textContent = t('web.agentControl')
+    el.agentControlBtn.title = t('web.agentControlTitle')
+    el.mcpDialogTitle.textContent = t('web.mcpTitle')
+    el.mcpDialogSubtitle.textContent = t('web.mcpSubtitle')
+    el.mcpEmpty.textContent = t('web.mcpEmpty')
+    el.mcpAttachAll.textContent = t('web.mcpAttachAll')
+    el.mcpClose.textContent = t('web.mcpClose')
+    if (el.mcpDialog.open) renderMcpHosts()
     el.emptyNewRun.textContent = t('web.newRun')
     el.overlayNewRun.textContent = t('web.newRun')
     el.overlayNewAgent.textContent = t('web.newAgent')
@@ -1350,10 +1389,160 @@
     }
   }
 
+  // --- agent control (MCP installer) ----------------------------------------
+
+  function openMcpDialog() {
+    setMcpError(null)
+    el.mcpHostList.innerHTML = ''
+    el.mcpEmpty.hidden = true
+    el.mcpDialog.showModal()
+    loadMcpHosts()
+  }
+
+  async function loadMcpHosts() {
+    try {
+      const data = await api('GET', '/api/mcp-hosts')
+      mcpHosts = (data && data.hosts) || []
+      renderMcpHosts()
+    } catch (err) {
+      setMcpError(t('web.mcpLoadError', { message: err.message }))
+    }
+  }
+
+  function hostStatusLabel(host) {
+    if (!host.installed) return t('web.mcpNotInstalled')
+    if (host.manual) return t('web.mcpManual')
+    return host.attached ? t('web.mcpAttached') : t('web.mcpDetached')
+  }
+
+  function hostStatusKind(host) {
+    if (!host.installed) return 'absent'
+    if (host.manual) return 'manual'
+    return host.attached ? 'attached' : 'detached'
+  }
+
+  function renderMcpHosts() {
+    el.mcpHostList.innerHTML = ''
+    el.mcpEmpty.hidden = mcpHosts.length > 0
+    for (const host of mcpHosts) {
+      const row = document.createElement('div')
+      row.className = 'mcp-host-row'
+      row.dataset.state = hostStatusKind(host)
+
+      const body = document.createElement('div')
+      body.className = 'mcp-host-body'
+      const name = document.createElement('span')
+      name.className = 'mcp-host-name'
+      name.textContent = host.label
+      body.appendChild(name)
+      const meta = document.createElement('span')
+      meta.className = 'mcp-host-meta'
+      meta.textContent = host.bin
+      body.appendChild(meta)
+      row.appendChild(body)
+
+      const status = document.createElement('span')
+      status.className = 'mcp-host-status'
+      status.textContent = hostStatusLabel(host)
+      row.appendChild(status)
+
+      if (host.installed && !host.manual) {
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.className = 'mcp-host-action'
+        btn.dataset.kind = host.attached ? 'detach' : 'attach'
+        btn.textContent = host.attached ? t('web.mcpDetach') : t('web.mcpAttach')
+        btn.title = host.attached ? t('web.mcpDetachHint') : t('web.mcpAttachHint')
+        btn.disabled = mcpBusy
+        btn.addEventListener('click', () => host.attached ? detachHost(host) : attachHost(host))
+        row.appendChild(btn)
+      } else if (host.manual) {
+        const note = document.createElement('span')
+        note.className = 'mcp-host-note'
+        note.textContent = t('web.mcpManualHint')
+        row.appendChild(note)
+      }
+      el.mcpHostList.appendChild(row)
+    }
+    el.mcpAttachAll.disabled = mcpBusy || !mcpHosts.some(h => h.installed && !h.manual && !h.attached)
+  }
+
+  function setMcpError(message) {
+    if (!message) { el.mcpError.hidden = true; el.mcpError.textContent = ''; return }
+    el.mcpError.textContent = message
+    el.mcpError.hidden = false
+  }
+
+  function applyMcpResult(data) {
+    if (data && Array.isArray(data.hosts)) {
+      mcpHosts = data.hosts
+      renderMcpHosts()
+    }
+  }
+
+  async function attachHost(host) {
+    if (mcpBusy) return
+    mcpBusy = true
+    setMcpError(null)
+    renderMcpHosts()
+    try {
+      const data = await api('POST', '/api/mcp-hosts/attach', { key: host.key })
+      applyMcpResult(data)
+      if (data && data.result && data.result.ok === false) {
+        setMcpError(t('web.mcpAttachError', { name: host.label, message: data.result.message }))
+      }
+    } catch (err) {
+      setMcpError(t('web.mcpAttachError', { name: host.label, message: err.message }))
+    } finally {
+      mcpBusy = false
+      renderMcpHosts()
+    }
+  }
+
+  async function detachHost(host) {
+    if (mcpBusy) return
+    mcpBusy = true
+    setMcpError(null)
+    renderMcpHosts()
+    try {
+      const data = await api('POST', '/api/mcp-hosts/detach', { key: host.key })
+      applyMcpResult(data)
+      if (data && data.result && data.result.ok === false) {
+        setMcpError(t('web.mcpDetachError', { name: host.label, message: data.result.message }))
+      }
+    } catch (err) {
+      setMcpError(t('web.mcpDetachError', { name: host.label, message: err.message }))
+    } finally {
+      mcpBusy = false
+      renderMcpHosts()
+    }
+  }
+
+  async function attachAllHosts() {
+    if (mcpBusy) return
+    mcpBusy = true
+    setMcpError(null)
+    renderMcpHosts()
+    try {
+      const data = await api('POST', '/api/mcp-hosts/attach-all', {})
+      applyMcpResult(data)
+      const failed = ((data && data.results) || []).filter(r => !r.ok)
+      if (failed.length > 0) setMcpError(t('web.mcpAttachAllError', { message: failed.map(r => r.message).join('; ') }))
+    } catch (err) {
+      setMcpError(t('web.mcpAttachAllError', { message: err.message }))
+    } finally {
+      mcpBusy = false
+      renderMcpHosts()
+    }
+  }
+
   // --- wire up --------------------------------------------------------------
 
   el.newAgentBtn.addEventListener('click', () => openAgentDialog(preferredRunId()))
   el.newRunBtn.addEventListener('click', openRunDialog)
+  el.agentControlBtn.addEventListener('click', openMcpDialog)
+  el.mcpClose.addEventListener('click', () => el.mcpDialog.close())
+  el.mcpAttachAll.addEventListener('click', attachAllHosts)
   el.emptyNewRun.addEventListener('click', openRunDialog)
   el.overlayNewRun.addEventListener('click', openRunDialog)
   el.overlayNewAgent.addEventListener('click', () => openAgentDialog(preferredRunId()))

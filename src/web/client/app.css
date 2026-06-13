@@ -1519,6 +1519,108 @@ button { letter-spacing: 0; }
   margin-top: var(--s-2);
 }
 
+/* agent control (MCP installer) dialog */
+.mcp-dialog { width: min(560px, calc(100vw - 32px)); }
+
+.mcp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-5);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.mcp-host-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.mcp-host-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-2);
+  padding: var(--s-2) var(--s-3);
+  background: color-mix(in srgb, var(--panel-2) 80%, black);
+}
+
+.mcp-host-row[data-state="attached"] {
+  border-color: color-mix(in srgb, var(--ok) 46%, var(--border));
+}
+
+.mcp-host-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mcp-host-name {
+  color: var(--text);
+  font-weight: 640;
+  font-size: var(--fs-sm);
+}
+
+.mcp-host-meta {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.mcp-host-status {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mcp-host-row[data-state="attached"] .mcp-host-status { color: var(--ok); }
+.mcp-host-row[data-state="detached"] .mcp-host-status { color: var(--warn); }
+.mcp-host-row[data-state="absent"] .mcp-host-status,
+.mcp-host-row[data-state="manual"] .mcp-host-status { color: var(--faint); }
+
+.mcp-host-action {
+  min-height: 30px;
+  padding-inline: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  color: var(--text);
+  background: var(--panel-3);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.mcp-host-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+}
+
+.mcp-host-action[data-kind="detach"] {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 36%, var(--border));
+}
+
+.mcp-host-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mcp-host-note {
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.mcp-empty {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  padding: var(--s-3);
+  text-align: center;
+}
+
 /* scrollbar */
 .sidebar::-webkit-scrollbar { width: 10px; }
 .sidebar::-webkit-scrollbar-thumb {
