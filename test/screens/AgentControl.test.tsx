@@ -93,4 +93,38 @@ describe('AgentControl', () => {
     expect(attachAll).toHaveBeenCalledTimes(1)
     unmount()
   })
+
+  it('pops the router when the Back row is activated with Enter', async () => {
+    // Reach AgentControl through Welcome so there is a history entry to pop back
+    // to. After Back the frame must show Welcome again, not Agent Control.
+    const { stdin, lastFrame, unmount } = render(<Router initialScreen="Welcome" />)
+    await waitForInput()
+
+    // Welcome menu order with no current run: New Run (0), Runs (1), Doctor (2),
+    // Agent Control (3). Step down three times and open it.
+    for (let i = 0; i < 3; i++) {
+      stdin.write('[B')
+      await waitForInput()
+    }
+    stdin.write('\r')
+    await waitForInput()
+    expect(lastFrame() ?? '').toContain('Agent Control')
+
+    // Rows in AgentControl: 3 hosts (0-2), Attach all (3), Back (4). Step down to
+    // the Back row and activate it.
+    for (let i = 0; i < 4; i++) {
+      stdin.write('[B')
+      await waitForInput()
+    }
+    stdin.write('\r')
+    await waitForInput()
+
+    // Back popped to Welcome: the host rows are gone and the Welcome menu is back.
+    const frame = lastFrame() ?? ''
+    expect(frame).toContain('New Run')
+    expect(frame).not.toContain('Claude Code')
+    expect(attach).not.toHaveBeenCalled()
+    expect(detach).not.toHaveBeenCalled()
+    unmount()
+  })
 })
