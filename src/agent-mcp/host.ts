@@ -15,7 +15,22 @@ const PROVIDER_BY_BIN: Record<string, Provider> = Object.fromEntries(
   (Object.entries(BIN) as [Provider, string][]).map(([provider, bin]) => [bin, provider]),
 )
 
-function readParentCommand(ppid: number): string {
+// Map a parent process to a provider. claude/kimi/qwen are Node CLIs whose comm
+// is usually "node", so the comm lookup misses; fall back to the argv basenames
+// (e.g. ["/usr/bin/node","/home/x/.local/bin/claude","mcp"] -> "claude" -> cc).
+// Pure so it can be unit-tested without a real parent process.
+export function providerFromParent(comm: string, argv: string[]): Provider | null {
+  const byComm = comm ? PROVIDER_BY_BIN[basename(comm)] : undefined
+  if (byComm) return byComm
+  for (const arg of argv) {
+    if (!arg) continue
+    const match = PROVIDER_BY_BIN[basename(arg)]
+    if (match) return match
+  }
+  return null
+}
+
+function readParentComm(ppid: number): string {
   try {
     // Linux: cheap and dependency-free.
     return readFileSync(`/proc/${ppid}/comm`, 'utf8').trim()
@@ -25,11 +40,23 @@ function readParentCommand(ppid: number): string {
   }
 }
 
+function readParentArgv(ppid: number): string[] {
+  try {
+    // Linux: NUL-separated argv with a trailing NUL.
+    return readFileSync(`/proc/${ppid}/cmdline`, 'utf8').split('\0').filter(Boolean)
+  } catch {
+    // macOS fallback: ps prints the full command line; split on whitespace.
+    try {
+      return execFileSync('ps', ['-o', 'args=', '-p', String(ppid)], { encoding: 'utf8' }).trim().split(/\s+/).filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+}
+
 export function detectHostProvider(): Provider | null {
   try {
-    const command = readParentCommand(process.ppid)
-    if (!command) return null
-    return PROVIDER_BY_BIN[basename(command)] ?? null
+    return providerFromParent(readParentComm(process.ppid), readParentArgv(process.ppid))
   } catch {
     return null
   }

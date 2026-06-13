@@ -21,7 +21,7 @@ import {
   type AllowedKey,
 } from '../launcher/runtime.js'
 import { detectHostProvider } from './host.js'
-import { findAgent, listAgents, listRuns } from '../state/runs.js'
+import { findAgent, listAgents, listRuns, readRun } from '../state/runs.js'
 import { isProvider } from '../launcher/providers.js'
 import { loadConfig } from '../state/config.js'
 import {
@@ -75,6 +75,18 @@ function parseRisk(value: unknown): ApprovalRisk {
 function parseApprovalStatus(value: unknown): ApprovalStatus | undefined {
   if (value === 'pending' || value === 'approved' || value === 'denied' || value === 'expired') return value
   return undefined
+}
+
+// True when the session's run still exists and is not ended. readRun throws for a
+// missing run (e.g. archived by stop/kill), which counts as not live. Exported so
+// the no-run_id spawn guard can be tested without driving real tmux.
+export function sessionRunIsLive(runId: string): boolean {
+  try {
+    const run = readRun(runId)
+    return run.status !== 'ended' && run.ended_at === null
+  } catch {
+    return false
+  }
 }
 
 export const MCP_TOOLS = [
@@ -228,18 +240,21 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
         // Adding to an existing run: enforce the size cap. A new run (no run_id,
         // handled below) starts with one agent, so it is always under it.
         const cap = loadConfig().global.max_agents
-        const live = listAgents(a.run_id).filter(agent => !agent.ended_at).length
+        const live = listAgents(a.run_id).filter(agent => !agent.ended_at && !agent.headless).length
         if (live >= cap) return fail(`run ${a.run_id} is at the agent cap (${cap}); raise max_agents in config to add more`)
         return ok(spawnWorker({ ...config, run_id: a.run_id }))
       }
       // No run_id but this session already owns a run: add the agent to it under
-      // the same cap as the run_id branch.
-      if (sessionRunId) {
+      // the same cap as the run_id branch. The owned run may have been ended by a
+      // stop/kill that archived and removed it; if so, drop it and fall through to
+      // start a fresh run instead of spawning into a dead run.
+      if (sessionRunId && sessionRunIsLive(sessionRunId)) {
         const cap = loadConfig().global.max_agents
-        const live = listAgents(sessionRunId).filter(agent => !agent.ended_at).length
+        const live = listAgents(sessionRunId).filter(agent => !agent.ended_at && !agent.headless).length
         if (live >= cap) return fail(`run ${sessionRunId} is at the agent cap (${cap}); raise max_agents in config to add more`)
         return ok(spawnWorker({ ...config, run_id: sessionRunId }))
       }
+      sessionRunId = null
       // First spawn of this session. If a host CLI launched us, that host becomes
       // the headless head and this agent is its first worker. Otherwise keep the
       // original behavior: a new run with this agent as its head.

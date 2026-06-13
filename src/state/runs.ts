@@ -463,7 +463,10 @@ export function endRunIfNoLiveAgents(runId: string, endedAt = nowIso()): RunReco
   return withRunsLock(() => {
     const run = readRunUnlocked(runId)
     if (run.status === 'ended' || run.ended_at !== null) return run
-    const liveAgents = listAgentsForRunIds([runId]).filter(agent => !agent.ended_at)
+    // Headless agents (a host CLI head with no tmux window) do not keep a run
+    // alive on their own; once the last windowed worker ends, the head-run must
+    // tear down so its tmux session and run record are not leaked.
+    const liveAgents = listAgentsForRunIds([runId]).filter(agent => !agent.ended_at && !agent.headless)
     if (liveAgents.length > 0) return run
     const endedRun: RunRecord = { ...run, status: 'ended', ended_at: endedAt }
     writeRunUnlocked(endedRun)

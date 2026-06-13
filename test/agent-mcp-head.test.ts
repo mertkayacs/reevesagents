@@ -116,4 +116,23 @@ describe('startRunWithHead', () => {
     expect(() => startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available: unavailable }))
       .toThrow(/not found on PATH/)
   })
+
+  it('tears the head-run down once its last worker is killed', async () => {
+    const driver = new FakeDriver()
+    const { startRunWithHead, killAgent } = await import('../src/launcher/runtime.js')
+    const { listRuns, listRunHistory } = await import('../src/state/runs.js')
+
+    const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
+    const worker = result.agents[1]!
+
+    killAgent(worker.id, { driver, available })
+
+    // The headless head alone must not keep the run live: killing the worker ends
+    // it, kills the tmux session, and archives the record (no leaked session/run).
+    expect(listRuns().map(run => run.id)).not.toContain(result.run.id)
+    expect(listRunHistory().map(record => record.id)).toContain(result.run.id)
+    expect(driver.calls).toEqual(expect.arrayContaining([
+      { args: ['kill-session', '-t', result.run.tmux_session] },
+    ]))
+  })
 })

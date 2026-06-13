@@ -107,6 +107,27 @@ describe('handleAgentMcpTool', () => {
     })
   })
 
+  describe('session run liveness', () => {
+    // BUG 2 guard: when the session's owned run was ended by a stop/kill (which
+    // archives and removes it), the no-run_id spawn must not reuse it and throw
+    // "Run not found". sessionRunIsLive is the branch guard that drops it instead.
+    it('treats a missing run as not live', async () => {
+      const { sessionRunIsLive } = await import('../src/agent-mcp/server.js')
+      expect(sessionRunIsLive('never-existed')).toBe(false)
+    })
+
+    it('treats a live run as live and an ended run as not live', async () => {
+      const { sessionRunIsLive } = await import('../src/agent-mcp/server.js')
+      const { writeRun, updateRun } = await import('../src/state/runs.js')
+
+      writeRun(makeRun('session-run'))
+      expect(sessionRunIsLive('session-run')).toBe(true)
+
+      updateRun('session-run', { status: 'ended', ended_at: '2026-01-01T00:00:05.000Z' })
+      expect(sessionRunIsLive('session-run')).toBe(false)
+    })
+  })
+
   describe('agent cap', () => {
     it('refuses to add an agent to a run already at max_agents', async () => {
       const { writeRun, writeAgent } = await import('../src/state/runs.js')
@@ -125,6 +146,31 @@ describe('handleAgentMcpTool', () => {
       const result = await call('spawn', { run_id: 'capped', provider: 'aider' })
       expect(result.isError).toBe(true)
       expect(payload(result).error).toContain('at the agent cap (1)')
+    })
+
+    it('does not count the headless head against the cap', async () => {
+      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+
+      writeFileSync(
+        join(tmpDir, 'config.json'),
+        JSON.stringify({ version: 2, global: { max_agents: 1 } }),
+        'utf-8',
+      )
+
+      // A head-run with only its headless head: live worker count is 0, so the cap
+      // of 1 must not block the first worker. The spawn falls through to the real
+      // runtime and fails for an unrelated reason (provider not on PATH), never
+      // with the cap error.
+      writeRun(makeRun('head-only', { root_agent_id: 'head' }))
+      writeAgent(makeAgent('head', 'head-only', {
+        role: 'root',
+        headless: true,
+        tmux_window_id: '',
+        tmux_pane_id: '',
+      }))
+
+      const result = await call('spawn', { run_id: 'head-only', provider: 'aider' })
+      expect(payload(result).error ?? '').not.toContain('at the agent cap')
     })
   })
 
