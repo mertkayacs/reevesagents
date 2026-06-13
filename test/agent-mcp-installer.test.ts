@@ -312,6 +312,29 @@ describe('agent-mcp installer', () => {
 
       expect(attachAll()).toEqual([])
     })
+
+    it('skips an already-attached host and reports it as success without re-adding', async () => {
+      // claude is already attached (its mcp list shows reevesagents); qwen is not.
+      // attach-all must not re-issue add for claude (which the real CLI would
+      // reject as "already exists") yet still count it as ok.
+      wireEnv({
+        installed: new Set(['claude', 'qwen']),
+        listOutput: { claude: 'reevesagents: reevesagents mcp - ✓ Connected' },
+      })
+      const { attachAll } = await loadInstaller()
+
+      const results = attachAll()
+      expect(results.every(r => r.ok)).toBe(true)
+      const cc = results.find(r => r.key === 'cc')!
+      expect(cc.message).toBe('already attached')
+
+      // No add was issued for the already-attached host.
+      const claudeAdd = execFileSync.mock.calls.find(c => c[0] === 'claude' && c[1]?.[1] === 'add')
+      expect(claudeAdd).toBeUndefined()
+      // The not-yet-attached host was still attached.
+      const qwenAdd = execFileSync.mock.calls.find(c => c[0] === 'qwen' && c[1]?.[1] === 'add')
+      expect(qwenAdd).toBeDefined()
+    })
   })
 
   describe('detach', () => {

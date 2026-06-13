@@ -189,9 +189,17 @@ export function detach(key: string): AttachResult {
   }
 }
 
-// Attach to every installed CLI we can drive automatically.
+// Attach to every installed CLI we can drive automatically. A host that is
+// already attached is left alone and counted as success, so running this twice
+// (or after a manual per-host attach) is safe and never surfaces a spurious
+// "already exists" failure from the CLI's own mcp add.
 export function attachAll(): AttachResult[] {
   return HOSTS
     .filter(host => host.add && isInstalled(host.bin))
-    .map(host => attach(host.key))
+    .map(host => {
+      if (isAttached(host)) {
+        return { key: host.key, label: host.label, ok: true, message: 'already attached' }
+      }
+      return attach(host.key)
+    })
 }
