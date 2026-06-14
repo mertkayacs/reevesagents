@@ -29,7 +29,8 @@
     "check:install-matrix": "node scripts/check-install-matrix.mjs",
     "render-mascot": "node scripts/render-mascot.mjs",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli && pnpm check:package",
-    "verify:release": "pnpm verify && CI=true pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir beta/orchestrator verify && pnpm check:install-matrix"
+    "verify:release": "pnpm verify && CI=true pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir beta/orchestrator verify && pnpm check:install-matrix",
+    "release": "release-it"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -45,6 +46,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@release-it/conventional-changelog": "^11.0.1",
     "@types/node": "^25.7.0",
     "@types/react": "^19.2.14",
     "@types/ws": "^8.18.1",
@@ -54,6 +56,7 @@
     "eslint": "10.3.0",
     "ink-testing-library": "^4.0.0",
     "prettier": "3.8.3",
+    "release-it": "^20.2.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"

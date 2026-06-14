@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes target the current `1.0.x` release line.
+Security fixes target the current `1.2.x` release line.
 
 ## Reporting A Vulnerability
 
