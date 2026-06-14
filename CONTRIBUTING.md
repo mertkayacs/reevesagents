@@ -48,6 +48,14 @@ For orchestrator package changes, run:
 pnpm --dir beta/orchestrator verify
 ```
 
+## Releasing
+
+Releases are automated. You do not edit the version by hand. From a clean
+`master`, `pnpm verify` then `pnpm release` bumps the version from the
+Conventional Commit history, writes the changelog, tags, pushes, and the tag
+push publishes to npm through CI. The full process is in
+[docs/releasing.md](docs/releasing.md).
+
 ## Package Boundaries
 
 The root package is the stable CLI, TUI, and Web beta. It must not bundle the pre-beta orchestrator package.
