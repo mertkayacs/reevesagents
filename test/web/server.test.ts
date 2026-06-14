@@ -96,7 +96,7 @@ describe('startWebServer', () => {
     expect(parsed.providers[0]).toHaveProperty('models')
     expect(parsed.providers[0].models).toContain('')
     expect(parsed.language.current).toBe('en')
-    expect(parsed.language.languages).toHaveLength(9)
+    expect(parsed.language.languages).toHaveLength(10)
     expect(parsed.language.translations['web.newRun']).toBe('New run')
 
     const health = await raw(handle.port, { path: '/healthz' })

@@ -2,7 +2,7 @@
 
 export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes' | 'kimi' | 'deepseek' | 'pi' | 'qwen' | 'aider'
 
-export type LanguageCode = 'en' | 'de' | 'fr' | 'es' | 'pt' | 'it' | 'tr' | 'zh-Hans' | 'ar'
+export type LanguageCode = 'en' | 'de' | 'fr' | 'es' | 'pt' | 'it' | 'tr' | 'ru' | 'zh-Hans' | 'ar'
 
 export type Permissions = 'skip' | 'ask'
 

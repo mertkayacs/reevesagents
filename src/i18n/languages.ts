@@ -2,7 +2,7 @@ import type { LanguageCode } from '../state/types.js'
 
 export type { LanguageCode }
 
-export const LANGUAGES = ['en', 'de', 'fr', 'es', 'pt', 'it', 'tr', 'zh-Hans', 'ar'] as const
+export const LANGUAGES = ['en', 'de', 'fr', 'es', 'pt', 'it', 'tr', 'ru', 'zh-Hans', 'ar'] as const
 
 export interface LanguageOption {
   code: LanguageCode
@@ -20,6 +20,7 @@ export const LANGUAGE_OPTIONS: LanguageOption[] = [
   { code: 'pt', flag: '🇵🇹', name: 'Portuguese', nativeName: 'Português', dir: 'ltr' },
   { code: 'it', flag: '🇮🇹', name: 'Italian', nativeName: 'Italiano', dir: 'ltr' },
   { code: 'tr', flag: '🇹🇷', name: 'Turkish', nativeName: 'Türkçe', dir: 'ltr' },
+  { code: 'ru', flag: '🇷🇺', name: 'Russian', nativeName: 'Русский', dir: 'ltr' },
   { code: 'zh-Hans', flag: '🇨🇳', name: 'Simplified Chinese', nativeName: '简体中文', dir: 'ltr' },
   { code: 'ar', flag: '🇸🇦', name: 'Arabic', nativeName: 'العربية', dir: 'rtl' },
 ]

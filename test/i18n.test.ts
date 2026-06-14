@@ -14,6 +14,7 @@ describe('i18n language catalog', () => {
       'pt',
       'it',
       'tr',
+      'ru',
       'zh-Hans',
       'ar',
     ])
