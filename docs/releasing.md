@@ -38,8 +38,8 @@ pnpm release    # everything below, in one step.
 Pushing the `vX.Y.Z` tag is what publishes to npm. It triggers the `publish`
 workflow (`.github/workflows/publish.yml`), which checks that the tag matches
 `package.json`, runs `pnpm verify:release`, and then runs
-`pnpm publish --provenance --access public`. The npm publish happens in CI, not
-from your machine.
+`npm publish --provenance --access public`. The npm publish happens in CI, not
+from your machine, and is signed with npm provenance.
 
 Preview a release without changing anything:
 
@@ -54,8 +54,38 @@ pnpm release --dry-run
 - Push access to the repository.
 - `GH_TOKEN` set in your shell. `release-it` uses it to create the GitHub
   release (see `tokenRef` in `.release-it.json`).
-- An `NPM_TOKEN` secret configured on the repository. The publish workflow uses
-  it to publish to npm. You do not need an npm token on your machine.
+- npm publishing configured for the repository: either a trusted publisher set
+  up on npmjs.com (recommended, see below) or an `NPM_TOKEN` repository secret as
+  the fallback. The npm publish runs in CI, so you never need an npm token on
+  your machine.
+
+## Where it publishes
+
+A release reaches three places:
+
+1. **npm: `reevesagents`** (the stable package), from the `publish` workflow on a
+   `vX.Y.Z` tag, with provenance.
+2. **GitHub Releases**, created by `release-it` during `pnpm release`.
+3. **npm: `reevesagents-orchestrator`** (the pre-beta package), published
+   separately and on demand (see below), under the `pre-beta-research` dist-tag.
+
+## Trusted publishing (npm OIDC)
+
+The publish workflows are set up for npm trusted publishing (OIDC), which is the
+current recommended method: GitHub authenticates to npm with a short-lived,
+workflow-scoped token, so no long-lived `NPM_TOKEN` is needed and provenance is
+automatic. This is a one-time setup on npmjs.com, per package:
+
+1. On npmjs.com, open the package settings and add a trusted publisher:
+   GitHub Actions, repository `mertkayacs/reevesagents`, workflow
+   `publish.yml` (and `publish-orchestrator.yml` for the orchestrator package).
+2. Recommended: set publishing access to "require two-factor authentication and
+   disallow tokens".
+
+Until a trusted publisher is configured, the workflows fall back to the
+`NPM_TOKEN` repository secret, so publishing keeps working either way. The
+workflows already request `id-token: write`, use `npm` 11.5.1+, and pass
+`--provenance`.
 
 ## Pre-beta orchestrator package
 

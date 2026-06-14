@@ -39,6 +39,16 @@ jobs:
 
       - run: pnpm verify:release
 
-      - run: pnpm publish --provenance --access public --no-git-checks
+      # npm 11.5.1+ is required for OIDC trusted publishing (and ships automatic
+      # provenance). setup-node's bundled npm is older.
+      - name: Use latest npm
+        run: npm install -g npm@latest
+
+      # Publishes the package built by verify:release. Uses npm OIDC trusted
+      # publishing when a trusted publisher is configured for this package on
+      # npmjs.com (no token, provenance is automatic); otherwise falls back to
+      # NPM_TOKEN. --provenance is kept so provenance is generated either way.
+      - name: Publish to npm
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

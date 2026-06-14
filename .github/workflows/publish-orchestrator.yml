@@ -31,6 +31,10 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      # npm 11.5.1+ for OIDC trusted publishing and automatic provenance.
+      - name: Use latest npm
+        run: npm install -g npm@latest
+
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace
