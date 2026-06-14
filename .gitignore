@@ -26,3 +26,10 @@ assets/
 !src/brand/assets/duck.svg
 .playwright-mcp/
 reevesagents-latestnotes.md
+
+# internal working docs: kept local, never committed to the public repo
+/LAUNCH.md
+/docs/agent-brief.md
+/docs/implementation-report.md
+/docs/release-readiness.md
+/docs/use-cases.md
