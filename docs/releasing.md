@@ -61,13 +61,23 @@ pnpm release --dry-run
 
 ## Where it publishes
 
-A release reaches three places:
+A release reaches these places:
 
 1. **npm: `reevesagents`** (the stable package), from the `publish` workflow on a
    `vX.Y.Z` tag, with provenance.
 2. **GitHub Releases**, created by `release-it` during `pnpm release`.
-3. **npm: `reevesagents-orchestrator`** (the pre-beta package), published
+3. **Homebrew tap `mertkayacs/homebrew-reevesagents`**: after the npm publish, the
+   `homebrew` job in `publish.yml` bumps `Formula/reevesagents.rb` (url + sha256 +
+   version) to the new release, so `brew upgrade reevesagents` tracks npm. This
+   needs a `HOMEBREW_TAP_TOKEN` repository secret: a PAT with `repo` + `workflow`
+   scope and write access to the tap. If it is missing, only that job fails; the
+   npm publish is unaffected.
+4. **npm: `reevesagents-orchestrator`** (the pre-beta package), published
    separately and on demand (see below), under the `pre-beta-research` dist-tag.
+
+Not used, on purpose: JSR is for packages you `import`, and reevesagents is a CLI
+(a `bin`), so it does not fit. GitHub Packages would only duplicate the public
+npm package.
 
 ## Trusted publishing (npm OIDC)
 
