@@ -1,7 +1,7 @@
 # ReevesAgents
 
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
-[![npm total downloads](https://img.shields.io/npm/dt/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
+[![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
 [![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
