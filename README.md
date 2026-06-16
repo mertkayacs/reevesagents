@@ -42,7 +42,7 @@ Portuguese, Italian, Turkish, Russian, Simplified Chinese, and Arabic.
 **Let you agent drive agents!** Let your agent, for example ClaudeCode, drive a set of 
 Claude, Codex, DeepSeek, Hermes, OpenCode, or other agent CLIs.
 
-**Multitask and Loop Engineer better** 
+**Multitask and Loop Engineer better** by using Orchastration based methods to create your agent compositions. Have a low-medium cost router model to drive smarter or smaller agents.
 
 **Keep cost practical.** Route work to the CLI that makes sense for the task
 instead of pushing everything through one expensive default. Let cheap/free models write Cruds and tests ehile you plan and design with a bigger model. 
