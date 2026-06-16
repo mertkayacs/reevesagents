@@ -11,9 +11,7 @@
 GitHub: https://github.com/mertkayacs/reevesagents
 
 ReevesAgents is a free and open source workspace manager for AI CLI agents. It
-helps you use several vendor CLIs at the same time, without turning your local
-machine into a heavy platform or locking the work into one model.
-
+helps you use several agents (ClaudeCode, Codex, Hermes ..) at the same time offering the ability to use these agents via mcp. So that a Claude agent can create and manage a set of Codex and ClaudeCode agents tackling separate issues.
 Put each CLI where it is strongest: ask DeepSeek to work on backend code, use
 Claude for product and website direction, use Codex for a design system or
 implementation pass, and keep Hermes agents on mail, web, search, or research
