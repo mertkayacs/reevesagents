@@ -33,6 +33,14 @@ Portuguese, Italian, Turkish, Russian, Simplified Chinese, and Arabic.
 | **Agent Control (opt-in)** | An MCP you can install tp turn on per CLI so an agent can spawn and drive other agents (Claude using HermesAgent, Codex, ClaudeCode simultaneously. |
 ## Why ReevesAgents
 
+**Let you agent drive agents!** Let your agent, for example ClaudeCode, drive a set of 
+Claude, Codex, DeepSeek, Hermes, OpenCode, or other agent CLIs.
+
+**Multitask and Loop Engineer better** 
+
+**Keep cost practical.** Route work to the CLI that makes sense for the task
+instead of pushing everything through one expensive default. Let cheap/free models write Cruds and tests ehile you plan and design with a bigger model. 
+
 **Use more than one CLI without losing the thread.** If you already jump between
 Claude, Codex, DeepSeek, Hermes, OpenCode, or other agent CLIs, ReevesAgents
 puts those sessions into one local workspace.
