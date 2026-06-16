@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
 [![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
-[![CI](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml/badge.svg)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
 *One lead at the front of a small line of workers, dispatching each to where it fits and keeping the whole line in view: a local tmux-first workspace manager for AI CLI agents.*
 
