@@ -10,6 +10,12 @@
 
 GitHub: https://github.com/mertkayacs/reevesagents
 
+The TUI and the local Web UI (beta) driving the same run:
+
+![ReevesAgents TUI: language picker, welcome screen, and runs](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
+
+![ReevesAgents Web UI: a live multi-agent run](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web.png)
+
 ReevesAgents is a free and open source workspace manager for AI CLI agents. It
 helps you use several agents (ClaudeCode, Codex, Hermes ..) at the same time offering the ability to use these agents via mcp. So that a Claude agent can create and manage a set of Codex and ClaudeCode agents tackling separate issues.
 Put each CLI where it is strongest: ask DeepSeek to work on backend code, use
@@ -60,27 +66,6 @@ alive.
 This is not a cloud agent platform. It is a small local layer around real CLIs.
 There is no database, no Docker, no background daemon, and no ReevesAgents-stored
 API keys.
-
-## Screenshots
-
-The launch-week demo shows the core workflow: split one project across the CLIs
-that fit each job, keep every session local in tmux, and watch the whole run
-from the TUI or Web UI.
-
-### TUI
-
-Recorded with VHS. Pick a language, jump from the ASCII-art welcome screen into
-active runs, then open the run to see agents, tasks, status, and history.
-
-![ReevesAgents TUI language selection, welcome screen, and runs page](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
-
-### Web UI (beta)
-
-The same local run in the browser: DeepSeek drafts the backend, Claude Code
-works on product and web direction, Codex reviews the implementation path, and
-Hermes waits for explicit research approval.
-
-![ReevesAgents Web UI showing a live multi-agent run](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web.png)
 
 ## Install
 
