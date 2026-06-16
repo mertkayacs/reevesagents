@@ -421,6 +421,7 @@ TypeScript, tsup, Vitest, ESLint, and Prettier from the repository.
 
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
+- Releases: https://github.com/mertkayacs/reevesagents/releases
 - Issues: https://github.com/mertkayacs/reevesagents/issues
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 - License: [Apache-2.0](LICENSE)
