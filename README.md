@@ -30,8 +30,7 @@ Portuguese, Italian, Turkish, Russian, Simplified Chinese, and Arabic.
 | **Web UI (beta)** | One visual view of runs, agents, live panes, and history. |
 | **CLI** | Scripts, quick spawn commands, doctor checks, and tmux opening. |
 | **tmux** | Real provider CLI windows that keep running locally. |
-| **Agent Control (opt-in)** | An MCP you turn on per CLI so an agent can spawn and drive other agents. |
-
+| **Agent Control (opt-in)** | An MCP you can install tp turn on per CLI so an agent can spawn and drive other agents (Claude using HermesAgent, Codex, ClaudeCode simultaneously. |
 ## Why ReevesAgents
 
 **Use more than one CLI without losing the thread.** If you already jump between
