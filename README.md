@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
-*One lead at the front of a small line of workers, dispatching each to where it fits and keeping the whole line in view: a local tmux-first workspace manager for AI CLI agents.*
+*No Api-keys / Without any change to your Mds. A WebUi/Tui/Cli/mcp to mix-match and spawn agents such as Claude Code, Codex, HermesAgent, DeepSeekCli, KimiCode and many others. With reevesagents you can use the webui to spawn runs where the hermes sends mails where multiple claudecode and codex agents work on the separate parts of the projects or to maintain more than one task at parallel. Reevesagents also can be used to install custom mcps to these agents which gives them the ability to spawn and control other agents. With loop engineering user can have multiple looping agents and a full view of these orchastrations. From tui and webui view you can easily jump into each agent to control them directly. Reevesagents is a local tmux-first workspace manager for AI CLI agents.*
 
 GitHub: https://github.com/mertkayacs/reevesagents
 
