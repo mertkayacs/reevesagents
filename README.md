@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
-*No Api-keys / Without any change to your Mds. With Reevesagents you can let your agents create and control agents.Let your claudecode ceate and control your codex,hermes .. ReevesAgents is a WebUi/Tui/Cli/mcp to mix-match and spawn agents such as Claude Code, Codex, HermesAgent, DeepSeekCli, KimiCode and many others. With reevesagents you can also use the webui to spawn runs where the hermes sends mails, multiple claudecode and codex agents work on the separate parts of the projects or to maintain more than one task at parallel. With loop engineering user can have multiple looping agents and a full view of these orchastrations. From tui and webui view you can easily jump into each agent to control them directly. Reevesagents is a local tmux-first workspace manager for AI CLI agents.*
+*Let one AI CLI run others. A local, tmux-first workspace to spawn and drive agents (Claude Code, Codex, Hermes, DeepSeek, Kimi, and more) from a TUI, Web UI, CLI, and MCP. No API keys, no changes to your Agent.md or Claude.md.*
 
 GitHub: https://github.com/mertkayacs/reevesagents
 
@@ -16,14 +16,12 @@ The TUI and the local Web UI (beta) driving the same run:
 
 ![ReevesAgents Web UI: a live multi-agent run](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web.png)
 
-ReevesAgents is a free and open source workspace manager for AI CLI agents. It
-helps you use several agents (ClaudeCode, Codex, Hermes ..) at the same time offering the ability to use these agents via mcp. So that a Claude agent can create and manage a set of Codex and ClaudeCode agents tackling separate issues.
-Put each CLI where it is strongest: ask DeepSeek to work on backend code, use
-Claude for product and website direction, use Codex for a design system or
-implementation pass, and keep Hermes agents on mail, web, search, or research
-tasks when those CLIs are configured for that work. ReevesAgents gives the work
-a shared local shape: runs, agents, tmux windows, history, a TUI, and a local
-Web UI.
+ReevesAgents is a free and open source workspace manager for AI CLI agents. Run
+several at once, and over MCP let one agent spawn and drive others: a Claude Code
+agent managing Codex and Claude Code agents on separate issues. Put each CLI
+where it is strongest, for example DeepSeek on backend, Claude on product and web
+direction, Codex on a design system or an implementation pass, and Hermes on
+mail, search, or research.
 
 The UI is available in 10 languages: English, German, French, Spanish,
 Portuguese, Italian, Turkish, Russian, Simplified Chinese, and Arabic.
@@ -36,36 +34,18 @@ Portuguese, Italian, Turkish, Russian, Simplified Chinese, and Arabic.
 | **Web UI (beta)** | One visual view of runs, agents, live panes, and history. |
 | **CLI** | Scripts, quick spawn commands, doctor checks, and tmux opening. |
 | **tmux** | Real provider CLI windows that keep running locally. |
-| **Agent Control (opt-in)** | An MCP you can install tp turn on per CLI so an agent can spawn and drive other agents (Claude using HermesAgent, Codex, ClaudeCode simultaneously. |
+| **Agent Control (opt-in)** | An MCP you turn on per CLI so one agent can spawn and drive others (Claude Code running Codex, Hermes, and Claude Code agents at once). |
+
 ## Why ReevesAgents
 
-**Let you agent drive agents!** Let your agent, for example ClaudeCode, drive a set of 
-Claude, Codex, DeepSeek, Hermes, OpenCode, or other agent CLIs.
+- **Let your agent drive agents.** Your lead CLI (say Claude Code) spawns and steers a set of Claude, Codex, DeepSeek, Hermes, OpenCode, or other agents over MCP.
+- **Multitask and loop.** Compose agents with orchestration-based runs and put a low-to-medium-cost router model in front to drive smarter or smaller ones. Run several in parallel on different parts of a project, keep looping agents going, and watch the whole orchestration from one view.
+- **Keep cost practical.** Let cheap or free models write CRUDs and tests while you plan and design with a bigger one, instead of pushing everything through one expensive default.
+- **One workspace, no lost thread.** If you already jump between Claude, Codex, DeepSeek, Hermes, or OpenCode, ReevesAgents puts those sessions in one local place; open any agent from the TUI or Web UI to drive it directly.
+- **Stay vendor-flexible.** Provider login stays with each CLI. ReevesAgents never stores credentials or proxies model traffic, so you can add, remove, or switch CLIs freely.
+- **See the work at a glance.** Active runs, agents, models, permission modes, stop and delete actions, and history in one Web UI view while tmux keeps the real CLIs alive.
 
-**Multitask and Loop Engineer better** by using Orchastration based methods to create your agent compositions. Have a low-medium cost router model to drive smarter or smaller agents.
-
-**Keep cost practical.** Route work to the CLI that makes sense for the task
-instead of pushing everything through one expensive default. Let cheap/free models write Cruds and tests ehile you plan and design with a bigger model. 
-
-**Use more than one CLI without losing the thread.** If you already jump between
-Claude, Codex, DeepSeek, Hermes, OpenCode, or other agent CLIs, ReevesAgents
-puts those sessions into one local workspace.
-
-**Stay vendor-flexible.** Provider login still belongs to each provider CLI, but
-ReevesAgents does not become another place for credentials or model traffic. You
-can add, remove, or switch CLIs without rebuilding the way you manage runs.
-
-**Keep cost practical.** Route work to the CLI that makes sense for the task
-instead of pushing everything through one expensive default.
-
-**See the work at a glance.** The Web UI is useful when several agents are
-running: active runs, agents, models, permission modes, stop and delete actions,
-and history are visible from one browser view while tmux keeps the real CLIs
-alive.
-
-This is not a cloud agent platform. It is a small local layer around real CLIs.
-There is no database, no Docker, no background daemon, and no ReevesAgents-stored
-API keys.
+This is not a cloud agent platform. It is a small local layer around real CLIs: no database, no Docker, no background daemon, and no ReevesAgents-stored API keys.
 
 ## Install
 
