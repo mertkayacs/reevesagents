@@ -66,12 +66,13 @@ A release reaches these places:
 1. **npm: `reevesagents`** (the stable package), from the `publish` workflow on a
    `vX.Y.Z` tag, with provenance.
 2. **GitHub Releases**, created by `release-it` during `pnpm release`.
-3. **Homebrew tap `mertkayacs/homebrew-reevesagents`**: after the npm publish, the
-   `homebrew` job in `publish.yml` bumps `Formula/reevesagents.rb` (url + sha256 +
-   version) to the new release, so `brew upgrade reevesagents` tracks npm. This
-   needs a `HOMEBREW_TAP_TOKEN` repository secret: a PAT with `repo` + `workflow`
-   scope and write access to the tap. If it is missing, only that job fails; the
-   npm publish is unaffected.
+3. **Homebrew tap `mertkayacs/homebrew-reevesagents`**: the tap updates itself. A
+   `bump formula` workflow in the tap repo runs daily (and can be run by hand from
+   its Actions tab) and points `Formula/reevesagents.rb` at the latest npm version
+   (url + sha256), so `brew upgrade reevesagents` tracks npm. It commits with the
+   tap's own `GITHUB_TOKEN`, so no cross-repo token is needed here. After a
+   release you can trigger it by hand for an immediate bump instead of waiting for
+   the daily run.
 4. **npm: `reevesagents-orchestrator`** (the pre-beta package), published
    separately and on demand (see below), under the `pre-beta-research` dist-tag.
 

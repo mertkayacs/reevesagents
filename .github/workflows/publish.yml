@@ -52,29 +52,3 @@ jobs:
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  # After npm publish, update the Homebrew tap formula to the new version. The
-  # formula points at the npm tarball, so this just bumps url + sha256 + version.
-  # Needs HOMEBREW_TAP_TOKEN: a PAT with repo + workflow scope and write access to
-  # mertkayacs/homebrew-reevesagents. If the secret is absent this job fails but
-  # the npm publish above is unaffected.
-  homebrew:
-    needs: publish
-    runs-on: ubuntu-latest
-    steps:
-      - name: Derive version from tag
-        id: ver
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Bump the Homebrew tap formula
-        uses: mislav/bump-homebrew-formula-action@v4.1
-        with:
-          formula-name: reevesagents
-          formula-path: Formula/reevesagents.rb
-          homebrew-tap: mertkayacs/homebrew-reevesagents
-          base-branch: master
-          push-to: mertkayacs/homebrew-reevesagents
-          create-pullrequest: false
-          download-url: https://registry.npmjs.org/reevesagents/-/reevesagents-${{ steps.ver.outputs.version }}.tgz
-        env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
