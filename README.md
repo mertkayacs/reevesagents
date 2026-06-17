@@ -8,6 +8,8 @@
 
 *Let one AI CLI run others. A local, tmux-first workspace to spawn and drive agents (Claude Code, Codex, Hermes, DeepSeek, Kimi, and more) from a TUI, Web UI, CLI, and MCP. No API keys, no changes to your Agent.md or Claude.md.*
 
+**In more than 10 languages!**
+
 GitHub: https://github.com/mertkayacs/reevesagents
 
 The TUI and the local Web UI (beta) driving the same run:
