@@ -7,16 +7,23 @@ import { PROVIDERS } from '../src/launcher/providers.js'
 import type { RuntimeDriver } from '../src/launcher/runtime.js'
 
 let tmpDir: string
+let savedTmux: string | undefined
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'reeves-runtime-test-'))
   process.env.REEVES_REGISTRY = tmpDir
   process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
+  // Pin the tmux-detection branch off so the anchor always falls back to a fresh
+  // 'reeves' session, regardless of whether the test runner is itself inside tmux.
+  savedTmux = process.env.TMUX
+  delete process.env.TMUX
 })
 
 afterEach(() => {
   delete process.env.REEVES_REGISTRY
   delete process.env.REEVES_CONFIG
+  if (savedTmux === undefined) delete process.env.TMUX
+  else process.env.TMUX = savedTmux
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
