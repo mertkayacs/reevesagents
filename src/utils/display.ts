@@ -3,26 +3,20 @@
 
 import chalk from 'chalk'
 import type { Provider } from '../state/types.js'
+import { PROVIDER_DEFS, PROVIDER_REGISTRY } from '../launcher/provider-registry.js'
 import { colors } from './tokens.js'
 
-export const PROVIDER_DISPLAY_NAMES: Record<Provider, string> = {
-  cc: 'Claude Code',
-  codex: 'Codex CLI',
-  opencode: 'OpenCode CLI',
-  hermes: 'Hermes',
-  kimi: 'Kimi Code',
-  deepseek: 'DeepSeek CLI',
-  pi: 'Pi',
-  qwen: 'Qwen Code',
-  aider: 'Aider',
-}
+// Derived from the provider registry, the single source of truth for provider identity.
+export const PROVIDER_DISPLAY_NAMES = Object.fromEntries(
+  PROVIDER_DEFS.map(def => [def.id, def.displayName]),
+) as Record<Provider, string>
 
 export function providerDisplayName(provider: Provider): string {
   return PROVIDER_DISPLAY_NAMES[provider] ?? provider
 }
 
 export function providerColor(p: Provider): string {
-  return colors.provider[p] ?? 'gray'
+  return PROVIDER_REGISTRY[p]?.color ?? 'gray'
 }
 
 export function modelColor(model: string, provider?: Provider): string {

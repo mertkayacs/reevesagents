@@ -3,6 +3,7 @@ import React from 'react'
 import { render } from 'ink-testing-library'
 import { Badge } from '../../src/components/Badge.js'
 import { colors } from '../../src/utils/tokens.js'
+import { providerColor } from '../../src/utils/display.js'
 
 describe('Badge', () => {
   it('renders glyph and label', () => {
@@ -32,7 +33,7 @@ describe('Badge', () => {
       <Badge
         glyph="CL"
         label="Claude Code"
-        color={colors.provider.cc}
+        color={providerColor('cc')}
       />
     )
     const frame = lastFrame()
