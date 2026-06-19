@@ -24,6 +24,8 @@
         <select id="language-select" aria-label="Language"></select>
       </label>
       <button id="agent-control-btn" class="btn btn-secondary" type="button">Agent control</button>
+      <button id="doctor-btn" class="btn btn-secondary" type="button">Doctor</button>
+      <button id="about-btn" class="btn btn-secondary" type="button">About</button>
       <button id="new-agent-btn" class="btn btn-agent" type="button">New agent</button>
       <button id="new-run-btn" class="btn btn-accent" type="button">New run</button>
     </div>
@@ -186,6 +188,36 @@
       <div class="dialog-actions">
         <button type="button" id="mcp-attach-all" class="btn btn-agent">Attach all</button>
         <button type="button" id="mcp-close" class="btn">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="doctor-dialog" class="dialog mcp-dialog">
+    <div class="mcp-panel">
+      <div class="dialog-header">
+        <div class="dialog-title">Doctor</div>
+        <div class="dialog-subtitle">Environment health checks for this machine.</div>
+      </div>
+
+      <div id="doctor-list" class="doctor-list" aria-label="health checks"></div>
+      <div id="doctor-error" class="dialog-error" hidden></div>
+
+      <div class="dialog-actions">
+        <button type="button" id="doctor-refresh" class="btn btn-agent">Refresh</button>
+        <button type="button" id="doctor-close" class="btn">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="about-dialog" class="dialog mcp-dialog">
+    <div class="mcp-panel">
+      <div class="dialog-header">
+        <div class="dialog-title">About ReevesAgents</div>
+        <div class="dialog-subtitle">Local tmux-first workspace manager for AI CLI agents.</div>
+      </div>
+      <div id="about-list" class="about-list" aria-label="about"></div>
+      <div class="dialog-actions">
+        <button type="button" id="about-close" class="btn">Close</button>
       </div>
     </div>
   </dialog>

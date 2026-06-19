@@ -5,6 +5,7 @@ import { Row } from '../../src/components/Row.js'
 import { LayoutProvider } from '../../src/components/LayoutContext.js'
 import { colors } from '../../src/utils/tokens.js'
 import { glyphs } from '../../src/utils/glyphs.js'
+import { providerColor } from '../../src/utils/display.js'
 
 describe('Row', () => {
   it('renders focused cursor when selected', () => {
@@ -61,7 +62,7 @@ describe('Row', () => {
         selected={false}
         primary="Test Item"
         badges={[
-          { label: 'codex', color: colors.provider.codex },
+          { label: 'codex', color: providerColor('codex') },
           { label: 'gpt-5', color: colors.model.openai },
         ]}
       />

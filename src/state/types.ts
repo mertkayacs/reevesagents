@@ -49,6 +49,7 @@ export type ScreenName =
   | 'Credits'
   | 'Doctor'
   | 'DoctorCheck'
+  | 'Approvals'
 
 export interface Message {
   id: string

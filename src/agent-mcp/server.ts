@@ -5,7 +5,12 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import {
+  CallToolRequestSchema,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js'
 
 import {
   ALLOWED_KEYS,
@@ -22,7 +27,8 @@ import {
 } from '../launcher/runtime.js'
 import { detectHostProvider } from './host.js'
 import { findAgent, listAgents, listRuns, readRun } from '../state/runs.js'
-import { isProvider } from '../launcher/providers.js'
+import { detectAvailable, isProvider } from '../launcher/providers.js'
+import { PROVIDER_DEFS } from '../launcher/provider-registry.js'
 import { loadConfig } from '../state/config.js'
 import {
   createRunApproval,
@@ -87,6 +93,24 @@ export function sessionRunIsLive(runId: string): boolean {
   } catch {
     return false
   }
+}
+
+// Discovery: the provider/model catalog a controlling agent reads to learn what it
+// can spawn, instead of guessing provider ids. Exposed both as the list_providers
+// tool and as the reevesagents://providers resource; both share this builder.
+export const PROVIDER_CATALOG_URI = 'reevesagents://providers'
+
+export function buildProviderCatalog() {
+  const available = detectAvailable()
+  return PROVIDER_DEFS.map(def => ({
+    id: def.id,
+    display_name: def.displayName,
+    bin: def.bin,
+    available: available[def.id],
+    aliases: [...def.aliases],
+    models: [...def.models],
+    model_source: def.modelSource,
+  }))
 }
 
 export const MCP_TOOLS = [
@@ -173,6 +197,11 @@ export const MCP_TOOLS = [
   {
     name: 'list',
     description: 'List runs and the agents in each.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'list_providers',
+    description: 'List the CLI providers this machine can launch: id, display name, whether it is installed, aliases, and known models. Pass an id as the provider for spawn.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -305,6 +334,10 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
       return ok(listRuns().map(run => ({ ...run, agents: listAgents(run.id) })))
     }
 
+    if (name === 'list_providers') {
+      return ok(buildProviderCatalog())
+    }
+
     if (name === 'request_approval') {
       const action = asString(a.action).trim()
       const summary = asString(a.summary).trim()
@@ -344,7 +377,7 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
 export async function startAgentMcpServer(): Promise<void> {
   const server = new Server(
     { name: 'reevesagents', version: REEVESAGENTS_VERSION },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {}, resources: {} } },
   )
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }))
@@ -352,6 +385,28 @@ export async function startAgentMcpServer(): Promise<void> {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args = {} } = request.params
     return handleAgentMcpTool(name, args as Record<string, unknown>)
+  })
+
+  // The provider/model catalog as a readable resource, mirroring the list_providers tool.
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    resources: [
+      {
+        uri: PROVIDER_CATALOG_URI,
+        name: 'Providers and models',
+        description: 'CLI providers this machine can launch and their known models.',
+        mimeType: 'application/json',
+      },
+    ],
+  }))
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const { uri } = request.params
+    if (uri !== PROVIDER_CATALOG_URI) throw new Error(`Unknown resource: ${uri}`)
+    return {
+      contents: [
+        { uri, mimeType: 'application/json', text: JSON.stringify(buildProviderCatalog()) },
+      ],
+    }
   })
 
   const transport = new StdioServerTransport()

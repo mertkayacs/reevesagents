@@ -94,6 +94,8 @@ const en = {
 
   'welcome.agentControl': 'Agent Control',
   'welcome.agentControlHint': 'attach the MCP to your CLIs',
+  'welcome.approvals': 'Approvals',
+  'welcome.approvalsHint': 'approve or deny agent requests',
 
   'history.deleteSelected': 'Delete Selected',
   'history.deleteHint': 'delete archived run',
@@ -181,6 +183,9 @@ const en = {
   'web.addAgentTitle': 'add agent to {{name}}',
   'web.stopRunTitle': 'stop run {{name}}',
   'web.deleteRunTitle': 'delete stopped run {{name}}',
+  'web.approvalsTitle': 'Pending approvals',
+  'web.approve': 'Approve',
+  'web.deny': 'Deny',
   'web.deleteHistoryTitle': 'delete archived run {{name}}',
   'web.stopAgentTitle': 'stop agent {{name}}',
   'web.deleteAgentTitle': 'delete stopped agent {{name}}',
@@ -1043,6 +1048,9 @@ const catalogs: Record<LanguageCode, Catalog> = {
 const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   de: {
     'history.movedToast': '{{name}} in Verlauf verschoben',
+    'web.approvalsTitle': 'Ausstehende Freigaben',
+    'web.approve': 'Freigeben',
+    'web.deny': 'Ablehnen',
     'runStop.noRunTitle': 'Kein Run gewählt',
     'runStop.noRunBody': 'Es kann kein Run gestoppt werden, weil keiner gewählt ist.',
     'runStop.deleteTitle': 'Gestoppten Run "{{name}}" löschen?',
@@ -1149,6 +1157,9 @@ const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   },
   fr: {
     'history.movedToast': '{{name}} déplacé vers l’historique',
+    'web.approvalsTitle': 'Approbations en attente',
+    'web.approve': 'Approuver',
+    'web.deny': 'Refuser',
     'runStop.noRunTitle': 'Aucun run choisi',
     'runStop.noRunBody': 'Impossible d’arrêter un run car aucun run n’est choisi.',
     'runStop.deleteTitle': 'Supprimer le run arrêté "{{name}}" ?',
@@ -1255,6 +1266,9 @@ const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   },
   es: {
     'history.movedToast': '{{name}} movido al historial',
+    'web.approvalsTitle': 'Aprobaciones pendientes',
+    'web.approve': 'Aprobar',
+    'web.deny': 'Denegar',
     'runStop.noRunTitle': 'Ningún run elegido',
     'runStop.noRunBody': 'No se puede detener un run porque no hay ninguno elegido.',
     'runStop.deleteTitle': '¿Eliminar run detenido "{{name}}"?',
@@ -1361,6 +1375,9 @@ const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   },
   pt: {
     'history.movedToast': '{{name}} movido para o histórico',
+    'web.approvalsTitle': 'Aprovações pendentes',
+    'web.approve': 'Aprovar',
+    'web.deny': 'Negar',
     'runStop.noRunTitle': 'Nenhum run escolhido',
     'runStop.noRunBody': 'Não é possível parar um run porque nenhum foi escolhido.',
     'runStop.deleteTitle': 'Eliminar run parado "{{name}}"?',
@@ -1467,6 +1484,9 @@ const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   },
   it: {
     'history.movedToast': '{{name}} spostato nella cronologia',
+    'web.approvalsTitle': 'Approvazioni in sospeso',
+    'web.approve': 'Approva',
+    'web.deny': 'Nega',
     'runStop.noRunTitle': 'Nessun run scelto',
     'runStop.noRunBody': 'Impossibile fermare un run perché nessun run è selezionato.',
     'runStop.deleteTitle': 'Eliminare run fermo "{{name}}"?',
@@ -1573,6 +1593,9 @@ const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   },
   tr: {
     'history.movedToast': '{{name}} geçmişe taşındı',
+    'web.approvalsTitle': 'Bekleyen onaylar',
+    'web.approve': 'Onayla',
+    'web.deny': 'Reddet',
     'runStop.noRunTitle': 'Run seçilmedi',
     'runStop.noRunBody': 'Run seçilmediği için durdurulamaz.',
     'runStop.deleteTitle': 'Durdurulmuş run "{{name}}" silinsin mi?',
@@ -1679,6 +1702,9 @@ const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   },
   ru: {
     'history.movedToast': '{{name}} перемещён в историю',
+    'web.approvalsTitle': 'Ожидающие подтверждения',
+    'web.approve': 'Подтвердить',
+    'web.deny': 'Отклонить',
     'runStop.noRunTitle': 'Run не выбран',
     'runStop.noRunBody': 'Невозможно остановить, так как run не выбран.',
     'runStop.deleteTitle': 'Удалить остановленный run "{{name}}"?',
@@ -1785,6 +1811,9 @@ const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   },
   'zh-Hans': {
     'history.movedToast': '{{name}} 已移到历史',
+    'web.approvalsTitle': '待处理的审批',
+    'web.approve': '批准',
+    'web.deny': '拒绝',
     'runStop.noRunTitle': '未选择 run',
     'runStop.noRunBody': '没有选择 run，无法停止。',
     'runStop.deleteTitle': '删除已停止 run "{{name}}"？',
@@ -1891,6 +1920,9 @@ const catalogOverrides: Partial<Record<LanguageCode, Partial<Catalog>>> = {
   },
   ar: {
     'history.movedToast': 'تم نقل {{name}} إلى السجل',
+    'web.approvalsTitle': 'الموافقات المعلقة',
+    'web.approve': 'موافقة',
+    'web.deny': 'رفض',
     'runStop.noRunTitle': 'لم يتم اختيار run',
     'runStop.noRunBody': 'لا يمكن إيقاف run لأنه لم يتم اختيار أي run.',
     'runStop.deleteTitle': 'حذف run المتوقف "{{name}}"؟',

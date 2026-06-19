@@ -551,6 +551,197 @@ button { letter-spacing: 0; }
   outline: none;
 }
 
+.approvals-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  animation: fadeUp var(--motion-pop) both;
+}
+
+.approvals-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-1) 0;
+}
+
+.approvals-title {
+  color: var(--warn);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.approvals-count {
+  color: var(--bg);
+  background: var(--warn);
+  border-radius: var(--r-1);
+  padding: 0 var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+.approval-card {
+  --run-color: var(--warn);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--warn) 32%, var(--border));
+  border-radius: var(--r-3);
+  background: color-mix(in srgb, var(--warn) 6%, transparent);
+}
+
+.approval-card[data-risk="high"] {
+  border-color: color-mix(in srgb, var(--error) 40%, var(--border));
+  background: color-mix(in srgb, var(--error) 7%, transparent);
+}
+
+.approval-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.approval-action {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approval-meta {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.approval-summary {
+  color: var(--dim);
+  font-size: var(--fs-xs);
+}
+
+.approval-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.approval-approve,
+.approval-deny {
+  flex: 1 1 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-1);
+  padding: var(--s-1) var(--s-2);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  transition: border-color var(--motion), color var(--motion), background var(--motion);
+}
+
+.approval-approve {
+  border-color: color-mix(in srgb, var(--ok) 36%, var(--border));
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.approval-approve:hover,
+.approval-approve:focus-visible {
+  background: color-mix(in srgb, var(--ok) 20%, transparent);
+  outline: none;
+}
+
+.approval-deny {
+  border-color: color-mix(in srgb, var(--error) 30%, var(--border));
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+
+.approval-deny:hover,
+.approval-deny:focus-visible {
+  background: color-mix(in srgb, var(--error) 18%, transparent);
+  outline: none;
+}
+
+.about-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.about-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+}
+
+.about-key {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+}
+
+.about-value {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  word-break: break-word;
+}
+
+.about-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.doctor-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.doctor-check {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-1);
+}
+
+.doctor-check-name {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.doctor-check-status {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.doctor-check[data-status="ok"] .doctor-check-status { color: var(--ok); }
+.doctor-check[data-status="warn"] .doctor-check-status { color: var(--warn); }
+.doctor-check[data-status="fail"] .doctor-check-status { color: var(--error); }
+
+.doctor-check-detail {
+  overflow: hidden;
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .history-group {
   display: flex;
   flex-direction: column;
@@ -803,6 +994,17 @@ button { letter-spacing: 0; }
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.card-task {
+  display: block;
+  overflow: hidden;
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
 }
 
 .card-provider {

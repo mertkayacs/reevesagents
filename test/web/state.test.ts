@@ -64,7 +64,7 @@ function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = 
 
 describe('buildWebState', () => {
   it('returns no runs on empty state', () => {
-    expect(buildWebState()).toEqual({ runs: [], history: [] })
+    expect(buildWebState()).toEqual({ runs: [], history: [], approvals: [] })
   })
 
   it('groups terminals under their run with monogram and provider color', () => {

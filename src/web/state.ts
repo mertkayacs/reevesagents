@@ -15,6 +15,7 @@ import {
 import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
 import { modelValuesForProvider } from '../launcher/model-catalog.js'
 import { providerColor, providerDisplayName } from '../utils/display.js'
+import { listRunApprovals, type ApprovalRisk } from '../state/approvals.js'
 import type { Provider, RunRecord, RunViewStatus, TaskStatus } from '../state/types.js'
 import { isOrchestratorWebProvider } from './prebeta-orchestrator.js'
 
@@ -39,6 +40,7 @@ export interface WebTerminal {
   disabledReason: string | null
   monogram: string
   color: string
+  task: string
 }
 
 export interface WebRun {
@@ -66,9 +68,25 @@ export interface WebRunHistory {
   root_provider_label: string | null
 }
 
+export interface WebApproval {
+  id: string
+  run_id: string
+  run_name: string
+  agent_id: string
+  agent_nickname: string
+  provider: Provider | null
+  provider_label: string | null
+  color: string | null
+  action: string
+  summary: string
+  risk: ApprovalRisk
+  requested_at: string
+}
+
 export interface WebState {
   runs: WebRun[]
   history: WebRunHistory[]
+  approvals: WebApproval[]
 }
 
 export interface WebProvider {
@@ -89,11 +107,15 @@ function monogram(nickname: string, provider: string): string {
 export function buildWebState(options: WebStateOptions = {}): WebState {
   const runsSource = options.prebetaOrchestrator ? listRunsAny() : listRuns()
   const listForRun = options.prebetaOrchestrator ? listAgentsAny : listAgents
+  const agentIndex = new Map<string, { nickname: string; provider: Provider }>()
+  const runNameById = new Map<string, string>()
   const runs = runsSource.map<WebRun>(run => {
+    runNameById.set(run.id, run.name)
     const mode = run.mode === 'spawner' ? 'spawner' : 'orchestrator'
     const live = options.liveTmuxTarget ? options.liveTmuxTarget(run) : runHasLiveTmuxTarget(run)
     const runStatus = computeRunStatus(run, live)
     const terminals = listForRun(run.id).map<WebTerminal>(agent => {
+      agentIndex.set(agent.id, { nickname: agent.nickname, provider: agent.provider })
       const status = agent.ended_at ? 'ended' : agent.task_status
       const hasWindow = !agent.headless && !!agent.tmux_window_id
       const canAttach = live && hasWindow && status !== 'ended'
@@ -121,6 +143,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
           : 'agent has no tmux window',
         monogram: monogram(agent.nickname, agent.provider),
         color: providerColor(agent.provider),
+        task: agent.task,
       }
     })
     return {
@@ -147,7 +170,24 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
     root_provider: record.root_provider,
     root_provider_label: record.root_provider ? providerDisplayName(record.root_provider) : null,
   }))
-  return { runs, history }
+  const approvals = listRunApprovals(undefined, 'pending').map<WebApproval>(approval => {
+    const info = agentIndex.get(approval.agent_id)
+    return {
+      id: approval.id,
+      run_id: approval.run_id,
+      run_name: runNameById.get(approval.run_id) ?? approval.run_id,
+      agent_id: approval.agent_id,
+      agent_nickname: info?.nickname ?? approval.agent_id,
+      provider: info?.provider ?? null,
+      provider_label: info ? providerDisplayName(info.provider) : null,
+      color: info ? providerColor(info.provider) : null,
+      action: approval.action,
+      summary: approval.summary,
+      risk: approval.risk,
+      requested_at: approval.requested_at,
+    }
+  })
+  return { runs, history, approvals }
 }
 
 // Provider options for the create form. Availability is probed via `which`, so this

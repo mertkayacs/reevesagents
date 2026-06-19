@@ -249,4 +249,30 @@ describe('handleAgentMcpTool', () => {
       expect(final.decision_note).toBe('looks fine')
     })
   })
+
+  describe('discovery', () => {
+    it('list_providers returns the full provider catalog from the registry', async () => {
+      const { MCP_TOOLS, buildProviderCatalog } = await import('../src/agent-mcp/server.js')
+      const { PROVIDERS } = await import('../src/launcher/providers.js')
+
+      // The tool is advertised in the tool list.
+      expect(MCP_TOOLS.map(tool => tool.name)).toContain('list_providers')
+
+      const result = await call('list_providers', {})
+      expect(result.isError).toBeUndefined()
+      const catalog = payload(result)
+
+      expect(Array.isArray(catalog)).toBe(true)
+      expect(catalog.map((entry: any) => entry.id)).toEqual([...PROVIDERS])
+      expect(catalog).toEqual(buildProviderCatalog())
+
+      const cc = catalog.find((entry: any) => entry.id === 'cc')
+      expect(cc.display_name).toBe('Claude Code')
+      expect(cc.bin).toBe('claude')
+      expect(typeof cc.available).toBe('boolean')
+      expect(cc.aliases).toContain('claude-code')
+      expect(Array.isArray(cc.models)).toBe(true)
+      expect(typeof cc.model_source).toBe('string')
+    })
+  })
 })

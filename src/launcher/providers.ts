@@ -1,9 +1,11 @@
-// Build CLI commands for supported providers.
-// Each provider has a different binary, permission flags, and model args.
-// RC (remote control) is provider-specific: Claude Code uses send-keys injection.
+// Provider launch helpers. Provider identity and per-provider launch logic live in
+// the registry (provider-registry.ts); this module derives the lookups and command
+// builders the rest of the app imports: BIN, PROVIDERS, the alias map, buildCommand,
+// and the --help compatibility checks.
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import type { Provider, Permissions, AuthMode, Effort } from '../state/types.js'
+import { PROVIDER_DEFS, PROVIDER_REGISTRY } from './provider-registry.js'
 
 export interface BuildCommandOptions {
   provider: Provider
@@ -14,89 +16,18 @@ export interface BuildCommandOptions {
   rc_enabled?: boolean
 }
 
-export const BIN: Record<Provider, string> = {
-  cc: 'claude',
-  codex: 'codex',
-  opencode: 'opencode',
-  hermes: 'hermes',
-  kimi: 'kimi',
-  deepseek: 'deepseek',
-  pi: 'pi',
-  qwen: 'qwen',
-  aider: 'aider',
-}
+export const BIN = Object.fromEntries(
+  PROVIDER_DEFS.map(def => [def.id, def.bin]),
+) as Record<Provider, string>
 
-export const PROVIDERS = Object.keys(BIN) as Provider[]
-const PROVIDER_ALIASES: Record<string, Provider> = {
-  cc: 'cc',
-  claude: 'cc',
-  'claude code': 'cc',
-  'claude-code': 'cc',
-  claudecode: 'cc',
-  codex: 'codex',
-  'codex cli': 'codex',
-  'codex-cli': 'codex',
-  opencode: 'opencode',
-  'opencode cli': 'opencode',
-  'opencode-cli': 'opencode',
-  open_code: 'opencode',
-  hermes: 'hermes',
-  kimi: 'kimi',
-  'kimi code': 'kimi',
-  'kimi-code': 'kimi',
-  deepseek: 'deepseek',
-  'deepseek cli': 'deepseek',
-  'deepseek-cli': 'deepseek',
-  pi: 'pi',
-  qwen: 'qwen',
-  'qwen code': 'qwen',
-  'qwen-code': 'qwen',
-  aider: 'aider',
-}
+export const PROVIDERS = Object.keys(PROVIDER_REGISTRY) as Provider[]
+
+const PROVIDER_ALIASES: Record<string, Provider> = Object.fromEntries(
+  PROVIDER_DEFS.flatMap(def => def.aliases.map(alias => [alias, def.id])),
+)
+
 const HELP_INSPECT_TIMEOUT_MS = 3000
 const HELP_INSPECT_TOTAL_BUDGET_MS = 8000
-const HERMES_PROVIDER_PREFIXES = new Set([
-  'auto',
-  'openrouter',
-  'nous',
-  'openai-codex',
-  'copilot-acp',
-  'copilot',
-  'anthropic',
-  'huggingface',
-  'novita',
-  'zai',
-  'kimi-coding',
-  'kimi-coding-cn',
-  'minimax',
-  'minimax-cn',
-  'minimax-oauth',
-  'kilocode',
-  'xiaomi',
-  'arcee',
-  'gmi',
-  'alibaba',
-  'alibaba-coding-plan',
-  'deepseek',
-  'nvidia',
-  'ollama-cloud',
-  'xai',
-  'xai-oauth',
-  'qwen-oauth',
-  'bedrock',
-  'opencode-zen',
-  'opencode-go',
-  'azure-foundry',
-  'lmstudio',
-  'stepfun',
-  'tencent-tokenhub',
-  'custom',
-])
-
-interface HelpRequirement {
-  feature: string
-  tokens: string[]
-}
 
 export interface ProviderCompatibility {
   provider: Provider
@@ -106,43 +37,8 @@ export interface ProviderCompatibility {
   missing: string[]
 }
 
-const HELP_REQUIREMENTS: Record<Provider, HelpRequirement[]> = {
-  cc: [
-    { feature: 'skip permissions', tokens: ['--dangerously-skip-permissions'] },
-  ],
-  codex: [
-    { feature: 'skip permissions', tokens: ['--dangerously-bypass-approvals-and-sandbox'] },
-  ],
-  opencode: [
-    { feature: 'prompt launch', tokens: ['--prompt'] },
-    { feature: 'model selection', tokens: ['--model'] },
-  ],
-  hermes: [
-    { feature: 'chat launch', tokens: ['--model'] },
-    { feature: 'skip permissions', tokens: ['--yolo'] },
-  ],
-  kimi: [
-    { feature: 'model selection', tokens: ['--model'] },
-    { feature: 'skip permissions', tokens: ['--yolo'] },
-  ],
-  deepseek: [
-    { feature: 'model selection', tokens: ['--model'] },
-  ],
-  pi: [
-    { feature: 'model selection', tokens: ['--model'] },
-  ],
-  qwen: [
-    { feature: 'model selection', tokens: ['--model'] },
-    { feature: 'skip permissions', tokens: ['--approval-mode'] },
-  ],
-  aider: [
-    { feature: 'model selection', tokens: ['--model'] },
-    { feature: 'skip confirmations', tokens: ['--yes-always'] },
-  ],
-}
-
 export function isProvider(value: unknown): value is Provider {
-  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(BIN, value)
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(PROVIDER_REGISTRY, value)
 }
 
 export function normalizeProvider(value: unknown): Provider | null {
@@ -155,80 +51,8 @@ export function buildCommand(opts: BuildCommandOptions): string[] {
   if (!isProvider(provider)) {
     throw new Error(`Unsupported provider: ${String(provider)}`)
   }
-
-  const cmd: string[] = [BIN[provider]]
-
-  if (provider === 'cc') {
-    if (permissions === 'skip') cmd.push('--dangerously-skip-permissions')
-    if (auth_mode === 'api-key') cmd.push('--bare')
-    if (effort !== 'default') cmd.push('--effort', effort)
-    if (model) cmd.push('--model', model)
-    // RC injected via send-keys after startup; not a launch flag for Claude Code.
-    return cmd
-  }
-
-  if (provider === 'codex') {
-    if (permissions === 'skip') cmd.push('--dangerously-bypass-approvals-and-sandbox')
-    if (model) cmd.push('--model', model)
-    return cmd
-  }
-
-  if (provider === 'opencode') {
-    if (model) cmd.push('--model', model)
-    return cmd
-  }
-
-  if (provider === 'hermes') {
-    cmd.push('chat')
-    if (permissions === 'skip') cmd.push('--yolo')
-    if (model) {
-      const parsed = parseHermesModel(model)
-      if (parsed.provider) cmd.push('--provider', parsed.provider)
-      cmd.push('--model', parsed.model)
-    }
-    return cmd
-  }
-
-  if (provider === 'kimi') {
-    if (permissions === 'skip') cmd.push('--yolo')
-    if (model) cmd.push('--model', model)
-    return cmd
-  }
-
-  if (provider === 'deepseek') {
-    if (model) cmd.push('--model', model)
-    return cmd
-  }
-
-  if (provider === 'pi') {
-    if (model) cmd.push('--model', model)
-    return cmd
-  }
-
-  if (provider === 'qwen') {
-    if (permissions === 'skip') cmd.push('--approval-mode', 'yolo')
-    if (model) cmd.push('--model', model)
-    return cmd
-  }
-
-  if (provider === 'aider') {
-    if (permissions === 'skip') cmd.push('--yes-always')
-    if (model) cmd.push('--model', model)
-    return cmd
-  }
-
-  return cmd
-}
-
-function parseHermesModel(value: string): { provider?: string; model: string } {
-  const separator = value.indexOf(':')
-  if (separator <= 0) return { model: value }
-
-  const provider = value.slice(0, separator).trim()
-  const model = value.slice(separator + 1).trim()
-  if (!provider || !model || !HERMES_PROVIDER_PREFIXES.has(provider)) return { model: value }
-
-  return { provider, model }
+  const def = PROVIDER_REGISTRY[provider]
+  return [def.bin, ...def.buildArgs({ permissions, model, auth_mode, effort })]
 }
 
 export function detectAvailable(): Record<Provider, boolean> {
@@ -245,12 +69,12 @@ export function detectAvailable(): Record<Provider, boolean> {
 }
 
 export function helpCommand(provider: Provider): string[] {
-  if (provider === 'hermes') return [BIN[provider], 'chat', '--help']
-  return [BIN[provider], '--help']
+  const def = PROVIDER_REGISTRY[provider]
+  return [def.bin, ...(def.helpArgs ?? ['--help'])]
 }
 
 export function missingHelpFeatures(provider: Provider, helpText: string): string[] {
-  return HELP_REQUIREMENTS[provider]
+  return PROVIDER_REGISTRY[provider].helpRequirements
     .filter(req => req.tokens.some(token => !helpText.includes(token)))
     .map(req => req.feature)
 }

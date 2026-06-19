@@ -37,6 +37,7 @@ import { Reference } from './screens/Reference.js'
 import { Credits } from './screens/Credits.js'
 import { Doctor } from './screens/Doctor.js'
 import { DoctorCheck } from './screens/doctor/Check.js'
+import { Approvals } from './screens/Approvals.js'
 import { readTuiOpenToken } from './state/tui-open.js'
 
 const RouterContext = createContext<RouterContextValue | null>(null)
@@ -79,6 +80,7 @@ function renderScreen(screen: ScreenName) {
     case 'Credits':     return <Credits />
     case 'Doctor':      return <Doctor />
     case 'DoctorCheck': return <DoctorCheck />
+    case 'Approvals':   return <Approvals />
     default:            return <Runs />
   }
 }

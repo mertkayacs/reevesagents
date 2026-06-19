@@ -33,19 +33,10 @@ export const colors = {
     pale:  '#a5cdf7',  // wordmark highlight
     gradient: ['#a5cdf7', '#7eb8f5', '#5a96e0', '#3a7ad8', '#2457a7'],  // breath cycle
   },
-  // Provider colors are deliberately distinct from accent.bright so a focused
+  // Provider brand colors live with each provider in the registry
+  // (launcher/provider-registry.ts); read them through providerColor() in
+  // utils/display.ts. They are kept distinct from accent.bright so a focused
   // provider row does not collide visually with the selection cursor.
-  provider: {
-    cc:       '#d97757',  // Anthropic Orange (Claude brand); the one warm color
-    codex:    '#7aa8c4',  // cool teal-blue
-    opencode: '#a890d1',  // muted purple
-    hermes:   '#c97b9b',  // muted rose
-    kimi:     '#b6a45d',  // muted gold
-    deepseek: '#6fb0a8',  // muted cyan
-    pi:       '#86a76b',  // muted olive
-    qwen:     '#c58c63',  // muted copper
-    aider:    '#8fa6d4',  // muted periwinkle
-  },
   model: {
     default:  '#9b9488',  // CLI default or unset model
     claude:   '#e0a06f',  // Claude family
