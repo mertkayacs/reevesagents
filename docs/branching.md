@@ -75,4 +75,4 @@ The root npm package is guarded by `pnpm check:package`. It must include only th
 - `scripts/`
 - `.github/`
 - `packages/`
-- loose orchestrator or MCP source files (the MCP ships bundled into `dist/`)
+- loose internal source files (everything ships bundled into `dist/`)

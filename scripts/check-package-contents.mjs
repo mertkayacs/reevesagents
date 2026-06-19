@@ -29,9 +29,6 @@ const forbiddenPrefixes = [
 ]
 
 const forbiddenSubstrings = [
-  'orchestrator',
-  'mcp-setup',
-  'mcp-tools',
   'approvals',
 ]
 
@@ -54,7 +51,7 @@ for (const path of files) {
     fail(`package includes forbidden path: ${path}`)
   }
   if (forbiddenSubstrings.some(value => path.includes(value))) {
-    fail(`package includes forbidden orchestrator-related path: ${path}`)
+    fail(`package includes forbidden internal source path: ${path}`)
   }
 }
 

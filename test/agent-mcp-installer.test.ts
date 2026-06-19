@@ -126,13 +126,13 @@ describe('agent-mcp installer', () => {
   })
 
   describe('isAttached regex robustness', () => {
-    it('does NOT count the reevesagents-orchestrator sibling as attached', async () => {
-      // The orchestrator is a separate server whose name only differs by the
-      // "-orchestrator" suffix; the negative lookahead in the isAttached regex
-      // must reject it as a token match.
+    it('does NOT count a reevesagents-prefixed sibling as attached', async () => {
+      // A differently-named sibling whose name only differs by a suffix (here
+      // reevesagents-extras) must be rejected by the negative lookahead in the
+      // isAttached regex, so it never counts as a token match.
       wireEnv({
         installed: new Set(['claude']),
-        listOutput: { claude: 'reevesagents-orchestrator: orchestrate run - ✓ Connected' },
+        listOutput: { claude: 'reevesagents-extras: some other server - ✓ Connected' },
       })
       const { hostStatus } = await loadInstaller()
 
@@ -151,12 +151,12 @@ describe('agent-mcp installer', () => {
       expect(cc.attached).toBe(true)
     })
 
-    it('counts reevesagents as attached even when the orchestrator sibling is also listed', async () => {
+    it('counts reevesagents as attached even when a prefixed sibling is also listed', async () => {
       wireEnv({
         installed: new Set(['claude']),
         listOutput: {
           claude: [
-            'reevesagents-orchestrator: orchestrate run - ✓ Connected',
+            'reevesagents-extras: some other server - ✓ Connected',
             'reevesagents: reevesagents mcp - ✓ Connected',
           ].join('\n'),
         },
