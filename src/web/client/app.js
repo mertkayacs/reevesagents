@@ -22,7 +22,6 @@
   const WEB_EN = {
     'common.delete': 'Delete',
     'web.beta': 'web · beta',
-    'web.prebeta': 'web · pre-beta MCP',
     'web.live': 'live',
     'web.offline': 'offline',
     'web.languageTitle': 'Language',
@@ -57,7 +56,6 @@
     'web.skipPromptsMeta': 'Use only in trusted workspaces',
     'web.agentName': 'Agent name',
     'web.optional': 'optional',
-    'web.newRunMode': 'New run mode',
     'web.workingDirectory': 'Working directory',
     'web.cwdPlaceholder': 'defaults to the server directory',
     'web.initialPrompt': 'Initial prompt',
@@ -68,17 +66,13 @@
     'web.modelHelp': 'Provider default is safest when unsure.',
     'web.permissionsHelp': 'Ask first is safer. Skip prompts only in trusted workspaces.',
     'web.agentNameHelp': 'Optional display name and tmux window name.',
-    'web.modeHelp': 'Normal runs are direct agent workspaces. Orchestrator MCP is pre-beta.',
     'web.cwdHelp': 'Agents start in this directory.',
     'web.promptHelp': 'Sent to the agent after its window opens.',
     'web.promptPlaceholder': 'What should this agent start working on?',
-    'web.orchestratorPromptPlaceholder': 'What should this orchestrator agent start working on?',
     'web.cancel': 'Cancel',
     'web.create': 'Create',
     'web.providerDefault': 'Provider default',
     'web.notInstalled': 'Not installed',
-    'web.spawnerOnly': 'Agent run only',
-    'web.readyOrchestrator': 'Ready · Orchestrator',
     'web.ready': 'Ready',
     'web.history': 'History',
     'web.archived': 'archived',
@@ -120,11 +114,9 @@
     'web.createRunFirst': 'Create a run first. Agents are added inside active runs.',
     'web.runInactive': 'This run is no longer active.',
     'web.noProvider': 'No installed provider is available for this mode.',
-    'web.addingTo': 'Adding to {{name}} · {{mode}} · {{count}}',
+    'web.addingTo': 'Adding to {{name}} · {{count}}',
     'web.oneAgent': '{{count}} agent',
     'web.manyAgents': '{{count}} agents',
-    'web.spawner': 'Agent run',
-    'web.orchestrator': 'Orchestrator MCP',
     'web.roleRoot': 'root',
     'web.roleWorker': 'worker',
     'web.statusQueued': 'queued',
@@ -195,9 +187,7 @@
     fNickname: document.getElementById('f-nickname'),
     fRunName: document.getElementById('f-run-name'),
     fAgentRun: document.getElementById('f-agent-run'),
-    fMode: document.getElementById('f-mode'),
     agentRunField: document.getElementById('agent-run-field'),
-    modeField: document.getElementById('mode-field'),
     runNameField: document.getElementById('run-name-field'),
     fCwd: document.getElementById('f-cwd'),
     cwdField: document.getElementById('cwd-field'),
@@ -234,7 +224,6 @@
   let language = 'en'
   let languages = []
   let messages = WEB_EN
-  let prebetaOrchestrator = false
   let selectedId = null
   let session = null // { id, ws, term, fit, observer }
   let createContext = { kind: 'run', runId: '' }
@@ -278,7 +267,6 @@
     history = data.history || []
     approvals = data.approvals || []
     appVersion = data.version || ''
-    prebetaOrchestrator = data.prebeta && data.prebeta.orchestrator === true
     applyLanguage(data.language)
     renderProviders()
     renderSidebar()
@@ -345,7 +333,7 @@
   }
 
   function applyStaticTranslations() {
-    el.brandBeta.textContent = prebetaOrchestrator ? t('web.prebeta') : t('web.beta')
+    el.brandBeta.textContent = t('web.beta')
     el.languageLabel.textContent = t('web.languageTitle')
     el.languageSelect.setAttribute('aria-label', t('web.languageTitle'))
     el.languageSelect.parentElement.title = t('web.languageTitle')
@@ -393,9 +381,6 @@
     document.querySelector('#f-permissions option[value="ask"]').textContent = t('web.askFirst')
     document.querySelector('#f-permissions option[value="skip"]').textContent = t('web.skipPrompts')
     document.querySelector('#agent-name-field .field-label').innerHTML = `${t('web.agentName')} <span class="field-opt">${t('web.optional')}</span>`
-    document.querySelector('#mode-field .field-label').textContent = t('web.newRunMode')
-    document.querySelector('#f-mode option[value="spawner"]').textContent = t('web.spawner')
-    document.querySelector('#f-mode option[value="orchestrator"]').textContent = `${t('web.orchestrator')} · pre-beta`
     document.querySelector('#cwd-field .field-label').textContent = t('web.workingDirectory')
     document.querySelector('#f-cwd').placeholder = t('web.cwdPlaceholder')
     document.querySelector('#prompt-field .field-label').innerHTML = `${t('web.initialPrompt')} <span class="field-opt">${t('web.initialPromptOpt')}</span>`
@@ -405,7 +390,6 @@
     setText('#model-help', t('web.modelHelp'))
     setText('#permissions-help', t('web.permissionsHelp'))
     setText('#agent-name-help', t('web.agentNameHelp'))
-    setText('#mode-help', t('web.modeHelp'))
     setText('#cwd-help', t('web.cwdHelp'))
     setText('#prompt-help', t('web.promptHelp'))
     el.newCancel.textContent = t('web.cancel')
@@ -453,16 +437,13 @@
 
   function renderProviders() {
     const current = el.fProvider.value
-    const mode = selectedCreateMode()
     el.fProvider.innerHTML = ''
     el.providerGrid.innerHTML = ''
     for (const p of providers) {
       const opt = document.createElement('option')
       opt.value = p.id
-      const supported = mode !== 'orchestrator' || p.orchestrator === true
       opt.textContent = p.available ? p.name : `${p.name} (${t('web.notInstalled')})`
-      if (mode === 'orchestrator' && !supported) opt.textContent = `${p.name} (${t('web.spawnerOnly')})`
-      opt.disabled = !p.available || !supported
+      opt.disabled = !p.available
       el.fProvider.appendChild(opt)
 
       const choice = document.createElement('button')
@@ -488,7 +469,7 @@
       body.appendChild(name)
       const meta = document.createElement('span')
       meta.className = 'provider-meta'
-      meta.textContent = providerMeta(p, supported)
+      meta.textContent = providerMeta(p)
       body.appendChild(meta)
       choice.appendChild(body)
       el.providerGrid.appendChild(choice)
@@ -502,10 +483,8 @@
     updateCreateSubmitState()
   }
 
-  function providerMeta(provider, supported) {
+  function providerMeta(provider) {
     if (!provider.available) return t('web.notInstalled')
-    if (!supported) return t('web.spawnerOnly')
-    if (selectedCreateMode() === 'orchestrator' && provider.orchestrator) return t('web.readyOrchestrator')
     return t('web.ready')
   }
 
@@ -828,7 +807,7 @@
       headBody.appendChild(name)
       const meta = document.createElement('span')
       meta.className = 'run-meta'
-      meta.textContent = `${statusLabel(run.status)} · ${modeLabel(run.mode)} · ${agentCountLabel(run.terminals.length)}`
+      meta.textContent = `${statusLabel(run.status)} · ${agentCountLabel(run.terminals.length)}`
       headBody.appendChild(meta)
       head.appendChild(headBody)
 
@@ -962,7 +941,7 @@
     const meta = document.createElement('span')
     meta.className = 'history-meta'
     const provider = record.root_provider_label || t('web.noRootProvider')
-    meta.textContent = `${modeLabel(record.mode)} · ${statusLabel(record.status)} · ${agentCountLabel(record.agent_count)} · ${provider}`
+    meta.textContent = `${statusLabel(record.status)} · ${agentCountLabel(record.agent_count)} · ${provider}`
     body.appendChild(meta)
     item.appendChild(body)
 
@@ -1125,7 +1104,7 @@
     renderSidebar()
     el.overlay.hidden = true
     el.stageTitle.textContent = found ? found.terminal.nickname : id
-    el.stageSub.textContent = found ? `${modeLabel(found.run.mode)} · ${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}` : ''
+    el.stageSub.textContent = found ? `${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}` : ''
     if (found) el.termWrap.style.setProperty('--agent-color', found.terminal.color)
     setStageStatus('connecting', t('web.connecting'))
 
@@ -1182,7 +1161,7 @@
       return
     }
     el.stageTitle.textContent = found.terminal.nickname
-    el.stageSub.textContent = `${modeLabel(found.run.mode)} · ${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}`
+    el.stageSub.textContent = `${found.terminal.provider_label || found.terminal.provider} · ${found.run.name}`
     el.termWrap.style.setProperty('--agent-color', found.terminal.color)
     setOverlayCopy(disabledReasonLabel(found.terminal), t('web.unavailableBody'))
     setStageStatus('closed', disabledReasonLabel(found.terminal))
@@ -1370,7 +1349,7 @@
       const opt = document.createElement('option')
       opt.value = run.id
       const count = agentCountLabel(run.terminals.length)
-      opt.textContent = `${run.name} · ${modeLabel(run.mode)} · ${count}`
+      opt.textContent = `${run.name} · ${count}`
       el.fAgentRun.appendChild(opt)
     }
     const hasCurrent = [...el.fAgentRun.options].some(opt => opt.value === current)
@@ -1384,17 +1363,10 @@
     return runs.find(item => item.id === createContext.runId && item.status === 'running') || null
   }
 
-  function selectedCreateMode() {
-    const run = selectedRunForCreate()
-    if (run) return run.mode || 'spawner'
-    return prebetaOrchestrator && el.fMode.value === 'orchestrator' ? 'orchestrator' : 'spawner'
-  }
-
   function syncCreateFields() {
     const addingToRun = createContext.kind === 'agent'
     if (addingToRun) populateAgentRunSelect(createContext.runId)
     const run = selectedRunForCreate()
-    const mode = selectedCreateMode()
     el.dialog.dataset.intent = addingToRun ? 'agent' : 'run'
     el.dialogTitle.textContent = addingToRun ? t('web.addAgent') : t('web.newRun')
     el.dialogSubtitle.textContent = addingToRun
@@ -1405,19 +1377,16 @@
     el.createAgentTab.setAttribute('aria-selected', String(addingToRun))
     el.agentRunField.hidden = !addingToRun
     el.runNameField.hidden = addingToRun
-    el.modeField.hidden = !prebetaOrchestrator || addingToRun
     el.cwdField.hidden = addingToRun
     el.targetRunNote.hidden = !addingToRun
     if (addingToRun && run) {
       const count = agentCountLabel(run.terminals.length)
-      el.targetRunNote.textContent = t('web.addingTo', { name: run.name, mode: modeLabel(run.mode), count })
+      el.targetRunNote.textContent = t('web.addingTo', { name: run.name, count })
     } else {
       el.targetRunNote.textContent = ''
     }
     el.fNickname.placeholder = addingToRun ? 'reviewer' : 'lead'
-    el.fPrompt.placeholder = mode === 'orchestrator'
-      ? t('web.orchestratorPromptPlaceholder')
-      : t('web.promptPlaceholder')
+    el.fPrompt.placeholder = t('web.promptPlaceholder')
     renderProviders()
     updatePermissionSelection()
     updateCreateActions()
@@ -1459,7 +1428,6 @@
       run_id: createContext.kind === 'agent' ? createContext.runId : undefined,
       run_name: createContext.kind === 'run' ? el.fRunName.value.trim() || undefined : undefined,
       working_dir: createContext.kind === 'run' ? el.fCwd.value.trim() || undefined : undefined,
-      mode: createContext.kind === 'run' ? selectedCreateMode() : undefined,
     }
     createSubmitting = true
     updateCreateSubmitState()
@@ -1750,7 +1718,6 @@
     createContext.runId = el.fAgentRun.value
     syncCreateFields()
   })
-  el.fMode.addEventListener('change', syncCreateFields)
   el.fProvider.addEventListener('change', () => {
     updateProviderSelection()
     renderModels()
@@ -1773,10 +1740,6 @@
     option.addEventListener('keydown', handlePermissionKeydown)
   }
   el.form.addEventListener('submit', submitNew)
-
-  function modeLabel(mode) {
-    return mode === 'orchestrator' ? t('web.orchestrator') : t('web.spawner')
-  }
 
   function roleLabel(role) {
     return role === 'root' ? t('web.roleRoot') : t('web.roleWorker')
