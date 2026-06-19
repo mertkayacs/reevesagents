@@ -59,12 +59,20 @@ agent").
 - `interrupt`: send ctrl-c
 - `read`: read an agent's recent output
 - `list`: list runs and agents with their status
+- `list_providers`: list the CLI providers this machine can launch, with their ids,
+  install status, aliases, and known models (so an agent can discover what to spawn
+  instead of guessing provider ids)
 - `request_approval`: ask for approval before an action
 - `resolve_approval`: approve or deny a request
 - `check_approval` and `list_approvals`: read approval state
 
 No inbox, no task-status protocol, no role scoping here. Those belong to the
 orchestrator package.
+
+The `list_providers` catalog is also published as an MCP resource at
+`reevesagents://providers`, so a client that prefers resources can read the same
+data without a tool call. Both are backed by the provider registry, so they never
+drift from what `spawn` accepts.
 
 ## Activation: off by default, installed from the UI
 
