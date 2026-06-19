@@ -236,11 +236,41 @@ describe('agent-mcp parity tools', () => {
     })
   })
 
+  describe('open', () => {
+    it('switches the tmux client to a run reeves tab', async () => {
+      const { writeRun } = await import('../src/state/runs.js')
+      writeRun(makeRun('open-run'))
+
+      const result = await call('open', { id: 'open-run' })
+      expect(result.isError).toBeUndefined()
+      expect(payload(result)).toEqual({ session: 'reeves_open-run', window: 'reeves', label: 'run-open-run' })
+
+      const switched = execFileSync.mock.calls.find(c => c[0] === 'tmux' && c[1]?.[0] === 'switch-client')!
+      expect(switched[1]).toEqual(['switch-client', '-t', 'reeves_open-run:reeves'])
+    })
+
+    it('opens a specific agent window when given an agent id', async () => {
+      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      writeRun(makeRun('open-run2'))
+      writeAgent(makeAgent('open-agent', 'open-run2', { tmux_window_id: '@7' }))
+
+      const result = await call('open', { id: 'open-agent' })
+      expect(result.isError).toBeUndefined()
+      expect(payload(result)).toEqual({ session: 'reeves_open-run2', window: '@7', label: 'agent-open-agent' })
+    })
+
+    it('reports when no run or agent matches the id', async () => {
+      const result = await call('open', { id: 'nothing' })
+      expect(result.isError).toBe(true)
+      expect(payload(result).error).toContain('no run or agent found')
+    })
+  })
+
   describe('tool registry', () => {
     it('advertises the new parity tools in tools/list', async () => {
       const { MCP_TOOLS } = await import('../src/agent-mcp/server.js')
       const names = MCP_TOOLS.map(tool => tool.name)
-      for (const name of ['delete', 'delete_run', 'delete_history', 'list_history']) {
+      for (const name of ['delete', 'delete_run', 'delete_history', 'list_history', 'open']) {
         expect(names).toContain(name)
       }
     })

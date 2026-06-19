@@ -1,7 +1,13 @@
-// Lean agent control MCP server. It exposes a flat mechanism: spawn a CLI agent,
-// drive it (text and keys), read its output, and handle approvals. Any agent
+// Lean agent control MCP server. It lets one AI CLI run and drive others: spawn
+// a CLI agent, type into it, read its output, and handle approvals. Any agent
 // that has this MCP can call any tool on any run. It stays deliberately flat:
 // no roles, autonomous loops, or higher-level coordination protocol.
+//
+// Typical flow: list_providers -> spawn (returns an agent_id and run_id) ->
+// send_text then send_key enter to submit -> read the output -> kill or stop ->
+// delete. Every id comes from spawn or list. The session run: a spawn without
+// run_id reuses one run created on the first spawn, so a chain of spawns lands
+// together.
 //
 // Each tool is one entry in TOOLS, colocating its schema and its handler so the
 // advertised list and the dispatch can never drift. MCP_TOOLS is derived from it.
@@ -19,6 +25,7 @@ import {
   ALLOWED_KEYS,
   interrupt,
   killAgent,
+  openTmuxTarget,
   peekAgent,
   sendKey,
   sendText,
@@ -203,7 +210,7 @@ interface ToolDef {
 const TOOLS: ToolDef[] = [
   {
     name: 'spawn',
-    description: 'Start a CLI agent. With run_id, add it to that run. Without run_id, add it to this session\'s run, which is created on the first spawn.',
+    description: 'Start a CLI agent in its own tmux window and return its agent_id (use it with send_text, send_key, read, kill) and run_id. Omit run_id to add the agent to this MCP session run, created on the first spawn so a chain of spawns stays in one run; pass run_id to add it to an existing run. Call list_providers for valid provider keys.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -224,7 +231,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'kill',
-    description: 'Stop one agent and close its tmux window.',
+    description: 'Stop one agent and close its tmux window. Pass an agent_id from spawn or list. Once it is ended you can remove its record with delete.',
     inputSchema: {
       type: 'object',
       properties: { agent_id: { type: 'string' } },
@@ -234,7 +241,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'stop',
-    description: 'Stop a whole run, ending every agent in it.',
+    description: 'Stop a whole run: end every agent in it and tear down its tmux session. Pass a run_id from spawn or list. Once ended, remove it with delete_run.',
     inputSchema: {
       type: 'object',
       properties: { run_id: { type: 'string' } },
@@ -244,7 +251,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_text',
-    description: 'Paste text (a prompt) into one agent.',
+    description: 'Paste text into one agent at its prompt. This does NOT submit it: follow with send_key enter to send. Use it to give a running agent a new instruction.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -260,7 +267,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_key',
-    description: 'Send one key to an agent: enter, escape, tab, space, up, down, left, right, backspace, or ctrl-c.',
+    description: 'Press one key in an agent: enter, escape, tab, space, up, down, left, right, backspace, or ctrl-c. Send enter after send_text to submit the pasted text.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -276,7 +283,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'interrupt',
-    description: 'Send ctrl-c to one agent.',
+    description: 'Press ctrl-c in one agent to interrupt whatever it is doing.',
     inputSchema: {
       type: 'object',
       properties: { agent_id: { type: 'string' } },
@@ -289,7 +296,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'read',
-    description: 'Read one agent\'s recent output, ANSI-stripped and secret-redacted.',
+    description: 'Read one agent\'s recent terminal output, ANSI-stripped and secret-redacted. Use it to see what the agent printed or is waiting on. Defaults to the last 20 lines.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -308,7 +315,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'list',
-    description: 'List runs and the agents in each.',
+    description: 'List every live run and the agents in each, with their ids, status, provider, and tmux info. Start here to find a run_id or agent_id for the other tools. Ended runs are in list_history.',
     inputSchema: { type: 'object', properties: {} },
     handler: () => ok(listRuns().map(run => ({ ...run, agents: listAgents(run.id) }))),
   },
@@ -320,7 +327,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'request_approval',
-    description: 'Ask for approval before an action. Another agent or a human resolves it.',
+    description: 'Ask for approval before a risky action. Creates a pending approval that a human or another agent clears with resolve_approval, and returns it with its approval_id.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -348,7 +355,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'resolve_approval',
-    description: 'Approve or deny one pending request.',
+    description: 'Approve or deny one pending approval by its approval_id (from list_approvals). An optional note records why.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -366,7 +373,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'check_approval',
-    description: 'Read one approval\'s current status.',
+    description: 'Read one approval\'s current status (pending, approved, denied, or expired) by its approval_id.',
     inputSchema: {
       type: 'object',
       properties: { approval_id: { type: 'string' } },
@@ -380,7 +387,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_approvals',
-    description: 'List approval requests, optionally for one run or one status.',
+    description: 'List approval requests, optionally filtered by run_id or status (pending, approved, denied, expired). Use it to find an approval_id to resolve.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -392,13 +399,13 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_history',
-    description: 'List archived run history records (ended and stale runs).',
+    description: 'List archived run history: runs that have ended or gone stale. Live runs are in list, not here.',
     inputSchema: { type: 'object', properties: {} },
     handler: () => ok(listRunHistory()),
   },
   {
     name: 'delete',
-    description: 'Delete one ended agent\'s record. The agent must already be ended (kill it first).',
+    description: 'Permanently remove one ended agent\'s record. Kill the agent first; a still-running agent is rejected.',
     inputSchema: {
       type: 'object',
       properties: { agent_id: { type: 'string' } },
@@ -413,7 +420,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'delete_run',
-    description: 'Delete one ended run, archiving it to history. The run must already be ended (stop it first).',
+    description: 'Permanently remove one ended run, archiving it to history. Stop the run first; a still-running run is rejected.',
     inputSchema: {
       type: 'object',
       properties: { run_id: { type: 'string' } },
@@ -428,7 +435,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'delete_history',
-    description: 'Delete one archived run history record.',
+    description: 'Permanently remove one archived run history record by its id (from list_history).',
     inputSchema: {
       type: 'object',
       properties: { id: { type: 'string' } },
@@ -441,6 +448,18 @@ const TOOLS: ToolDef[] = [
       deleteRunHistory(id)
       return ok({ deleted: true, id })
     },
+  },
+  {
+    name: 'open',
+    description: 'Open a run or agent in tmux for the user: switch the attached tmux client to a run (its reeves tab) or to a specific agent window. Works for any run, whether this agent started it or not, so you can surface any run for the user on request. No effect when nobody is attached.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'A run id or an agent id (from list). A run id opens its reeves tab; an agent id opens that agent window.' },
+      },
+      required: ['id'],
+    },
+    handler: (a) => ok(openTmuxTarget(asString(a.id))),
   },
 ]
 

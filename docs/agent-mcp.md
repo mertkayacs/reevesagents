@@ -52,12 +52,13 @@ agent").
   an autonomous worker, not just an `ask` one
 - `kill`: stop one agent
 - `stop`: stop a whole run
-- `send_text`: paste text (a prompt) into an agent
+- `send_text`: paste text into an agent's prompt (does not submit; follow with `send_key` enter)
 - `send_key`: send one key (enter, escape, tab, space, up, down, left, right,
   backspace, ctrl-c)
 - `interrupt`: send ctrl-c
 - `read`: read an agent's recent output
 - `list`: list runs and agents with their status
+- `open`: switch the attached tmux client to a run or agent, so an agent can surface any run for the user (its own run or another)
 - `list_history`: list archived run history records (ended and stale runs)
 - `list_providers`: list the CLI providers this machine can launch, with their ids,
   install status, aliases, and known models (so an agent can discover what to spawn
