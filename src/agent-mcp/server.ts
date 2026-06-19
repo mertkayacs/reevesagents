@@ -29,7 +29,16 @@ import {
   type AllowedKey,
 } from '../launcher/runtime.js'
 import { detectHostProvider } from './host.js'
-import { findAgent, listAgents, listRuns, readRun } from '../state/runs.js'
+import {
+  archiveAndRemoveRun,
+  deleteAgent,
+  deleteRunHistory,
+  findAgent,
+  listAgents,
+  listRunHistory,
+  listRuns,
+  readRun,
+} from '../state/runs.js'
 import { detectAvailable, isProvider } from '../launcher/providers.js'
 import { PROVIDER_DEFS } from '../launcher/provider-registry.js'
 import { loadConfig } from '../state/config.js'
@@ -41,7 +50,7 @@ import {
   type ApprovalRisk,
   type ApprovalStatus,
 } from '../state/approvals.js'
-import type { Provider } from '../state/types.js'
+import type { AuthMode, Effort, Permissions, Provider } from '../state/types.js'
 import { REEVESAGENTS_VERSION } from '../version.js'
 
 // Read-only at module load: which host CLI launched us, if any. Used to make the
@@ -88,6 +97,21 @@ function parseApprovalStatus(value: unknown): ApprovalStatus | undefined {
   return undefined
 }
 
+// The three spawn launch knobs. Each returns undefined for a missing or unknown
+// value so the runtime falls back to its own default instead of a bad value.
+function parsePermissions(value: unknown): Permissions | undefined {
+  return value === 'ask' || value === 'skip' ? value : undefined
+}
+
+function parseAuthMode(value: unknown): AuthMode | undefined {
+  return value === 'default' || value === 'api-key' ? value : undefined
+}
+
+function parseEffort(value: unknown): Effort | undefined {
+  if (value === 'default' || value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh' || value === 'max') return value
+  return undefined
+}
+
 // True when the session's run still exists and is not ended. readRun throws for a
 // missing run (e.g. archived by stop/kill), which counts as not live. Exported so
 // the no-run_id spawn guard can be tested without driving real tmux.
@@ -126,6 +150,9 @@ function spawnHandler(a: Record<string, unknown>): ToolResult {
     task: asString(a.task),
     nickname: typeof a.nickname === 'string' ? a.nickname : undefined,
     working_dir: typeof a.working_dir === 'string' ? a.working_dir : undefined,
+    permissions: parsePermissions(a.permissions),
+    auth_mode: parseAuthMode(a.auth_mode),
+    effort: parseEffort(a.effort),
   }
   if (typeof a.run_id === 'string' && a.run_id.trim()) {
     // Adding to an existing run: enforce the size cap. A new run (no run_id,
@@ -187,6 +214,9 @@ const TOOLS: ToolDef[] = [
         nickname: { type: 'string' },
         name: { type: 'string', description: 'Run name when starting a new run.' },
         working_dir: { type: 'string' },
+        permissions: { type: 'string', enum: ['ask', 'skip'], description: 'ask prompts for each action; skip runs autonomously. Blank uses the global default.' },
+        auth_mode: { type: 'string', enum: ['default', 'api-key'], description: 'How the CLI authenticates. Blank uses the provider default.' },
+        effort: { type: 'string', enum: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], description: 'Reasoning effort, for providers that support it. Blank uses the provider default.' },
       },
       required: ['provider'],
     },
@@ -359,6 +389,58 @@ const TOOLS: ToolDef[] = [
       },
     },
     handler: (a) => ok(listRunApprovals(typeof a.run_id === 'string' ? a.run_id : undefined, parseApprovalStatus(a.status))),
+  },
+  {
+    name: 'list_history',
+    description: 'List archived run history records (ended and stale runs).',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(listRunHistory()),
+  },
+  {
+    name: 'delete',
+    description: 'Delete one ended agent\'s record. The agent must already be ended (kill it first).',
+    inputSchema: {
+      type: 'object',
+      properties: { agent_id: { type: 'string' } },
+      required: ['agent_id'],
+    },
+    handler: (a) => {
+      // Mirror the web delete guard: an agent must be stopped before deletion.
+      const agent = findAgent(String(a.agent_id))
+      if (!agent.ended_at) return fail('Stop agent before deleting it')
+      return ok(deleteAgent(String(a.agent_id)))
+    },
+  },
+  {
+    name: 'delete_run',
+    description: 'Delete one ended run, archiving it to history. The run must already be ended (stop it first).',
+    inputSchema: {
+      type: 'object',
+      properties: { run_id: { type: 'string' } },
+      required: ['run_id'],
+    },
+    handler: (a) => {
+      // Mirror the web delete guard: a run must be stopped before deletion.
+      const run = readRun(String(a.run_id))
+      if (run.status !== 'ended' && run.ended_at === null) return fail('Stop run before deleting it')
+      return ok(archiveAndRemoveRun(run.id, 'ended'))
+    },
+  },
+  {
+    name: 'delete_history',
+    description: 'Delete one archived run history record.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    handler: (a) => {
+      const id = String(a.id)
+      // Mirror the web guard: confirm the record exists before deleting it.
+      if (!listRunHistory().some(record => record.id === id)) return fail('history record not found')
+      deleteRunHistory(id)
+      return ok({ deleted: true, id })
+    },
   },
 ]
 

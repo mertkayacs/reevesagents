@@ -47,7 +47,9 @@ Any agent that has the MCP can call any of these, on any run or agent. There are
 no roles at this layer; it is flat on purpose ("any agent can manage any
 agent").
 
-- `spawn`: start a CLI agent (a new run, or add one to an existing run)
+- `spawn`: start a CLI agent (a new run, or add one to an existing run). Accepts
+  `permissions` (`ask` or `skip`), `auth_mode`, and `effort` so a client can launch
+  an autonomous worker, not just an `ask` one
 - `kill`: stop one agent
 - `stop`: stop a whole run
 - `send_text`: paste text (a prompt) into an agent
@@ -56,15 +58,20 @@ agent").
 - `interrupt`: send ctrl-c
 - `read`: read an agent's recent output
 - `list`: list runs and agents with their status
+- `list_history`: list archived run history records (ended and stale runs)
 - `list_providers`: list the CLI providers this machine can launch, with their ids,
   install status, aliases, and known models (so an agent can discover what to spawn
   instead of guessing provider ids)
+- `delete`: delete one ended agent's record (it must be stopped first)
+- `delete_run`: delete one ended run, archiving it to history (it must be stopped first)
+- `delete_history`: delete one archived run history record
 - `request_approval`: ask for approval before an action
 - `resolve_approval`: approve or deny a request
 - `check_approval` and `list_approvals`: read approval state
 
 No inbox, no task-status protocol, no role scoping here. The MCP stays a flat
-control surface by design.
+control surface by design. The delete tools mirror the Web UI delete actions and
+their ended-state guards, so anything removable in the UI is removable over MCP.
 
 The `list_providers` catalog is also published as an MCP resource at
 `reevesagents://providers`, so a client that prefers resources can read the same
