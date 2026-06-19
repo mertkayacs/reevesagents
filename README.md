@@ -242,6 +242,11 @@ worker's CLI from the same screen. Guardrails sit at the resource level: a
 per-run agent cap (`max_agents`), enforced when the spawn tool adds to a run,
 and the fact that each agent is a real CLI process in its own tmux pane.
 
+An attached CLI can also discover what it can launch: the `list_providers` tool
+and the `reevesagents://providers` resource return the providers on this machine
+with their ids, install status, aliases, and known models, so an agent passes a
+real id to `spawn` instead of guessing.
+
 See [docs/agent-mcp.md](docs/agent-mcp.md) for the full design and tool list.
 
 ## Configuration

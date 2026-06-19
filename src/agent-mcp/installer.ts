@@ -6,19 +6,21 @@
 // reevesagents.
 
 import { execFileSync } from 'node:child_process'
+import { PROVIDER_REGISTRY } from '../launcher/provider-registry.js'
+import type { Provider } from '../state/types.js'
 
 const SERVER_NAME = 'reevesagents'
 const SERVER_BIN = 'reevesagents'
 const SERVER_ARG = 'mcp'
 const MGMT_TIMEOUT_MS = 15_000
 
-// A CLI that can host an MCP server, with the argument lists for its own
-// management commands. `add` is undefined for CLIs we cannot drive without an
-// interactive prompt; those are reported as manual.
+// A provider CLI that can host an MCP server. Its binary and display name come
+// from the provider registry (the single source of truth); only the per-CLI
+// `mcp add` / `mcp remove` / `mcp list` argument lists live here. `add` is
+// undefined for CLIs we cannot drive without an interactive prompt; those are
+// reported as manual.
 interface HostCli {
-  key: string
-  bin: string
-  label: string
+  provider: Provider
   add?: string[]
   remove?: string[]
   list: string[]
@@ -26,41 +28,31 @@ interface HostCli {
 
 const HOSTS: HostCli[] = [
   {
-    key: 'cc',
-    bin: 'claude',
-    label: 'Claude Code',
+    provider: 'cc',
     add: ['mcp', 'add', SERVER_NAME, '--', SERVER_BIN, SERVER_ARG],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
   {
-    key: 'codex',
-    bin: 'codex',
-    label: 'Codex CLI',
+    provider: 'codex',
     add: ['mcp', 'add', SERVER_NAME, '--', SERVER_BIN, SERVER_ARG],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
   {
-    key: 'kimi',
-    bin: 'kimi',
-    label: 'Kimi Code',
+    provider: 'kimi',
     add: ['mcp', 'add', SERVER_NAME, '--', SERVER_BIN, SERVER_ARG],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
   {
-    key: 'qwen',
-    bin: 'qwen',
-    label: 'Qwen Code',
+    provider: 'qwen',
     add: ['mcp', 'add', SERVER_NAME, SERVER_BIN, SERVER_ARG],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
   {
-    key: 'hermes',
-    bin: 'hermes',
-    label: 'Hermes',
+    provider: 'hermes',
     add: ['mcp', 'add', SERVER_NAME, '--command', SERVER_BIN, '--args', SERVER_ARG],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
@@ -68,12 +60,18 @@ const HOSTS: HostCli[] = [
   {
     // opencode's `mcp add` prompts interactively and has no remove subcommand,
     // so we cannot attach or detach it without a prompt. Report it as manual.
-    key: 'opencode',
-    bin: 'opencode',
-    label: 'OpenCode CLI',
+    provider: 'opencode',
     list: ['mcp', 'list'],
   },
 ]
+
+function hostBin(host: HostCli): string {
+  return PROVIDER_REGISTRY[host.provider].bin
+}
+
+function hostLabel(host: HostCli): string {
+  return PROVIDER_REGISTRY[host.provider].displayName
+}
 
 export interface HostStatus {
   key: string
@@ -102,7 +100,7 @@ function isInstalled(bin: string): boolean {
 
 function isAttached(host: HostCli): boolean {
   try {
-    const out = execFileSync(host.bin, host.list, {
+    const out = execFileSync(hostBin(host), host.list, {
       encoding: 'utf8',
       timeout: MGMT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -116,7 +114,7 @@ function isAttached(host: HostCli): boolean {
 }
 
 function runHostCommand(host: HostCli, args: string[]): void {
-  execFileSync(host.bin, args, {
+  execFileSync(hostBin(host), args, {
     encoding: 'utf8',
     timeout: MGMT_TIMEOUT_MS,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -134,7 +132,7 @@ function cliError(err: unknown): string {
 }
 
 function findHost(key: string): HostCli {
-  const host = HOSTS.find(item => item.key === key)
+  const host = HOSTS.find(item => item.provider === key)
   if (!host) throw new Error(`Unknown CLI: ${key}`)
   return host
 }
@@ -143,11 +141,11 @@ function findHost(key: string): HostCli {
 // attached, and can we drive it automatically (manual when add is undefined).
 export function hostStatus(): HostStatus[] {
   return HOSTS.map(host => {
-    const installed = isInstalled(host.bin)
+    const installed = isInstalled(hostBin(host))
     return {
-      key: host.key,
-      bin: host.bin,
-      label: host.label,
+      key: host.provider,
+      bin: hostBin(host),
+      label: hostLabel(host),
       installed,
       attached: installed && isAttached(host),
       manual: host.add === undefined,
@@ -158,34 +156,36 @@ export function hostStatus(): HostStatus[] {
 // Attach the reevesagents MCP server to one CLI by calling that CLI's own mcp add.
 export function attach(key: string): AttachResult {
   const host = findHost(key)
+  const label = hostLabel(host)
   if (!host.add) {
-    return { key, label: host.label, ok: false, message: `${host.label} must be added manually` }
+    return { key, label, ok: false, message: `${label} must be added manually` }
   }
-  if (!isInstalled(host.bin)) {
-    return { key, label: host.label, ok: false, message: `${host.bin} is not installed` }
+  if (!isInstalled(hostBin(host))) {
+    return { key, label, ok: false, message: `${hostBin(host)} is not installed` }
   }
   try {
     runHostCommand(host, host.add)
-    return { key, label: host.label, ok: true, message: 'attached' }
+    return { key, label, ok: true, message: 'attached' }
   } catch (err) {
-    return { key, label: host.label, ok: false, message: cliError(err) }
+    return { key, label, ok: false, message: cliError(err) }
   }
 }
 
 // Detach the reevesagents MCP server from one CLI by calling that CLI's mcp remove.
 export function detach(key: string): AttachResult {
   const host = findHost(key)
+  const label = hostLabel(host)
   if (!host.remove) {
-    return { key, label: host.label, ok: false, message: `${host.label} must be removed manually` }
+    return { key, label, ok: false, message: `${label} must be removed manually` }
   }
-  if (!isInstalled(host.bin)) {
-    return { key, label: host.label, ok: false, message: `${host.bin} is not installed` }
+  if (!isInstalled(hostBin(host))) {
+    return { key, label, ok: false, message: `${hostBin(host)} is not installed` }
   }
   try {
     runHostCommand(host, host.remove)
-    return { key, label: host.label, ok: true, message: 'detached' }
+    return { key, label, ok: true, message: 'detached' }
   } catch (err) {
-    return { key, label: host.label, ok: false, message: cliError(err) }
+    return { key, label, ok: false, message: cliError(err) }
   }
 }
 
@@ -195,11 +195,11 @@ export function detach(key: string): AttachResult {
 // "already exists" failure from the CLI's own mcp add.
 export function attachAll(): AttachResult[] {
   return HOSTS
-    .filter(host => host.add && isInstalled(host.bin))
+    .filter(host => host.add && isInstalled(hostBin(host)))
     .map(host => {
       if (isAttached(host)) {
-        return { key: host.key, label: host.label, ok: true, message: 'already attached' }
+        return { key: host.provider, label: hostLabel(host), ok: true, message: 'already attached' }
       }
-      return attach(host.key)
+      return attach(host.provider)
     })
 }
