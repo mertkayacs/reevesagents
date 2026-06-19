@@ -142,8 +142,8 @@ reevesagents
 <details>
 <summary><b>From source</b></summary>
 
-Use source when you want to inspect the code, contribute, or test the pre-beta
-research package from the repository.
+Use source when you want to inspect the code, contribute, or run from the
+repository.
 
 ```sh
 git clone https://github.com/mertkayacs/reevesagents.git
@@ -206,7 +206,7 @@ humans and scripts.
 | `stop <run-id>` | Stop one run. | `-y, --yes` (or `ALLOW_DESTRUCTIVE=1`) |
 | `kill <agent-id>` | Stop one agent. | `-y, --yes` (or `ALLOW_DESTRUCTIVE=1`) |
 | `doctor` | Run environment health checks (Node, tmux, state path, provider CLIs). Exits non-zero on any failed check. | `--json` |
-| `web` | Start the on-demand, loopback-only Web UI. Runs in the foreground; agents keep running after you stop it. | `--port <n>` (preferred port, falls back to the next free port), `--no-open` (do not open the browser), `--prebeta-orchestrator` (enable pre-beta orchestrator controls when the separate package is installed) |
+| `web` | Start the on-demand, loopback-only Web UI. Runs in the foreground; agents keep running after you stop it. | `--port <n>` (preferred port, falls back to the next free port), `--no-open` (do not open the browser) |
 | `mcp` | Start the Agent Control MCP server over stdio. Not run by hand; the CLI you attach it to from the Agent Control screen runs it. | none |
 
 `stop` and `kill` are the only destructive commands. They refuse to run without
@@ -216,9 +216,8 @@ humans and scripts.
 
 ReevesAgents ships an optional MCP server that lets one AI CLI spawn and drive
 other AI CLIs: start an agent, paste a prompt, send keys, read output, and
-resolve approval requests. It is a mechanism, not an orchestration policy. The
-heavier autonomous coordination (roles, loops, the coordination protocol) stays
-in the separate pre-beta `reevesagents-orchestrator` package.
+resolve approval requests. It is a flat mechanism, not an orchestration policy:
+no roles, no autonomous loops, no coordination protocol.
 
 It is off by default. ReevesAgents never attaches it to a CLI on its own.
 
@@ -347,35 +346,6 @@ Reinstall with optional dependencies enabled, then run `reevesagents doctor`.
 **Port already in use.** `reevesagents web` starts on port `8080` by default. If
 it is taken, the server binds the next free port in a small range and prints the
 chosen URL. Pass `--port <n>` to pick a different starting port.
-
-## Pre-Beta Research: MCP Orchestrator
-
-The stable `reevesagents` package is the CLI, TUI, Web UI, and the opt-in Agent
-Control MCP. Connected root/child orchestration with roles, autonomous loops,
-and a coordination protocol is separate and pre-beta, in the
-`reevesagents-orchestrator` package.
-
-The idea: a root agent coordinates worker agents over MCP, instead of you
-dispatching each worker by hand. Orchestrator runs are limited to the
-orchestrator-supported providers: `cc`, `codex`, `opencode`, and `hermes`.
-
-**Research-only disclaimer:** orchestrator mode is experimental. Do not use it
-to create unattended fully autonomous agent systems. Be careful when routing
-outputs between different provider CLIs, especially if one provider's output is
-used to prompt or evaluate another. Provider terms, data policies, and
-automation rules differ, and some combinations may violate a provider's rules.
-Review the terms for the CLIs you use and keep a human in control.
-
-```sh
-npm install -g reevesagents reevesagents-orchestrator@pre-beta-research
-reevesagents-orchestrator setup
-reevesagents web --prebeta-orchestrator
-```
-
-`reevesagents-orchestrator setup` may write MCP entries into provider CLI
-configuration. Run `reevesagents doctor` and
-`reevesagents-orchestrator setup --help` first if you want to review the path
-before changing local provider config.
 
 ## Not Required
 

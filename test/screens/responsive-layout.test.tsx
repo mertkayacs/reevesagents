@@ -302,7 +302,6 @@ describe('responsive layout', () => {
     process.env.REEVES_REGISTRY = registry
     const run: RunRecord = {
       id: 'run-compact',
-      mode: 'spawner',
       name: 'compact',
       status: 'running',
       tmux_session: 'reeves_compact',

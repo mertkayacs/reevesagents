@@ -1,6 +1,6 @@
 # ReevesAgents Design
 
-This document is the canonical design for the stable main package and the explicit PRE-BETA add-on path. The default release path is the spawner app with optional Web beta. Orchestrator/MCP is a separate PRE-BETA package and must be installed intentionally.
+This document is the canonical design for the reevesagents package: the spawner CLI and TUI, the optional Web beta, and the opt-in agent-control MCP. The MCP is a flat mechanism (spawn and drive agents, read their output, resolve approvals); it has no roles, autonomous loops, or coordination protocol.
 
 ## Product Thesis
 
@@ -141,7 +141,6 @@ reevesagents stop <run-id>
 reevesagents kill <terminal-id>
 reevesagents doctor
 reevesagents web
-reevesagents web --prebeta-orchestrator
 ```
 
 CLI design rules:
@@ -153,7 +152,6 @@ CLI design rules:
 - `peek` prints recent terminal output.
 - `stop` and `kill` require `--yes` or `ALLOW_DESTRUCTIVE=1`.
 - `web` starts an on-demand, loopback-only browser UI for spawner terminals and stops when the process exits.
-- `web --prebeta-orchestrator` starts the same browser UI with PRE-BETA orchestrator/MCP run controls, only when the separate orchestrator package is installed.
 
 ## Config And Doctor
 
@@ -227,50 +225,16 @@ Doctor and packaging:
 - Where the web UI is used, Doctor shall report whether the node-pty terminal bridge loads on this platform.
 - The system shall include the web client assets under `dist/` in the published package, asserted by the package contents check.
 
-## Web UI PRE-BETA Orchestrator Mode
-
-The Web UI may opt into orchestrator mode through `reevesagents web --prebeta-orchestrator`.
-This is not the default Web UI. It requires `reevesagents-orchestrator` to be installed beside `reevesagents`.
-
-Rules:
-
-- Default `reevesagents web` shall show only spawner runs and call only the root spawner runtime.
-- `reevesagents web --prebeta-orchestrator` shall show both spawner and orchestrator runs.
-- The pre-beta Web server shall load `reevesagents-orchestrator` dynamically at startup; the root bundle must not statically import MCP code.
-- If the orchestrator package is missing, the pre-beta Web command shall fail with a clear install message.
-- New runs created in default Web mode shall always be spawner runs.
-- New runs created in pre-beta Web mode may be spawner or orchestrator runs.
-- Adding a terminal to an existing run shall infer the run mode and dispatch to the matching runtime.
-- Headless orchestrator roots shall render as records but shall not be attachable in the browser terminal.
-- Orchestrator root kill shall be rejected; stopping the run remains the root-level destructive action.
-- Provider options for orchestrator runs shall be limited to the orchestrator-supported set: `cc`, `codex`, `opencode`, and `hermes`.
-
-## Release Boundary
-
-Connected agent coordination is intentionally outside the default main install and root release package. The main package should not depend on it and should not expose setup for it in normal flows.
-
-`beta/orchestrator` may exist in the repository as PRE-BETA code for MCP-connected root/worker flows. It is not part of the root npm tarball, root Homebrew formula, or stable default app. It may ship as the separate `reevesagents-orchestrator` package for users who explicitly choose the all-in PRE-BETA option.
-
-Install choices:
+## Install Choices
 
 - CLI/TUI only: install `reevesagents` without optional dependencies.
 - CLI/TUI plus Web beta: install `reevesagents` normally.
-- All-in PRE-BETA: install `reevesagents` and `reevesagents-orchestrator`, then start Web with `--prebeta-orchestrator` or use `reevesagents-orchestrator` directly.
 
-Acceptable main-package references:
+Invariants:
 
-- Maintainer docs may mention connected coordination as PRE-BETA test code.
-- Root tests may assert spawner runs do not receive injected Reeves context.
-- Shared state may preserve old internal names for compatibility.
-
-Not acceptable in the main package:
-
-- install-time provider config writes
-- add-on setup commands in root CLI help
-- root/worker choice in the New Run flow
-- connected-only decision screens in the main TUI
-- provider launch injection for spawner terminals
-- static imports from the root package into orchestrator/MCP modules
+- The agent-control MCP ships inside the package and is off by default; nothing attaches it to a host CLI without the user asking.
+- Install writes no provider config and runs no setup at install time.
+- Spawner terminals are independent and do not receive injected Reeves context.
 
 ## Release Bar
 
@@ -278,7 +242,6 @@ A release-ready main package must pass:
 
 ```sh
 pnpm verify
-pnpm --dir beta/orchestrator verify
 pnpm check:install-matrix
 pnpm pack --dry-run
 ```

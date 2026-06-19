@@ -216,7 +216,6 @@ program
       const specs = agentSpecs.length > 0 ? agentSpecs : ['codex']
       const [first, ...rest] = specs.map(parseAgentSpec)
       const result = startRun({
-        mode: 'spawner',
         name: opts.name,
         working_dir: opts.cwd,
         root: {
@@ -334,8 +333,7 @@ program
   .description('start the on-demand loopback web UI for agents')
   .option('--port <n>', 'preferred port; falls back to the next free port')
   .option('--no-open', 'do not open the browser')
-  .option('--prebeta-orchestrator', 'enable PRE-BETA orchestrator/MCP run controls when the separate package is installed')
-  .action((opts: { port?: string; open?: boolean; prebetaOrchestrator?: boolean }) => {
+  .action((opts: { port?: string; open?: boolean }) => {
     runWeb(opts).catch(err => {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)
@@ -355,7 +353,7 @@ program
     }
   })
 
-async function runWeb(opts: { port?: string; open?: boolean; prebetaOrchestrator?: boolean }): Promise<void> {
+async function runWeb(opts: { port?: string; open?: boolean }): Promise<void> {
   const { checkWebExtras, webExtrasMessage } = await import('./web/extras.js')
   const extras = await checkWebExtras()
   if (!extras.ok) {
@@ -367,10 +365,8 @@ async function runWeb(opts: { port?: string; open?: boolean; prebetaOrchestrator
   const handle = await startWebServer({
     port: parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined,
     open: opts.open !== false,
-    prebetaOrchestrator: opts.prebetaOrchestrator === true,
   })
   console.log(`reevesagents web running at ${handle.url}`)
-  if (opts.prebetaOrchestrator) console.log('PRE-BETA orchestrator/MCP controls enabled.')
   console.log('press Ctrl+C to stop. agents keep running.')
   const shutdown = (): void => { handle.close().finally(() => process.exit(0)) }
   process.on('SIGINT', shutdown)

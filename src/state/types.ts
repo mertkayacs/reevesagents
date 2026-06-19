@@ -18,8 +18,6 @@ export type RunStatus = 'running' | 'ended'
 
 export type RunViewStatus = RunStatus | 'stale'
 
-export type RunMode = 'spawner' | 'orchestrator'
-
 export type RunHistoryStatus = 'ended' | 'stale'
 
 export type ScreenName =
@@ -62,7 +60,6 @@ export interface Message {
 // ~/.reeves/runs/<run-id>/run.json
 export interface RunRecord {
   id: string
-  mode?: string
   name: string
   status: RunStatus
   tmux_session: string
@@ -80,7 +77,6 @@ export interface RunRecord {
 export interface RunHistoryRecord {
   id: string
   name: string
-  mode: RunMode
   status: RunHistoryStatus
   working_dir: string
   started_at: string

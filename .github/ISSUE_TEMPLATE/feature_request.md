@@ -16,7 +16,6 @@ assignees: ""
 
 - [ ] Stable CLI/TUI
 - [ ] Web UI beta
-- [ ] PRE-BETA orchestrator/MCP package
 - [ ] Docs or release packaging
 
 ## Constraints

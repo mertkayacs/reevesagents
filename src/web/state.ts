@@ -5,9 +5,7 @@
 
 import {
   listRuns,
-  listRunsAny,
   listAgents,
-  listAgentsAny,
   listRunHistory,
   runHasLiveTmuxTarget,
   computeRunStatus,
@@ -17,10 +15,8 @@ import { modelValuesForProvider } from '../launcher/model-catalog.js'
 import { providerColor, providerDisplayName } from '../utils/display.js'
 import { listRunApprovals, type ApprovalRisk } from '../state/approvals.js'
 import type { Provider, RunRecord, RunViewStatus, TaskStatus } from '../state/types.js'
-import { isOrchestratorWebProvider } from './prebeta-orchestrator.js'
 
 export interface WebStateOptions {
-  prebetaOrchestrator?: boolean
   liveTmuxTarget?: (_run: RunRecord) => boolean
 }
 
@@ -45,7 +41,6 @@ export interface WebTerminal {
 
 export interface WebRun {
   id: string
-  mode: 'spawner' | 'orchestrator'
   name: string
   status: RunViewStatus
   working_dir: string
@@ -57,7 +52,6 @@ export interface WebRun {
 export interface WebRunHistory {
   id: string
   name: string
-  mode: 'spawner' | 'orchestrator'
   status: 'ended' | 'stale'
   working_dir: string
   started_at: string
@@ -93,7 +87,6 @@ export interface WebProvider {
   id: Provider
   name: string
   available: boolean
-  orchestrator: boolean
   color: string
   models: string[]
 }
@@ -105,21 +98,18 @@ function monogram(nickname: string, provider: string): string {
 }
 
 export function buildWebState(options: WebStateOptions = {}): WebState {
-  const runsSource = options.prebetaOrchestrator ? listRunsAny() : listRuns()
-  const listForRun = options.prebetaOrchestrator ? listAgentsAny : listAgents
   const agentIndex = new Map<string, { nickname: string; provider: Provider }>()
   const runNameById = new Map<string, string>()
-  const runs = runsSource.map<WebRun>(run => {
+  const runs = listRuns().map<WebRun>(run => {
     runNameById.set(run.id, run.name)
-    const mode = run.mode === 'spawner' ? 'spawner' : 'orchestrator'
     const live = options.liveTmuxTarget ? options.liveTmuxTarget(run) : runHasLiveTmuxTarget(run)
     const runStatus = computeRunStatus(run, live)
-    const terminals = listForRun(run.id).map<WebTerminal>(agent => {
+    const terminals = listAgents(run.id).map<WebTerminal>(agent => {
       agentIndex.set(agent.id, { nickname: agent.nickname, provider: agent.provider })
       const status = agent.ended_at ? 'ended' : agent.task_status
       const hasWindow = !agent.headless && !!agent.tmux_window_id
       const canAttach = live && hasWindow && status !== 'ended'
-      const canKill = live && status !== 'ended' && hasWindow && (mode === 'spawner' || agent.role !== 'root')
+      const canKill = live && status !== 'ended' && hasWindow
       const canDelete = status === 'ended'
       return {
         id: agent.id,
@@ -148,7 +138,6 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
     })
     return {
       id: run.id,
-      mode,
       name: run.name,
       status: runStatus,
       working_dir: run.working_dir,
@@ -157,10 +146,9 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       terminals,
     }
   })
-  const history = listRunHistory({ includeAllModes: options.prebetaOrchestrator === true }).map<WebRunHistory>(record => ({
+  const history = listRunHistory().map<WebRunHistory>(record => ({
     id: record.id,
     name: record.name,
-    mode: record.mode,
     status: record.status,
     working_dir: record.working_dir,
     started_at: record.started_at,
@@ -198,7 +186,6 @@ export function listWebProviders(): WebProvider[] {
     id,
     name: providerDisplayName(id),
     available: available[id],
-    orchestrator: isOrchestratorWebProvider(id),
     color: providerColor(id),
     models: [...modelValuesForProvider(id)],
   }))

@@ -20,10 +20,9 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
-function makeRun(id: string, mode: RunRecord['mode'] = 'spawner'): RunRecord {
+function makeRun(id: string): RunRecord {
   return {
     id,
-    mode,
     name: `run-${id}`,
     status: 'running',
     tmux_session: `reeves_${id}`,
@@ -77,7 +76,6 @@ describe('buildWebState', () => {
 
     const run = state.runs[0]!
     expect(run.id).toBe('r1')
-    expect(run.mode).toBe('spawner')
     expect(run.name).toBe('run-r1')
     expect(run.canStop).toBe(true)
     expect(run.canDelete).toBe(false)
@@ -133,35 +131,6 @@ describe('buildWebState', () => {
     expect(buildWebState({ liveTmuxTarget: () => true }).runs.map(run => run.id)).toEqual(['active'])
   })
 
-  it('hides orchestrator runs by default and shows them in pre-beta mode', () => {
-    writeRun(makeRun('stable'))
-    writeAgent(makeAgent('stable-root', 'stable', { role: 'root' }))
-    writeRun(makeRun('prebeta', 'orchestrator'))
-    writeAgent(makeAgent('root', 'prebeta', {
-      role: 'root',
-      headless: true,
-      tmux_window_id: '',
-      tmux_pane_id: '',
-    }))
-    writeAgent(makeAgent('worker', 'prebeta', { role: 'worker', provider: 'codex' }))
-
-    expect(buildWebState({ liveTmuxTarget: () => true }).runs.map(run => run.id)).toEqual(['stable'])
-
-    const state = buildWebState({ prebetaOrchestrator: true, liveTmuxTarget: () => true })
-    expect(state.runs.map(run => [run.id, run.mode]).sort()).toEqual([
-      ['prebeta', 'orchestrator'],
-      ['stable', 'spawner'],
-    ])
-    const prebeta = state.runs.find(run => run.id === 'prebeta')!
-    const root = prebeta.terminals.find(term => term.id === 'root')!
-    const worker = prebeta.terminals.find(term => term.id === 'worker')!
-    expect(root.canAttach).toBe(false)
-    expect(root.canKill).toBe(false)
-    expect(root.disabledReason).toBe('agent has no tmux window')
-    expect(worker.canAttach).toBe(true)
-    expect(worker.canKill).toBe(true)
-  })
-
   it('includes shared simple history records', () => {
     writeRun(makeRun('old'))
     writeAgent(makeAgent('root', 'old', { role: 'root', provider: 'codex' }))
@@ -173,7 +142,6 @@ describe('buildWebState', () => {
     expect(state.history[0]).toMatchObject({
       id: 'old',
       name: 'run-old',
-      mode: 'spawner',
       status: 'ended',
       working_dir: '/tmp/work',
       agent_count: 1,
@@ -190,7 +158,6 @@ describe('listWebProviders', () => {
     expect(list.map(p => p.id).sort()).toEqual([...PROVIDERS].sort())
     for (const p of list) {
       expect(typeof p.available).toBe('boolean')
-      expect(typeof p.orchestrator).toBe('boolean')
       expect(p.name).toBe(providerDisplayName(p.id))
       expect(p.color).toBe(providerColor(p.id))
     }

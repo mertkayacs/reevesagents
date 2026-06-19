@@ -2,7 +2,7 @@
 // Holds run name, working dir, root config, and worker list with persistence.
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import type { Provider, Permissions, Effort, AuthMode, RunMode } from './types.js'
+import type { Provider, Permissions, Effort, AuthMode } from './types.js'
 
 export interface WorkerConfig {
   nickname: string
@@ -16,7 +16,6 @@ export interface WorkerConfig {
 }
 
 export interface WizardState {
-  mode: RunMode
   presetName: string | null
   name: string
   workingDir: string
@@ -48,7 +47,6 @@ const INITIAL_WORKER: WorkerConfig = {
 }
 
 const INITIAL_STATE: WizardState = {
-  mode: 'spawner',
   presetName: null,
   name: '',
   workingDir: process.cwd(),

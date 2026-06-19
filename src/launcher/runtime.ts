@@ -48,7 +48,6 @@ export interface AgentLaunchConfig {
 }
 
 export interface StartRunRequest {
-  mode?: 'spawner'
   name: string
   working_dir: string
   root: AgentLaunchConfig
@@ -347,14 +346,7 @@ function validateAgents(configs: AgentLaunchConfig[], available: Record<Provider
   for (const config of configs) requireProvider(config.provider, available)
 }
 
-function assertSpawnerMode(mode: unknown): void {
-  if (mode !== undefined && mode !== 'spawner') {
-    throw new Error('Only agent-run mode is available in this package')
-  }
-}
-
 export function startRun(request: StartRunRequest, options: RuntimeOptions = {}): { run: RunRecord, agents: AgentRecord[] } {
-  assertSpawnerMode(request.mode)
   const cfg = loadConfig()
   const driver = options.driver ?? realDriver
   const available = options.available ?? detectAvailable()
@@ -376,7 +368,6 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
     const root = createAgentWindow(runId, tmuxSession, 'root', request.root, workingDir, readyDelayMs, driver)
     const run: RunRecord = {
       id: runId,
-      mode: 'spawner',
       name: request.name,
       status: 'running',
       tmux_session: tmuxSession,
@@ -465,7 +456,6 @@ export function startRunWithHead(
     const head = createHeadlessHeadAgent(runId, tmuxSession, headProvider, workingDir)
     const run: RunRecord = {
       id: runId,
-      mode: 'spawner',
       name: providerDisplayName(headProvider),
       status: 'running',
       tmux_session: tmuxSession,
@@ -498,9 +488,6 @@ export function spawnWorker(request: SpawnWorkerRequest, options: RuntimeOptions
   requireProvider(request.provider, available)
   const run = readRun(request.run_id)
   if (run.status === 'ended' || run.ended_at) throw new Error(`Run is ended: ${run.id}`)
-  if (run.mode !== 'spawner') {
-    throw new Error('Run not found')
-  }
   return createAgentWindow(
     run.id,
     run.tmux_session,
@@ -603,9 +590,6 @@ export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentR
   const driver = options.driver ?? realDriver
   const agent = findAgent(agentId)
   const run = readRun(agent.run_id)
-  if (run.mode !== 'spawner') {
-    throw new Error('Run not found')
-  }
   try {
     driver.tmux(['kill-window', '-t', agent.tmux_window_id])
   } catch {

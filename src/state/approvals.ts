@@ -14,8 +14,8 @@ import {
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import {
-  findAgentAny as findAgent,
-  listRunsAny as listRuns,
+  findAgent,
+  listRuns,
   nowIso,
   runDir,
   withRunsLock,

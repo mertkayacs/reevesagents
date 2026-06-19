@@ -73,8 +73,6 @@ A release reaches these places:
    tap's own `GITHUB_TOKEN`, so no cross-repo token is needed here. After a
    release you can trigger it by hand for an immediate bump instead of waiting for
    the daily run.
-4. **npm: `reevesagents-orchestrator`** (the pre-beta package), published
-   separately and on demand (see below), under the `pre-beta-research` dist-tag.
 
 Not used, on purpose: JSR is for packages you `import`, and reevesagents is a CLI
 (a `bin`), so it does not fit. GitHub Packages would only duplicate the public
@@ -89,7 +87,7 @@ automatic. This is a one-time setup on npmjs.com, per package:
 
 1. On npmjs.com, open the package settings and add a trusted publisher:
    GitHub Actions, repository `mertkayacs/reevesagents`, workflow
-   `publish.yml` (and `publish-orchestrator.yml` for the orchestrator package).
+   `publish.yml`.
 2. Recommended: set publishing access to "require two-factor authentication and
    disallow tokens".
 
@@ -97,14 +95,6 @@ Until a trusted publisher is configured, the workflows fall back to the
 `NPM_TOKEN` repository secret, so publishing keeps working either way. The
 workflows already request `id-token: write`, use `npm` 11.5.1+, and pass
 `--provenance`.
-
-## Pre-beta orchestrator package
-
-The separate `reevesagents-orchestrator` package is not released on a tag. It is
-published on demand: run the `publish pre-beta orchestrator` workflow
-(`.github/workflows/publish-orchestrator.yml`) from the GitHub Actions tab. It
-publishes under the `pre-beta-research` dist-tag, so it never takes the npm
-`latest` tag from the stable package.
 
 ## If a release goes wrong
 

@@ -43,7 +43,7 @@ export interface ProviderDef {
   modelSource: string
   helpRequirements: readonly HelpRequirement[]
   // Launch args after the binary. Excludes the binary name itself.
-  buildArgs: (opts: BuildArgsOptions) => string[]
+  buildArgs: (_opts: BuildArgsOptions) => string[]
   // Args for the --help inspection, after the binary. Defaults to ['--help'].
   helpArgs?: readonly string[]
 }

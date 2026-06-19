@@ -91,7 +91,6 @@ describe('startRunWithHead', () => {
     const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
 
     expect(result.run.root_agent_id).toBe(result.agents[0]!.id)
-    expect(result.run.mode).toBe('spawner')
   })
 
   it('persists both agents so the head shows up in list', async () => {

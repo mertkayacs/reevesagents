@@ -11,19 +11,16 @@ The main `reevesagents` package gains an optional MCP server that lets any AI
 CLI agent spawn and control other AI CLI agents: start one, type into it, send
 keys, read its output, and approve its requests.
 
-It is a mechanism only. The heavier orchestration (root/child roles, autonomous
-loops, the coordination protocol) stays in the separate
-`reevesagents-orchestrator` package. The MCP is off by default. You turn it on
-from the TUI or the Web UI.
+It is a mechanism only. It stays deliberately flat: no root/child roles, no
+autonomous loops, no coordination protocol. The MCP is off by default. You turn
+it on from the TUI or the Web UI.
 
-## Why it is split this way: mechanism vs policy
+## Mechanism, not policy
 
-- Main package is the mechanism: the raw ability to spawn a CLI and drive it.
-- Orchestrator package is the policy: roles, who may control whom, autonomous
-  loops, approval rules.
-
-This keeps the main package small, and keeps the powerful, opinionated parts
-opt-in and separate.
+The MCP gives the raw ability to spawn a CLI and drive it. It carries no policy:
+no roles, no rules about who may control whom, no autonomous loops. Those
+opinionated parts are deliberately left out, which keeps this surface small and
+predictable.
 
 ## The model: a run is a CLI plus what it spawned
 
@@ -66,8 +63,8 @@ agent").
 - `resolve_approval`: approve or deny a request
 - `check_approval` and `list_approvals`: read approval state
 
-No inbox, no task-status protocol, no role scoping here. Those belong to the
-orchestrator package.
+No inbox, no task-status protocol, no role scoping here. The MCP stays a flat
+control surface by design.
 
 The `list_providers` catalog is also published as an MCP resource at
 `reevesagents://providers`, so a client that prefers resources can read the same
@@ -106,10 +103,6 @@ when you run `reevesagents mcp`, so the TUI and CLI bundle does not pull MCP cod
 in by default. This is the same lazy-import pattern the `web` command already
 uses.
 
-The orchestrator package depends on the main package's mechanism and adds policy
-on top. This also lets the orchestrator stop carrying its own copy of the
-spawn/drive runtime.
-
 ## Safety
 
 The control is intentionally full: any key, any text. So the guardrails sit at
@@ -133,8 +126,8 @@ pane. And off-by-default plus explicit install is the first guardrail.
 - No change to the state model. The existing JSON registry and run/agent records
   are reused. (The append-only event log from earlier research is a separate,
   later improvement, not part of this.)
-- No roles and no autonomous loops here. Those are the orchestrator package's
-  job.
+- No roles and no autonomous loops here. The MCP is the control mechanism, and
+  nothing more.
 
 ## Implementation steps
 

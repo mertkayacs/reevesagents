@@ -37,7 +37,6 @@ describe('NewRunWorkers', () => {
     vi.spyOn(WizardModule, 'useWizard').mockReturnValue({
       state: {
         name: 'test-run',
-        mode: 'spawner',
         workingDir: '/tmp',
         presetName: null,
         root: {

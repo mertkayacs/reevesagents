@@ -58,10 +58,6 @@ function shortIso(value: string | null): string {
   return `${value.replace('T', ' ').slice(0, 16)}Z`
 }
 
-function modeLabel(mode: RunHistoryRecord['mode'], language: ReturnType<typeof useLanguage>['language']): string {
-  return translatePhrase(language, mode === 'orchestrator' ? 'orchestrator' : 'Agent run')
-}
-
 export function RunHistory() {
   const { pop, resetStack } = useRouter()
   const { toast } = useToast()
@@ -70,7 +66,7 @@ export function RunHistory() {
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 10
   const visibleRecordCount = Math.max(1, compactBody ? bodyRows - 3 : Math.min(termRows - CHROME_ROWS, bodyRows - 7))
-  const [records, setRecords] = useState<RunHistoryRecord[]>(() => listRunHistory({ includeAllModes: true }))
+  const [records, setRecords] = useState<RunHistoryRecord[]>(() => listRunHistory())
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [recordScroll, setRecordScroll] = useState(0)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(() => records[0]?.id ?? null)
@@ -109,7 +105,7 @@ export function RunHistory() {
   const compactEntries = selectableEntries.slice(compactFirstEntry, compactFirstEntry + compactEntryCount)
 
   function refreshRecords(): void {
-    const next = listRunHistory({ includeAllModes: true })
+    const next = listRunHistory()
     setRecords(next)
     setSelectedRecordId(current => (
       current && next.some(record => record.id === current)
@@ -135,7 +131,7 @@ export function RunHistory() {
   function confirmDelete(record: RunHistoryRecord): void {
     deleteRunHistory(record.id)
     setPendingDelete(null)
-    const next = listRunHistory({ includeAllModes: true })
+    const next = listRunHistory()
     setRecords(next)
     setSelectedRecordId(next[0]?.id ?? null)
     setSelectedIdx(idx => normalizeSelectedIndex(idx, next.length))
@@ -229,7 +225,6 @@ export function RunHistory() {
             }
             const record = entry.record
             const badges = [
-              { label: modeLabel(record.mode, language), color: colors.accent.primary },
               { label: translatePhrase(language, record.status), color: record.status === 'stale' ? colors.status.warn : colors.status.error },
               ...(record.root_provider
                 ? [{ label: providerDisplayName(record.root_provider), color: providerColor(record.root_provider) }]
@@ -272,7 +267,6 @@ export function RunHistory() {
             visibleRecords.map((record, idx) => {
               const absoluteIdx = recordScroll + idx
               const badges = [
-                { label: modeLabel(record.mode, language), color: colors.accent.primary },
                 { label: translatePhrase(language, record.status), color: record.status === 'stale' ? colors.status.warn : colors.status.error },
                 ...(record.root_provider
                   ? [{ label: providerDisplayName(record.root_provider), color: providerColor(record.root_provider) }]

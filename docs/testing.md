@@ -20,8 +20,7 @@ This document covers the stable main package. The current release path is spawne
 | Build | `CI=true pnpm build` | The package emits `dist/cli.js` and `dist/index.js`. | No user state. |
 | CLI smoke | `pnpm smoke:cli` | Built CLI runs `runs` and `doctor` against fake providers. | Temp registry/config and fake `tmux`/provider bins. |
 | Package contents | `pnpm check:package` | Root npm tarball contains only the spawner package surface. | `npm pack --dry-run`, no install. |
-| Install matrix | `pnpm check:install-matrix` | CLI/TUI-only install, Web install, and all-in PRE-BETA orchestrator install work from tarballs. | Temp npm projects, temp registry/config, fake `tmux`/provider bins for pre-beta Web create/stop. |
-| Orchestrator package | `CI=true pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir beta/orchestrator verify` | PRE-BETA MCP package typechecks, tests, builds, and packs as a separate package. | Separate package config and temp state in tests. |
+| Install matrix | `pnpm check:install-matrix` | CLI/TUI-only install and Web install work from tarballs. | Temp npm projects, temp registry/config. |
 | Manual TUI smoke | `node dist/cli.js` with temp env | Welcome menu, Runs page, Main Menu return, narrow terminal behavior, and visible action flow. | Temp registry/config. |
 
 ## Acceptance Criteria
@@ -58,8 +57,6 @@ Use this for the full release install matrix:
 
 ```sh
 pnpm verify
-CI=true pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace
-pnpm --dir beta/orchestrator verify
 pnpm check:install-matrix
 ```
 
@@ -67,7 +64,6 @@ The matrix proves:
 
 - `npm install --omit=optional ./reevesagents-1.2.0.tgz` keeps CLI/TUI usable and disables Web cleanly.
 - `npm install ./reevesagents-1.2.0.tgz` starts the loopback Web beta.
-- `npm install ./reevesagents-1.2.0.tgz ./reevesagents-orchestrator-1.2.0.tgz` starts `reevesagents web --prebeta-orchestrator`, creates an orchestrator run through HTTP, shows it in `/api/state`, and stops it.
 
 Use this to verify the packed package installs in a clean project without touching the real home directory:
 
@@ -147,4 +143,4 @@ Observed results:
 - CLI smoke passed against isolated fake setup.
 - Package content check passed with 43 files and only root package paths.
 - Root `pnpm pack --dry-run` and `npm pack --dry-run` contained only `dist`, README, changelog, license, and package metadata.
-- Clean install matrix checks returned version `1.2.0`, disabled Web cleanly without optional extras, started the Web beta with optional extras, and controlled pre-beta orchestrator runs when the separate package was installed.
+- Clean install matrix checks returned version `1.2.0`, disabled Web cleanly without optional extras, and started the Web beta with optional extras.
