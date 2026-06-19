@@ -639,6 +639,37 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
   return endedRun
 }
 
+// Switch the attached tmux client to a run (its reeves tab) or to a specific
+// agent window, so an agent can surface any run for the user: its own run or
+// another. Both tmux calls are best effort. With no attached client there is
+// nothing to switch, which is not an error; select-window still sets the
+// active window so it is ready when someone attaches.
+export function openTmuxTarget(id: string, options: RuntimeOptions = {}): { session: string; window: string; label: string } {
+  const driver = options.driver ?? realDriver
+  let session: string
+  let window: string
+  let label: string
+  try {
+    const run = readRun(id)
+    session = run.tmux_session
+    window = 'reeves'
+    label = run.name
+  } catch {
+    try {
+      const agent = findAgent(id)
+      session = agent.tmux_session
+      window = agent.tmux_window_id
+      label = agent.nickname
+    } catch {
+      throw new Error(`no run or agent found: ${id}`)
+    }
+  }
+  const target = `${session}:${window}`
+  try { driver.tmux(['switch-client', '-t', target]) } catch { /* no attached client to switch */ }
+  try { driver.tmux(['select-window', '-t', target]) } catch { /* best effort */ }
+  return { session, window, label }
+}
+
 export function agentJsonPath(runId: string, agentId: string): string {
   return agentPath(runId, agentId)
 }
