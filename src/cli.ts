@@ -4,20 +4,29 @@
 
 import { Command } from 'commander'
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { prepareTuiColorEnv } from './utils/color-env.js'
 import { runDoctor } from './launcher/doctor.js'
-import { peekAgent, startRun, stopRun, killAgent } from './launcher/runtime.js'
-import { normalizeProvider, PROVIDERS } from './launcher/providers.js'
-import { autoCleanupRuns, listAgents, listRuns, readRun, computeRunStatus, runHasLiveTmuxTarget } from './state/runs.js'
+import { peekAgent, startRun, spawnWorker, stopRun, killAgent, sendText, sendKey, interrupt, type AllowedKey, ALLOWED_KEYS } from './launcher/runtime.js'
+import { normalizeProvider, PROVIDERS, detectAvailable } from './launcher/providers.js'
+import {
+  autoCleanupRuns,
+  listAgents,
+  listRuns,
+  readRun,
+  computeRunStatus,
+  runHasLiveTmuxTarget,
+  deleteAgent,
+  archiveAndRemoveRun,
+  listRunHistory,
+  deleteRunHistory,
+} from './state/runs.js'
+import { listRunApprovals, resolveRunApproval } from './state/approvals.js'
+import { hostStatus, attach, attachAll, detach } from './agent-mcp/installer.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
-import { providerDisplayName } from './utils/display.js'
+import { providerDisplayName, providerColor } from './utils/display.js'
 import type { AgentRecord, Provider, RunRecord } from './state/types.js'
-
-process.on('uncaughtException', (err) => {
-  process.stderr.write(`[FATAL] ${err.message}\n`)
-  process.exit(1)
-})
 
 const program = new Command()
 
@@ -211,10 +220,27 @@ program
   .option('--name <name>', 'run name', 'run')
   .option('--cwd <dir>', 'working directory', process.cwd())
   .option('--prompt <text>', 'initial prompt pasted into each agent', '')
+  .option('--skip', 'skip permission prompts for every agent (sets permissions to skip)')
+  .option('--run <run-id>', 'add the agents to an existing run instead of starting a new one')
   .action((agentSpecs: string[], opts) => {
     try {
       const specs = agentSpecs.length > 0 ? agentSpecs : ['codex']
-      const [first, ...rest] = specs.map(parseAgentSpec)
+      const parsed = specs.map(parseAgentSpec)
+      const permissions = opts.skip ? 'skip' as const : undefined
+      if (opts.run) {
+        const run = resolveRun(opts.run)
+        const agents = parsed.map(spec => spawnWorker({
+          run_id: run.id,
+          provider: spec.provider,
+          nickname: spec.nickname,
+          model: spec.model,
+          task: opts.prompt,
+          permissions,
+        }))
+        console.log(`added ${agents.length} agents to ${run.id.slice(0, 8)}  ${run.name}`)
+        return
+      }
+      const [first, ...rest] = parsed
       const result = startRun({
         name: opts.name,
         working_dir: opts.cwd,
@@ -223,12 +249,14 @@ program
           nickname: first!.nickname,
           model: first!.model,
           task: opts.prompt,
+          permissions,
         },
         workers: rest.map(spec => ({
           provider: spec.provider,
           nickname: spec.nickname,
           model: spec.model,
           task: opts.prompt,
+          permissions,
         })),
       })
       console.log(`started ${result.run.id.slice(0, 8)}  ${result.run.name}  ${result.agents.length} agents`)
@@ -312,6 +340,221 @@ program
   })
 
 program
+  .command('send <agent-id> <text...>')
+  .description('paste text into an agent')
+  .action((id, textParts: string[]) => {
+    try {
+      const agent = resolveAgent(id)
+      sendText(agent.id, textParts.join(' '))
+      console.log(`sent to ${agent.id.slice(0, 8)}  ${agent.nickname}`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('key <agent-id> <key>')
+  .description(`send a single keypress to an agent (${ALLOWED_KEYS.join(', ')})`)
+  .action((id, key: string) => {
+    try {
+      const agent = resolveAgent(id)
+      if (!ALLOWED_KEYS.includes(key as AllowedKey)) {
+        throw new Error(`unsupported key: ${key} (allowed: ${ALLOWED_KEYS.join(', ')})`)
+      }
+      sendKey(agent.id, key as AllowedKey)
+      console.log(`sent ${key} to ${agent.id.slice(0, 8)}  ${agent.nickname}`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('interrupt <agent-id>')
+  .description('send an interrupt (ctrl-c) to an agent')
+  .action((id) => {
+    try {
+      const agent = resolveAgent(id)
+      interrupt(agent.id)
+      console.log(`interrupted ${agent.id.slice(0, 8)}  ${agent.nickname}`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('delete <agent-id>')
+  .description('delete an ended agent')
+  .option('-y, --yes', 'confirm delete')
+  .action((id, opts) => {
+    requireDestructiveConfirmation(opts, 'delete agent')
+    const agent = resolveAgent(id)
+    const deleted = deleteAgent(agent.id)
+    console.log(`deleted ${deleted.id.slice(0, 8)}  ${deleted.nickname}`)
+  })
+
+program
+  .command('delete-run <run-id>')
+  .description('delete an ended run')
+  .option('-y, --yes', 'confirm delete')
+  .action((id, opts) => {
+    requireDestructiveConfirmation(opts, 'delete run')
+    // Read by id directly: ended runs are filtered out of listRuns, so the web
+    // delete path reads them straight from disk and guards on the ended state.
+    const run = readRun(id)
+    if (run.status !== 'ended' && run.ended_at === null) throw new Error('Stop run before deleting it')
+    archiveAndRemoveRun(run.id, 'ended')
+    console.log(`deleted ${run.id.slice(0, 8)}  ${run.name}`)
+  })
+
+program
+  .command('history')
+  .description('list archived run history')
+  .option('--json', 'output JSON array')
+  .action((opts) => {
+    const records = listRunHistory()
+    if (opts.json) {
+      console.log(JSON.stringify(records, null, 2))
+      return
+    }
+    if (records.length === 0) {
+      console.log('no history')
+      return
+    }
+    for (const record of records) {
+      const provider = record.root_provider ? providerDisplayName(record.root_provider) : '-'
+      console.log(`${record.id.slice(0, 8)}  ${record.status.padEnd(5)}  ${provider.padEnd(14)}  ${String(record.agent_count).padStart(2)} agents  ${record.name}  ${record.working_dir}`)
+    }
+  })
+
+program
+  .command('delete-history <id>')
+  .description('delete one run history record')
+  .option('-y, --yes', 'confirm delete')
+  .action((id, opts) => {
+    requireDestructiveConfirmation(opts, 'delete history record')
+    if (!listRunHistory().some(record => record.id === id)) throw new Error(`history record not found: ${id}`)
+    deleteRunHistory(id)
+    console.log(`deleted history ${id.slice(0, 8)}`)
+  })
+
+program
+  .command('providers')
+  .description('list providers with availability')
+  .option('--json', 'output JSON array')
+  .action((opts) => {
+    const available = detectAvailable()
+    const providers = PROVIDERS.map(id => ({
+      id,
+      name: providerDisplayName(id),
+      available: available[id],
+      color: providerColor(id),
+    }))
+    if (opts.json) {
+      console.log(JSON.stringify(providers, null, 2))
+      return
+    }
+    for (const provider of providers) {
+      console.log(`${(provider.available ? 'ok' : '--').padEnd(3)} ${provider.id.padEnd(10)} ${provider.name}`)
+    }
+  })
+
+program
+  .command('approvals')
+  .description('list pending approvals')
+  .option('--json', 'output JSON array')
+  .action((opts) => {
+    const approvals = listRunApprovals(undefined, 'pending')
+    if (opts.json) {
+      console.log(JSON.stringify(approvals, null, 2))
+      return
+    }
+    if (approvals.length === 0) {
+      console.log('no pending approvals')
+      return
+    }
+    for (const approval of approvals) {
+      console.log(`${approval.id.slice(0, 8)}  ${approval.risk.padEnd(6)}  ${approval.action.padEnd(16)}  ${approval.summary}`)
+    }
+  })
+
+program
+  .command('approve <approval-id> [note]')
+  .description('approve a pending approval')
+  .action((id, note: string | undefined) => {
+    try {
+      const resolved = resolveRunApproval(id, 'approved', note ?? '')
+      console.log(`${resolved.status} ${resolved.id.slice(0, 8)}  ${resolved.action}`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('deny <approval-id> [note]')
+  .description('deny a pending approval')
+  .action((id, note: string | undefined) => {
+    try {
+      const resolved = resolveRunApproval(id, 'denied', note ?? '')
+      console.log(`${resolved.status} ${resolved.id.slice(0, 8)}  ${resolved.action}`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('hosts')
+  .description('list MCP host CLIs and whether reevesagents is attached')
+  .option('--json', 'output JSON array')
+  .action((opts) => {
+    const hosts = hostStatus()
+    if (opts.json) {
+      console.log(JSON.stringify(hosts, null, 2))
+      return
+    }
+    for (const host of hosts) {
+      const state = !host.installed ? 'absent' : host.attached ? 'attached' : host.manual ? 'manual' : 'detached'
+      console.log(`${host.key.padEnd(10)} ${state.padEnd(9)} ${host.label}`)
+    }
+  })
+
+program
+  .command('attach [cli]')
+  .description('attach the reevesagents MCP to one CLI, or all installed when omitted')
+  .action((cli: string | undefined) => {
+    try {
+      const results = cli ? [attach(cli)] : attachAll()
+      if (results.length === 0) {
+        console.log('no installed CLIs to attach')
+        return
+      }
+      for (const result of results) {
+        console.log(`${(result.ok ? 'ok' : '--').padEnd(3)} ${result.key.padEnd(10)} ${result.message}`)
+      }
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('detach <cli>')
+  .description('detach the reevesagents MCP from one CLI')
+  .action((cli: string) => {
+    try {
+      const result = detach(cli)
+      console.log(`${(result.ok ? 'ok' : '--').padEnd(3)} ${result.key.padEnd(10)} ${result.message}`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
   .command('doctor')
   .description('run setup and environment health checks')
   .option('--json', 'output JSON')
@@ -373,9 +616,6 @@ async function runWeb(opts: { port?: string; open?: boolean }): Promise<void> {
   process.on('SIGTERM', shutdown)
 }
 
-const knownSubcommands = new Set(program.commands.map(command => command.name()))
-const firstArg = process.argv[2]
-
 async function renderTui(): Promise<void> {
   prepareTuiColorEnv()
   const [{ default: React }, { render }, { Router }] = await Promise.all([
@@ -392,33 +632,58 @@ async function renderTui(): Promise<void> {
   process.exit(0)
 }
 
-if (!firstArg || (!knownSubcommands.has(firstArg) && !firstArg.startsWith('--'))) {
-  // tmux is required: window-based terminal navigation only works inside a tmux session.
-  // If launched outside tmux on an interactive terminal, auto-wrap into a session
-  // named "reeves" and re-exec ourselves there. Subsequent launches attach to the
-  // same app-owned session and clear unrelated windows there. Set
-  // REEVES_NO_TMUX_WRAPPER=1 to skip.
-  if (!process.env.TMUX && process.stdout.isTTY && !process.env.REEVES_NO_TMUX_WRAPPER) {
-    const wrapperCmd = [process.argv[0], process.argv[1]]
-      .filter((arg): arg is string => typeof arg === 'string')
-      .map(arg => `'${arg.replace(/'/g, "'\\''")}'`)
-      .join(' ')
-    try {
-      writeTuiOpenToken()
-      openTuiSession(wrapperCmd)
-      process.exit(0)
-    } catch (err) {
-      process.stderr.write('reevesagents requires tmux. Install tmux (brew install tmux / apt install tmux) or set REEVES_NO_TMUX_WRAPPER=1 to run without it.\n')
-      process.stderr.write(`tmux launch error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
-    }
-  }
-  process.on('SIGTERM', () => process.exit(0))
-  if (process.stdout.isTTY) process.stdout.write('\x1b[2J\x1b[H')
-  renderTui().catch(err => {
-    process.stderr.write(`[FATAL] ${err instanceof Error ? err.message : String(err)}\n`)
+function runCli(): void {
+  process.on('uncaughtException', (err) => {
+    process.stderr.write(`[FATAL] ${err.message}\n`)
     process.exit(1)
   })
-} else {
-  program.parse()
+
+  const knownSubcommands = new Set(program.commands.map(command => command.name()))
+  const firstArg = process.argv[2]
+
+  if (!firstArg || (!knownSubcommands.has(firstArg) && !firstArg.startsWith('--'))) {
+    // tmux is required: window-based terminal navigation only works inside a tmux session.
+    // If launched outside tmux on an interactive terminal, auto-wrap into a session
+    // named "reeves" and re-exec ourselves there. Subsequent launches attach to the
+    // same app-owned session and clear unrelated windows there. Set
+    // REEVES_NO_TMUX_WRAPPER=1 to skip.
+    if (!process.env.TMUX && process.stdout.isTTY && !process.env.REEVES_NO_TMUX_WRAPPER) {
+      const wrapperCmd = [process.argv[0], process.argv[1]]
+        .filter((arg): arg is string => typeof arg === 'string')
+        .map(arg => `'${arg.replace(/'/g, "'\\''")}'`)
+        .join(' ')
+      try {
+        writeTuiOpenToken()
+        openTuiSession(wrapperCmd)
+        process.exit(0)
+      } catch (err) {
+        process.stderr.write('reevesagents requires tmux. Install tmux (brew install tmux / apt install tmux) or set REEVES_NO_TMUX_WRAPPER=1 to run without it.\n')
+        process.stderr.write(`tmux launch error: ${err instanceof Error ? err.message : String(err)}\n`)
+        process.exit(1)
+      }
+    }
+    process.on('SIGTERM', () => process.exit(0))
+    if (process.stdout.isTTY) process.stdout.write('\x1b[2J\x1b[H')
+    renderTui().catch(err => {
+      process.stderr.write(`[FATAL] ${err instanceof Error ? err.message : String(err)}\n`)
+      process.exit(1)
+    })
+  } else {
+    program.parse()
+  }
 }
+
+// Only auto-run when invoked as the binary, not when imported (e.g. by tests).
+function isEntrypoint(): boolean {
+  const entry = process.argv[1]
+  if (!entry) return false
+  try {
+    return fileURLToPath(import.meta.url) === entry
+  } catch {
+    return false
+  }
+}
+
+export { program }
+
+if (isEntrypoint()) runCli()
