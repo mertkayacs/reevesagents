@@ -26,7 +26,6 @@ export function NewRunStarting() {
 
   useEffect(() => {
     const req: StartRunRequest = {
-      mode: 'spawner',
       name: state.name,
       working_dir: state.workingDir,
       root: {

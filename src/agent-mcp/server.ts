@@ -1,7 +1,7 @@
 // Lean agent control MCP server. It exposes a flat mechanism: spawn a CLI agent,
 // drive it (text and keys), read its output, and handle approvals. Any agent
-// that has this MCP can call any tool on any run. Roles, autonomous loops, and
-// the coordination protocol live in the separate orchestrator package, not here.
+// that has this MCP can call any tool on any run. It stays deliberately flat:
+// no roles, autonomous loops, or higher-level coordination protocol.
 //
 // Each tool is one entry in TOOLS, colocating its schema and its handler so the
 // advertised list and the dispatch can never drift. MCP_TOOLS is derived from it.
@@ -170,7 +170,7 @@ interface ToolDef {
   name: string
   description: string
   inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: readonly string[] }
-  handler: (a: Record<string, unknown>) => ToolResult
+  handler: (_a: Record<string, unknown>) => ToolResult
 }
 
 const TOOLS: ToolDef[] = [

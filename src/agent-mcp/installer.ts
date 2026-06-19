@@ -105,8 +105,8 @@ function isAttached(host: HostCli): boolean {
       timeout: MGMT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    // Match the reevesagents name as a token; the reevesagents-orchestrator
-    // sibling must not count as attached.
+    // Match the reevesagents name as a whole token, so a differently-named
+    // sibling (e.g. reevesagents-foo) is never miscounted as attached.
     return /reevesagents(?![-\w])/i.test(out)
   } catch {
     return false
