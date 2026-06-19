@@ -27,4 +27,3 @@ ReevesAgents is a local tmux-first tool. The stable package should not:
 - Start background services.
 - Bind Web UI outside loopback.
 - Write provider MCP config.
-- Bundle the pre-beta orchestrator package into the root package.
