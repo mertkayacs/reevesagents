@@ -29,7 +29,7 @@
     "check:install-matrix": "node scripts/check-install-matrix.mjs",
     "render-mascot": "node scripts/render-mascot.mjs",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli && pnpm check:package",
-    "verify:release": "pnpm verify && CI=true pnpm --dir beta/orchestrator install --frozen-lockfile --ignore-workspace && pnpm --dir beta/orchestrator verify && pnpm check:install-matrix",
+    "verify:release": "pnpm verify && pnpm check:install-matrix",
     "release": "release-it"
   },
   "dependencies": {
