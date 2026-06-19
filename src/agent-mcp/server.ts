@@ -2,6 +2,9 @@
 // drive it (text and keys), read its output, and handle approvals. Any agent
 // that has this MCP can call any tool on any run. Roles, autonomous loops, and
 // the coordination protocol live in the separate orchestrator package, not here.
+//
+// Each tool is one entry in TOOLS, colocating its schema and its handler so the
+// advertised list and the dispatch can never drift. MCP_TOOLS is derived from it.
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -60,6 +63,8 @@ function fail(message: string) {
   }
 }
 
+type ToolResult = ReturnType<typeof ok> | ReturnType<typeof fail>
+
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
 }
@@ -113,7 +118,62 @@ export function buildProviderCatalog() {
   }))
 }
 
-export const MCP_TOOLS = [
+function spawnHandler(a: Record<string, unknown>): ToolResult {
+  const provider = parseProvider(a.provider)
+  const config = {
+    provider,
+    model: asString(a.model),
+    task: asString(a.task),
+    nickname: typeof a.nickname === 'string' ? a.nickname : undefined,
+    working_dir: typeof a.working_dir === 'string' ? a.working_dir : undefined,
+  }
+  if (typeof a.run_id === 'string' && a.run_id.trim()) {
+    // Adding to an existing run: enforce the size cap. A new run (no run_id,
+    // handled below) starts with one agent, so it is always under it.
+    const cap = loadConfig().global.max_agents
+    const live = listAgents(a.run_id).filter(agent => !agent.ended_at && !agent.headless).length
+    if (live >= cap) return fail(`run ${a.run_id} is at the agent cap (${cap}); raise max_agents in config to add more`)
+    return ok(spawnWorker({ ...config, run_id: a.run_id }))
+  }
+  // No run_id but this session already owns a run: add the agent to it under
+  // the same cap as the run_id branch. The owned run may have been ended by a
+  // stop/kill that archived and removed it; if so, drop it and fall through to
+  // start a fresh run instead of spawning into a dead run.
+  if (sessionRunId && sessionRunIsLive(sessionRunId)) {
+    const cap = loadConfig().global.max_agents
+    const live = listAgents(sessionRunId).filter(agent => !agent.ended_at && !agent.headless).length
+    if (live >= cap) return fail(`run ${sessionRunId} is at the agent cap (${cap}); raise max_agents in config to add more`)
+    return ok(spawnWorker({ ...config, run_id: sessionRunId }))
+  }
+  sessionRunId = null
+  // First spawn of this session. If a host CLI launched us, that host becomes
+  // the headless head and this agent is its first worker. Otherwise keep the
+  // original behavior: a new run with this agent as its head.
+  if (hostProvider) {
+    const result = startRunWithHead(hostProvider, config)
+    sessionRunId = result.run.id
+    return ok({ run: result.run, agents: result.agents })
+  }
+  // asString returns '' for an empty string, so a blank name would defeat the
+  // fallback; trim-check it explicitly before falling back to nickname/provider.
+  const runName = typeof a.name === 'string' && a.name.trim() ? a.name : (config.nickname ?? provider)
+  const result = startRun({
+    name: runName,
+    working_dir: asString(a.working_dir, process.cwd()),
+    root: config,
+  })
+  sessionRunId = result.run.id
+  return ok({ run: result.run, agents: result.agents })
+}
+
+interface ToolDef {
+  name: string
+  description: string
+  inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: readonly string[] }
+  handler: (a: Record<string, unknown>) => ToolResult
+}
+
+const TOOLS: ToolDef[] = [
   {
     name: 'spawn',
     description: 'Start a CLI agent. With run_id, add it to that run. Without run_id, add it to this session\'s run, which is created on the first spawn.',
@@ -130,6 +190,7 @@ export const MCP_TOOLS = [
       },
       required: ['provider'],
     },
+    handler: spawnHandler,
   },
   {
     name: 'kill',
@@ -139,6 +200,7 @@ export const MCP_TOOLS = [
       properties: { agent_id: { type: 'string' } },
       required: ['agent_id'],
     },
+    handler: (a) => ok(killAgent(String(a.agent_id))),
   },
   {
     name: 'stop',
@@ -148,6 +210,7 @@ export const MCP_TOOLS = [
       properties: { run_id: { type: 'string' } },
       required: ['run_id'],
     },
+    handler: (a) => ok(stopRun(String(a.run_id))),
   },
   {
     name: 'send_text',
@@ -159,6 +222,10 @@ export const MCP_TOOLS = [
         text: { type: 'string' },
       },
       required: ['agent_id', 'text'],
+    },
+    handler: (a) => {
+      sendText(String(a.agent_id), asString(a.text))
+      return ok({ sent: true })
     },
   },
   {
@@ -172,6 +239,10 @@ export const MCP_TOOLS = [
       },
       required: ['agent_id', 'key'],
     },
+    handler: (a) => {
+      sendKey(String(a.agent_id), parseKey(a.key))
+      return ok({ sent: true })
+    },
   },
   {
     name: 'interrupt',
@@ -180,6 +251,10 @@ export const MCP_TOOLS = [
       type: 'object',
       properties: { agent_id: { type: 'string' } },
       required: ['agent_id'],
+    },
+    handler: (a) => {
+      interrupt(String(a.agent_id))
+      return ok({ sent: true })
     },
   },
   {
@@ -193,16 +268,25 @@ export const MCP_TOOLS = [
       },
       required: ['agent_id'],
     },
+    handler: (a) => {
+      // peekAgent swallows a missing-agent error and returns '', so validate
+      // first to give callers a clean "agent not found" instead of empty output.
+      findAgent(String(a.agent_id))
+      const lines = typeof a.lines === 'number' && a.lines > 0 ? Math.floor(a.lines) : 20
+      return ok(peekAgent(String(a.agent_id), lines))
+    },
   },
   {
     name: 'list',
     description: 'List runs and the agents in each.',
     inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(listRuns().map(run => ({ ...run, agents: listAgents(run.id) }))),
   },
   {
     name: 'list_providers',
     description: 'List the CLI providers this machine can launch: id, display name, whether it is installed, aliases, and known models. Pass an id as the provider for spawn.',
     inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(buildProviderCatalog()),
   },
   {
     name: 'request_approval',
@@ -218,6 +302,19 @@ export const MCP_TOOLS = [
       },
       required: ['agent_id', 'action', 'summary'],
     },
+    handler: (a) => {
+      const action = asString(a.action).trim()
+      const summary = asString(a.summary).trim()
+      if (!action) return fail('approval action is required')
+      if (!summary) return fail('approval summary is required')
+      return ok(createRunApproval({
+        agent_id: String(a.agent_id),
+        action,
+        summary,
+        details: typeof a.details === 'object' && a.details !== null ? a.details as Record<string, unknown> : {},
+        risk: parseRisk(a.risk),
+      }))
+    },
   },
   {
     name: 'resolve_approval',
@@ -231,6 +328,11 @@ export const MCP_TOOLS = [
       },
       required: ['approval_id', 'decision'],
     },
+    handler: (a) => {
+      const decision = a.decision === 'approved' ? 'approved' : a.decision === 'denied' ? 'denied' : null
+      if (!decision) throw new Error('decision must be approved or denied')
+      return ok(resolveRunApproval(String(a.approval_id), decision, typeof a.note === 'string' ? a.note : ''))
+    },
   },
   {
     name: 'check_approval',
@@ -239,6 +341,11 @@ export const MCP_TOOLS = [
       type: 'object',
       properties: { approval_id: { type: 'string' } },
       required: ['approval_id'],
+    },
+    handler: (a) => {
+      const approval = listRunApprovals().find(item => item.id === String(a.approval_id))
+      if (!approval) throw new Error(`Approval not found: ${String(a.approval_id)}`)
+      return ok(readRunApproval(approval.run_id, approval.id))
     },
   },
   {
@@ -251,124 +358,23 @@ export const MCP_TOOLS = [
         status: { type: 'string', enum: ['pending', 'approved', 'denied', 'expired'] },
       },
     },
+    handler: (a) => ok(listRunApprovals(typeof a.run_id === 'string' ? a.run_id : undefined, parseApprovalStatus(a.status))),
   },
-] as const
+]
 
+// The advertised tool list (schema only) and the name -> handler dispatch, both
+// derived from the single TOOLS source so they cannot drift.
+export const MCP_TOOLS = TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
+
+const TOOL_BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]))
+
+// Dispatch a tool call to its handler. Any error a handler throws (a bad argument,
+// a missing agent) is caught here and returned as a structured fail() result.
 export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
+  const tool = TOOL_BY_NAME.get(name)
+  if (!tool) return fail(`Unknown tool: ${name}`)
   try {
-    if (name === 'spawn') {
-      const provider = parseProvider(a.provider)
-      const config = {
-        provider,
-        model: asString(a.model),
-        task: asString(a.task),
-        nickname: typeof a.nickname === 'string' ? a.nickname : undefined,
-        working_dir: typeof a.working_dir === 'string' ? a.working_dir : undefined,
-      }
-      if (typeof a.run_id === 'string' && a.run_id.trim()) {
-        // Adding to an existing run: enforce the size cap. A new run (no run_id,
-        // handled below) starts with one agent, so it is always under it.
-        const cap = loadConfig().global.max_agents
-        const live = listAgents(a.run_id).filter(agent => !agent.ended_at && !agent.headless).length
-        if (live >= cap) return fail(`run ${a.run_id} is at the agent cap (${cap}); raise max_agents in config to add more`)
-        return ok(spawnWorker({ ...config, run_id: a.run_id }))
-      }
-      // No run_id but this session already owns a run: add the agent to it under
-      // the same cap as the run_id branch. The owned run may have been ended by a
-      // stop/kill that archived and removed it; if so, drop it and fall through to
-      // start a fresh run instead of spawning into a dead run.
-      if (sessionRunId && sessionRunIsLive(sessionRunId)) {
-        const cap = loadConfig().global.max_agents
-        const live = listAgents(sessionRunId).filter(agent => !agent.ended_at && !agent.headless).length
-        if (live >= cap) return fail(`run ${sessionRunId} is at the agent cap (${cap}); raise max_agents in config to add more`)
-        return ok(spawnWorker({ ...config, run_id: sessionRunId }))
-      }
-      sessionRunId = null
-      // First spawn of this session. If a host CLI launched us, that host becomes
-      // the headless head and this agent is its first worker. Otherwise keep the
-      // original behavior: a new run with this agent as its head.
-      if (hostProvider) {
-        const result = startRunWithHead(hostProvider, config)
-        sessionRunId = result.run.id
-        return ok({ run: result.run, agents: result.agents })
-      }
-      // asString returns '' for an empty string, so a blank name would defeat the
-      // fallback; trim-check it explicitly before falling back to nickname/provider.
-      const runName = typeof a.name === 'string' && a.name.trim() ? a.name : (config.nickname ?? provider)
-      const result = startRun({
-        name: runName,
-        working_dir: asString(a.working_dir, process.cwd()),
-        root: config,
-      })
-      sessionRunId = result.run.id
-      return ok({ run: result.run, agents: result.agents })
-    }
-
-    if (name === 'kill') return ok(killAgent(String(a.agent_id)))
-    if (name === 'stop') return ok(stopRun(String(a.run_id)))
-
-    if (name === 'send_text') {
-      sendText(String(a.agent_id), asString(a.text))
-      return ok({ sent: true })
-    }
-
-    if (name === 'send_key') {
-      sendKey(String(a.agent_id), parseKey(a.key))
-      return ok({ sent: true })
-    }
-
-    if (name === 'interrupt') {
-      interrupt(String(a.agent_id))
-      return ok({ sent: true })
-    }
-
-    if (name === 'read') {
-      // peekAgent swallows a missing-agent error and returns '', so validate
-      // first to give callers a clean "agent not found" instead of empty output.
-      findAgent(String(a.agent_id))
-      const lines = typeof a.lines === 'number' && a.lines > 0 ? Math.floor(a.lines) : 20
-      return ok(peekAgent(String(a.agent_id), lines))
-    }
-
-    if (name === 'list') {
-      return ok(listRuns().map(run => ({ ...run, agents: listAgents(run.id) })))
-    }
-
-    if (name === 'list_providers') {
-      return ok(buildProviderCatalog())
-    }
-
-    if (name === 'request_approval') {
-      const action = asString(a.action).trim()
-      const summary = asString(a.summary).trim()
-      if (!action) return fail('approval action is required')
-      if (!summary) return fail('approval summary is required')
-      return ok(createRunApproval({
-        agent_id: String(a.agent_id),
-        action,
-        summary,
-        details: typeof a.details === 'object' && a.details !== null ? a.details as Record<string, unknown> : {},
-        risk: parseRisk(a.risk),
-      }))
-    }
-
-    if (name === 'resolve_approval') {
-      const decision = a.decision === 'approved' ? 'approved' : a.decision === 'denied' ? 'denied' : null
-      if (!decision) throw new Error('decision must be approved or denied')
-      return ok(resolveRunApproval(String(a.approval_id), decision, typeof a.note === 'string' ? a.note : ''))
-    }
-
-    if (name === 'check_approval') {
-      const approval = listRunApprovals().find(item => item.id === String(a.approval_id))
-      if (!approval) throw new Error(`Approval not found: ${String(a.approval_id)}`)
-      return ok(readRunApproval(approval.run_id, approval.id))
-    }
-
-    if (name === 'list_approvals') {
-      return ok(listRunApprovals(typeof a.run_id === 'string' ? a.run_id : undefined, parseApprovalStatus(a.status)))
-    }
-
-    return fail(`Unknown tool: ${name}`)
+    return tool.handler(a)
   } catch (e) {
     return fail(e instanceof Error ? e.message : String(e))
   }

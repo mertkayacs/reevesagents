@@ -250,6 +250,20 @@ describe('handleAgentMcpTool', () => {
     })
   })
 
+  describe('tool registry', () => {
+    it('advertises unique tool names that each resolve to a handler', async () => {
+      const { MCP_TOOLS } = await import('../src/agent-mcp/server.js')
+      const names = MCP_TOOLS.map(tool => tool.name)
+      expect(new Set(names).size).toBe(names.length)
+      for (const name of names) {
+        const result = await call(name, {})
+        // A handler may reject empty arguments, but it must never fall through to
+        // the unknown-tool path: every advertised tool has a registered handler.
+        expect(payload(result).error ?? '').not.toContain('Unknown tool')
+      }
+    })
+  })
+
   describe('discovery', () => {
     it('list_providers returns the full provider catalog from the registry', async () => {
       const { MCP_TOOLS, buildProviderCatalog } = await import('../src/agent-mcp/server.js')
