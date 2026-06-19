@@ -82,6 +82,9 @@
     'web.ready': 'Ready',
     'web.history': 'History',
     'web.archived': 'archived',
+    'web.approvalsTitle': 'Pending approvals',
+    'web.approve': 'Approve',
+    'web.deny': 'Deny',
     'web.noRootProvider': 'no root provider',
     'web.addAgentTitle': 'add agent to {{name}}',
     'web.stopRunTitle': 'stop run {{name}}',
@@ -211,11 +214,23 @@
     mcpError: document.getElementById('mcp-error'),
     mcpAttachAll: document.getElementById('mcp-attach-all'),
     mcpClose: document.getElementById('mcp-close'),
+    doctorBtn: document.getElementById('doctor-btn'),
+    doctorDialog: document.getElementById('doctor-dialog'),
+    doctorList: document.getElementById('doctor-list'),
+    doctorError: document.getElementById('doctor-error'),
+    doctorRefresh: document.getElementById('doctor-refresh'),
+    doctorClose: document.getElementById('doctor-close'),
+    aboutBtn: document.getElementById('about-btn'),
+    aboutDialog: document.getElementById('about-dialog'),
+    aboutList: document.getElementById('about-list'),
+    aboutClose: document.getElementById('about-close'),
   }
 
   let runs = []
   let history = []
+  let approvals = []
   let providers = []
+  let appVersion = ''
   let language = 'en'
   let languages = []
   let messages = WEB_EN
@@ -261,6 +276,8 @@
     providers = data.providers || []
     runs = data.runs || []
     history = data.history || []
+    approvals = data.approvals || []
+    appVersion = data.version || ''
     prebetaOrchestrator = data.prebeta && data.prebeta.orchestrator === true
     applyLanguage(data.language)
     renderProviders()
@@ -280,6 +297,7 @@
           runs = data.runs
         }
         if (Array.isArray(data.history)) history = data.history
+        if (Array.isArray(data.approvals)) approvals = data.approvals
         renderSidebar()
         reconcileCreateDialog()
         reconcileSelectedAgent()
@@ -775,6 +793,24 @@
     }
     el.sidebarList.innerHTML = ''
 
+    if (approvals.length > 0) {
+      const group = document.createElement('div')
+      group.className = 'approvals-group'
+      const head = document.createElement('div')
+      head.className = 'approvals-head'
+      const title = document.createElement('span')
+      title.className = 'approvals-title'
+      title.textContent = t('web.approvalsTitle')
+      head.appendChild(title)
+      const count = document.createElement('span')
+      count.className = 'approvals-count'
+      count.textContent = String(approvals.length)
+      head.appendChild(count)
+      group.appendChild(head)
+      for (const approval of approvals) group.appendChild(renderApproval(approval))
+      el.sidebarList.appendChild(group)
+    }
+
     for (const run of runsWithAgents) {
       const group = document.createElement('div')
       group.className = 'run-group'
@@ -856,6 +892,60 @@
     updateCreateActions()
   }
 
+  function renderApproval(approval) {
+    const item = document.createElement('div')
+    item.className = 'approval-card'
+    item.dataset.risk = approval.risk
+    if (approval.color) item.style.setProperty('--run-color', approval.color)
+
+    const body = document.createElement('div')
+    body.className = 'approval-body'
+    const action = document.createElement('span')
+    action.className = 'approval-action'
+    action.textContent = approval.action
+    action.title = approval.action
+    body.appendChild(action)
+    const meta = document.createElement('span')
+    meta.className = 'approval-meta'
+    meta.textContent = `${approval.agent_nickname} · ${approval.run_name} · ${approval.risk}`
+    body.appendChild(meta)
+    if (approval.summary) {
+      const summary = document.createElement('span')
+      summary.className = 'approval-summary'
+      summary.textContent = approval.summary
+      body.appendChild(summary)
+    }
+    item.appendChild(body)
+
+    const actions = document.createElement('div')
+    actions.className = 'approval-actions'
+    const approve = document.createElement('button')
+    approve.className = 'approval-approve'
+    approve.type = 'button'
+    approve.textContent = t('web.approve')
+    approve.addEventListener('click', () => resolveApproval(approval, 'approved'))
+    actions.appendChild(approve)
+    const deny = document.createElement('button')
+    deny.className = 'approval-deny'
+    deny.type = 'button'
+    deny.textContent = t('web.deny')
+    deny.addEventListener('click', () => resolveApproval(approval, 'denied'))
+    actions.appendChild(deny)
+    item.appendChild(actions)
+    return item
+  }
+
+  async function resolveApproval(approval, decision) {
+    try {
+      await api('POST', `/api/approvals/${encodeURIComponent(approval.id)}/resolve`, { decision })
+      approvals = approvals.filter(item => item.id !== approval.id)
+      renderSidebar()
+      await refreshState()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
   function renderHistoryRecord(record) {
     const item = document.createElement('div')
     item.className = 'history-card'
@@ -924,6 +1014,13 @@
     if (agent.model) meta.append(document.createTextNode(` · ${agent.model}`))
     body.appendChild(nm)
     body.appendChild(meta)
+    if (agent.task) {
+      const task = document.createElement('span')
+      task.className = 'card-task'
+      task.textContent = agent.task
+      task.title = agent.task
+      body.appendChild(task)
+    }
     open.appendChild(body)
     card.appendChild(open)
 
@@ -1391,6 +1488,88 @@
 
   // --- agent control (MCP installer) ----------------------------------------
 
+  function openAboutDialog() {
+    el.aboutList.innerHTML = ''
+    const rows = [
+      ['Version', appVersion || 'unknown'],
+      ['Purpose', 'Local tmux-first workspace manager for AI CLI agents'],
+      ['Interface', 'Ink TUI, Web UI, and agent run CLI'],
+      ['Runtime', 'tmux sessions and provider CLI windows'],
+      ['Providers', providers.map(p => p.name).join(', ') || 'none detected'],
+      ['License', 'Apache-2.0'],
+    ]
+    for (const [label, value] of rows) {
+      const row = document.createElement('div')
+      row.className = 'about-row'
+      const k = document.createElement('span')
+      k.className = 'about-key'
+      k.textContent = label
+      const v = document.createElement('span')
+      v.className = 'about-value'
+      v.textContent = value
+      row.appendChild(k)
+      row.appendChild(v)
+      el.aboutList.appendChild(row)
+    }
+    const repoRow = document.createElement('div')
+    repoRow.className = 'about-row'
+    const repoKey = document.createElement('span')
+    repoKey.className = 'about-key'
+    repoKey.textContent = 'Repository'
+    const link = document.createElement('a')
+    link.className = 'about-value about-link'
+    link.href = 'https://github.com/mertkayacs/reevesagents'
+    link.textContent = 'github.com/mertkayacs/reevesagents'
+    link.target = '_blank'
+    link.rel = 'noreferrer'
+    repoRow.appendChild(repoKey)
+    repoRow.appendChild(link)
+    el.aboutList.appendChild(repoRow)
+    el.aboutDialog.showModal()
+  }
+
+  function openDoctorDialog() {
+    el.doctorError.hidden = true
+    el.doctorDialog.showModal()
+    loadDoctor()
+  }
+
+  async function loadDoctor() {
+    el.doctorError.hidden = true
+    el.doctorList.textContent = 'Running checks...'
+    try {
+      const result = await api('GET', '/api/doctor')
+      renderDoctorChecks((result && result.checks) || [])
+    } catch (err) {
+      el.doctorList.textContent = ''
+      el.doctorError.hidden = false
+      el.doctorError.textContent = err.message
+    }
+  }
+
+  function renderDoctorChecks(checks) {
+    el.doctorList.innerHTML = ''
+    for (const check of checks) {
+      const row = document.createElement('div')
+      row.className = 'doctor-check'
+      row.dataset.status = check.status
+      const name = document.createElement('span')
+      name.className = 'doctor-check-name'
+      name.textContent = check.name
+      const status = document.createElement('span')
+      status.className = 'doctor-check-status'
+      status.textContent = check.status
+      const detail = document.createElement('span')
+      detail.className = 'doctor-check-detail'
+      detail.textContent = check.detail
+      detail.title = check.detail
+      row.appendChild(name)
+      row.appendChild(status)
+      row.appendChild(detail)
+      el.doctorList.appendChild(row)
+    }
+  }
+
   function openMcpDialog() {
     setMcpError(null)
     el.mcpHostList.innerHTML = ''
@@ -1543,6 +1722,11 @@
   el.agentControlBtn.addEventListener('click', openMcpDialog)
   el.mcpClose.addEventListener('click', () => el.mcpDialog.close())
   el.mcpAttachAll.addEventListener('click', attachAllHosts)
+  el.doctorBtn.addEventListener('click', openDoctorDialog)
+  el.doctorRefresh.addEventListener('click', loadDoctor)
+  el.doctorClose.addEventListener('click', () => el.doctorDialog.close())
+  el.aboutBtn.addEventListener('click', openAboutDialog)
+  el.aboutClose.addEventListener('click', () => el.aboutDialog.close())
   el.emptyNewRun.addEventListener('click', openRunDialog)
   el.overlayNewRun.addEventListener('click', openRunDialog)
   el.overlayNewAgent.addEventListener('click', () => openAgentDialog(preferredRunId()))

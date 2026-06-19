@@ -33,6 +33,9 @@ import {
   readRun,
   readRunAny,
 } from '../state/runs.js'
+import { resolveRunApproval } from '../state/approvals.js'
+import { runDoctor } from '../launcher/doctor.js'
+import { REEVESAGENTS_VERSION } from '../version.js'
 import {
   isOrchestratorWebProvider,
   loadWebOrchestratorRuntime,
@@ -380,6 +383,15 @@ function deleteHistoryRecord(id: string, ctx: RequestContext): void {
   deleteRunHistory(id)
 }
 
+// Resolve a pending approval (approve or deny). The decision is the confirmation,
+// so no separate confirm flag is required; the origin guard already blocks CSRF.
+function resolveApprovalAction(id: string, body: Record<string, unknown>): unknown {
+  const decision = body.decision === 'approved' ? 'approved' : body.decision === 'denied' ? 'denied' : null
+  if (!decision) throw new Error('decision must be approved or denied')
+  const note = typeof body.note === 'string' ? body.note : ''
+  return resolveRunApproval(id, decision, note)
+}
+
 async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
   if (!isAllowedHostHeader(req.headers.host)) {
     send(res, 403, 'forbidden host', 'text/plain; charset=utf-8')
@@ -409,12 +421,21 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       providers: listWebProviders(),
       prebeta: { orchestrator: ctx.prebetaOrchestrator },
       language: webLanguagePayload(),
+      version: REEVESAGENTS_VERSION,
     })
     return
   }
   if (method === 'GET' && path === '/api/mcp-hosts') {
     try {
       sendJson(res, 200, mcpHostsPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/doctor') {
+    try {
+      sendJson(res, 200, runDoctor())
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }
@@ -528,6 +549,16 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       requireConfirm(body)
       deleteHistoryRecord(decodeURIComponent(deleteHistoryMatch[1]!), ctx)
       sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const resolveApprovalMatch = path.match(/^\/api\/approvals\/([^/]+)\/resolve$/)
+  if (method === 'POST' && resolveApprovalMatch) {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, resolveApprovalAction(decodeURIComponent(resolveApprovalMatch[1]!), body))
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }

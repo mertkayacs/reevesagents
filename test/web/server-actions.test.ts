@@ -584,6 +584,77 @@ describe('agent control (mcp hosts)', () => {
   })
 })
 
+describe('approvals', () => {
+  it('lists pending approvals in state and resolves one through HTTP', async () => {
+    const { createRunApproval, listRunApprovals } = await import('../../src/state/approvals.js')
+
+    writeRun(makeRun('appr-run', 'spawner'))
+    writeAgent(makeAgent('appr-agent', 'appr-run', 'cc', 'root'))
+    const approval = createRunApproval({
+      agent_id: 'appr-agent',
+      action: 'deploy to prod',
+      summary: 'please approve the deploy',
+      risk: 'high',
+    })
+
+    const handle = await start()
+
+    // The pending approval shows up in the web state, enriched with run/agent info.
+    const state = JSON.parse((await get(handle.port, '/api/state')).body)
+    expect(state.approvals).toHaveLength(1)
+    expect(state.approvals[0]).toMatchObject({
+      id: approval.id,
+      run_id: 'appr-run',
+      run_name: 'run-appr-run',
+      agent_id: 'appr-agent',
+      agent_nickname: 'appr-agent',
+      provider: 'cc',
+      provider_label: 'Claude Code',
+      action: 'deploy to prod',
+      summary: 'please approve the deploy',
+      risk: 'high',
+    })
+
+    // A non-approve/deny decision is rejected.
+    const bad = await post(handle.port, `/api/approvals/${encodeURIComponent(approval.id)}/resolve`, { decision: 'maybe' })
+    expect(bad.status).toBe(400)
+    expect(JSON.parse(bad.body).error).toMatch(/approved or denied/i)
+
+    // Approve it.
+    const resolved = await post(handle.port, `/api/approvals/${encodeURIComponent(approval.id)}/resolve`, { decision: 'approved', note: 'ok' })
+    expect(resolved.status).toBe(200)
+    expect(JSON.parse(resolved.body)).toMatchObject({ status: 'approved', decision_note: 'ok' })
+    expect(listRunApprovals('appr-run', 'approved').map(a => a.id)).toContain(approval.id)
+
+    // Once resolved it is no longer pending, so it leaves the web state queue.
+    const after = JSON.parse((await get(handle.port, '/api/state')).body)
+    expect(after.approvals).toEqual([])
+  })
+})
+
+describe('doctor', () => {
+  it('returns environment health checks', async () => {
+    const handle = await start()
+    const res = await get(handle.port, '/api/doctor')
+    expect(res.status).toBe(200)
+    const body = JSON.parse(res.body) as { checks: Array<{ name: string; status: string; detail: string }> }
+    expect(Array.isArray(body.checks)).toBe(true)
+    expect(body.checks.length).toBeGreaterThan(0)
+    const node = body.checks.find(check => check.name === 'node')
+    expect(node).toBeDefined()
+    expect(['ok', 'warn', 'fail']).toContain(node!.status)
+  })
+})
+
+describe('about / version', () => {
+  it('exposes the package version in /api/state', async () => {
+    const handle = await start()
+    const state = JSON.parse((await get(handle.port, '/api/state')).body)
+    expect(typeof state.version).toBe('string')
+    expect(state.version.length).toBeGreaterThan(0)
+  })
+})
+
 describe('static assets', () => {
   it('serves an allowlisted asset from the web root and 404s a missing one', async () => {
     writeFileSync(join(tmpDir, 'app.js'), '// fixture\n')

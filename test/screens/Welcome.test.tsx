@@ -125,8 +125,10 @@ describe('Welcome', () => {
   it('starts the Web UI without leaving the TUI', async () => {
     const { stdin, lastFrame } = render(<Welcome />)
 
-    // Menu order: New Run, Runs, Doctor, Agent Control, Start Web UI.
-    // Four down presses land on Start Web UI (index 4).
+    // Menu order: New Run, Runs, Doctor, Agent Control, Approvals, Start Web UI.
+    // Five down presses land on Start Web UI (index 5).
+    stdin.write('\u001B[B')
+    await waitForInput()
     stdin.write('\u001B[B')
     await waitForInput()
     stdin.write('\u001B[B')
