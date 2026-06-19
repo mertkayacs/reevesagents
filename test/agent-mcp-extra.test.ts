@@ -77,7 +77,6 @@ async function call(name: string, args: Record<string, unknown>): Promise<ToolRe
 function makeRun(id: string, overrides: Partial<RunRecord> = {}): RunRecord {
   return {
     id,
-    mode: 'spawner',
     name: `run-${id}`,
     status: 'running',
     tmux_session: `reeves_${id}`,

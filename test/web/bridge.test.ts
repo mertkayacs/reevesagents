@@ -18,10 +18,9 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
-function makeRun(id: string, mode: RunRecord['mode'] = 'spawner'): RunRecord {
+function makeRun(id: string): RunRecord {
   return {
     id,
-    mode,
     name: `run-${id}`,
     status: 'running',
     tmux_session: `reeves_${id}`,
@@ -99,29 +98,6 @@ describe('resolveTerminalTarget', () => {
     expect(() => resolveTerminalTarget('nowin')).toThrow('agent has no tmux window')
   })
 
-  it('resolves orchestrator agents only when pre-beta mode is enabled', () => {
-    writeRun(makeRun('prebeta', 'orchestrator'))
-    writeAgent(makeAgent('worker', 'prebeta', { nickname: 'worker' }))
-
-    expect(() => resolveTerminalTarget('worker')).toThrow('Agent not found')
-    expect(resolveTerminalTarget('worker', { prebetaOrchestrator: true })).toEqual({
-      session: 'reeves_prebeta',
-      windowId: '@1',
-      nickname: 'worker',
-    })
-  })
-
-  it('rejects headless orchestrator roots in pre-beta mode', () => {
-    writeRun(makeRun('prebeta', 'orchestrator'))
-    writeAgent(makeAgent('root', 'prebeta', {
-      role: 'root',
-      headless: true,
-      tmux_window_id: '',
-      tmux_pane_id: '',
-    }))
-
-    expect(() => resolveTerminalTarget('root', { prebetaOrchestrator: true })).toThrow('agent has no tmux window')
-  })
 })
 
 describe('parseClientFrame', () => {

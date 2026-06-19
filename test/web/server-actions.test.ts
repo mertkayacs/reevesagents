@@ -9,14 +9,10 @@ import {
   listRunHistory,
   readAgent,
   readRun,
-  readRunAny,
-  updateAgent,
-  updateRun,
   writeAgent,
   writeRun,
 } from '../../src/state/runs.js'
 import type { AgentRecord, Provider, RunRecord } from '../../src/state/types.js'
-import type { WebOrchestratorRuntime } from '../../src/web/prebeta-orchestrator.js'
 
 let tmpDir: string
 let handles: WebServerHandle[]
@@ -45,14 +41,10 @@ afterEach(async () => {
 
 async function start(opts: {
   webRoot?: string
-  prebetaOrchestrator?: boolean
-  orchestratorRuntime?: WebOrchestratorRuntime
 } = {}): Promise<WebServerHandle> {
   const handle = await startWebServer({
     open: false,
     webRoot: opts.webRoot,
-    prebetaOrchestrator: opts.prebetaOrchestrator,
-    orchestratorRuntime: opts.orchestratorRuntime,
   })
   handles.push(handle)
   return handle
@@ -144,10 +136,9 @@ function installFakeRuntimeBins(): void {
   }
 }
 
-function makeRun(id: string, mode: RunRecord['mode']): RunRecord {
+function makeRun(id: string): RunRecord {
   return {
     id,
-    mode,
     name: `run-${id}`,
     status: 'running',
     tmux_session: `reeves_${id}`,
@@ -182,44 +173,6 @@ function makeAgent(id: string, runId: string, provider: Provider, role: AgentRec
     last_seen: 0,
     started_at: '2026-01-01T00:00:01.000Z',
     ended_at: null,
-  }
-}
-
-function fakeOrchestratorRuntime(): WebOrchestratorRuntime {
-  return {
-    startRun(request) {
-      const run = makeRun('orch', 'orchestrator')
-      run.name = request.name
-      run.working_dir = request.working_dir
-      run.root_agent_id = 'root'
-      const root = makeAgent('root', run.id, request.root.provider, 'root')
-      root.nickname = request.root.nickname || 'root'
-      root.model = request.root.model
-      root.permissions = request.root.permissions ?? 'ask'
-      root.task = request.root.task
-      writeRun(run)
-      writeAgent(root)
-      return { run, agents: [root] }
-    },
-    spawnWorker(request) {
-      const worker = makeAgent('worker', request.run_id, request.provider, 'worker')
-      worker.nickname = request.nickname || 'worker'
-      worker.model = request.model
-      worker.permissions = request.permissions ?? 'ask'
-      worker.task = request.task
-      writeAgent(worker)
-      return worker
-    },
-    killAgent(agentId) {
-      const agent = readAgent('orch', agentId)
-      if (agent.role === 'root') throw new Error('Root agent cannot be killed directly')
-      updateAgent(agent.run_id, agent.id, { ended_at: '2026-01-01T00:05:00.000Z', task_status: 'done' })
-      return readAgent(agent.run_id, agent.id)
-    },
-    stopRun(runId) {
-      updateRun(runId, { status: 'ended', ended_at: '2026-01-01T00:10:00.000Z' })
-      return readRunAny(runId)
-    },
   }
 }
 
@@ -364,72 +317,6 @@ describe('create terminal', () => {
     expect(JSON.parse(badPermissions.body).error).toMatch(/unknown permission mode/i)
   })
 
-  it('rejects orchestrator creation unless pre-beta mode is enabled', async () => {
-    const handle = await start()
-    const res = await post(handle.port, '/api/terminals', {
-      provider: 'codex',
-      mode: 'orchestrator',
-      working_dir: tmpDir,
-    })
-    expect(res.status).toBe(400)
-    expect(JSON.parse(res.body).error).toMatch(/pre-beta orchestrator web mode is not enabled/i)
-  })
-
-  it('creates and controls orchestrator runs when pre-beta mode is enabled', async () => {
-    const handle = await start({
-      prebetaOrchestrator: true,
-      orchestratorRuntime: fakeOrchestratorRuntime(),
-    })
-
-    const state = await get(handle.port, '/api/state')
-    expect(JSON.parse(state.body).prebeta).toEqual({ orchestrator: true })
-
-    const created = await post(handle.port, '/api/terminals', {
-      provider: 'codex-cli',
-      model: 'gpt-5',
-      permissions: 'skip',
-      nickname: 'Lead',
-      run_name: 'Orchestrator Check',
-      mode: 'orchestrator',
-      working_dir: tmpDir,
-    })
-    expect(created.status).toBe(200)
-    const createdBody = JSON.parse(created.body) as { id: string; run_id: string }
-    expect(readRunAny(createdBody.run_id).mode).toBe('orchestrator')
-    expect(readRunAny(createdBody.run_id).name).toBe('Orchestrator Check')
-    expect(readAgent(createdBody.run_id, createdBody.id).model).toBe('gpt-5')
-    expect(readAgent(createdBody.run_id, createdBody.id).permissions).toBe('skip')
-
-    const added = await post(handle.port, '/api/terminals', {
-      provider: 'claude-code',
-      model: 'opus',
-      permissions: 'ask',
-      nickname: 'Worker',
-      run_id: createdBody.run_id,
-    })
-    expect(added.status).toBe(200)
-    const addedBody = JSON.parse(added.body) as { id: string; run_id: string }
-    expect(addedBody.run_id).toBe(createdBody.run_id)
-    expect(readAgent(createdBody.run_id, addedBody.id).model).toBe('opus')
-    expect(readAgent(createdBody.run_id, addedBody.id).permissions).toBe('ask')
-
-    const rootKill = await post(handle.port, `/api/terminals/${encodeURIComponent(createdBody.id)}/kill`, { confirm: true })
-    expect(rootKill.status).toBe(400)
-    expect(JSON.parse(rootKill.body).error).toMatch(/root agent cannot be killed/i)
-
-    const workerKill = await post(handle.port, `/api/terminals/${encodeURIComponent(addedBody.id)}/kill`, { confirm: true })
-    expect(workerKill.status).toBe(200)
-    expect(readAgent(createdBody.run_id, addedBody.id).ended_at).not.toBeNull()
-
-    const stopped = await post(handle.port, `/api/runs/${encodeURIComponent(createdBody.run_id)}/stop`, { confirm: true })
-    expect(stopped.status).toBe(200)
-    expect(readRunAny(createdBody.run_id).status).toBe('ended')
-
-    const stateAfterStop = await get(handle.port, '/api/state')
-    const parsed = JSON.parse(stateAfterStop.body)
-    expect(parsed.runs).toEqual([])
-    expect(parsed.history.map((record: { id: string; mode: string }) => [record.id, record.mode])).toContainEqual([createdBody.run_id, 'orchestrator'])
-  })
 })
 
 describe('kill terminal', () => {
@@ -588,7 +475,7 @@ describe('approvals', () => {
   it('lists pending approvals in state and resolves one through HTTP', async () => {
     const { createRunApproval, listRunApprovals } = await import('../../src/state/approvals.js')
 
-    writeRun(makeRun('appr-run', 'spawner'))
+    writeRun(makeRun('appr-run'))
     writeAgent(makeAgent('appr-agent', 'appr-run', 'cc', 'root'))
     const approval = createRunApproval({
       agent_id: 'appr-agent',

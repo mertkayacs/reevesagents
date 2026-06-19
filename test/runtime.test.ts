@@ -65,7 +65,6 @@ describe('agent-run runtime', () => {
     const { readRun, listAgents } = await import('../src/state/runs.js')
 
     const result = startRun({
-      mode: 'spawner',
       name: 'manual team',
       working_dir: '/tmp',
       root: { provider: 'codex', model: '', task: 'build the thing', nickname: 'builder' },
@@ -90,7 +89,6 @@ describe('agent-run runtime', () => {
       .filter(call => call.args[0] === 'load-buffer')
       .map(call => call.input)
 
-    expect(readRun(result.run.id).mode).toBe('spawner')
     expect(readRun(result.run.id).reeves_session).toBe('reeves')
     expect(readRun(result.run.id).reeves_window_id).toBe('@0')
     expect(readRun(result.run.id).reeves_pane_id).toBe('%0')
@@ -110,24 +108,11 @@ describe('agent-run runtime', () => {
     expect(pasted.join('\n')).not.toContain('You are a worker agent')
   })
 
-  it('rejects non-agent-run starts in the root package', async () => {
-    const driver = new FakeDriver()
-    const { startRun } = await import('../src/launcher/runtime.js')
-
-    expect(() => startRun({
-      mode: 'orchestrator',
-      name: 'beta',
-      working_dir: '/tmp',
-      root: { provider: 'codex', model: '', task: 'lead' },
-    } as never, { driver, available })).toThrow(/Only agent-run mode/)
-  })
-
   it('spawns an agent into an existing agent-run session', async () => {
     const driver = new FakeDriver()
     const { startRun, spawnWorker } = await import('../src/launcher/runtime.js')
     const { listAgents } = await import('../src/state/runs.js')
     const result = startRun({
-      mode: 'spawner',
       name: 'terminals',
       working_dir: '/tmp',
       root: { provider: 'cc', model: '', task: 'lead', nickname: 'first' },
@@ -169,7 +154,6 @@ describe('agent-run runtime', () => {
     } = await import('../src/launcher/runtime.js')
 
     const result = startRun({
-      mode: 'spawner',
       name: 'control',
       working_dir: '/tmp',
       root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
@@ -211,7 +195,6 @@ describe('agent-run runtime', () => {
     const { listRunHistory, readRun } = await import('../src/state/runs.js')
 
     const result = startRun({
-      mode: 'spawner',
       name: 'solo',
       working_dir: '/tmp',
       root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },

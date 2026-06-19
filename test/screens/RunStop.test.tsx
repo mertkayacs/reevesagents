@@ -30,7 +30,6 @@ vi.mock('../../src/state/runs.js', async () => {
     archiveAndRemoveRun: vi.fn(() => ({
       id: mockRun.id,
       name: mockRun.name,
-      mode: 'spawner',
       status: 'ended',
       working_dir: mockRun.working_dir,
       started_at: mockRun.started_at,

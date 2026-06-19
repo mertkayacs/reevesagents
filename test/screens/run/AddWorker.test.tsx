@@ -29,7 +29,6 @@ let registry = ''
 function makeRun(): RunRecord {
   return {
     id: RUN_ID,
-    mode: 'spawner',
     name: 'existing-run',
     status: 'running',
     tmux_session: 'reeves-existing',

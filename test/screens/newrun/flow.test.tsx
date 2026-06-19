@@ -155,7 +155,6 @@ describe('New Run keyboard flow', () => {
 
     expect(RuntimeModule.startRun).toHaveBeenCalledOnce()
     const request = vi.mocked(RuntimeModule.startRun).mock.calls[0]![0]
-    expect(request.mode).toBe('spawner')
     expect(request.name).toBe('tui-run')
     expect(request.root.model).toBe('sonnet')
     expect(request.root.task).toBe('root smoke task\nsecond line')

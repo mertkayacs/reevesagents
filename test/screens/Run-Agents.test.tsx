@@ -13,7 +13,6 @@ vi.mock('../../src/state/runs.js', async () => {
     ...actual,
     readRun: vi.fn(() => ({
       id: 'run-1',
-      mode: 'spawner',
       name: 'test-run',
       status: 'running',
       tmux_session: 'reeves-123',

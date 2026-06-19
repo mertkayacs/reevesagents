@@ -24,7 +24,6 @@ afterEach(() => {
 function makeRun(id: string): RunRecord {
   return {
     id,
-    mode: 'spawner',
     name: `run-${id}`,
     status: 'running',
     tmux_session: `reeves_${id}`,

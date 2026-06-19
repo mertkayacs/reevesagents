@@ -16,7 +16,6 @@ vi.mock('../../src/state/runs.js', async () => {
     ...actual,
     readRun: vi.fn(() => ({
       id: 'run-1',
-      mode: 'spawner',
       name: 'test-run',
       status: 'running',
       tmux_session: 'reeves-123',
@@ -88,7 +87,6 @@ describe('Run hub screen', () => {
     vi.clearAllMocks()
     vi.mocked(runsState.readRun).mockReturnValue({
       id: 'run-1',
-      mode: 'spawner',
       name: 'test-run',
       status: 'running',
       tmux_session: 'reeves-123',
@@ -174,7 +172,6 @@ describe('Run hub screen', () => {
   it('changes stop into delete after the run ends', () => {
     vi.mocked(runsState.readRun).mockReturnValue({
       id: 'run-1',
-      mode: 'spawner',
       name: 'test-run',
       status: 'ended',
       tmux_session: 'reeves-123',
