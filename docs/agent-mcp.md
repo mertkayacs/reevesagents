@@ -149,6 +149,6 @@ Done:
 8. Agent Control in the Web UI: an "Agent control" dialog over the same installer
    engine (`GET /api/mcp-hosts` plus attach / detach / attach-all POSTs), gated to
    loopback by the same origin guard as every other action.
-
-Open:
-- A user-facing README entry for the feature.
+9. Provider/model discovery: the `list_providers` tool and the
+   `reevesagents://providers` resource, both built from the provider registry.
+10. The user-facing README entry (the Agent Control section).
