@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { prepareTuiColorEnv } from './utils/color-env.js'
 import { runDoctor } from './launcher/doctor.js'
-import { peekAgent, startRun, spawnWorker, stopRun, killAgent, sendText, sendKey, interrupt, type AllowedKey, ALLOWED_KEYS } from './launcher/runtime.js'
+import { peekAgent, startRun, startRunFromPreset, spawnWorker, stopRun, killAgent, sendText, sendKey, interrupt, type AllowedKey, ALLOWED_KEYS } from './launcher/runtime.js'
 import { normalizeProvider, PROVIDERS, detectAvailable } from './launcher/providers.js'
 import {
   autoCleanupRuns,
@@ -22,11 +22,14 @@ import {
   deleteRunHistory,
 } from './state/runs.js'
 import { listRunApprovals, resolveRunApproval } from './state/approvals.js'
+import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './state/config.js'
+import { listSavedTrees, savePresetFromRun, deleteSavedTree } from './state/store.js'
+import { MODEL_CATALOG } from './launcher/model-catalog.js'
 import { hostStatus, attach, attachAll, detach } from './agent-mcp/installer.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
 import { providerDisplayName, providerColor } from './utils/display.js'
-import type { AgentRecord, Provider, RunRecord } from './state/types.js'
+import type { AgentRecord, AuthMode, Effort, Provider, RunRecord } from './state/types.js'
 
 const program = new Command()
 
@@ -214,6 +217,20 @@ function parseAgentSpec(spec: string): { provider: Provider; nickname?: string; 
   return { provider, nickname: nickname || undefined, model }
 }
 
+const EFFORT_LEVELS: readonly Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
+
+function parseAuthModeOpt(value?: string): AuthMode | undefined {
+  if (value === undefined) return undefined
+  if (value === 'default' || value === 'api-key') return value
+  throw new Error('--auth-mode must be default or api-key')
+}
+
+function parseEffortOpt(value?: string): Effort | undefined {
+  if (value === undefined) return undefined
+  if ((EFFORT_LEVELS as readonly string[]).includes(value)) return value as Effort
+  throw new Error(`--effort must be one of ${EFFORT_LEVELS.join(', ')}`)
+}
+
 program
   .command('spawn [agent...]')
   .description('start a run with one or more provider agents')
@@ -222,11 +239,15 @@ program
   .option('--prompt <text>', 'initial prompt pasted into each agent', '')
   .option('--skip', 'skip permission prompts for every agent (sets permissions to skip)')
   .option('--run <run-id>', 'add the agents to an existing run instead of starting a new one')
+  .option('--auth-mode <mode>', 'auth mode for every agent: default or api-key')
+  .option('--effort <level>', 'reasoning effort for every agent: default, low, medium, high, xhigh, max')
   .action((agentSpecs: string[], opts) => {
     try {
       const specs = agentSpecs.length > 0 ? agentSpecs : ['codex']
       const parsed = specs.map(parseAgentSpec)
       const permissions = opts.skip ? 'skip' as const : undefined
+      const auth_mode = parseAuthModeOpt(opts.authMode)
+      const effort = parseEffortOpt(opts.effort)
       if (opts.run) {
         const run = resolveRun(opts.run)
         const agents = parsed.map(spec => spawnWorker({
@@ -236,6 +257,8 @@ program
           model: spec.model,
           task: opts.prompt,
           permissions,
+          auth_mode,
+          effort,
         }))
         console.log(`added ${agents.length} agents to ${run.id.slice(0, 8)}  ${run.name}`)
         return
@@ -250,6 +273,8 @@ program
           model: first!.model,
           task: opts.prompt,
           permissions,
+          auth_mode,
+          effort,
         },
         workers: rest.map(spec => ({
           provider: spec.provider,
@@ -257,6 +282,8 @@ program
           model: spec.model,
           task: opts.prompt,
           permissions,
+          auth_mode,
+          effort,
         })),
       })
       console.log(`started ${result.run.id.slice(0, 8)}  ${result.run.name}  ${result.agents.length} agents`)
@@ -442,8 +469,9 @@ program
 
 program
   .command('providers')
-  .description('list providers with availability')
+  .description('list providers with availability and known models')
   .option('--json', 'output JSON array')
+  .option('--models', "also print each provider's known models")
   .action((opts) => {
     const available = detectAvailable()
     const providers = PROVIDERS.map(id => ({
@@ -451,6 +479,7 @@ program
       name: providerDisplayName(id),
       available: available[id],
       color: providerColor(id),
+      models: [...MODEL_CATALOG[id].models],
     }))
     if (opts.json) {
       console.log(JSON.stringify(providers, null, 2))
@@ -458,6 +487,9 @@ program
     }
     for (const provider of providers) {
       console.log(`${(provider.available ? 'ok' : '--').padEnd(3)} ${provider.id.padEnd(10)} ${provider.name}`)
+      if (opts.models) {
+        for (const model of provider.models) console.log(`      ${model}`)
+      }
     }
   })
 
@@ -569,6 +601,124 @@ program
       }
     }
     process.exit(anyFail ? 1 : 0)
+  })
+
+program
+  .command('agents [run-id]')
+  .description('list agents, optionally only those in one run')
+  .option('--json', 'output JSON array')
+  .action((runId: string | undefined, opts) => {
+    try {
+      const run = runId ? resolveRun(runId) : undefined
+      const agents = listAgents(run?.id)
+      if (opts.json) {
+        console.log(JSON.stringify(agents, null, 2))
+        return
+      }
+      if (agents.length === 0) {
+        console.log('no agents')
+        return
+      }
+      for (const agent of agents) {
+        const note = agent.task_note.trim()
+        console.log(`${agent.id.slice(0, 8)}  ${agent.run_id.slice(0, 8)}  ${agent.role.padEnd(6)}  ${agent.task_status.padEnd(7)}  ${providerDisplayName(agent.provider).padEnd(14)}  ${(agent.model || 'default').padEnd(16)}  ${agent.nickname}${note ? `  ${note}` : ''}`)
+      }
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('config [key] [value]')
+  .description(`show config, get one value, or set one (keys: ${CONFIG_FIELDS.map(field => field.key).join(', ')})`)
+  .option('--json', 'output JSON for show or get')
+  .action((key: string | undefined, value: string | undefined, opts) => {
+    try {
+      if (key !== undefined && value !== undefined) {
+        const cfg = setConfigValues({ [key]: parseConfigValue(key, value) })
+        const saved = cfg.global as unknown as Record<string, unknown>
+        console.log(`${key} = ${String(saved[key])}`)
+        return
+      }
+      const cfg = loadConfig()
+      const global = cfg.global as unknown as Record<string, unknown>
+      if (key !== undefined) {
+        if (!CONFIG_FIELDS.some(field => field.key === key)) throw new Error(`unknown config field: ${key}`)
+        console.log(opts.json ? JSON.stringify(global[key]) : String(global[key]))
+        return
+      }
+      if (opts.json) {
+        console.log(JSON.stringify(cfg.global, null, 2))
+        return
+      }
+      for (const field of CONFIG_FIELDS) {
+        console.log(`${field.key.padEnd(20)} ${String(global[field.key])}`)
+      }
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('presets')
+  .description('list saved presets')
+  .option('--json', 'output JSON array')
+  .action((opts) => {
+    const presets = listSavedTrees()
+    if (opts.json) {
+      console.log(JSON.stringify(presets, null, 2))
+      return
+    }
+    if (presets.length === 0) {
+      console.log('no presets')
+      return
+    }
+    for (const preset of presets) {
+      console.log(`${preset.name.padEnd(24)}  ${String(1 + preset.workers.length).padStart(2)} agents  ${preset.description}`)
+    }
+  })
+
+program
+  .command('save-preset <run-id> <name> [description...]')
+  .description('save a run as a reusable preset')
+  .action((runId: string, name: string, description: string[]) => {
+    try {
+      const run = resolveRun(runId)
+      const tree = savePresetFromRun(run.id, name, description.join(' '))
+      console.log(`saved preset ${tree.name}  ${1 + tree.workers.length} agents`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('delete-preset <name>')
+  .description('delete a saved preset')
+  .option('-y, --yes', 'confirm delete')
+  .action((name: string, opts) => {
+    requireDestructiveConfirmation(opts, 'delete preset')
+    if (!listSavedTrees().some(preset => preset.name === name)) throw new Error(`preset not found: ${name}`)
+    deleteSavedTree(name)
+    console.log(`deleted preset ${name}`)
+  })
+
+program
+  .command('start-preset <name>')
+  .description('start a run from a saved preset')
+  .option('--name <name>', 'override the run name')
+  .option('--cwd <dir>', 'working directory', process.cwd())
+  .action((name: string, opts) => {
+    try {
+      if (!listSavedTrees().some(preset => preset.name === name)) throw new Error(`preset not found: ${name}`)
+      const result = startRunFromPreset(name, { name: opts.name, working_dir: opts.cwd })
+      console.log(`started ${result.run.id.slice(0, 8)}  ${result.run.name}  ${result.agents.length} agents`)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
   })
 
 program

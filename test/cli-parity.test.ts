@@ -383,4 +383,103 @@ describe('cli parity', () => {
       expect(removeCall?.[1]).toEqual(['mcp', 'remove', 'reevesagents'])
     })
   })
+
+  describe('spawn launch knobs', () => {
+    it('passes --auth-mode and --effort to the launch command', async () => {
+      wireTmux()
+      const { out } = await runCli(['spawn', 'cc', '--auth-mode', 'api-key', '--effort', 'high'])
+      expect(out).toMatch(/started/)
+      const newWindow = execFileSync.mock.calls.find(c => c[0] === 'tmux' && c[1]?.[0] === 'new-window')!
+      const shellCommand = String(newWindow[1]![newWindow[1]!.length - 1])
+      expect(shellCommand).toContain('--effort')
+      expect(shellCommand).toContain('high')
+      expect(shellCommand).toContain('--bare')
+    })
+
+    it('rejects an invalid --auth-mode or --effort', async () => {
+      wireTmux()
+      await expect(runCli(['spawn', 'cc', '--auth-mode', 'bogus'])).rejects.toThrow(/process\.exit/)
+      await expect(runCli(['spawn', 'cc', '--effort', 'turbo'])).rejects.toThrow(/process\.exit/)
+    })
+  })
+
+  describe('agents listing', () => {
+    it('lists agents as JSON and filtered by run', async () => {
+      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      writeRun(makeRun('ag'))
+      writeAgent(makeAgent('ag-root', 'ag', { role: 'root', nickname: 'lead' }))
+      writeAgent(makeAgent('ag-w', 'ag', { role: 'worker', nickname: 'hand' }))
+
+      const { out } = await runCli(['agents', '--json'])
+      const ids = (JSON.parse(out) as Array<{ id: string }>).map(a => a.id)
+      expect(ids).toEqual(expect.arrayContaining(['ag-root', 'ag-w']))
+
+      const { out: text } = await runCli(['agents', 'ag'])
+      expect(text).toMatch(/lead/)
+      expect(text).toMatch(/hand/)
+    })
+  })
+
+  describe('providers models', () => {
+    it('includes models in JSON and prints them with --models', async () => {
+      execFileSync.mockImplementation(() => { throw new Error('which: not found') })
+      const { out } = await runCli(['providers', '--json'])
+      const cc = (JSON.parse(out) as Array<{ id: string; models: string[] }>).find(p => p.id === 'cc')!
+      expect(Array.isArray(cc.models)).toBe(true)
+      expect(cc.models.length).toBeGreaterThan(0)
+
+      const { out: text } = await runCli(['providers', '--models'])
+      expect(text.split('\n').some(line => line.startsWith('      '))).toBe(true)
+    })
+  })
+
+  describe('config', () => {
+    it('shows, gets, and sets a config value', async () => {
+      const { out: shown } = await runCli(['config'])
+      expect(shown).toMatch(/max_agents\s+10/)
+
+      const { out: set } = await runCli(['config', 'max_agents', '25'])
+      expect(set).toMatch(/max_agents = 25/)
+
+      const { out: got } = await runCli(['config', 'max_agents'])
+      expect(got.trim()).toBe('25')
+    })
+
+    it('sets language and rejects invalid input', async () => {
+      const { out } = await runCli(['config', 'language', 'tr'])
+      expect(out).toMatch(/language = tr/)
+      await expect(runCli(['config', 'max_agents', '0'])).rejects.toThrow(/process\.exit/)
+      await expect(runCli(['config', 'bogus', '1'])).rejects.toThrow(/process\.exit/)
+    })
+  })
+
+  describe('presets', () => {
+    it('saves a run as a preset, lists, starts, and deletes it', async () => {
+      wireTmux()
+      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      writeRun(makeRun('pr'))
+      writeAgent(makeAgent('pr-root', 'pr', { role: 'root', nickname: 'lead', provider: 'cc', task: '' }))
+      writeAgent(makeAgent('pr-w', 'pr', { role: 'worker', nickname: 'hand', provider: 'codex', task: '' }))
+
+      const { out: saved } = await runCli(['save-preset', 'pr', 'my-team'])
+      expect(saved).toMatch(/saved preset my-team\s+2 agents/)
+
+      const { out: listed } = await runCli(['presets', '--json'])
+      expect((JSON.parse(listed) as Array<{ name: string }>).map(p => p.name)).toContain('my-team')
+
+      const { out: started } = await runCli(['start-preset', 'my-team', '--cwd', '/tmp'])
+      expect(started).toMatch(/started/)
+
+      await expect(runCli(['delete-preset', 'my-team'])).rejects.toThrow(/without --yes/)
+      const { out: deleted } = await runCli(['delete-preset', 'my-team', '--yes'])
+      expect(deleted).toMatch(/deleted preset my-team/)
+      const { out: empty } = await runCli(['presets'])
+      expect(empty).toMatch(/no presets/)
+    })
+
+    it('rejects starting or deleting an unknown preset', async () => {
+      await expect(runCli(['start-preset', 'ghost'])).rejects.toThrow(/process\.exit/)
+      await expect(runCli(['delete-preset', 'ghost', '--yes'])).rejects.toThrow(/preset not found/)
+    })
+  })
 })
