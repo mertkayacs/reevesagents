@@ -42,7 +42,7 @@ beforeEach(() => {
 let tmpDir: string
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'reeves-agent-mcp-parity-'))
+  tmpDir = mkdtempSync(join(tmpdir(), 'reeves-mcp-parity-'))
   process.env.REEVES_REGISTRY = tmpDir
   process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
 })
@@ -60,7 +60,7 @@ function payload(result: ToolResult): any {
 }
 
 async function call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
-  const { handleAgentMcpTool } = await import('../src/agent-mcp/server.js')
+  const { handleAgentMcpTool } = await import('../src/mcp/server.js')
   return handleAgentMcpTool(name, args) as ToolResult
 }
 
@@ -106,7 +106,7 @@ function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = 
   }
 }
 
-describe('agent-mcp parity tools', () => {
+describe('mcp parity tools', () => {
   describe('spawn launch knobs', () => {
     it('honors permissions:skip on the spawned worker', async () => {
       const { writeRun } = await import('../src/state/runs.js')
@@ -268,7 +268,7 @@ describe('agent-mcp parity tools', () => {
 
   describe('tool registry', () => {
     it('advertises the new parity tools in tools/list', async () => {
-      const { MCP_TOOLS } = await import('../src/agent-mcp/server.js')
+      const { MCP_TOOLS } = await import('../src/mcp/server.js')
       const names = MCP_TOOLS.map(tool => tool.name)
       for (const name of ['delete', 'delete_run', 'delete_history', 'list_history', 'open']) {
         expect(names).toContain(name)
@@ -276,7 +276,7 @@ describe('agent-mcp parity tools', () => {
     })
 
     it('advertises the spawn launch knobs in the spawn input schema', async () => {
-      const { MCP_TOOLS } = await import('../src/agent-mcp/server.js')
+      const { MCP_TOOLS } = await import('../src/mcp/server.js')
       const spawn = MCP_TOOLS.find(tool => tool.name === 'spawn')!
       const props = spawn.inputSchema.properties as Record<string, any>
       expect(props.permissions.enum).toEqual(['ask', 'skip'])
@@ -285,7 +285,7 @@ describe('agent-mcp parity tools', () => {
     })
 
     it('advertises the config, preset, host, and doctor tools', async () => {
-      const { MCP_TOOLS } = await import('../src/agent-mcp/server.js')
+      const { MCP_TOOLS } = await import('../src/mcp/server.js')
       const names = MCP_TOOLS.map(tool => tool.name)
       for (const name of ['doctor', 'get_config', 'set_config', 'list_presets', 'save_preset', 'start_preset', 'delete_preset', 'list_hosts', 'attach_host', 'detach_host']) {
         expect(names).toContain(name)

@@ -12,7 +12,7 @@ const attach = vi.hoisted(() => vi.fn((key: string) => ({ key, label: key, ok: t
 const detach = vi.hoisted(() => vi.fn((key: string) => ({ key, label: key, ok: true, message: 'detached' })))
 const attachAll = vi.hoisted(() => vi.fn(() => [] as Array<{ key: string; label: string; ok: boolean; message: string }>))
 
-vi.mock('../../src/agent-mcp/installer.js', () => ({ hostStatus, attach, detach, attachAll }))
+vi.mock('../../src/mcp/installer.js', () => ({ hostStatus, attach, detach, attachAll }))
 
 const FIXTURE = [
   { key: 'cc', bin: 'claude', label: 'Claude Code', installed: true, attached: true, manual: false },

@@ -2,7 +2,7 @@
 // the user attach or detach the reevesagents MCP per host, or attach all
 // installed drivable hosts at once. Manual hosts (e.g. opencode) cannot be
 // toggled and only show an "add by hand" note. The engine lives in
-// agent-mcp/installer; this screen never edits CLI config files itself.
+// mcp/installer; this screen never edits CLI config files itself.
 
 import React, { useMemo, useState } from 'react'
 import { Box, useInput, useWindowSize } from 'ink'
@@ -15,7 +15,7 @@ import { useRouter } from '../router.js'
 import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { useLanguage } from '../state/LanguageContext.js'
-import { hostStatus, attach, detach, attachAll, type HostStatus, type AttachResult } from '../agent-mcp/installer.js'
+import { hostStatus, attach, detach, attachAll, type HostStatus, type AttachResult } from '../mcp/installer.js'
 
 // One status glyph per host: attached is ok, drivable-but-detached is warn,
 // not installed or manual is faint.

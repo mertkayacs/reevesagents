@@ -40,7 +40,7 @@ import {
   attach as attachMcpHost,
   detach as detachMcpHost,
   attachAll as attachAllMcpHosts,
-} from '../agent-mcp/installer.js'
+} from '../mcp/installer.js'
 
 const HOST = '127.0.0.1'
 const DEFAULT_PORT = 8080

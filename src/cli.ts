@@ -25,7 +25,7 @@ import { listRunApprovals, resolveRunApproval } from './state/approvals.js'
 import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './state/config.js'
 import { listSavedTrees, savePresetFromRun, deleteSavedTree } from './state/store.js'
 import { MODEL_CATALOG } from './launcher/model-catalog.js'
-import { hostStatus, attach, attachAll, detach } from './agent-mcp/installer.js'
+import { hostStatus, attach, attachAll, detach } from './mcp/installer.js'
 import { writeTuiOpenToken } from './state/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
 import { providerDisplayName, providerColor } from './utils/display.js'
@@ -738,7 +738,7 @@ program
   .description('start the agent control MCP server over stdio (for CLIs that have it attached)')
   .action(async () => {
     try {
-      const { startAgentMcpServer } = await import('./agent-mcp/server.js')
+      const { startAgentMcpServer } = await import('./mcp/server.js')
       await startAgentMcpServer()
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))

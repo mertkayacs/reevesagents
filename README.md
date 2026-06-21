@@ -357,10 +357,10 @@ that touches provider config, and only through each CLI's own `mcp add` command.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branches and pull request flow,
-[SECURITY.md](SECURITY.md) for reporting vulnerabilities, and
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for branches and pull request flow,
+[SECURITY.md](.github/SECURITY.md) for reporting vulnerabilities, and
 [CHANGELOG.md](CHANGELOG.md) for recent changes. The design model lives in
-[REEVESAGENTS_DESIGN.md](REEVESAGENTS_DESIGN.md) and the contributor docs are
+[REEVESAGENTS_DESIGN.md](docs/REEVESAGENTS_DESIGN.md) and the contributor docs are
 under [docs/](docs).
 
 End users do not need the development toolchain. Contributors use pnpm,

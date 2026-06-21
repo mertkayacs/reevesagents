@@ -51,7 +51,7 @@ beforeEach(() => {
 let tmpDir: string
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'reeves-agent-mcp-extra-'))
+  tmpDir = mkdtempSync(join(tmpdir(), 'reeves-mcp-extra-'))
   process.env.REEVES_REGISTRY = tmpDir
   process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
 })
@@ -70,7 +70,7 @@ function payload(result: ToolResult): any {
 }
 
 async function call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
-  const { handleAgentMcpTool } = await import('../src/agent-mcp/server.js')
+  const { handleAgentMcpTool } = await import('../src/mcp/server.js')
   return handleAgentMcpTool(name, args) as ToolResult
 }
 
@@ -247,9 +247,9 @@ describe('handleAgentMcpTool extra surfaces', () => {
   })
 })
 
-describe('agent-mcp installer extra', () => {
+describe('mcp installer extra', () => {
   async function loadInstaller() {
-    return import('../src/agent-mcp/installer.js')
+    return import('../src/mcp/installer.js')
   }
 
   it('detaches a drivable host: runs mcp remove and returns ok:true', async () => {

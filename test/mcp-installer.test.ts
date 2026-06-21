@@ -9,7 +9,7 @@ vi.mock('node:child_process', () => ({ execFileSync }))
 // Import the module under test fresh after the mock is in place. The installer
 // reads execFileSync lazily inside each function, so one import is enough.
 async function loadInstaller() {
-  return import('../src/agent-mcp/installer.js')
+  return import('../src/mcp/installer.js')
 }
 
 // A tiny fake host environment. `installed` lists the bins that `which` finds;
@@ -50,7 +50,7 @@ beforeEach(() => {
   execFileSync.mockReset()
 })
 
-describe('agent-mcp installer', () => {
+describe('mcp installer', () => {
   describe('hostStatus', () => {
     it('reports a drivable host as installed and attached when its mcp list shows reevesagents', async () => {
       wireEnv({

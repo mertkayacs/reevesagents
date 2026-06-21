@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { providerFromParent } from '../src/agent-mcp/host.js'
+import { providerFromParent } from '../src/mcp/host.js'
 
 // providerFromParent maps a parent process (comm + argv) to a provider. The hard
 // case is a Node CLI whose comm is "node": detection must fall through to the

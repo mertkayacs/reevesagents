@@ -6,15 +6,17 @@
 // this map, so adding a provider is one entry here instead of edits across six files.
 
 import type { Provider, Permissions, AuthMode, Effort } from '../state/types.js'
-import { CC_MODELS, CC_MODEL_SOURCE } from './model-data/cc.js'
-import { CODEX_MODELS, CODEX_MODEL_SOURCE } from './model-data/codex.js'
-import { OPENCODE_MODELS, OPENCODE_MODEL_SOURCE } from './model-data/opencode.js'
-import { HERMES_MODELS, HERMES_MODEL_SOURCE } from './model-data/hermes.js'
-import { KIMI_MODELS, KIMI_MODEL_SOURCE } from './model-data/kimi.js'
-import { DEEPSEEK_MODELS, DEEPSEEK_MODEL_SOURCE } from './model-data/deepseek.js'
-import { PI_MODELS, PI_MODEL_SOURCE } from './model-data/pi.js'
-import { QWEN_MODELS, QWEN_MODEL_SOURCE } from './model-data/qwen.js'
-import { AIDER_MODELS, AIDER_MODEL_SOURCE } from './model-data/aider.js'
+import {
+  CC_MODELS, CC_MODEL_SOURCE,
+  CODEX_MODELS, CODEX_MODEL_SOURCE,
+  OPENCODE_MODELS, OPENCODE_MODEL_SOURCE,
+  HERMES_MODELS, HERMES_MODEL_SOURCE,
+  KIMI_MODELS, KIMI_MODEL_SOURCE,
+  DEEPSEEK_MODELS, DEEPSEEK_MODEL_SOURCE,
+  PI_MODELS, PI_MODEL_SOURCE,
+  QWEN_MODELS, QWEN_MODEL_SOURCE,
+  AIDER_MODELS, AIDER_MODEL_SOURCE,
+} from './model-data.js'
 
 // The user-chosen knobs that shape a launch. The provider is implicit: each entry
 // builds its own args, so only these are passed in.
