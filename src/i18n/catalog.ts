@@ -1,6 +1,11 @@
 import { DEFAULT_LANGUAGE, type LanguageCode } from './languages.js'
 
 const en = {
+  // Parity additions: TUI entry points for the presets screen and config editor.
+  'welcome.presets': 'Presets',
+  'welcome.presetsHint': 'save and launch agent-team templates',
+  'settings.editConfig': 'Edit Config',
+  'settings.editConfigHint': 'tune agent caps, delays, and defaults',
   'common.language': 'Language',
   'common.current': 'Current',
   'common.default': 'Default',

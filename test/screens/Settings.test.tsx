@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -6,6 +6,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Router } from '../../src/router.js'
 import { loadConfig } from '../../src/state/config.js'
+
+// Pin a tall viewport so Settings renders its full layout (all languages visible)
+// instead of the height-dependent compact window, which would scroll Türkçe off.
+const viewport = vi.hoisted(() => ({ current: { columns: 100, rows: 40 } }))
+vi.mock('ink', async () => {
+  const actual = await vi.importActual<typeof import('ink')>('ink')
+  return { ...actual, useWindowSize: () => viewport.current }
+})
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 

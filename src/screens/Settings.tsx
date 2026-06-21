@@ -45,7 +45,7 @@ interface SettingsRow {
 }
 
 export function Settings() {
-  const { pop } = useRouter()
+  const { pop, push } = useRouter()
   const { toast } = useToast()
   const { language, setLanguage, t } = useLanguage()
   const { rows: termRows } = useWindowSize()
@@ -56,7 +56,7 @@ export function Settings() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   const available = useMemo(() => detectAvailable(), [refreshKey])
-  const actionLabelWidth = Math.max(t('settings.recheck').length, t('settings.showConfig').length, t('common.back').length)
+  const actionLabelWidth = Math.max(t('settings.recheck').length, t('settings.showConfig').length, t('settings.editConfig').length, t('common.back').length)
 
   const rows: SettingsRow[] = [
     ...PROVIDERS.map(p => ({ type: 'provider' as const, id: p, provider: p, selectable: true })),
@@ -66,6 +66,7 @@ export function Settings() {
     { type: 'statePath' as const, id: 'presets', selectable: false },
     { type: 'action' as const, id: 'recheck', selectable: true },
     { type: 'action' as const, id: 'showConfig', selectable: true },
+    { type: 'action' as const, id: 'editConfig', selectable: true },
     { type: 'action' as const, id: 'back', selectable: true },
   ]
 
@@ -95,6 +96,10 @@ export function Settings() {
     }
     if (row.id === 'showConfig') {
       toast(t('settings.configToast', { path: configPath() }), 'info')
+      return
+    }
+    if (row.id === 'editConfig') {
+      push('Config')
       return
     }
     if (row.type === 'language' && row.language) {
@@ -179,6 +184,7 @@ export function Settings() {
             const actionLabels: Record<string, { primary: string; hint: string }> = {
               recheck: { primary: t('settings.recheck'), hint: t('settings.recheckHint') },
               showConfig: { primary: t('settings.showConfig'), hint: t('settings.showConfigHint') },
+              editConfig: { primary: t('settings.editConfig'), hint: t('settings.editConfigHint') },
               back: { primary: t('common.back'), hint: t('settings.backHint') },
             }
             const action = actionLabels[row.id]!
@@ -280,6 +286,12 @@ export function Settings() {
             primary={t('settings.showConfig')}
             primaryWidth={actionLabelWidth}
             hint={t('settings.showConfigHint')}
+          />
+          <Row
+            selected={selectedIdx === rows.findIndex(r => r.id === 'editConfig')}
+            primary={t('settings.editConfig')}
+            primaryWidth={actionLabelWidth}
+            hint={t('settings.editConfigHint')}
           />
           <Row
             selected={selectedIdx === rows.findIndex(r => r.id === 'back')}

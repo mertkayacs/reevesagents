@@ -38,6 +38,7 @@ export function Welcome() {
     const rows: Array<{ label: string; hint: string; screen?: ScreenName; quit?: boolean; launchWeb?: boolean }> = [
       { label: t('welcome.newRun'), hint: t('welcome.newRunHint'), screen: 'NewRun' },
       { label: t('welcome.runs'), hint: t('welcome.runsHint'), screen: 'Runs' },
+      { label: t('welcome.presets'), hint: t('welcome.presetsHint'), screen: 'Presets' },
       { label: t('welcome.doctor'), hint: t('welcome.doctorHint'), screen: 'Doctor' },
       { label: t('welcome.agentControl'), hint: t('welcome.agentControlHint'), screen: 'AgentControl' },
       { label: t('welcome.approvals'), hint: t('welcome.approvalsHint'), screen: 'Approvals' },

@@ -61,6 +61,7 @@ describe('Welcome', () => {
     expect(output).toContain('Main Menu')
     expect(output).toContain('New Run')
     expect(output).toContain('Runs')
+    expect(output).toContain('Presets')
     expect(output).toContain('Doctor')
     expect(output).toContain('Start Web UI')
     expect(output).toContain('Settings')
@@ -119,14 +120,17 @@ describe('Welcome', () => {
     await waitForInput()
     stdin.write('\r')
     await waitForInput()
-    expect(mockPush).toHaveBeenCalledWith('Doctor')
+    // Menu order: New Run(0), Runs(1), Presets(2). Two downs land on Presets.
+    expect(mockPush).toHaveBeenCalledWith('Presets')
   })
 
   it('starts the Web UI without leaving the TUI', async () => {
     const { stdin, lastFrame } = render(<Welcome />)
 
-    // Menu order: New Run, Runs, Doctor, Agent Control, Approvals, Start Web UI.
-    // Five down presses land on Start Web UI (index 5).
+    // Menu order: New Run, Runs, Presets, Doctor, Agent Control, Approvals, Start
+    // Web UI. Six down presses land on Start Web UI (index 6).
+    stdin.write('[B')
+    await waitForInput()
     stdin.write('\u001B[B')
     await waitForInput()
     stdin.write('\u001B[B')

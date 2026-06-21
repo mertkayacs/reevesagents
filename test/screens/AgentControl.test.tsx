@@ -100,9 +100,9 @@ describe('AgentControl', () => {
     const { stdin, lastFrame, unmount } = render(<Router initialScreen="Welcome" />)
     await waitForInput()
 
-    // Welcome menu order with no current run: New Run (0), Runs (1), Doctor (2),
-    // Agent Control (3). Step down three times and open it.
-    for (let i = 0; i < 3; i++) {
+    // Welcome menu order with no current run: New Run (0), Runs (1), Presets (2),
+    // Doctor (3), Agent Control (4). Step down four times and open it.
+    for (let i = 0; i < 4; i++) {
       stdin.write('[B')
       await waitForInput()
     }

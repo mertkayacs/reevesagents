@@ -15,16 +15,21 @@ import { useWizard } from '../../state/WizardContext.js'
 import { PROVIDERS } from '../../launcher/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../launcher/model-catalog.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
-import type { Permissions, Effort, Provider } from '../../state/types.js'
+import type { Permissions, Effort, AuthMode, Provider } from '../../state/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
 const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
+const AUTH_MODE_VALUES: AuthMode[] = ['default', 'api-key']
 
 function permissionDisplay(value: Permissions): string {
   return value === 'skip' ? 'Skip prompts' : 'Ask first'
 }
 
-type FieldId = 'provider' | 'model' | 'prompt' | 'permissions' | 'effort'
+function authModeDisplay(value: AuthMode): string {
+  return value === 'api-key' ? 'API key' : 'Default login'
+}
+
+type FieldId = 'provider' | 'model' | 'prompt' | 'permissions' | 'authMode' | 'effort'
 type ActionId = 'continue' | 'back' | 'cancel'
 const ACTION_LABEL_WIDTH = Math.max('Continue'.length, 'Back'.length, 'Reset Wizard'.length)
 
@@ -85,11 +90,14 @@ export function NewRunRoot() {
         hint: state.root.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
       },
     ]
+    if (state.root.provider === 'cc') {
+      list.push({ kind: 'picker', id: 'authMode', label: 'Auth', current: state.root.authMode, values: AUTH_MODE_VALUES, display: authModeDisplay(state.root.authMode), hint: 'api-key uses the API key instead of the default login' })
+    }
     if (state.root.provider === 'cc' || state.root.provider === 'codex') {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: state.root.effort, values: EFFORT_VALUES })
     }
     return list
-  }, [state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.effort])
+  }, [state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.authMode, state.root.effort])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
     { id: 'continue', label: 'Continue', hint: 'to additional agents' },
@@ -150,6 +158,8 @@ export function NewRunRoot() {
       updateRoot({ model: cycle(modelValuesForProvider(state.root.provider), state.root.model, dir) })
     } else if (id === 'permissions') {
       updateRoot({ permissions: cycle(PERMISSIONS_VALUES, state.root.permissions, dir) })
+    } else if (id === 'authMode') {
+      updateRoot({ authMode: cycle(AUTH_MODE_VALUES, state.root.authMode, dir) })
     } else if (id === 'effort') {
       updateRoot({ effort: cycle(EFFORT_VALUES, state.root.effort, dir) })
     }

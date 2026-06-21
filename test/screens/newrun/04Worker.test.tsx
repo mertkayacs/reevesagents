@@ -83,4 +83,49 @@ describe('NewRunWorker', () => {
     const output = lastFrame()
     expect(output).toContain('Agent')
   })
+
+  it('shows the Auth picker for a cc worker', () => {
+    const { lastFrame } = render(
+      <ToastProvider>
+        <WizardProvider>
+          <NewRunWorker />
+        </WizardProvider>
+      </ToastProvider>
+    )
+
+    const output = lastFrame()!
+    expect(output).toContain('Auth')
+    expect(output).toContain('Default login')
+  })
+
+  it('hides the Auth picker for a non-cc provider', () => {
+    vi.spyOn(WizardModule, 'useWizard').mockReturnValue({
+      state: {
+        name: 'test-run',
+        workingDir: '/tmp',
+        presetName: null,
+        root: { nickname: 'root', provider: 'cc', model: '', prompt: '', workingDir: '/tmp', permissions: 'ask', authMode: 'default', effort: 'default' },
+        workers: [
+          { nickname: 'worker1', provider: 'kimi', model: '', prompt: '', workingDir: '/tmp', permissions: 'ask', authMode: 'default', effort: 'default' },
+        ],
+      },
+      update: vi.fn(),
+      updateRoot: vi.fn(),
+      updateWorker: vi.fn(),
+      addWorker: vi.fn(() => 0),
+      removeWorker: vi.fn(),
+      reset: vi.fn(),
+    } as any)
+
+    const { lastFrame } = render(
+      <ToastProvider>
+        <WizardProvider>
+          <NewRunWorker />
+        </WizardProvider>
+      </ToastProvider>
+    )
+
+    const output = lastFrame()!
+    expect(output).not.toContain('Auth')
+  })
 })
