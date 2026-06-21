@@ -1,7 +1,8 @@
 // Lean agent control MCP server. It lets one AI CLI run and drive others: spawn
-// a CLI agent, type into it, read its output, and handle approvals. Any agent
-// that has this MCP can call any tool on any run. It stays deliberately flat:
-// no roles, autonomous loops, or higher-level coordination protocol.
+// a CLI agent, type into it, read its output, handle approvals, manage presets
+// and settings, and check the host setup. Any agent that has this MCP can call
+// any tool on any run. It stays deliberately flat: no roles, autonomous loops,
+// or higher-level coordination protocol.
 //
 // Typical flow: list_providers -> spawn (returns an agent_id and run_id) ->
 // send_text then send_key enter to submit -> read the output -> kill or stop ->
@@ -31,6 +32,7 @@ import {
   sendText,
   spawnWorker,
   startRun,
+  startRunFromPreset,
   startRunWithHead,
   stopRun,
   type AllowedKey,
@@ -48,7 +50,10 @@ import {
 } from '../state/runs.js'
 import { detectAvailable, isProvider } from '../launcher/providers.js'
 import { PROVIDER_DEFS } from '../launcher/provider-registry.js'
-import { loadConfig } from '../state/config.js'
+import { runDoctor } from '../launcher/doctor.js'
+import { hostStatus, attach, attachAll, detach } from './installer.js'
+import { listSavedTrees, savePresetFromRun, deleteSavedTree } from '../state/store.js'
+import { CONFIG_FIELDS, loadConfig, setConfigValues } from '../state/config.js'
 import {
   createRunApproval,
   listRunApprovals,
@@ -460,6 +465,127 @@ const TOOLS: ToolDef[] = [
       required: ['id'],
     },
     handler: (a) => ok(openTmuxTarget(asString(a.id))),
+  },
+  {
+    name: 'doctor',
+    description: 'Check this machine for running agents: tmux availability, which provider CLIs are installed, and the state directories. Returns each check with an ok/warn/fail status and a detail string. Run it when a spawn fails to see what is missing.',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(runDoctor().checks),
+  },
+  {
+    name: 'get_config',
+    description: 'Read the global reevesagents settings: peek_interval_ms, peek_lines, max_depth, max_agents (the per-run agent cap), ready_delay_ms, default_permissions, and language. Check max_agents here when a spawn is rejected for hitting the cap.',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(loadConfig().global),
+  },
+  {
+    name: 'set_config',
+    description: 'Change one or more global settings and save them. Pass only the fields to change. Counts must be positive integers (ready_delay_ms may be 0); default_permissions is ask or skip; language is a supported code such as en or tr. Example: raise the per-run agent cap with { "max_agents": 20 }. Returns the saved settings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        peek_interval_ms: { type: 'number', description: 'Milliseconds between output peek polls.' },
+        peek_lines: { type: 'number', description: 'Lines captured per peek.' },
+        max_depth: { type: 'number', description: 'Spawn recursion cap.' },
+        max_agents: { type: 'number', description: 'Max agents per run.' },
+        ready_delay_ms: { type: 'number', description: 'Delay before the startup prompt is injected.' },
+        default_permissions: { type: 'string', enum: ['ask', 'skip'], description: 'Permission mode used when a spawn omits one.' },
+        language: { type: 'string', description: 'UI language code for the TUI and web UI, e.g. en, tr.' },
+      },
+    },
+    handler: (a) => {
+      const patch: Record<string, unknown> = {}
+      for (const field of CONFIG_FIELDS) {
+        if (a[field.key] !== undefined) patch[field.key] = a[field.key]
+      }
+      if (Object.keys(patch).length === 0) return fail('no config fields to set')
+      return ok(setConfigValues(patch).global)
+    },
+  },
+  {
+    name: 'list_presets',
+    description: 'List saved run presets: reusable agent-team templates, each with a root agent and workers. Launch a whole team at once by passing a preset name to start_preset.',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(listSavedTrees()),
+  },
+  {
+    name: 'save_preset',
+    description: 'Save a live run\'s agent line-up as a reusable preset under a name, so the same team can be relaunched later with start_preset. Pass a run_id from list. Re-saving the same name updates it. Note: a captured agent\'s auth_mode and effort are not stored (they default).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'The run whose agents become the preset (from list).' },
+        name: { type: 'string', description: 'Preset name; characters that are not filename-safe are replaced.' },
+        description: { type: 'string' },
+      },
+      required: ['run_id', 'name'],
+    },
+    handler: (a) => ok(savePresetFromRun(String(a.run_id), asString(a.name), asString(a.description))),
+  },
+  {
+    name: 'start_preset',
+    description: 'Launch a new run from a saved preset (see list_presets), starting its root agent and every worker at once. Optionally override the run name and working_dir. Returns the new run and its agents.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Preset name to launch (from list_presets).' },
+        run_name: { type: 'string', description: 'Run name; defaults to the preset name.' },
+        working_dir: { type: 'string' },
+      },
+      required: ['name'],
+    },
+    handler: (a) => {
+      const presetName = asString(a.name)
+      if (!listSavedTrees().some(preset => preset.name === presetName)) return fail(`preset not found: ${presetName}`)
+      const result = startRunFromPreset(presetName, {
+        name: typeof a.run_name === 'string' ? a.run_name : undefined,
+        working_dir: typeof a.working_dir === 'string' ? a.working_dir : undefined,
+      })
+      return ok({ run: result.run, agents: result.agents })
+    },
+  },
+  {
+    name: 'delete_preset',
+    description: 'Permanently delete a saved preset by its name (from list_presets). Does not affect any running run.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+    },
+    handler: (a) => {
+      const name = asString(a.name)
+      if (!listSavedTrees().some(preset => preset.name === name)) return fail('preset not found')
+      deleteSavedTree(name)
+      return ok({ deleted: true, name })
+    },
+  },
+  {
+    name: 'list_hosts',
+    description: 'List the AI CLIs on this machine that can host the reevesagents MCP and whether reevesagents is attached to each. Use it to see where this control surface is wired before attach_host or detach_host.',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(hostStatus()),
+  },
+  {
+    name: 'attach_host',
+    description: 'Attach the reevesagents MCP to one host CLI by its key (from list_hosts), or to every installed host when key is omitted. After attaching, that CLI can drive agents through these same tools.',
+    inputSchema: {
+      type: 'object',
+      properties: { key: { type: 'string', description: 'Host key from list_hosts, e.g. cc or codex. Omit to attach all installed hosts.' } },
+    },
+    handler: (a) => {
+      const key = asString(a.key).trim()
+      return ok(key ? [attach(key)] : attachAll())
+    },
+  },
+  {
+    name: 'detach_host',
+    description: 'Detach the reevesagents MCP from one host CLI by its key (from list_hosts). The CLI keeps running but can no longer drive agents through reevesagents.',
+    inputSchema: {
+      type: 'object',
+      properties: { key: { type: 'string' } },
+      required: ['key'],
+    },
+    handler: (a) => ok(detach(asString(a.key))),
   },
 ]
 

@@ -1,8 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentRecord, RunRecord } from '../src/state/types.js'
+
+// child_process is mocked so the registry smoke-test (which calls every tool
+// handler) and the provider/host lookups never touch real subprocesses: `which`
+// throws so every provider/host reads as not installed (matching the absent-PATH
+// outcome these tests assume), and tmux/host calls return benign output. Without
+// this, tools like attach_host would run real `mcp add` against the machine.
+const execFileSync = vi.hoisted(() => vi.fn((file: string) => {
+  if (file === 'which') throw new Error('not found')
+  return ''
+}))
+const spawnSync = vi.hoisted(() => vi.fn(() => ({ status: 1, stdout: '', stderr: '' })))
+vi.mock('node:child_process', () => ({ execFileSync, spawnSync }))
 
 // These tests cover the tool handler paths that do not need a real tmux: input
 // validation, error surfaces, the agent cap, and the filesystem-only approval

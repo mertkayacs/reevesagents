@@ -283,5 +283,78 @@ describe('agent-mcp parity tools', () => {
       expect(props.auth_mode.enum).toEqual(['default', 'api-key'])
       expect(props.effort.enum).toContain('high')
     })
+
+    it('advertises the config, preset, host, and doctor tools', async () => {
+      const { MCP_TOOLS } = await import('../src/agent-mcp/server.js')
+      const names = MCP_TOOLS.map(tool => tool.name)
+      for (const name of ['doctor', 'get_config', 'set_config', 'list_presets', 'save_preset', 'start_preset', 'delete_preset', 'list_hosts', 'attach_host', 'detach_host']) {
+        expect(names).toContain(name)
+      }
+    })
+  })
+
+  describe('doctor', () => {
+    it('returns the environment checks', async () => {
+      const checks = payload(await call('doctor', {}))
+      expect(Array.isArray(checks)).toBe(true)
+      expect(checks.length).toBeGreaterThan(0)
+      expect(checks[0]).toHaveProperty('status')
+    })
+  })
+
+  describe('config', () => {
+    it('get_config and set_config round-trip with validation', async () => {
+      expect(payload(await call('get_config', {})).max_agents).toBe(10)
+
+      const after = payload(await call('set_config', { max_agents: 20, language: 'tr' }))
+      expect(after.max_agents).toBe(20)
+      expect(after.language).toBe('tr')
+
+      const bad = await call('set_config', { max_agents: 0 })
+      expect(bad.isError).toBe(true)
+      expect(payload(bad).error).toMatch(/positive integer/)
+
+      const empty = await call('set_config', {})
+      expect(empty.isError).toBe(true)
+      expect(payload(empty).error).toMatch(/no config fields/)
+    })
+  })
+
+  describe('presets', () => {
+    it('saves a run as a preset, lists, starts, and deletes it', async () => {
+      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      writeRun(makeRun('pr'))
+      writeAgent(makeAgent('pr-root', 'pr', { role: 'root', nickname: 'lead', provider: 'cc', task: '' }))
+      writeAgent(makeAgent('pr-w', 'pr', { role: 'worker', nickname: 'hand', provider: 'codex', task: '' }))
+
+      const saved = payload(await call('save_preset', { run_id: 'pr', name: 'my-team' }))
+      expect(saved.name).toBe('my-team')
+      expect(saved.workers).toHaveLength(1)
+
+      expect(payload(await call('list_presets', {})).map((p: any) => p.name)).toContain('my-team')
+
+      const started = payload(await call('start_preset', { name: 'my-team', working_dir: '/tmp' }))
+      expect(started.run.preset_name).toBe('my-team')
+      expect(started.agents).toHaveLength(2)
+
+      expect(payload(await call('delete_preset', { name: 'my-team' }))).toEqual({ deleted: true, name: 'my-team' })
+
+      const missing = await call('start_preset', { name: 'my-team' })
+      expect(missing.isError).toBe(true)
+    })
+  })
+
+  describe('mcp hosts', () => {
+    it('lists, attaches, and detaches hosts', async () => {
+      const hosts = payload(await call('list_hosts', {}))
+      expect(Array.isArray(hosts)).toBe(true)
+      expect(hosts.some((h: any) => h.key === 'cc')).toBe(true)
+
+      const attached = payload(await call('attach_host', { key: 'cc' }))
+      expect(Array.isArray(attached)).toBe(true)
+      expect(attached[0].key).toBe('cc')
+
+      expect(payload(await call('detach_host', { key: 'cc' })).key).toBe('cc')
+    })
   })
 })
