@@ -182,6 +182,10 @@
     fProvider: document.getElementById('f-provider'),
     providerGrid: document.getElementById('provider-grid'),
     fModel: document.getElementById('f-model'),
+    fAuthMode: document.getElementById('f-auth-mode'),
+    fEffort: document.getElementById('f-effort'),
+    authModeField: document.getElementById('auth-mode-field'),
+    effortField: document.getElementById('effort-field'),
     fPermissions: document.getElementById('f-permissions'),
     permissionGrid: document.getElementById('permission-grid'),
     fNickname: document.getElementById('f-nickname'),
@@ -214,6 +218,19 @@
     aboutDialog: document.getElementById('about-dialog'),
     aboutList: document.getElementById('about-list'),
     aboutClose: document.getElementById('about-close'),
+    configBtn: document.getElementById('config-btn'),
+    configDialog: document.getElementById('config-dialog'),
+    configList: document.getElementById('config-list'),
+    configError: document.getElementById('config-error'),
+    configSave: document.getElementById('config-save'),
+    configClose: document.getElementById('config-close'),
+    presetsBtn: document.getElementById('presets-btn'),
+    presetsDialog: document.getElementById('presets-dialog'),
+    presetsList: document.getElementById('presets-list'),
+    presetNameInput: document.getElementById('preset-name-input'),
+    presetSave: document.getElementById('preset-save'),
+    presetsError: document.getElementById('presets-error'),
+    presetsClose: document.getElementById('presets-close'),
   }
 
   let runs = []
@@ -480,6 +497,7 @@
     else if (firstAvailable) el.fProvider.value = firstAvailable.value
     updateProviderSelection()
     renderModels()
+    updateLaunchKnobVisibility()
     updateCreateSubmitState()
   }
 
@@ -494,6 +512,7 @@
     el.fProvider.value = providerId
     updateProviderSelection()
     renderModels()
+    updateLaunchKnobVisibility()
     updateCreateSubmitState()
   }
 
@@ -552,6 +571,18 @@
     else el.fModel.value = ''
     el.fModel.disabled = !selectedProviderAvailable()
     updateCreateSubmitState()
+  }
+
+  // auth_mode only applies to Claude Code; reasoning effort applies to cc and codex.
+  // Hide the irrelevant knobs and reset them so a stale value is never submitted.
+  function updateLaunchKnobVisibility() {
+    const provider = el.fProvider.value
+    const showAuthMode = provider === 'cc'
+    const showEffort = provider === 'cc' || provider === 'codex'
+    el.authModeField.hidden = !showAuthMode
+    el.effortField.hidden = !showEffort
+    if (!showAuthMode) el.fAuthMode.value = ''
+    if (!showEffort) el.fEffort.value = ''
   }
 
   function updatePermissionSelection() {
@@ -1309,6 +1340,8 @@
     el.fNickname.value = ''
     el.fRunName.value = ''
     el.fModel.value = ''
+    el.fAuthMode.value = ''
+    el.fEffort.value = ''
     el.fPermissions.value = 'ask'
     el.fPrompt.value = ''
     el.fCwd.value = ''
@@ -1422,6 +1455,8 @@
     const payload = {
       provider,
       model: el.fModel.value,
+      auth_mode: el.fAuthMode.value,
+      effort: el.fEffort.value,
       permissions: el.fPermissions.value,
       nickname: el.fNickname.value.trim(),
       prompt: el.fPrompt.value,
@@ -1683,6 +1718,183 @@
     }
   }
 
+  // --- config panel ---------------------------------------------------------
+
+  function openConfigDialog() {
+    el.configError.hidden = true
+    el.configDialog.showModal()
+    loadConfig()
+  }
+
+  async function loadConfig() {
+    el.configError.hidden = true
+    el.configList.textContent = 'Loading...'
+    try {
+      const payload = await api('GET', '/api/config')
+      renderConfigFields(payload)
+    } catch (err) {
+      el.configList.textContent = ''
+      el.configError.hidden = false
+      el.configError.textContent = err.message
+    }
+  }
+
+  function renderConfigFields(payload) {
+    el.configList.innerHTML = ''
+    const config = (payload && payload.config) || {}
+    const fields = (payload && payload.fields) || []
+    for (const field of fields) {
+      const row = document.createElement('label')
+      row.className = 'field config-field'
+      const label = document.createElement('span')
+      label.className = 'field-label'
+      label.textContent = field.label
+      row.appendChild(label)
+      if (field.kind === 'permissions') {
+        const select = document.createElement('select')
+        select.dataset.key = field.key
+        for (const value of ['ask', 'skip']) {
+          const opt = document.createElement('option')
+          opt.value = value
+          opt.textContent = value === 'ask' ? t('web.askFirst') : t('web.skipPrompts')
+          select.appendChild(opt)
+        }
+        select.value = config[field.key] === 'skip' ? 'skip' : 'ask'
+        row.appendChild(select)
+      } else {
+        const input = document.createElement('input')
+        input.type = 'number'
+        input.dataset.key = field.key
+        input.min = field.kind === 'nonneg-int' ? '0' : '1'
+        input.step = '1'
+        input.value = String(config[field.key] ?? '')
+        row.appendChild(input)
+      }
+      el.configList.appendChild(row)
+    }
+  }
+
+  async function saveConfig() {
+    el.configError.hidden = true
+    const patch = {}
+    for (const node of el.configList.querySelectorAll('[data-key]')) {
+      const key = node.dataset.key
+      patch[key] = node.tagName === 'SELECT' ? node.value : Number(node.value)
+    }
+    try {
+      const payload = await api('POST', '/api/config', patch)
+      renderConfigFields(payload)
+    } catch (err) {
+      el.configError.hidden = false
+      el.configError.textContent = err.message
+    }
+  }
+
+  // --- presets panel --------------------------------------------------------
+
+  function openPresetsDialog() {
+    el.presetsError.hidden = true
+    el.presetNameInput.value = ''
+    el.presetsDialog.showModal()
+    loadPresets()
+  }
+
+  async function loadPresets() {
+    el.presetsError.hidden = true
+    el.presetsList.textContent = 'Loading...'
+    try {
+      const payload = await api('GET', '/api/presets')
+      renderPresets((payload && payload.presets) || [])
+    } catch (err) {
+      el.presetsList.textContent = ''
+      el.presetsError.hidden = false
+      el.presetsError.textContent = err.message
+    }
+  }
+
+  function renderPresets(presets) {
+    el.presetsList.innerHTML = ''
+    for (const preset of presets) {
+      const row = document.createElement('div')
+      row.className = 'mcp-host-row'
+
+      const body = document.createElement('div')
+      body.className = 'mcp-host-body'
+      const name = document.createElement('span')
+      name.className = 'mcp-host-name'
+      const agents = 1 + (Array.isArray(preset.workers) ? preset.workers.length : 0)
+      name.textContent = `${preset.name} (${agentCountLabel(agents)})`
+      body.appendChild(name)
+      if (preset.description) {
+        const meta = document.createElement('span')
+        meta.className = 'mcp-host-meta'
+        meta.textContent = preset.description
+        body.appendChild(meta)
+      }
+      row.appendChild(body)
+
+      const start = document.createElement('button')
+      start.type = 'button'
+      start.className = 'mcp-host-action'
+      start.textContent = 'Start'
+      start.addEventListener('click', () => startPreset(preset.name))
+      row.appendChild(start)
+
+      const del = document.createElement('button')
+      del.type = 'button'
+      del.className = 'mcp-host-action'
+      del.dataset.kind = 'detach'
+      del.textContent = t('common.delete')
+      del.addEventListener('click', () => deletePreset(preset.name))
+      row.appendChild(del)
+
+      el.presetsList.appendChild(row)
+    }
+  }
+
+  async function startPreset(name) {
+    el.presetsError.hidden = true
+    try {
+      await api('POST', `/api/presets/${encodeURIComponent(name)}/start`, {})
+      el.presetsDialog.close()
+      await refreshState()
+    } catch (err) {
+      el.presetsError.hidden = false
+      el.presetsError.textContent = err.message
+    }
+  }
+
+  async function deletePreset(name) {
+    if (!confirm(`Delete preset "${name}"?`)) return
+    el.presetsError.hidden = true
+    try {
+      await api('POST', `/api/presets/${encodeURIComponent(name)}/delete`, { confirm: true })
+      await loadPresets()
+    } catch (err) {
+      el.presetsError.hidden = false
+      el.presetsError.textContent = err.message
+    }
+  }
+
+  async function savePreset() {
+    el.presetsError.hidden = true
+    const runId = preferredRunId()
+    if (!runId) {
+      el.presetsError.hidden = false
+      el.presetsError.textContent = 'Open a run first, then save it as a preset.'
+      return
+    }
+    const name = el.presetNameInput.value.trim()
+    try {
+      const payload = await api('POST', '/api/presets/save', { run_id: runId, name, description: '' })
+      el.presetNameInput.value = ''
+      renderPresets((payload && payload.presets) || [])
+    } catch (err) {
+      el.presetsError.hidden = false
+      el.presetsError.textContent = err.message
+    }
+  }
+
   // --- wire up --------------------------------------------------------------
 
   el.newAgentBtn.addEventListener('click', () => openAgentDialog(preferredRunId()))
@@ -1695,6 +1907,12 @@
   el.doctorClose.addEventListener('click', () => el.doctorDialog.close())
   el.aboutBtn.addEventListener('click', openAboutDialog)
   el.aboutClose.addEventListener('click', () => el.aboutDialog.close())
+  el.configBtn.addEventListener('click', openConfigDialog)
+  el.configSave.addEventListener('click', saveConfig)
+  el.configClose.addEventListener('click', () => el.configDialog.close())
+  el.presetsBtn.addEventListener('click', openPresetsDialog)
+  el.presetSave.addEventListener('click', savePreset)
+  el.presetsClose.addEventListener('click', () => el.presetsDialog.close())
   el.emptyNewRun.addEventListener('click', openRunDialog)
   el.overlayNewRun.addEventListener('click', openRunDialog)
   el.overlayNewAgent.addEventListener('click', () => openAgentDialog(preferredRunId()))
@@ -1721,6 +1939,7 @@
   el.fProvider.addEventListener('change', () => {
     updateProviderSelection()
     renderModels()
+    updateLaunchKnobVisibility()
   })
   el.languageSelect.addEventListener('change', async () => {
     try {

@@ -24,6 +24,8 @@
         <select id="language-select" aria-label="Language"></select>
       </label>
       <button id="agent-control-btn" class="btn btn-secondary" type="button">Agent control</button>
+      <button id="config-btn" class="btn btn-secondary" type="button">Config</button>
+      <button id="presets-btn" class="btn btn-secondary" type="button">Presets</button>
       <button id="doctor-btn" class="btn btn-secondary" type="button">Doctor</button>
       <button id="about-btn" class="btn btn-secondary" type="button">About</button>
       <button id="new-agent-btn" class="btn btn-agent" type="button">New agent</button>
@@ -136,6 +138,28 @@
           </div>
           <span id="permissions-help" class="field-help">Ask first is safer. Skip prompts only in trusted workspaces.</span>
         </div>
+
+        <label class="field" id="auth-mode-field" hidden>
+          <span class="field-label">Auth</span>
+          <select id="f-auth-mode">
+            <option value="">Default login</option>
+            <option value="api-key">API key</option>
+          </select>
+          <span class="field-help">Default uses the signed-in CLI session. API key forces key-based auth.</span>
+        </label>
+
+        <label class="field" id="effort-field" hidden>
+          <span class="field-label">Reasoning effort</span>
+          <select id="f-effort">
+            <option value="">Provider default</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">Extra high</option>
+            <option value="max">Max</option>
+          </select>
+          <span class="field-help">Higher effort spends more on reasoning. Provider default is safest.</span>
+        </label>
       </div>
 
       <label class="field" id="agent-name-field">
@@ -209,6 +233,46 @@
       <div id="about-list" class="about-list" aria-label="about"></div>
       <div class="dialog-actions">
         <button type="button" id="about-close" class="btn">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="config-dialog" class="dialog mcp-dialog">
+    <div class="mcp-panel">
+      <div class="dialog-header">
+        <div class="dialog-title">Config</div>
+        <div class="dialog-subtitle">Edit global settings.</div>
+      </div>
+
+      <div id="config-list" class="config-list" aria-label="global settings"></div>
+      <div id="config-error" class="dialog-error" hidden></div>
+
+      <div class="dialog-actions">
+        <button type="button" id="config-save" class="btn btn-agent">Save</button>
+        <button type="button" id="config-close" class="btn">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="presets-dialog" class="dialog mcp-dialog">
+    <div class="mcp-panel">
+      <div class="dialog-header">
+        <div class="dialog-title">Presets</div>
+        <div class="dialog-subtitle">Saved agent-team templates.</div>
+      </div>
+
+      <div id="presets-list" class="mcp-host-list" aria-label="saved presets"></div>
+
+      <div class="field" id="preset-save-field">
+        <span class="field-label">Save current run</span>
+        <input id="preset-name-input" type="text" maxlength="64" placeholder="preset name" autocomplete="off" />
+        <button type="button" id="preset-save" class="btn btn-agent">Save current run</button>
+      </div>
+
+      <div id="presets-error" class="dialog-error" hidden></div>
+
+      <div class="dialog-actions">
+        <button type="button" id="presets-close" class="btn">Close</button>
       </div>
     </div>
   </dialog>

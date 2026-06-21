@@ -12,6 +12,7 @@ import {
   writeAgent,
   writeRun,
 } from '../../src/state/runs.js'
+import { loadConfig } from '../../src/state/config.js'
 import type { AgentRecord, Provider, RunRecord } from '../../src/state/types.js'
 
 let tmpDir: string
@@ -559,5 +560,87 @@ describe('static assets', () => {
 
     const missing = await get(handle.port, '/xterm.js')
     expect(missing.status).toBe(404)
+  })
+})
+
+describe('config and presets web actions', () => {
+  it('reads and updates global config through HTTP', async () => {
+    const handle = await start()
+
+    const read = await get(handle.port, '/api/config')
+    expect(read.status).toBe(200)
+    const readBody = JSON.parse(read.body) as { config: { max_agents: number }; fields: Array<{ key: string }> }
+    expect(readBody.config.max_agents).toBe(10)
+    expect(readBody.fields.map(f => f.key)).not.toContain('language')
+
+    const updated = await post(handle.port, '/api/config', { max_agents: 25, default_permissions: 'skip' })
+    expect(updated.status).toBe(200)
+    expect((JSON.parse(updated.body) as { config: { max_agents: number } }).config.max_agents).toBe(25)
+    expect(loadConfig().global.max_agents).toBe(25)
+
+    const bad = await post(handle.port, '/api/config', { max_agents: 0 })
+    expect(bad.status).toBe(400)
+    expect(JSON.parse(bad.body).error).toMatch(/positive integer/)
+
+    const empty = await post(handle.port, '/api/config', {})
+    expect(empty.status).toBe(400)
+    expect(JSON.parse(empty.body).error).toMatch(/no config fields/)
+  })
+
+  it('saves a run as a preset, lists, starts, and deletes it through HTTP', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+
+    writeRun(makeRun('pr'))
+    writeAgent(makeAgent('pr-root', 'pr', 'cc', 'root'))
+    writeAgent(makeAgent('pr-worker', 'pr', 'codex', 'worker'))
+
+    const saved = await post(handle.port, '/api/presets/save', { run_id: 'pr', name: 'web-team' })
+    expect(saved.status).toBe(200)
+    expect((JSON.parse(saved.body) as { preset: { name: string } }).preset.name).toBe('web-team')
+
+    const listed = await get(handle.port, '/api/presets')
+    expect(listed.status).toBe(200)
+    expect((JSON.parse(listed.body) as { presets: Array<{ name: string }> }).presets.map(p => p.name)).toContain('web-team')
+
+    const started = await post(handle.port, '/api/presets/web-team/start', {})
+    expect(started.status).toBe(200)
+    const startedBody = JSON.parse(started.body) as { run: { preset_name: string }; agents: unknown[] }
+    expect(startedBody.run.preset_name).toBe('web-team')
+    expect(startedBody.agents.length).toBe(2)
+
+    const noConfirm = await post(handle.port, '/api/presets/web-team/delete', {})
+    expect(noConfirm.status).toBe(400)
+    expect(JSON.parse(noConfirm.body).error).toMatch(/confirmation required/)
+
+    const deleted = await post(handle.port, '/api/presets/web-team/delete', { confirm: true })
+    expect(deleted.status).toBe(200)
+    expect(JSON.parse(deleted.body)).toEqual({ ok: true })
+
+    const afterDelete = await get(handle.port, '/api/presets')
+    expect((JSON.parse(afterDelete.body) as { presets: unknown[] }).presets).toEqual([])
+  })
+
+  it('rejects starting an unknown preset', async () => {
+    const handle = await start()
+    const res = await post(handle.port, '/api/presets/ghost/start', {})
+    expect(res.status).toBe(400)
+    expect(JSON.parse(res.body).error).toMatch(/preset not found/)
+  })
+
+  it('passes auth_mode and effort to create, rejecting invalid values', async () => {
+    installFakeRuntimeBins()
+    const handle = await start()
+
+    const ok = await post(handle.port, '/api/terminals', { provider: 'claude-code', model: '', auth_mode: 'api-key', effort: 'high' })
+    expect(ok.status).toBe(200)
+
+    const badAuth = await post(handle.port, '/api/terminals', { provider: 'claude-code', model: '', auth_mode: 'nope' })
+    expect(badAuth.status).toBe(400)
+    expect(JSON.parse(badAuth.body).error).toMatch(/unknown auth mode/)
+
+    const badEffort = await post(handle.port, '/api/terminals', { provider: 'claude-code', model: '', effort: 'turbo' })
+    expect(badEffort.status).toBe(400)
+    expect(JSON.parse(badEffort.body).error).toMatch(/unknown effort/)
   })
 })

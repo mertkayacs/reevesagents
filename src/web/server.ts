@@ -14,14 +14,15 @@ import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './g
 import { buildWebState, listWebProviders } from './state.js'
 import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
-import { startRun, spawnWorker, killAgent, stopRun } from '../launcher/runtime.js'
+import { startRun, startRunFromPreset, spawnWorker, killAgent, stopRun } from '../launcher/runtime.js'
 import { normalizeProvider } from '../launcher/providers.js'
 import { modelValuesForProvider } from '../launcher/model-catalog.js'
 import { providerDisplayName } from '../utils/display.js'
-import type { Permissions, Provider } from '../state/types.js'
-import { loadConfig, saveConfig } from '../state/config.js'
+import type { AuthMode, Effort, Permissions, Provider } from '../state/types.js'
+import { loadConfig, saveConfig, setConfigValues, CONFIG_FIELDS } from '../state/config.js'
 import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
 import { localeCatalog } from '../i18n/catalog.js'
+import { listSavedTrees, savePresetFromRun, deleteSavedTree } from '../state/store.js'
 import {
   archiveAndRemoveRun,
   autoCleanupRuns,
@@ -232,6 +233,18 @@ function normalizePermissionsInput(raw: unknown): Permissions | undefined {
   throw new Error('unknown permission mode')
 }
 
+function parseAuthModeInput(raw: unknown): AuthMode | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (raw === 'default' || raw === 'api-key') return raw
+  throw new Error('unknown auth mode')
+}
+
+function parseEffortInput(raw: unknown): Effort | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (raw === 'default' || raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh' || raw === 'max') return raw
+  throw new Error('unknown effort')
+}
+
 // Creates a terminal: a worker in an existing run, or a fresh single-terminal run.
 // Provider is validated against the known set (it maps to the launched binary);
 // nickname is sanitized; the prompt is typed into the pane by the runtime, not shelled.
@@ -241,6 +254,8 @@ async function createTerminal(body: Record<string, unknown>): Promise<{ id: stri
   if (!normalizedProvider) throw new Error('unknown provider')
   const model = normalizeModel(normalizedProvider, body.model)
   const permissions = normalizePermissionsInput(body.permissions)
+  const auth_mode = parseAuthModeInput(body.auth_mode)
+  const effort = parseEffortInput(body.effort)
   const nickname = sanitizeNickname(typeof body.nickname === 'string' ? body.nickname : '')
   const runName = sanitizeRunName(typeof body.run_name === 'string' ? body.run_name : '')
   const prompt = typeof body.prompt === 'string' ? body.prompt : ''
@@ -248,7 +263,7 @@ async function createTerminal(body: Record<string, unknown>): Promise<{ id: stri
 
   if (runId) {
     readRun(runId)
-    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model, permissions, task: prompt })
+    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model, permissions, auth_mode, effort, task: prompt })
     return { id: agent.id, run_id: agent.run_id }
   }
 
@@ -258,7 +273,7 @@ async function createTerminal(body: Record<string, unknown>): Promise<{ id: stri
   const result = startRun({
     name: runName || nickname || providerDisplayName(normalizedProvider),
     working_dir: workingDir,
-    root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, task: prompt },
+    root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, auth_mode, effort, task: prompt },
   })
   const root = result.agents[0]
   if (!root) throw new Error('run created no agent')
@@ -301,6 +316,47 @@ function detachMcpHostAction(body: Record<string, unknown>): unknown {
 
 function attachAllMcpHostsAction(): unknown {
   return { results: attachAllMcpHosts(), hosts: mcpHostStatus() }
+}
+
+// Editable global settings. The config panel reads the field specs plus current
+// values, then posts a patch; setConfigValues validates each field the same way
+// the CLI, MCP, and TUI do. Language is handled by /api/language (it needs the
+// live language payload), so the panel edits only the numeric and permission fields.
+function configPayload(): unknown {
+  return { config: loadConfig().global, fields: CONFIG_FIELDS.filter(field => field.kind !== 'language') }
+}
+
+function updateConfigAction(body: Record<string, unknown>): unknown {
+  const patch: Record<string, unknown> = {}
+  for (const field of CONFIG_FIELDS) {
+    if (body[field.key] !== undefined) patch[field.key] = body[field.key]
+  }
+  if (Object.keys(patch).length === 0) throw new Error('no config fields to set')
+  return { config: setConfigValues(patch).global }
+}
+
+// Saved presets: reusable agent-team templates shared with the CLI, MCP, and TUI.
+function presetsPayload(): unknown {
+  return { presets: listSavedTrees() }
+}
+
+function savePresetAction(body: Record<string, unknown>): unknown {
+  const runId = typeof body.run_id === 'string' ? body.run_id : ''
+  if (!runId) throw new Error('run_id is required')
+  const name = typeof body.name === 'string' ? body.name : ''
+  const description = typeof body.description === 'string' ? body.description : ''
+  return { preset: savePresetFromRun(runId, name, description), presets: listSavedTrees() }
+}
+
+function startPresetAction(name: string): unknown {
+  if (!listSavedTrees().some(preset => preset.name === name)) throw new Error('preset not found')
+  const result = startRunFromPreset(name)
+  return { run: result.run, agents: result.agents }
+}
+
+function deletePresetAction(name: string): void {
+  if (!listSavedTrees().some(preset => preset.name === name)) throw new Error('preset not found')
+  deleteSavedTree(name)
 }
 
 function killTerminal(id: string): void {
@@ -386,6 +442,22 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     }
     return
   }
+  if (method === 'GET' && path === '/api/config') {
+    try {
+      sendJson(res, 200, configPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/presets') {
+    try {
+      sendJson(res, 200, presetsPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
   if (method === 'GET' && path === '/api/events') {
     ctx.sse.add(res)
     return
@@ -434,6 +506,45 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
   if (method === 'POST' && path === '/api/mcp-hosts/attach-all') {
     try {
       sendJson(res, 200, attachAllMcpHostsAction())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/config') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, updateConfigAction(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/presets/save') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, savePresetAction(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const startPresetMatch = path.match(/^\/api\/presets\/([^/]+)\/start$/)
+  if (method === 'POST' && startPresetMatch) {
+    try {
+      sendJson(res, 200, startPresetAction(decodeURIComponent(startPresetMatch[1]!)))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deletePresetMatch = path.match(/^\/api\/presets\/([^/]+)\/delete$/)
+  if (method === 'POST' && deletePresetMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deletePresetAction(decodeURIComponent(deletePresetMatch[1]!))
+      sendJson(res, 200, { ok: true })
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }

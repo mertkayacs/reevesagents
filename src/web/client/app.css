@@ -1823,6 +1823,23 @@ button { letter-spacing: 0; }
   text-align: center;
 }
 
+/* config + presets panels reuse the mcp dialog shell */
+.config-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+#preset-save-field {
+  gap: var(--s-2);
+}
+
+#preset-save {
+  align-self: flex-start;
+}
+
 /* scrollbar */
 .sidebar::-webkit-scrollbar { width: 10px; }
 .sidebar::-webkit-scrollbar-thumb {
