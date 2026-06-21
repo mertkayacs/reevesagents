@@ -5,8 +5,8 @@
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync, renameSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import type { SavedTree, SavedTreeSlot } from './types.js'
-import { stateRoot } from './runs.js'
+import type { AgentRecord, SavedTree, SavedTreeSlot } from './types.js'
+import { listAgents, nowIso, readRun, stateRoot } from './runs.js'
 import { isProvider } from '../launcher/providers.js'
 
 function stateDir(): string {
@@ -104,4 +104,52 @@ export function saveSavedTree(tree: SavedTree): void {
 
 export function deleteSavedTree(name: string): void {
   try { unlinkSync(join(savedTreesDir(), `${name}.json`)) } catch { /* already gone */ }
+}
+
+// Filesystem-safe preset name: presets are stored as <name>.json under the presets
+// dir, so restrict a user-supplied name to characters that cannot traverse paths.
+export function sanitizePresetName(raw: string): string {
+  return raw.trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 64)
+}
+
+function agentToSlot(agent: AgentRecord): SavedTreeSlot {
+  // AgentRecord does not persist auth_mode/effort, so a run -> preset capture
+  // defaults those two; every other launch field carries over verbatim.
+  return {
+    nickname_template: agent.nickname,
+    provider: agent.provider,
+    model: agent.model,
+    auth_mode: 'default',
+    effort: 'default',
+    initial_prompt: agent.task,
+    working_dir: agent.working_dir,
+    permissions: agent.permissions,
+    rc_enabled: agent.rc_enabled,
+  }
+}
+
+// Capture a live run's agents into a reusable preset: the run's root agent becomes
+// the preset root and the remaining windowed agents become workers in start order.
+// Re-saving under an existing name keeps its created_at. Throws on an empty name or
+// a run with no capturable (non-headless) agents.
+export function savePresetFromRun(runId: string, name: string, description = ''): SavedTree {
+  const presetName = sanitizePresetName(name)
+  if (!presetName) throw new Error('preset name is required')
+  const run = readRun(runId)
+  const agents = listAgents(run.id).filter(agent => !agent.headless)
+  if (agents.length === 0) throw new Error('run has no agents to save as a preset')
+  const root = agents.find(agent => agent.role === 'root') ?? agents[0]!
+  const workers = agents.filter(agent => agent !== root)
+  const existing = loadSavedTree(presetName)
+  const now = nowIso()
+  const tree: SavedTree = {
+    name: presetName,
+    description,
+    root: agentToSlot(root),
+    workers: workers.map(agentToSlot),
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+  }
+  saveSavedTree(tree)
+  return tree
 }

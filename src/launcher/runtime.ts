@@ -13,6 +13,7 @@ import type {
   Permissions,
   Provider,
   RunRecord,
+  SavedTreeSlot,
 } from '../state/types.js'
 import {
   agentPath,
@@ -31,6 +32,7 @@ import {
   writeRun,
 } from '../state/runs.js'
 import { loadConfig } from '../state/config.js'
+import { loadSavedTree } from '../state/store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { providerDisplayName, redactSecrets } from '../utils/display.js'
@@ -393,6 +395,39 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
     const detail = childProcessOutput(err) || (err instanceof Error ? err.message : 'tmux returned a non-zero exit code')
     throw new Error(`Failed to start run ${request.name}: ${detail}`, { cause: err })
   }
+}
+
+function slotToLaunchConfig(slot: SavedTreeSlot): AgentLaunchConfig {
+  return {
+    nickname: slot.nickname_template,
+    provider: slot.provider,
+    model: slot.model,
+    auth_mode: slot.auth_mode,
+    effort: slot.effort,
+    task: slot.initial_prompt,
+    working_dir: slot.working_dir,
+    permissions: slot.permissions,
+    rc_enabled: slot.rc_enabled,
+  }
+}
+
+// Start a run from a saved preset. The preset must already exist. opts.name
+// overrides the run name (defaults to the preset name); opts.working_dir sets the
+// run base dir, while each slot's own working_dir still wins when it is set.
+export function startRunFromPreset(
+  presetName: string,
+  opts: { name?: string; working_dir?: string } = {},
+  options: RuntimeOptions = {},
+): { run: RunRecord; agents: AgentRecord[] } {
+  const tree = loadSavedTree(presetName)
+  if (!tree) throw new Error(`preset not found: ${presetName}`)
+  return startRun({
+    name: opts.name?.trim() || tree.name,
+    working_dir: opts.working_dir || process.cwd(),
+    root: slotToLaunchConfig(tree.root),
+    workers: tree.workers.map(slotToLaunchConfig),
+    preset_name: tree.name,
+  }, options)
 }
 
 function createHeadlessHeadAgent(
