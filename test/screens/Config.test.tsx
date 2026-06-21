@@ -4,11 +4,11 @@ import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { Config } from '../../src/screens/Config.js'
-import * as RouterModule from '../../src/router.js'
-import { ToastProvider } from '../../src/state/ToastContext.js'
+import { Config } from '../../src/tui/screens/Config.js'
+import * as RouterModule from '../../src/tui/router.js'
+import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
 
-vi.mock('../../src/router.js')
+vi.mock('../../src/tui/router.js')
 
 let tmpDir: string
 

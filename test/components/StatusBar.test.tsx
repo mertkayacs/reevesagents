@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { render } from 'ink-testing-library'
 import React from 'react'
-import { StatusBar } from '../../src/components/StatusBar.js'
-import { ToastProvider } from '../../src/state/ToastContext.js'
+import { StatusBar } from '../../src/tui/components/StatusBar.js'
+import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
 
 // Mock Toast context for testing.
 const renderWithToast = (component: React.ReactNode) => {

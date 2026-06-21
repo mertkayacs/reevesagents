@@ -4,16 +4,16 @@ import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AddWorker } from '../../../src/screens/run/AddWorker.js'
-import { RouterContext } from '../../../src/router.js'
-import { ToastProvider } from '../../../src/state/ToastContext.js'
-import { WorkerDraftProvider } from '../../../src/state/WorkerDraftContext.js'
-import { writeRun } from '../../../src/state/runs.js'
-import type { RouterContextValue, RunRecord } from '../../../src/state/types.js'
-import * as RuntimeModule from '../../../src/launcher/runtime.js'
+import { AddWorker } from '../../../src/tui/screens/run/AddWorker.js'
+import { RouterContext } from '../../../src/tui/router.js'
+import { ToastProvider } from '../../../src/tui/contexts/ToastContext.js'
+import { WorkerDraftProvider } from '../../../src/tui/contexts/WorkerDraftContext.js'
+import { writeRun } from '../../../src/core/runs.js'
+import type { RouterContextValue, RunRecord } from '../../../src/core/types.js'
+import * as RuntimeModule from '../../../src/core/runtime.js'
 
-vi.mock('../../../src/launcher/runtime.js', async () => {
-  const actual = await vi.importActual<typeof import('../../../src/launcher/runtime.js')>('../../../src/launcher/runtime.js')
+vi.mock('../../../src/core/runtime.js', async () => {
+  const actual = await vi.importActual<typeof import('../../../src/core/runtime.js')>('../../../src/core/runtime.js')
   return {
     ...actual,
     spawnWorker: vi.fn(),

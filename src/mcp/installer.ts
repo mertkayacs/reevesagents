@@ -6,8 +6,8 @@
 // reevesagents.
 
 import { execFileSync } from 'node:child_process'
-import { PROVIDER_REGISTRY } from '../launcher/provider-registry.js'
-import type { Provider } from '../state/types.js'
+import { PROVIDER_REGISTRY } from '../core/provider-registry.js'
+import type { Provider } from '../core/types.js'
 
 const SERVER_NAME = 'reevesagents'
 const SERVER_BIN = 'reevesagents'

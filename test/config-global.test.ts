@@ -18,7 +18,7 @@ describe('config global fields', () => {
   })
 
   it('loads global defaults when config missing', async () => {
-    const { loadConfig } = await import('../src/state/config.js')
+    const { loadConfig } = await import('../src/core/config.js')
     const cfg = loadConfig()
     expect(cfg.global.peek_interval_ms).toBe(5000)
     expect(cfg.global.peek_lines).toBe(10)
@@ -30,7 +30,7 @@ describe('config global fields', () => {
   })
 
   it('preserves global config on save and reload', async () => {
-    const { loadConfig, saveConfig } = await import('../src/state/config.js')
+    const { loadConfig, saveConfig } = await import('../src/core/config.js')
     const cfg = loadConfig()
     cfg.global.peek_interval_ms = 5000
     cfg.global.default_permissions = 'ask'

@@ -20,7 +20,7 @@ afterEach(() => {
 
 describe('seed-presets', () => {
   it('defaultPresets returns the two expected trees with correct providers', async () => {
-    const { defaultPresets } = await import('../src/state/seed-presets.js')
+    const { defaultPresets } = await import('../src/core/seed-presets.js')
     const presets = defaultPresets()
     expect(presets).toHaveLength(2)
 
@@ -34,7 +34,7 @@ describe('seed-presets', () => {
   })
 
   it('every slot has a non-empty initial_prompt', async () => {
-    const { defaultPresets } = await import('../src/state/seed-presets.js')
+    const { defaultPresets } = await import('../src/core/seed-presets.js')
     for (const p of defaultPresets()) {
       expect(p.root.initial_prompt.length).toBeGreaterThan(0)
       for (const w of p.workers) {
@@ -44,8 +44,8 @@ describe('seed-presets', () => {
   })
 
   it('seedDefaultPresetsIfEmpty writes both presets when the dir is empty', async () => {
-    const { seedDefaultPresetsIfEmpty } = await import('../src/state/seed-presets.js')
-    const { listSavedTrees } = await import('../src/state/store.js')
+    const { seedDefaultPresetsIfEmpty } = await import('../src/core/seed-presets.js')
+    const { listSavedTrees } = await import('../src/core/store.js')
 
     const written = seedDefaultPresetsIfEmpty()
     expect(written.sort()).toEqual(['claude-code-pair', 'research-team'])
@@ -57,8 +57,8 @@ describe('seed-presets', () => {
   })
 
   it('seedDefaultPresetsIfEmpty is a no-op when any preset already exists', async () => {
-    const { seedDefaultPresetsIfEmpty } = await import('../src/state/seed-presets.js')
-    const { savedTreesDir, saveSavedTree } = await import('../src/state/store.js')
+    const { seedDefaultPresetsIfEmpty } = await import('../src/core/seed-presets.js')
+    const { savedTreesDir, saveSavedTree } = await import('../src/core/store.js')
 
     // Pre-seed a single user preset.
     saveSavedTree({
@@ -85,7 +85,7 @@ describe('seed-presets', () => {
     const written = seedDefaultPresetsIfEmpty()
     expect(written).toEqual([])
 
-    const { listSavedTrees } = await import('../src/state/store.js')
+    const { listSavedTrees } = await import('../src/core/store.js')
     const names = listSavedTrees().map(t => t.name)
     expect(names).toEqual(['my-thing'])
   })
@@ -94,12 +94,12 @@ describe('seed-presets', () => {
     // Pre-create the dir as a regular file so readdir fails. seed should
     // catch the error and either skip or write through saveSavedTree (which
     // will fail too); either way it must not throw.
-    const { savedTreesDir } = await import('../src/state/store.js')
+    const { savedTreesDir } = await import('../src/core/store.js')
     const dir = savedTreesDir()
     mkdirSync(join(dir, '..'), { recursive: true })
     writeFileSync(dir, 'not a dir', 'utf-8')
 
-    const { seedDefaultPresetsIfEmpty } = await import('../src/state/seed-presets.js')
+    const { seedDefaultPresetsIfEmpty } = await import('../src/core/seed-presets.js')
     expect(() => seedDefaultPresetsIfEmpty()).not.toThrow()
   })
 })

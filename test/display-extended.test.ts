@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PROVIDERS } from '../src/launcher/providers.js'
+import { PROVIDERS } from '../src/core/providers.js'
 
 describe('providerColor — extended providers', () => {
   it('hermes returns muted rose hex', async () => {

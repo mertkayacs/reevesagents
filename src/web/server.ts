@@ -14,15 +14,15 @@ import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './g
 import { buildWebState, listWebProviders } from './state.js'
 import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
-import { startRun, startRunFromPreset, spawnWorker, killAgent, stopRun } from '../launcher/runtime.js'
-import { normalizeProvider } from '../launcher/providers.js'
-import { modelValuesForProvider } from '../launcher/model-catalog.js'
+import { startRun, startRunFromPreset, spawnWorker, killAgent, stopRun } from '../core/runtime.js'
+import { normalizeProvider } from '../core/providers.js'
+import { modelValuesForProvider } from '../core/model-catalog.js'
 import { providerDisplayName } from '../utils/display.js'
-import type { AuthMode, Effort, Permissions, Provider } from '../state/types.js'
-import { loadConfig, saveConfig, setConfigValues, CONFIG_FIELDS } from '../state/config.js'
+import type { AuthMode, Effort, Permissions, Provider } from '../core/types.js'
+import { loadConfig, saveConfig, setConfigValues, CONFIG_FIELDS } from '../core/config.js'
 import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
 import { localeCatalog } from '../i18n/catalog.js'
-import { listSavedTrees, savePresetFromRun, deleteSavedTree } from '../state/store.js'
+import { listSavedTrees, savePresetFromRun, deleteSavedTree } from '../core/store.js'
 import {
   archiveAndRemoveRun,
   autoCleanupRuns,
@@ -31,9 +31,9 @@ import {
   findAgent,
   listRunHistory,
   readRun,
-} from '../state/runs.js'
-import { resolveRunApproval } from '../state/approvals.js'
-import { runDoctor } from '../launcher/doctor.js'
+} from '../core/runs.js'
+import { resolveRunApproval } from '../core/approvals.js'
+import { runDoctor } from '../core/doctor.js'
 import { REEVESAGENTS_VERSION } from '../version.js'
 import {
   hostStatus as mcpHostStatus,

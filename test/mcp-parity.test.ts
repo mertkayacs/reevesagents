@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, RunRecord } from '../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../src/core/types.js'
 
 // Parity coverage for the MCP control surface: the spawn launch knobs
 // (permissions / auth_mode / effort) reaching the runtime, the three delete
@@ -109,7 +109,7 @@ function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = 
 describe('mcp parity tools', () => {
   describe('spawn launch knobs', () => {
     it('honors permissions:skip on the spawned worker', async () => {
-      const { writeRun } = await import('../src/state/runs.js')
+      const { writeRun } = await import('../src/core/runs.js')
       writeRun(makeRun('skip-run'))
 
       const result = await call('spawn', { run_id: 'skip-run', provider: 'cc', permissions: 'skip' })
@@ -118,12 +118,12 @@ describe('mcp parity tools', () => {
       expect(agent.permissions).toBe('skip')
 
       // The persisted record carries the same mode, so a later reader sees it too.
-      const { readAgent } = await import('../src/state/runs.js')
+      const { readAgent } = await import('../src/core/runs.js')
       expect(readAgent('skip-run', agent.id).permissions).toBe('skip')
     })
 
     it('falls back to the global default for an unknown permissions value', async () => {
-      const { writeRun } = await import('../src/state/runs.js')
+      const { writeRun } = await import('../src/core/runs.js')
       writeRun(makeRun('bad-perm-run'))
 
       // The global default is 'ask'; an unknown value must normalize away, not pass through.
@@ -133,7 +133,7 @@ describe('mcp parity tools', () => {
     })
 
     it('passes auth_mode and effort through to the launched command', async () => {
-      const { writeRun } = await import('../src/state/runs.js')
+      const { writeRun } = await import('../src/core/runs.js')
       writeRun(makeRun('knobs-run'))
 
       // cc renders both knobs as launch flags (--bare for api-key, --effort high),
@@ -158,7 +158,7 @@ describe('mcp parity tools', () => {
 
   describe('delete', () => {
     it('deletes an ended agent and refuses a live one', async () => {
-      const { writeRun, writeAgent, listAgents } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent, listAgents } = await import('../src/core/runs.js')
       writeRun(makeRun('del-run'))
       writeAgent(makeAgent('live-agent', 'del-run', { ended_at: null }))
       writeAgent(makeAgent('ended-agent', 'del-run', { ended_at: '2026-01-01T00:02:00.000Z' }))
@@ -183,7 +183,7 @@ describe('mcp parity tools', () => {
 
   describe('delete_run', () => {
     it('deletes an ended run, archiving it to history', async () => {
-      const { writeRun, listRuns, listRunHistory } = await import('../src/state/runs.js')
+      const { writeRun, listRuns, listRunHistory } = await import('../src/core/runs.js')
       writeRun(makeRun('ended-run', { status: 'ended', ended_at: '2026-01-01T00:03:00.000Z' }))
 
       const result = await call('delete_run', { run_id: 'ended-run' })
@@ -195,7 +195,7 @@ describe('mcp parity tools', () => {
     })
 
     it('refuses to delete a still-running run', async () => {
-      const { writeRun } = await import('../src/state/runs.js')
+      const { writeRun } = await import('../src/core/runs.js')
       writeRun(makeRun('running-run'))
 
       const result = await call('delete_run', { run_id: 'running-run' })
@@ -212,7 +212,7 @@ describe('mcp parity tools', () => {
 
   describe('delete_history and list_history', () => {
     it('lists then deletes an existing history record', async () => {
-      const { writeRun, archiveAndRemoveRun } = await import('../src/state/runs.js')
+      const { writeRun, archiveAndRemoveRun } = await import('../src/core/runs.js')
       // Seed a real history record by archiving an ended run.
       writeRun(makeRun('hist-run', { status: 'ended', ended_at: '2026-01-01T00:04:00.000Z' }))
       archiveAndRemoveRun('hist-run', 'ended')
@@ -238,7 +238,7 @@ describe('mcp parity tools', () => {
 
   describe('open', () => {
     it('switches the tmux client to a run reeves tab', async () => {
-      const { writeRun } = await import('../src/state/runs.js')
+      const { writeRun } = await import('../src/core/runs.js')
       writeRun(makeRun('open-run'))
 
       const result = await call('open', { id: 'open-run' })
@@ -250,7 +250,7 @@ describe('mcp parity tools', () => {
     })
 
     it('opens a specific agent window when given an agent id', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('open-run2'))
       writeAgent(makeAgent('open-agent', 'open-run2', { tmux_window_id: '@7' }))
 
@@ -322,7 +322,7 @@ describe('mcp parity tools', () => {
 
   describe('presets', () => {
     it('saves a run as a preset, lists, starts, and deletes it', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('pr'))
       writeAgent(makeAgent('pr-root', 'pr', { role: 'root', nickname: 'lead', provider: 'cc', task: '' }))
       writeAgent(makeAgent('pr-w', 'pr', { role: 'worker', nickname: 'hand', provider: 'codex', task: '' }))

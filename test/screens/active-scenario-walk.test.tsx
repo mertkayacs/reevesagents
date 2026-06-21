@@ -7,39 +7,39 @@ import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RouterContext } from '../../src/router.js'
-import { ToastProvider } from '../../src/state/ToastContext.js'
-import { WizardProvider } from '../../src/state/WizardContext.js'
-import { WorkerDraftProvider } from '../../src/state/WorkerDraftContext.js'
-import { Welcome } from '../../src/screens/Welcome.js'
-import { Runs } from '../../src/screens/Runs.js'
-import { Run } from '../../src/screens/Run.js'
-import { RunAgents } from '../../src/screens/run/Agents.js'
-import { RunOutput } from '../../src/screens/run/Output.js'
-import { AgentDetail } from '../../src/screens/AgentDetail.js'
-import { AgentOutput } from '../../src/screens/run/agent/Output.js'
-import { AgentTask } from '../../src/screens/run/agent/Task.js'
-import { AgentKill } from '../../src/screens/run/agent/Kill.js'
-import { AddWorker } from '../../src/screens/run/AddWorker.js'
-import { RunStop } from '../../src/screens/run/Stop.js'
-import { NewRun } from '../../src/screens/NewRun.js'
-import { NewRunBasics } from '../../src/screens/newrun/02Basics.js'
-import { NewRunRoot } from '../../src/screens/newrun/03Root.js'
-import { NewRunWorkers } from '../../src/screens/newrun/04Workers.js'
-import { NewRunReview } from '../../src/screens/newrun/05Review.js'
-import { Settings } from '../../src/screens/Settings.js'
-import { Reference } from '../../src/screens/Reference.js'
-import { Credits } from '../../src/screens/Credits.js'
-import { writeAgent, writeRun } from '../../src/state/runs.js'
+import { RouterContext } from '../../src/tui/router.js'
+import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
+import { WizardProvider } from '../../src/tui/contexts/WizardContext.js'
+import { WorkerDraftProvider } from '../../src/tui/contexts/WorkerDraftContext.js'
+import { Welcome } from '../../src/tui/screens/Welcome.js'
+import { Runs } from '../../src/tui/screens/Runs.js'
+import { Run } from '../../src/tui/screens/Run.js'
+import { RunAgents } from '../../src/tui/screens/run/Agents.js'
+import { RunOutput } from '../../src/tui/screens/run/Output.js'
+import { AgentDetail } from '../../src/tui/screens/AgentDetail.js'
+import { AgentOutput } from '../../src/tui/screens/run/agent/Output.js'
+import { AgentTask } from '../../src/tui/screens/run/agent/Task.js'
+import { AgentKill } from '../../src/tui/screens/run/agent/Kill.js'
+import { AddWorker } from '../../src/tui/screens/run/AddWorker.js'
+import { RunStop } from '../../src/tui/screens/run/Stop.js'
+import { NewRun } from '../../src/tui/screens/NewRun.js'
+import { NewRunBasics } from '../../src/tui/screens/newrun/02Basics.js'
+import { NewRunRoot } from '../../src/tui/screens/newrun/03Root.js'
+import { NewRunWorkers } from '../../src/tui/screens/newrun/04Workers.js'
+import { NewRunReview } from '../../src/tui/screens/newrun/05Review.js'
+import { Settings } from '../../src/tui/screens/Settings.js'
+import { Reference } from '../../src/tui/screens/Reference.js'
+import { Credits } from '../../src/tui/screens/Credits.js'
+import { writeAgent, writeRun } from '../../src/core/runs.js'
 import type {
   AgentRecord,
   RouterContextValue,
   RunRecord,
   ScreenName,
-} from '../../src/state/types.js'
+} from '../../src/core/types.js'
 
-vi.mock('../../src/state/runs.js', async () => {
-  const actual = await vi.importActual<typeof import('../../src/state/runs.js')>('../../src/state/runs.js')
+vi.mock('../../src/core/runs.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/core/runs.js')>('../../src/core/runs.js')
   return {
     ...actual,
     autoCleanupRuns: vi.fn(() => ({ removed: [], archived: [] })),
@@ -47,7 +47,7 @@ vi.mock('../../src/state/runs.js', async () => {
   }
 })
 
-vi.mock('../../src/launcher/runtime.js', () => ({
+vi.mock('../../src/core/runtime.js', () => ({
   openRunTabs: vi.fn(),
   openAgent: vi.fn(),
   openReeves: vi.fn(),

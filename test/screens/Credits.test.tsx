@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/router.js'
+import { Router } from '../../src/tui/router.js'
 import { REEVESAGENTS_VERSION } from '../../src/version.js'
 
 describe('Credits screen', () => {

@@ -12,7 +12,7 @@ import type { Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket, type RawData } from 'ws'
 import pty from '@lydell/node-pty'
-import { findAgent, readRun } from '../state/runs.js'
+import { findAgent, readRun } from '../core/runs.js'
 import { isAllowedHostHeader, isAllowedOrigin } from './guards.js'
 
 type Pty = ReturnType<typeof pty.spawn>

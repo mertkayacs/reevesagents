@@ -36,7 +36,7 @@ import {
   startRunWithHead,
   stopRun,
   type AllowedKey,
-} from '../launcher/runtime.js'
+} from '../core/runtime.js'
 import { detectHostProvider } from './host.js'
 import {
   archiveAndRemoveRun,
@@ -47,13 +47,13 @@ import {
   listRunHistory,
   listRuns,
   readRun,
-} from '../state/runs.js'
-import { detectAvailable, isProvider } from '../launcher/providers.js'
-import { PROVIDER_DEFS } from '../launcher/provider-registry.js'
-import { runDoctor } from '../launcher/doctor.js'
+} from '../core/runs.js'
+import { detectAvailable, isProvider } from '../core/providers.js'
+import { PROVIDER_DEFS } from '../core/provider-registry.js'
+import { runDoctor } from '../core/doctor.js'
 import { hostStatus, attach, attachAll, detach } from './installer.js'
-import { listSavedTrees, savePresetFromRun, deleteSavedTree } from '../state/store.js'
-import { CONFIG_FIELDS, loadConfig, setConfigValues } from '../state/config.js'
+import { listSavedTrees, savePresetFromRun, deleteSavedTree } from '../core/store.js'
+import { CONFIG_FIELDS, loadConfig, setConfigValues } from '../core/config.js'
 import {
   createRunApproval,
   listRunApprovals,
@@ -61,8 +61,8 @@ import {
   resolveRunApproval,
   type ApprovalRisk,
   type ApprovalStatus,
-} from '../state/approvals.js'
-import type { AuthMode, Effort, Permissions, Provider } from '../state/types.js'
+} from '../core/approvals.js'
+import type { AuthMode, Effort, Permissions, Provider } from '../core/types.js'
 import { REEVESAGENTS_VERSION } from '../version.js'
 
 // Read-only at module load: which host CLI launched us, if any. Used to make the

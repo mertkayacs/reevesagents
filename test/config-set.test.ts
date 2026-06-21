@@ -20,14 +20,14 @@ afterEach(() => {
 
 describe('config editing', () => {
   it('CONFIG_FIELDS lists every editable global field in order', async () => {
-    const { CONFIG_FIELDS } = await import('../src/state/config.js')
+    const { CONFIG_FIELDS } = await import('../src/core/config.js')
     expect(CONFIG_FIELDS.map(f => f.key)).toEqual([
       'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms', 'default_permissions', 'language',
     ])
   })
 
   it('setConfigValues validates and persists a patch', async () => {
-    const { setConfigValues, loadConfig } = await import('../src/state/config.js')
+    const { setConfigValues, loadConfig } = await import('../src/core/config.js')
     setConfigValues({ max_agents: 20, default_permissions: 'skip', language: 'tr' })
     const cfg = loadConfig()
     expect(cfg.global.max_agents).toBe(20)
@@ -36,7 +36,7 @@ describe('config editing', () => {
   })
 
   it('setConfigValues rejects invalid values and persists nothing', async () => {
-    const { setConfigValues, loadConfig } = await import('../src/state/config.js')
+    const { setConfigValues, loadConfig } = await import('../src/core/config.js')
     expect(() => setConfigValues({ max_agents: 0 })).toThrow(/positive integer/)
     expect(() => setConfigValues({ max_agents: -3 })).toThrow(/positive integer/)
     expect(() => setConfigValues({ peek_lines: 1.5 })).toThrow(/positive integer/)
@@ -48,13 +48,13 @@ describe('config editing', () => {
   })
 
   it('ready_delay_ms accepts zero', async () => {
-    const { setConfigValues, loadConfig } = await import('../src/state/config.js')
+    const { setConfigValues, loadConfig } = await import('../src/core/config.js')
     setConfigValues({ ready_delay_ms: 0 })
     expect(loadConfig().global.ready_delay_ms).toBe(0)
   })
 
   it('parseConfigValue coerces numeric strings and validates the key', async () => {
-    const { parseConfigValue } = await import('../src/state/config.js')
+    const { parseConfigValue } = await import('../src/core/config.js')
     expect(parseConfigValue('max_agents', '15')).toBe(15)
     expect(parseConfigValue('default_permissions', 'skip')).toBe('skip')
     expect(parseConfigValue('language', 'de')).toBe('de')

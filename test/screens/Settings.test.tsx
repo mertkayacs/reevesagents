@@ -4,8 +4,8 @@ import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { Router } from '../../src/router.js'
-import { loadConfig } from '../../src/state/config.js'
+import { Router } from '../../src/tui/router.js'
+import { loadConfig } from '../../src/core/config.js'
 
 // Pin a tall viewport so Settings renders its full layout (all languages visible)
 // instead of the height-dependent compact window, which would scroll Türkçe off.

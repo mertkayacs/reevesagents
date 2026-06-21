@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Tagline } from '../../src/components/Tagline.js'
+import { Tagline } from '../../src/tui/components/Tagline.js'
 
 describe('Tagline', () => {
   it('renders full text on standard height (rows >= 22)', () => {

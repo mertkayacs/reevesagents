@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RunOutput } from '../../src/screens/run/Output.js'
+import { RunOutput } from '../../src/tui/screens/run/Output.js'
 
 describe('Run › Output (Detail)', () => {
   it('exports RunOutput component', () => {

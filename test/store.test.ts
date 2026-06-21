@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SavedTree } from '../src/state/types.js'
+import type { SavedTree } from '../src/core/types.js'
 
 let testName: string
 let tmpHome: string
@@ -17,7 +17,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  const { deleteSavedTree } = await import('../src/state/store.js')
+  const { deleteSavedTree } = await import('../src/core/store.js')
   deleteSavedTree(testName)
   if (oldHome === undefined) delete process.env.HOME
   else process.env.HOME = oldHome
@@ -50,12 +50,12 @@ function makeTree(name: string, overrides: Partial<SavedTree> = {}): SavedTree {
 
 describe('store', () => {
   it('listSavedTrees returns an array', async () => {
-    const { listSavedTrees } = await import('../src/state/store.js')
+    const { listSavedTrees } = await import('../src/core/store.js')
     expect(Array.isArray(listSavedTrees())).toBe(true)
   })
 
   it('saveSavedTree + loadSavedTree roundtrip', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/state/store.js')
+    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
     saveSavedTree(makeTree(testName))
     const loaded = loadSavedTree(testName)
     expect(loaded?.name).toBe(testName)
@@ -65,13 +65,13 @@ describe('store', () => {
   })
 
   it('saveSavedTree makes tree appear in listSavedTrees', async () => {
-    const { saveSavedTree, listSavedTrees } = await import('../src/state/store.js')
+    const { saveSavedTree, listSavedTrees } = await import('../src/core/store.js')
     saveSavedTree(makeTree(testName))
     expect(listSavedTrees().map(t => t.name)).toContain(testName)
   })
 
   it('saveSavedTree with workers preserves worker array', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/state/store.js')
+    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
     const tree = makeTree(testName, {
       workers: [{
         nickname_template: 'worker-1',
@@ -93,31 +93,31 @@ describe('store', () => {
   })
 
   it('deleteSavedTree removes tree from listSavedTrees', async () => {
-    const { saveSavedTree, deleteSavedTree, listSavedTrees } = await import('../src/state/store.js')
+    const { saveSavedTree, deleteSavedTree, listSavedTrees } = await import('../src/core/store.js')
     saveSavedTree(makeTree(testName))
     deleteSavedTree(testName)
     expect(listSavedTrees().map(t => t.name)).not.toContain(testName)
   })
 
   it('loadSavedTree returns null for a missing tree', async () => {
-    const { loadSavedTree } = await import('../src/state/store.js')
+    const { loadSavedTree } = await import('../src/core/store.js')
     expect(loadSavedTree('definitely-does-not-exist-xyzzy-999')).toBeNull()
   })
 
   it('deleteSavedTree on a missing tree does not throw', async () => {
-    const { deleteSavedTree } = await import('../src/state/store.js')
+    const { deleteSavedTree } = await import('../src/core/store.js')
     expect(() => deleteSavedTree('definitely-does-not-exist-xyzzy-999')).not.toThrow()
   })
 
   it('overwriting a tree with saveSavedTree updates it', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/state/store.js')
+    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
     saveSavedTree(makeTree(testName, { description: 'original' }))
     saveSavedTree(makeTree(testName, { description: 'updated' }))
     expect(loadSavedTree(testName)?.description).toBe('updated')
   })
 
   it('persists a tree with one worker of every provider', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/state/store.js')
+    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
     const tree = makeTree(testName, {
       workers: [
         { nickname_template: 'claude-w', provider: 'cc',     model: 'sonnet',   auth_mode: 'default', effort: 'high', initial_prompt: 'cc prompt',     working_dir: '/tmp', permissions: 'ask', rc_enabled: true  },
@@ -145,7 +145,7 @@ describe('store', () => {
   })
 
   it('persists heterogeneous workers with their own providers and prompts', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/state/store.js')
+    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
     const tree = makeTree(testName, {
       workers: [
         {
@@ -198,7 +198,7 @@ describe('store', () => {
   })
 
   it('loads legacy task_template field as initial_prompt', async () => {
-    const { loadSavedTree, savedTreesDir } = await import('../src/state/store.js')
+    const { loadSavedTree, savedTreesDir } = await import('../src/core/store.js')
     const dir = savedTreesDir()
     mkdirSync(dir, { recursive: true })
     const legacy = {

@@ -3,15 +3,15 @@
 import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/router.js'
-import * as runsState from '../../src/state/runs.js'
-import * as runtime from '../../src/launcher/runtime.js'
-import type { RunRecord, AgentRecord } from '../../src/state/types.js'
+import { Router } from '../../src/tui/router.js'
+import * as runsState from '../../src/core/runs.js'
+import * as runtime from '../../src/core/runtime.js'
+import type { RunRecord, AgentRecord } from '../../src/core/types.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 75))
 
-vi.mock('../../src/state/runs.js', async () => {
-  const actual = await vi.importActual('../../src/state/runs.js')
+vi.mock('../../src/core/runs.js', async () => {
+  const actual = await vi.importActual('../../src/core/runs.js')
   return {
     ...actual,
     readRun: vi.fn(() => ({
@@ -74,8 +74,8 @@ vi.mock('../../src/state/runs.js', async () => {
   }
 })
 
-vi.mock('../../src/launcher/runtime.js', async () => {
-  const actual = await vi.importActual<typeof import('../../src/launcher/runtime.js')>('../../src/launcher/runtime.js')
+vi.mock('../../src/core/runtime.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/core/runtime.js')>('../../src/core/runtime.js')
   return {
     ...actual,
     openRunTabs: vi.fn(),

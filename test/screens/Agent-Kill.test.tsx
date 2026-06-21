@@ -4,12 +4,12 @@
 import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router, RouterContext } from '../../src/router.js'
-import { AgentKill } from '../../src/screens/run/agent/Kill.js'
-import { ToastProvider } from '../../src/state/ToastContext.js'
-import * as runsState from '../../src/state/runs.js'
-import * as runtime from '../../src/launcher/runtime.js'
-import type { AgentRecord, RouterContextValue, RunRecord } from '../../src/state/types.js'
+import { Router, RouterContext } from '../../src/tui/router.js'
+import { AgentKill } from '../../src/tui/screens/run/agent/Kill.js'
+import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
+import * as runsState from '../../src/core/runs.js'
+import * as runtime from '../../src/core/runtime.js'
+import type { AgentRecord, RouterContextValue, RunRecord } from '../../src/core/types.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 75))
 
@@ -71,8 +71,8 @@ const mockRun: RunRecord = {
   ended_at: null,
 }
 
-vi.mock('../../src/state/runs.js', async () => {
-  const actual = await vi.importActual('../../src/state/runs.js')
+vi.mock('../../src/core/runs.js', async () => {
+  const actual = await vi.importActual('../../src/core/runs.js')
   return {
     ...actual,
     findAgent: vi.fn(() => mockWorkerAgent),
@@ -81,8 +81,8 @@ vi.mock('../../src/state/runs.js', async () => {
   }
 })
 
-vi.mock('../../src/launcher/runtime.js', async () => {
-  const actual = await vi.importActual('../../src/launcher/runtime.js')
+vi.mock('../../src/core/runtime.js', async () => {
+  const actual = await vi.importActual('../../src/core/runtime.js')
   return {
     ...actual,
     killAgent: vi.fn(),

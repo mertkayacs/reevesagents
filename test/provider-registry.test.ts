@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { PROVIDER_REGISTRY, PROVIDER_DEFS } from '../src/launcher/provider-registry.js'
-import { PROVIDERS, BIN, buildCommand, helpCommand, normalizeProvider } from '../src/launcher/providers.js'
+import { PROVIDER_REGISTRY, PROVIDER_DEFS } from '../src/core/provider-registry.js'
+import { PROVIDERS, BIN, buildCommand, helpCommand, normalizeProvider } from '../src/core/providers.js'
 import { providerColor, providerDisplayName, PROVIDER_DISPLAY_NAMES } from '../src/utils/display.js'
-import { MODEL_CATALOG } from '../src/launcher/model-catalog.js'
+import { MODEL_CATALOG } from '../src/core/model-catalog.js'
 import { colors } from '../src/utils/tokens.js'
 
 describe('provider registry', () => {

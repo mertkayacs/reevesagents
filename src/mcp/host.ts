@@ -6,8 +6,8 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 
-import { BIN } from '../launcher/providers.js'
-import type { Provider } from '../state/types.js'
+import { BIN } from '../core/providers.js'
+import type { Provider } from '../core/types.js'
 
 // Reverse of the BIN map (binary name -> Provider). Built once; first match wins
 // if two providers ever share a binary name, which they do not today.

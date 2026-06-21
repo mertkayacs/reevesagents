@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
-import { Welcome } from '../../src/screens/Welcome.js'
-import * as RouterModule from '../../src/router.js'
+import { Welcome } from '../../src/tui/screens/Welcome.js'
+import * as RouterModule from '../../src/tui/router.js'
 import * as TuiLaunch from '../../src/web/tui-launch.js'
 
-vi.mock('../../src/router.js')
+vi.mock('../../src/tui/router.js')
 vi.mock('../../src/web/tui-launch.js', () => ({
   startWebFromTui: vi.fn(async () => 'http://127.0.0.1:8080'),
 }))

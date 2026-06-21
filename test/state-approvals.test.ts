@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, RunRecord } from '../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../src/core/types.js'
 
 let tmpDir: string
 let originalConfig: string | undefined
@@ -63,13 +63,13 @@ function makeAgent(id: string, runId: string): AgentRecord {
 
 describe('approvals', () => {
   it('creates, lists, and resolves approvals inside the run folder', async () => {
-    const { writeRun, writeAgent } = await import('../src/state/runs.js')
+    const { writeRun, writeAgent } = await import('../src/core/runs.js')
     const {
       createRunApproval,
       listRunApprovals,
       resolveRunApproval,
       readRunApproval,
-    } = await import('../src/state/approvals.js')
+    } = await import('../src/core/approvals.js')
     writeRun(makeRun('r9'))
     writeAgent(makeAgent('a4', 'r9'))
 
@@ -91,8 +91,8 @@ describe('approvals', () => {
   })
 
   it('redacts approval text and details before writing', async () => {
-    const { writeRun, writeAgent } = await import('../src/state/runs.js')
-    const { createRunApproval, readRunApproval } = await import('../src/state/approvals.js')
+    const { writeRun, writeAgent } = await import('../src/core/runs.js')
+    const { createRunApproval, readRunApproval } = await import('../src/core/approvals.js')
     writeRun(makeRun('r10'))
     writeAgent(makeAgent('a5', 'r10'))
     const approval = createRunApproval({
@@ -108,8 +108,8 @@ describe('approvals', () => {
   })
 
   it('returns the created approval already redacted, not just on reload', async () => {
-    const { writeRun, writeAgent } = await import('../src/state/runs.js')
-    const { createRunApproval } = await import('../src/state/approvals.js')
+    const { writeRun, writeAgent } = await import('../src/core/runs.js')
+    const { createRunApproval } = await import('../src/core/approvals.js')
     writeRun(makeRun('r11'))
     writeAgent(makeAgent('a6', 'r11'))
     const approval = createRunApproval({
@@ -123,7 +123,7 @@ describe('approvals', () => {
   })
 
   it('reads a missing approval as not found without leaking the path', async () => {
-    const { readRunApproval } = await import('../src/state/approvals.js')
+    const { readRunApproval } = await import('../src/core/approvals.js')
     expect(() => readRunApproval('r12', 'no-such-id')).toThrow('Approval not found: no-such-id')
   })
 })

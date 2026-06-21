@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, RunRecord } from '../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../src/core/types.js'
 
 // CLI feature-parity coverage: every command added for parity with the TUI and
 // web UI is driven through the real commander program with a temp registry. The
@@ -130,7 +130,7 @@ describe('cli parity', () => {
   describe('spawn options', () => {
     it('spawns into an existing run with --run and applies --skip permissions', async () => {
       wireTmux()
-      const { writeRun, writeAgent, listAgents } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent, listAgents } = await import('../src/core/runs.js')
       writeRun(makeRun('rr'))
       writeAgent(makeAgent('rr-root', 'rr', { role: 'root', id: 'rr-root' }))
 
@@ -145,7 +145,7 @@ describe('cli parity', () => {
 
     it('starts a new run and sets skip permissions on root and workers with --skip', async () => {
       wireTmux()
-      const { listAgents, listRuns } = await import('../src/state/runs.js')
+      const { listAgents, listRuns } = await import('../src/core/runs.js')
 
       const { out } = await runCli(['spawn', 'cc:lead', 'codex:worker', '--skip', '--name', 'team'])
       expect(out).toMatch(/started/)
@@ -160,7 +160,7 @@ describe('cli parity', () => {
   describe('remote control', () => {
     it('send pastes text into an agent pane', async () => {
       wireTmux()
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('s1'))
       writeAgent(makeAgent('s1-a', 's1'))
 
@@ -173,7 +173,7 @@ describe('cli parity', () => {
 
     it('key sends a single keypress', async () => {
       wireTmux()
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('k1'))
       writeAgent(makeAgent('k1-a', 'k1'))
 
@@ -185,7 +185,7 @@ describe('cli parity', () => {
 
     it('key rejects an unsupported key', async () => {
       wireTmux()
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('k2'))
       writeAgent(makeAgent('k2-a', 'k2'))
 
@@ -194,7 +194,7 @@ describe('cli parity', () => {
 
     it('interrupt sends ctrl-c', async () => {
       wireTmux()
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('i1'))
       writeAgent(makeAgent('i1-a', 'i1'))
 
@@ -207,7 +207,7 @@ describe('cli parity', () => {
 
   describe('delete agent', () => {
     it('deletes an ended agent with --yes', async () => {
-      const { writeRun, writeAgent, listAgents } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent, listAgents } = await import('../src/core/runs.js')
       writeRun(makeRun('d1'))
       writeAgent(makeAgent('d1-a', 'd1', { ended_at: '2026-01-01T01:00:00.000Z', task_status: 'done' }))
 
@@ -217,7 +217,7 @@ describe('cli parity', () => {
     })
 
     it('refuses to delete an agent without --yes', async () => {
-      const { writeRun, writeAgent, listAgents } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent, listAgents } = await import('../src/core/runs.js')
       writeRun(makeRun('d2'))
       writeAgent(makeAgent('d2-a', 'd2', { ended_at: '2026-01-01T01:00:00.000Z', task_status: 'done' }))
 
@@ -228,7 +228,7 @@ describe('cli parity', () => {
 
   describe('delete-run', () => {
     it('deletes an ended run with --yes', async () => {
-      const { writeRun, listRuns, listRunHistory } = await import('../src/state/runs.js')
+      const { writeRun, listRuns, listRunHistory } = await import('../src/core/runs.js')
       writeRun(makeRun('dr1', { status: 'ended', ended_at: '2026-01-01T01:00:00.000Z' }))
 
       const { out } = await runCli(['delete-run', 'dr1', '--yes'])
@@ -238,14 +238,14 @@ describe('cli parity', () => {
     })
 
     it('refuses to delete a run without --yes', async () => {
-      const { writeRun } = await import('../src/state/runs.js')
+      const { writeRun } = await import('../src/core/runs.js')
       writeRun(makeRun('dr2', { status: 'ended', ended_at: '2026-01-01T01:00:00.000Z' }))
 
       await expect(runCli(['delete-run', 'dr2'])).rejects.toThrow(/without --yes/)
     })
 
     it('refuses to delete a still-running run even with --yes', async () => {
-      const { writeRun, listRuns } = await import('../src/state/runs.js')
+      const { writeRun, listRuns } = await import('../src/core/runs.js')
       writeRun(makeRun('dr3'))
 
       await expect(runCli(['delete-run', 'dr3', '--yes'])).rejects.toThrow(/Stop run before deleting/)
@@ -255,7 +255,7 @@ describe('cli parity', () => {
 
   describe('history', () => {
     it('lists run history as JSON', async () => {
-      const { writeRun, archiveAndRemoveRun } = await import('../src/state/runs.js')
+      const { writeRun, archiveAndRemoveRun } = await import('../src/core/runs.js')
       writeRun(makeRun('h1', { status: 'ended', ended_at: '2026-01-01T01:00:00.000Z' }))
       archiveAndRemoveRun('h1', 'ended')
 
@@ -265,7 +265,7 @@ describe('cli parity', () => {
     })
 
     it('deletes a history record with --yes and refuses without it', async () => {
-      const { writeRun, archiveAndRemoveRun, listRunHistory } = await import('../src/state/runs.js')
+      const { writeRun, archiveAndRemoveRun, listRunHistory } = await import('../src/core/runs.js')
       writeRun(makeRun('h2', { status: 'ended', ended_at: '2026-01-01T01:00:00.000Z' }))
       archiveAndRemoveRun('h2', 'ended')
 
@@ -292,8 +292,8 @@ describe('cli parity', () => {
 
   describe('approvals', () => {
     it('lists pending approvals as JSON', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
-      const { createRunApproval } = await import('../src/state/approvals.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
+      const { createRunApproval } = await import('../src/core/approvals.js')
       writeRun(makeRun('ap1'))
       writeAgent(makeAgent('ap1-a', 'ap1'))
       const approval = createRunApproval({ agent_id: 'ap1-a', action: 'deploy', summary: 'ship it', risk: 'high' })
@@ -304,8 +304,8 @@ describe('cli parity', () => {
     })
 
     it('approve resolves a pending approval', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
-      const { createRunApproval, readRunApproval } = await import('../src/state/approvals.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
+      const { createRunApproval, readRunApproval } = await import('../src/core/approvals.js')
       writeRun(makeRun('ap2'))
       writeAgent(makeAgent('ap2-a', 'ap2'))
       const approval = createRunApproval({ agent_id: 'ap2-a', action: 'deploy', summary: 'ship it' })
@@ -318,8 +318,8 @@ describe('cli parity', () => {
     })
 
     it('deny resolves a pending approval', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
-      const { createRunApproval, readRunApproval } = await import('../src/state/approvals.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
+      const { createRunApproval, readRunApproval } = await import('../src/core/approvals.js')
       writeRun(makeRun('ap3'))
       writeAgent(makeAgent('ap3-a', 'ap3'))
       const approval = createRunApproval({ agent_id: 'ap3-a', action: 'deploy', summary: 'ship it' })
@@ -405,7 +405,7 @@ describe('cli parity', () => {
 
   describe('agents listing', () => {
     it('lists agents as JSON and filtered by run', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('ag'))
       writeAgent(makeAgent('ag-root', 'ag', { role: 'root', nickname: 'lead' }))
       writeAgent(makeAgent('ag-w', 'ag', { role: 'worker', nickname: 'hand' }))
@@ -456,7 +456,7 @@ describe('cli parity', () => {
   describe('presets', () => {
     it('saves a run as a preset, lists, starts, and deletes it', async () => {
       wireTmux()
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('pr'))
       writeAgent(makeAgent('pr-root', 'pr', { role: 'root', nickname: 'lead', provider: 'cc', task: '' }))
       writeAgent(makeAgent('pr-w', 'pr', { role: 'worker', nickname: 'hand', provider: 'codex', task: '' }))

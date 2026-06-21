@@ -1,12 +1,12 @@
 import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/router.js'
-import { DoctorCheck } from '../../src/screens/doctor/Check.js'
+import { Router } from '../../src/tui/router.js'
+import { DoctorCheck } from '../../src/tui/screens/doctor/Check.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 
-vi.mock('../../src/launcher/doctor.js', () => ({
+vi.mock('../../src/core/doctor.js', () => ({
   runDoctor: () => ({
     checks: [
       { name: 'node', status: 'ok' as const, detail: '20.19.0' },

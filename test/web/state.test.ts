@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { archiveAndRemoveRun, writeRun, writeAgent } from '../../src/state/runs.js'
+import { archiveAndRemoveRun, writeRun, writeAgent } from '../../src/core/runs.js'
 import { buildWebState, listWebProviders } from '../../src/web/state.js'
-import { PROVIDERS } from '../../src/launcher/providers.js'
+import { PROVIDERS } from '../../src/core/providers.js'
 import { providerColor, providerDisplayName } from '../../src/utils/display.js'
-import type { AgentRecord, RunRecord } from '../../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../../src/core/types.js'
 
 let tmpDir: string
 

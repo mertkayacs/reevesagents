@@ -6,9 +6,9 @@ import { Command } from 'commander'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { prepareTuiColorEnv } from './utils/color-env.js'
-import { runDoctor } from './launcher/doctor.js'
-import { peekAgent, startRun, startRunFromPreset, spawnWorker, stopRun, killAgent, sendText, sendKey, interrupt, type AllowedKey, ALLOWED_KEYS } from './launcher/runtime.js'
-import { normalizeProvider, PROVIDERS, detectAvailable } from './launcher/providers.js'
+import { runDoctor } from './core/doctor.js'
+import { peekAgent, startRun, startRunFromPreset, spawnWorker, stopRun, killAgent, sendText, sendKey, interrupt, type AllowedKey, ALLOWED_KEYS } from './core/runtime.js'
+import { normalizeProvider, PROVIDERS, detectAvailable } from './core/providers.js'
 import {
   autoCleanupRuns,
   listAgents,
@@ -20,16 +20,16 @@ import {
   archiveAndRemoveRun,
   listRunHistory,
   deleteRunHistory,
-} from './state/runs.js'
-import { listRunApprovals, resolveRunApproval } from './state/approvals.js'
-import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './state/config.js'
-import { listSavedTrees, savePresetFromRun, deleteSavedTree } from './state/store.js'
-import { MODEL_CATALOG } from './launcher/model-catalog.js'
+} from './core/runs.js'
+import { listRunApprovals, resolveRunApproval } from './core/approvals.js'
+import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './core/config.js'
+import { listSavedTrees, savePresetFromRun, deleteSavedTree } from './core/store.js'
+import { MODEL_CATALOG } from './core/model-catalog.js'
 import { hostStatus, attach, attachAll, detach } from './mcp/installer.js'
-import { writeTuiOpenToken } from './state/tui-open.js'
+import { writeTuiOpenToken } from './core/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
 import { providerDisplayName, providerColor } from './utils/display.js'
-import type { AgentRecord, AuthMode, Effort, Provider, RunRecord } from './state/types.js'
+import type { AgentRecord, AuthMode, Effort, Provider, RunRecord } from './core/types.js'
 
 const program = new Command()
 
@@ -771,7 +771,7 @@ async function renderTui(): Promise<void> {
   const [{ default: React }, { render }, { Router }] = await Promise.all([
     import('react'),
     import('ink'),
-    import('./router.js'),
+    import('./tui/router.js'),
   ])
   try {
     await render(React.createElement(Router), { alternateScreen: false }).waitUntilExit()

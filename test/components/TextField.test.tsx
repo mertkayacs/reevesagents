@@ -1,9 +1,9 @@
 import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { TextField } from '../../src/components/TextField.js'
+import { TextField } from '../../src/tui/components/TextField.js'
 import { glyphs } from '../../src/utils/glyphs.js'
-import { LayoutProvider } from '../../src/components/LayoutContext.js'
+import { LayoutProvider } from '../../src/tui/components/LayoutContext.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 

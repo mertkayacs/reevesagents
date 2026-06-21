@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCommand } from '../src/launcher/providers.js'
+import { buildCommand } from '../src/core/providers.js'
 
 describe('buildCommand — extended providers', () => {
   describe('hermes', () => {

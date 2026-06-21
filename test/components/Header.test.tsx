@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Header } from '../../src/components/Header.js'
+import { Header } from '../../src/tui/components/Header.js'
 import { glyphs } from '../../src/utils/glyphs.js'
 
 describe('Header', () => {

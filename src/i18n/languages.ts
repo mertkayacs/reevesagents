@@ -1,4 +1,4 @@
-import type { LanguageCode } from '../state/types.js'
+import type { LanguageCode } from '../core/types.js'
 
 export type { LanguageCode }
 

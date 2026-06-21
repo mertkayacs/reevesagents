@@ -9,12 +9,12 @@ import {
   listRunHistory,
   runHasLiveTmuxTarget,
   computeRunStatus,
-} from '../state/runs.js'
-import { PROVIDERS, detectAvailable } from '../launcher/providers.js'
-import { modelValuesForProvider } from '../launcher/model-catalog.js'
+} from '../core/runs.js'
+import { PROVIDERS, detectAvailable } from '../core/providers.js'
+import { modelValuesForProvider } from '../core/model-catalog.js'
 import { providerColor, providerDisplayName } from '../utils/display.js'
-import { listRunApprovals, type ApprovalRisk } from '../state/approvals.js'
-import type { Provider, RunRecord, RunViewStatus, TaskStatus } from '../state/types.js'
+import { listRunApprovals, type ApprovalRisk } from '../core/approvals.js'
+import type { Provider, RunRecord, RunViewStatus, TaskStatus } from '../core/types.js'
 
 export interface WebStateOptions {
   liveTmuxTarget?: (_run: RunRecord) => boolean

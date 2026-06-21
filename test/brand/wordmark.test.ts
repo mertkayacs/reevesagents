@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LOGO_LINES, FULL_LOGO_LINES, logoRows, chunks } from '../../src/brand/wordmark.js'
+import { LOGO_LINES, FULL_LOGO_LINES, logoRows, chunks } from '../../src/tui/brand/wordmark.js'
 
 describe('wordmark', () => {
   it('REEVES is five rows tall', () => {

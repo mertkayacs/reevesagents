@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, RunRecord } from '../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../src/core/types.js'
 
 // child_process is mocked so the registry smoke-test (which calls every tool
 // handler) and the provider/host lookups never touch real subprocesses: `which`
@@ -129,7 +129,7 @@ describe('handleAgentMcpTool', () => {
 
     it('treats a live run as live and an ended run as not live', async () => {
       const { sessionRunIsLive } = await import('../src/mcp/server.js')
-      const { writeRun, updateRun } = await import('../src/state/runs.js')
+      const { writeRun, updateRun } = await import('../src/core/runs.js')
 
       writeRun(makeRun('session-run'))
       expect(sessionRunIsLive('session-run')).toBe(true)
@@ -141,7 +141,7 @@ describe('handleAgentMcpTool', () => {
 
   describe('agent cap', () => {
     it('refuses to add an agent to a run already at max_agents', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
 
       // Cap the run size at one live agent.
       writeFileSync(
@@ -160,7 +160,7 @@ describe('handleAgentMcpTool', () => {
     })
 
     it('does not count the headless head against the cap', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
 
       writeFileSync(
         join(tmpDir, 'config.json'),
@@ -212,7 +212,7 @@ describe('handleAgentMcpTool', () => {
 
   describe('approval lifecycle', () => {
     it('creates, lists, resolves, and rereads an approval, redacting secrets in the return value', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
 
       writeRun(makeRun('appr-run'))
       writeAgent(makeAgent('appr-agent', 'appr-run'))
@@ -278,7 +278,7 @@ describe('handleAgentMcpTool', () => {
   describe('discovery', () => {
     it('list_providers returns the full provider catalog from the registry', async () => {
       const { MCP_TOOLS, buildProviderCatalog } = await import('../src/mcp/server.js')
-      const { PROVIDERS } = await import('../src/launcher/providers.js')
+      const { PROVIDERS } = await import('../src/core/providers.js')
 
       // The tool is advertised in the tool list.
       expect(MCP_TOOLS.map(tool => tool.name)).toContain('list_providers')

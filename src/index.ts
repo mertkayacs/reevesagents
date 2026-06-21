@@ -2,7 +2,7 @@
 // Inputs: function arguments. Outputs: typed return values.
 // Invariant: all exports are pure functions or constants; no side effects on import.
 
-export { ErrorBoundary } from './components/ErrorBoundary.js'
+export { ErrorBoundary } from './tui/components/ErrorBoundary.js'
 
 export {
   startRun,
@@ -12,9 +12,9 @@ export {
   peekAgent,
   killAgent,
   stopRun,
-} from './launcher/runtime.js'
-export { runDoctor } from './launcher/doctor.js'
-export { detectAvailable, buildCommand, BIN, PROVIDERS, isProvider, normalizeProvider } from './launcher/providers.js'
+} from './core/runtime.js'
+export { runDoctor } from './core/doctor.js'
+export { detectAvailable, buildCommand, BIN, PROVIDERS, isProvider, normalizeProvider } from './core/providers.js'
 export {
   MODEL_CATALOG,
   PROVIDER_DEFAULT_MODEL,
@@ -22,7 +22,7 @@ export {
   modelDisplayName,
   modelSourceForProvider,
   modelValuesForProvider,
-} from './launcher/model-catalog.js'
+} from './core/model-catalog.js'
 
 export {
   listRuns,
@@ -34,12 +34,12 @@ export {
   nowIso,
   stateRoot,
   runsDir,
-} from './state/runs.js'
+} from './core/runs.js'
 
-export { loadConfig, saveConfig, defaultConfig } from './state/config.js'
+export { loadConfig, saveConfig, defaultConfig } from './core/config.js'
 export {
   listSavedTrees, loadSavedTree, saveSavedTree, deleteSavedTree, presetsDir,
-} from './state/store.js'
+} from './core/store.js'
 
 export type {
   Provider,
@@ -57,4 +57,4 @@ export type {
   AgentRecord,
   CheckResult,
   RouterContextValue,
-} from './state/types.js'
+} from './core/types.js'

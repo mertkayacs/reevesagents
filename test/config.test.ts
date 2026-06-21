@@ -19,12 +19,12 @@ afterEach(() => {
 
 describe('config', () => {
   it('configExists returns false when no file', async () => {
-    const { configExists } = await import('../src/state/config.js')
+    const { configExists } = await import('../src/core/config.js')
     expect(configExists()).toBe(false)
   })
 
   it('defaultConfig returns valid v4 structure', async () => {
-    const { defaultConfig } = await import('../src/state/config.js')
+    const { defaultConfig } = await import('../src/core/config.js')
     const cfg = defaultConfig()
     expect(cfg.version).toBe(2)
     expect(typeof cfg.global).toBe('object')
@@ -34,7 +34,7 @@ describe('config', () => {
   })
 
   it('saveConfig then loadConfig roundtrip', async () => {
-    const { saveConfig, loadConfig, defaultConfig } = await import('../src/state/config.js')
+    const { saveConfig, loadConfig, defaultConfig } = await import('../src/core/config.js')
     const original = defaultConfig()
     original.global.peek_lines = 20
     original.global.max_agents = 5
@@ -45,7 +45,7 @@ describe('config', () => {
   })
 
   it('loadConfig returns defaults when file missing', async () => {
-    const { loadConfig, defaultConfig } = await import('../src/state/config.js')
+    const { loadConfig, defaultConfig } = await import('../src/core/config.js')
     const loaded = loadConfig()
     const defaults = defaultConfig()
     expect(loaded.version).toBe(defaults.version)
@@ -53,7 +53,7 @@ describe('config', () => {
   })
 
   it('configExists returns true after save', async () => {
-    const { saveConfig, defaultConfig, configExists } = await import('../src/state/config.js')
+    const { saveConfig, defaultConfig, configExists } = await import('../src/core/config.js')
     saveConfig(defaultConfig())
     expect(configExists()).toBe(true)
   })

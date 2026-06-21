@@ -11,9 +11,9 @@ import {
   readRun,
   writeAgent,
   writeRun,
-} from '../../src/state/runs.js'
-import { loadConfig } from '../../src/state/config.js'
-import type { AgentRecord, Provider, RunRecord } from '../../src/state/types.js'
+} from '../../src/core/runs.js'
+import { loadConfig } from '../../src/core/config.js'
+import type { AgentRecord, Provider, RunRecord } from '../../src/core/types.js'
 
 let tmpDir: string
 let handles: WebServerHandle[]
@@ -474,7 +474,7 @@ describe('agent control (mcp hosts)', () => {
 
 describe('approvals', () => {
   it('lists pending approvals in state and resolves one through HTTP', async () => {
-    const { createRunApproval, listRunApprovals } = await import('../../src/state/approvals.js')
+    const { createRunApproval, listRunApprovals } = await import('../../src/core/approvals.js')
 
     writeRun(makeRun('appr-run'))
     writeAgent(makeAgent('appr-agent', 'appr-run', 'cc', 'root'))

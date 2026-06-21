@@ -4,13 +4,13 @@ import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { Presets } from '../../src/screens/Presets.js'
-import * as RouterModule from '../../src/router.js'
-import { ToastProvider } from '../../src/state/ToastContext.js'
-import { saveSavedTree } from '../../src/state/store.js'
-import type { SavedTreeSlot } from '../../src/state/types.js'
+import { Presets } from '../../src/tui/screens/Presets.js'
+import * as RouterModule from '../../src/tui/router.js'
+import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
+import { saveSavedTree } from '../../src/core/store.js'
+import type { SavedTreeSlot } from '../../src/core/types.js'
 
-vi.mock('../../src/router.js')
+vi.mock('../../src/tui/router.js')
 
 let tmpDir: string
 

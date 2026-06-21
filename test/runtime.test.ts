@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Provider } from '../src/state/types.js'
-import { PROVIDERS } from '../src/launcher/providers.js'
-import type { RuntimeDriver } from '../src/launcher/runtime.js'
+import type { Provider } from '../src/core/types.js'
+import { PROVIDERS } from '../src/core/providers.js'
+import type { RuntimeDriver } from '../src/core/runtime.js'
 
 let tmpDir: string
 let savedTmux: string | undefined
@@ -54,15 +54,15 @@ class FakeDriver implements RuntimeDriver {
 
 describe('agent-run runtime', () => {
   it('parses stable tmux window and pane ids', async () => {
-    const { parseTmuxIds } = await import('../src/launcher/runtime.js')
+    const { parseTmuxIds } = await import('../src/core/runtime.js')
     expect(parseTmuxIds('@12 %34')).toEqual({ windowId: '@12', paneId: '%34' })
     expect(() => parseTmuxIds('0 1')).toThrow(/Could not parse/)
   })
 
   it('starts agent runs as independent agents without MCP or Reeves context injection', async () => {
     const driver = new FakeDriver()
-    const { startRun } = await import('../src/launcher/runtime.js')
-    const { readRun, listAgents } = await import('../src/state/runs.js')
+    const { startRun } = await import('../src/core/runtime.js')
+    const { readRun, listAgents } = await import('../src/core/runs.js')
 
     const result = startRun({
       name: 'manual team',
@@ -110,8 +110,8 @@ describe('agent-run runtime', () => {
 
   it('spawns an agent into an existing agent-run session', async () => {
     const driver = new FakeDriver()
-    const { startRun, spawnWorker } = await import('../src/launcher/runtime.js')
-    const { listAgents } = await import('../src/state/runs.js')
+    const { startRun, spawnWorker } = await import('../src/core/runtime.js')
+    const { listAgents } = await import('../src/core/runs.js')
     const result = startRun({
       name: 'terminals',
       working_dir: '/tmp',
@@ -138,7 +138,7 @@ describe('agent-run runtime', () => {
     const {
       listRunHistory,
       readRun,
-    } = await import('../src/state/runs.js')
+    } = await import('../src/core/runs.js')
 
     const {
       startRun,
@@ -151,7 +151,7 @@ describe('agent-run runtime', () => {
       interrupt,
       killAgent,
       stopRun,
-    } = await import('../src/launcher/runtime.js')
+    } = await import('../src/core/runtime.js')
 
     const result = startRun({
       name: 'control',
@@ -191,8 +191,8 @@ describe('agent-run runtime', () => {
 
   it('ends a run when the last live agent is closed', async () => {
     const driver = new FakeDriver()
-    const { startRun, killAgent } = await import('../src/launcher/runtime.js')
-    const { listRunHistory, readRun } = await import('../src/state/runs.js')
+    const { startRun, killAgent } = await import('../src/core/runtime.js')
+    const { listRunHistory, readRun } = await import('../src/core/runs.js')
 
     const result = startRun({
       name: 'solo',

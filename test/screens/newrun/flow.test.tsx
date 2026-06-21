@@ -1,10 +1,10 @@
 import React from 'react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../../src/router.js'
-import * as StoreModule from '../../../src/state/store.js'
-import * as RunsModule from '../../../src/state/runs.js'
-import * as RuntimeModule from '../../../src/launcher/runtime.js'
+import { Router } from '../../../src/tui/router.js'
+import * as StoreModule from '../../../src/core/store.js'
+import * as RunsModule from '../../../src/core/runs.js'
+import * as RuntimeModule from '../../../src/core/runtime.js'
 
 const tick = (ms = 5) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -45,9 +45,9 @@ async function settleFrame(lastFrame: () => string | undefined, before?: string)
 }
 const down = '\u001B[B'
 
-vi.mock('../../../src/state/store.js')
-vi.mock('../../../src/state/runs.js', async () => {
-  const actual = await vi.importActual('../../../src/state/runs.js')
+vi.mock('../../../src/core/store.js')
+vi.mock('../../../src/core/runs.js', async () => {
+  const actual = await vi.importActual('../../../src/core/runs.js')
   return {
     ...actual,
     listRuns: vi.fn(() => []),
@@ -55,7 +55,7 @@ vi.mock('../../../src/state/runs.js', async () => {
     autoCleanupRuns: vi.fn(() => ({ removed: [], archived: [] })),
   }
 })
-vi.mock('../../../src/launcher/runtime.js')
+vi.mock('../../../src/core/runtime.js')
 
 async function press(
   stdin: { write: (_input: string) => void },

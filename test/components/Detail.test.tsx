@@ -2,7 +2,7 @@ import React from 'react'
 import { describe, expect, it } from 'vitest'
 import { render } from 'ink-testing-library'
 import { Text } from 'ink'
-import { Detail } from '../../src/components/Detail.js'
+import { Detail } from '../../src/tui/components/Detail.js'
 import { colors } from '../../src/utils/tokens.js'
 
 describe('Detail', () => {

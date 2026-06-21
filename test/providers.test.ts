@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildCommand, helpCommand, missingHelpFeatures, normalizeProvider, PROVIDERS } from '../src/launcher/providers.js'
-import type { BuildCommandOptions } from '../src/launcher/providers.js'
+import { buildCommand, helpCommand, missingHelpFeatures, normalizeProvider, PROVIDERS } from '../src/core/providers.js'
+import type { BuildCommandOptions } from '../src/core/providers.js'
 
 describe('providers', () => {
   describe('normalizeProvider', () => {
@@ -222,7 +222,7 @@ describe('providers', () => {
 
   describe('detectAvailable', () => {
     it('returns object with supported provider keys', async () => {
-      const { detectAvailable } = await import('../src/launcher/providers.js')
+      const { detectAvailable } = await import('../src/core/providers.js')
       const result = detectAvailable()
       expect(typeof result.cc).toBe('boolean')
       expect(typeof result.codex).toBe('boolean')

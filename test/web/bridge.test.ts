@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { writeRun, writeAgent } from '../../src/state/runs.js'
+import { writeRun, writeAgent } from '../../src/core/runs.js'
 import { resolveTerminalTarget, parseClientFrame } from '../../src/web/bridge.js'
-import type { AgentRecord, RunRecord } from '../../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../../src/core/types.js'
 
 let tmpDir: string
 

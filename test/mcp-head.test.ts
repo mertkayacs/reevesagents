@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Provider } from '../src/state/types.js'
-import { PROVIDERS } from '../src/launcher/providers.js'
-import type { RuntimeDriver } from '../src/launcher/runtime.js'
+import type { Provider } from '../src/core/types.js'
+import { PROVIDERS } from '../src/core/providers.js'
+import type { RuntimeDriver } from '../src/core/runtime.js'
 
 let tmpDir: string
 
@@ -48,7 +48,7 @@ class FakeDriver implements RuntimeDriver {
 describe('startRunWithHead', () => {
   it('returns a run plus a head agent and a first worker', async () => {
     const driver = new FakeDriver()
-    const { startRunWithHead } = await import('../src/launcher/runtime.js')
+    const { startRunWithHead } = await import('../src/core/runtime.js')
 
     const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
 
@@ -58,7 +58,7 @@ describe('startRunWithHead', () => {
 
   it('makes agents[0] the headless head bound to the host provider with no tmux window', async () => {
     const driver = new FakeDriver()
-    const { startRunWithHead } = await import('../src/launcher/runtime.js')
+    const { startRunWithHead } = await import('../src/core/runtime.js')
 
     const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
     const head = result.agents[0]!
@@ -72,7 +72,7 @@ describe('startRunWithHead', () => {
 
   it('makes agents[1] the first worker with a real tmux window', async () => {
     const driver = new FakeDriver()
-    const { startRunWithHead } = await import('../src/launcher/runtime.js')
+    const { startRunWithHead } = await import('../src/core/runtime.js')
 
     const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
     const worker = result.agents[1]!
@@ -86,7 +86,7 @@ describe('startRunWithHead', () => {
 
   it('points the run at the head as root and uses spawner mode', async () => {
     const driver = new FakeDriver()
-    const { startRunWithHead } = await import('../src/launcher/runtime.js')
+    const { startRunWithHead } = await import('../src/core/runtime.js')
 
     const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
 
@@ -95,8 +95,8 @@ describe('startRunWithHead', () => {
 
   it('persists both agents so the head shows up in list', async () => {
     const driver = new FakeDriver()
-    const { startRunWithHead } = await import('../src/launcher/runtime.js')
-    const { listAgents } = await import('../src/state/runs.js')
+    const { startRunWithHead } = await import('../src/core/runtime.js')
+    const { listAgents } = await import('../src/core/runs.js')
 
     const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
 
@@ -109,7 +109,7 @@ describe('startRunWithHead', () => {
 
   it('validates the worker provider and throws when it is unavailable', async () => {
     const driver = new FakeDriver()
-    const { startRunWithHead } = await import('../src/launcher/runtime.js')
+    const { startRunWithHead } = await import('../src/core/runtime.js')
     const unavailable = { ...available, aider: false }
 
     expect(() => startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available: unavailable }))
@@ -118,7 +118,7 @@ describe('startRunWithHead', () => {
 
   it('coerces a non-positive lines value to the default when peeking a worker', async () => {
     const driver = new FakeDriver()
-    const { startRunWithHead, peekAgent } = await import('../src/launcher/runtime.js')
+    const { startRunWithHead, peekAgent } = await import('../src/core/runtime.js')
 
     const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
     const worker = result.agents[1]!
@@ -151,8 +151,8 @@ describe('startRunWithHead', () => {
 
   it('tears the head-run down once its last worker is killed', async () => {
     const driver = new FakeDriver()
-    const { startRunWithHead, killAgent } = await import('../src/launcher/runtime.js')
-    const { listRuns, listRunHistory } = await import('../src/state/runs.js')
+    const { startRunWithHead, killAgent } = await import('../src/core/runtime.js')
+    const { listRuns, listRunHistory } = await import('../src/core/runs.js')
 
     const result = startRunWithHead('cc', { provider: 'aider', model: '', task: '' }, { driver, available })
     const worker = result.agents[1]!

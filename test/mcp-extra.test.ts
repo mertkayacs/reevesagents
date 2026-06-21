@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, RunRecord } from '../src/state/types.js'
+import type { AgentRecord, RunRecord } from '../src/core/types.js'
 
 // Extra coverage for the agent-control MCP that needs no real tmux: the tool
 // handler error surfaces, the run/agent listing, the approval lifecycle edge
@@ -151,7 +151,7 @@ describe('handleAgentMcpTool extra surfaces', () => {
 
   describe('list', () => {
     it('returns each seeded run with an agents array holding its agents', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
 
       writeRun(makeRun('run-a'))
       writeRun(makeRun('run-b'))
@@ -187,7 +187,7 @@ describe('handleAgentMcpTool extra surfaces', () => {
     })
 
     it('decides once: a second resolve returns the first decision unchanged', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('twice-run'))
       writeAgent(makeAgent('twice-agent', 'twice-run'))
 
@@ -219,7 +219,7 @@ describe('handleAgentMcpTool extra surfaces', () => {
     })
 
     it('list_approvals with status pending returns only the pending requests', async () => {
-      const { writeRun, writeAgent } = await import('../src/state/runs.js')
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
       writeRun(makeRun('mix-run'))
       writeAgent(makeAgent('mix-agent', 'mix-run'))
 

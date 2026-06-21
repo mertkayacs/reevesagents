@@ -4,9 +4,9 @@
 import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/router.js'
-import * as runsState from '../../src/state/runs.js'
-import type { AgentRecord, RunRecord } from '../../src/state/types.js'
+import { Router } from '../../src/tui/router.js'
+import * as runsState from '../../src/core/runs.js'
+import type { AgentRecord, RunRecord } from '../../src/core/types.js'
 
 const mockAgent: AgentRecord = {
   id: 'agent-1',
@@ -44,8 +44,8 @@ const mockRun: RunRecord = {
   ended_at: null,
 }
 
-vi.mock('../../src/state/runs.js', async () => {
-  const actual = await vi.importActual('../../src/state/runs.js')
+vi.mock('../../src/core/runs.js', async () => {
+  const actual = await vi.importActual('../../src/core/runs.js')
   return {
     ...actual,
     findAgent: vi.fn(() => mockAgent),

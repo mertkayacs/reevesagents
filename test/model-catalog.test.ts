@@ -5,8 +5,8 @@ import {
   modelDisplayName,
   modelSourceForProvider,
   modelValuesForProvider,
-} from '../src/launcher/model-catalog.js'
-import { PROVIDERS } from '../src/launcher/providers.js'
+} from '../src/core/model-catalog.js'
+import { PROVIDERS } from '../src/core/providers.js'
 
 describe('model catalog', () => {
   it('adds provider default before provider model files', () => {

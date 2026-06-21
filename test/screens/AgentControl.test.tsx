@@ -1,7 +1,7 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/router.js'
+import { Router } from '../../src/tui/router.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 

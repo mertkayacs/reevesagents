@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
 import stripAnsi from 'strip-ansi'
-import { LayoutProvider } from '../../src/components/LayoutContext.js'
-import { Row } from '../../src/components/Row.js'
-import { Section, SectionEnd } from '../../src/components/Section.js'
+import { LayoutProvider } from '../../src/tui/components/LayoutContext.js'
+import { Row } from '../../src/tui/components/Row.js'
+import { Section, SectionEnd } from '../../src/tui/components/Section.js'
 
 describe('Section', () => {
   it('renders label with dashes', () => {

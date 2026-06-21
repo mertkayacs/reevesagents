@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, Provider, RunRecord, SavedTreeSlot } from '../src/state/types.js'
-import { PROVIDERS } from '../src/launcher/providers.js'
-import type { RuntimeDriver } from '../src/launcher/runtime.js'
+import type { AgentRecord, Provider, RunRecord, SavedTreeSlot } from '../src/core/types.js'
+import { PROVIDERS } from '../src/core/providers.js'
+import type { RuntimeDriver } from '../src/core/runtime.js'
 
 // Coverage for the two shared preset helpers every interface reuses:
 // savePresetFromRun (run -> preset) and startRunFromPreset (preset -> run).
@@ -100,8 +100,8 @@ function slot(overrides: Partial<SavedTreeSlot>): SavedTreeSlot {
 
 describe('savePresetFromRun', () => {
   it('captures the root and workers into a sanitized preset', async () => {
-    const { writeRun, writeAgent } = await import('../src/state/runs.js')
-    const { savePresetFromRun, loadSavedTree } = await import('../src/state/store.js')
+    const { writeRun, writeAgent } = await import('../src/core/runs.js')
+    const { savePresetFromRun, loadSavedTree } = await import('../src/core/store.js')
     writeRun(makeRun('r1'))
     writeAgent(makeAgent('r1-root', 'r1', { role: 'root', nickname: 'lead', provider: 'cc', model: 'opus', task: 'plan it', permissions: 'skip', started_at: '2026-01-01T00:00:01.000Z' }))
     writeAgent(makeAgent('r1-w', 'r1', { role: 'worker', nickname: 'builder', provider: 'codex', task: 'build it', started_at: '2026-01-01T00:00:02.000Z' }))
@@ -118,8 +118,8 @@ describe('savePresetFromRun', () => {
   })
 
   it('keeps created_at when re-saving under the same name', async () => {
-    const { writeRun, writeAgent } = await import('../src/state/runs.js')
-    const { savePresetFromRun } = await import('../src/state/store.js')
+    const { writeRun, writeAgent } = await import('../src/core/runs.js')
+    const { savePresetFromRun } = await import('../src/core/store.js')
     writeRun(makeRun('r2'))
     writeAgent(makeAgent('r2-root', 'r2', { role: 'root' }))
     const first = savePresetFromRun('r2', 'keepme')
@@ -128,8 +128,8 @@ describe('savePresetFromRun', () => {
   })
 
   it('rejects an empty name and a run with no capturable agents', async () => {
-    const { writeRun, writeAgent } = await import('../src/state/runs.js')
-    const { savePresetFromRun } = await import('../src/state/store.js')
+    const { writeRun, writeAgent } = await import('../src/core/runs.js')
+    const { savePresetFromRun } = await import('../src/core/store.js')
     writeRun(makeRun('r3'))
     writeAgent(makeAgent('r3-h', 'r3', { role: 'root', headless: true }))
     expect(() => savePresetFromRun('r3', '   ')).toThrow(/name is required/)
@@ -139,9 +139,9 @@ describe('savePresetFromRun', () => {
 
 describe('startRunFromPreset', () => {
   it('starts a run from a saved preset, root first then workers', async () => {
-    const { saveSavedTree } = await import('../src/state/store.js')
-    const { startRunFromPreset } = await import('../src/launcher/runtime.js')
-    const { listRuns, listAgents } = await import('../src/state/runs.js')
+    const { saveSavedTree } = await import('../src/core/store.js')
+    const { startRunFromPreset } = await import('../src/core/runtime.js')
+    const { listRuns, listAgents } = await import('../src/core/runs.js')
     saveSavedTree({
       name: 'duo',
       description: '',
@@ -161,7 +161,7 @@ describe('startRunFromPreset', () => {
   })
 
   it('throws for an unknown preset', async () => {
-    const { startRunFromPreset } = await import('../src/launcher/runtime.js')
+    const { startRunFromPreset } = await import('../src/core/runtime.js')
     expect(() => startRunFromPreset('ghost', {}, { driver: new FakeDriver(), available })).toThrow(/preset not found/)
   })
 })

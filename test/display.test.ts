@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { PROVIDERS } from '../src/launcher/providers.js'
-import type { Provider } from '../src/state/types.js'
+import { PROVIDERS } from '../src/core/providers.js'
+import type { Provider } from '../src/core/types.js'
 
 describe('display utilities', () => {
   describe('providerDisplayName', () => {

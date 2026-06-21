@@ -1,8 +1,8 @@
 // Display utilities: provider/model colors, color capability checks, secret redaction.
 // Invariant: providerColor and modelColor always return a valid hex string or named color.
 
-import type { Provider } from '../state/types.js'
-import { PROVIDER_DEFS, PROVIDER_REGISTRY } from '../launcher/provider-registry.js'
+import type { Provider } from '../core/types.js'
+import { PROVIDER_DEFS, PROVIDER_REGISTRY } from '../core/provider-registry.js'
 import { colors } from './tokens.js'
 
 // Derived from the provider registry, the single source of truth for provider identity.

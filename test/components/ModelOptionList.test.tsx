@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
-import { ModelOptionList } from '../../src/components/ModelOptionList.js'
+import { ModelOptionList } from '../../src/tui/components/ModelOptionList.js'
 
 describe('ModelOptionList', () => {
   it('renders selectable provider-scoped models', () => {
