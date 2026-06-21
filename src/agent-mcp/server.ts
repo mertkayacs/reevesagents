@@ -139,7 +139,7 @@ export function sessionRunIsLive(runId: string): boolean {
 // Discovery: the provider/model catalog a controlling agent reads to learn what it
 // can spawn, instead of guessing provider ids. Exposed both as the list_providers
 // tool and as the reevesagents://providers resource; both share this builder.
-export const PROVIDER_CATALOG_URI = 'reevesagents://providers'
+const PROVIDER_CATALOG_URI = 'reevesagents://providers'
 
 export function buildProviderCatalog() {
   const available = detectAvailable()

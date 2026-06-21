@@ -14,10 +14,6 @@ export function useLayoutColumns(): number {
   return useContext(LayoutContext).columns ?? process.stdout.columns ?? 100
 }
 
-export function useLayoutRows(): number {
-  return useContext(LayoutContext).rows ?? process.stdout.rows ?? 24
-}
-
 export function panelWidth(columns: number): number {
   return Math.max(1, columns)
 }

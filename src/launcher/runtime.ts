@@ -16,7 +16,6 @@ import type {
   SavedTreeSlot,
 } from '../state/types.js'
 import {
-  agentPath,
   archiveAndRemoveRun,
   endRunIfNoLiveAgents,
   findAgent,
@@ -703,8 +702,4 @@ export function openTmuxTarget(id: string, options: RuntimeOptions = {}): { sess
   try { driver.tmux(['switch-client', '-t', target]) } catch { /* no attached client to switch */ }
   try { driver.tmux(['select-window', '-t', target]) } catch { /* best effort */ }
   return { session, window, label }
-}
-
-export function agentJsonPath(runId: string, agentId: string): string {
-  return agentPath(runId, agentId)
 }

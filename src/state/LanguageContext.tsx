@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useState } from 'react'
-import { localeCatalog, translate, type TranslationKey } from '../i18n/catalog.js'
+import { translate, type TranslationKey } from '../i18n/catalog.js'
 import { DEFAULT_LANGUAGE, languageOption } from '../i18n/languages.js'
 import { loadConfig, saveConfig } from './config.js'
 import type { LanguageCode } from './types.js'
@@ -51,8 +51,4 @@ export function useLanguage(): LanguageContextValue {
 export function tuiLanguageLabel(code: LanguageCode): string {
   const option = languageOption(code)
   return `${option.flag} ${option.nativeName}`
-}
-
-export function webLocalePayload(language: LanguageCode): Record<string, string> {
-  return localeCatalog(language)
 }

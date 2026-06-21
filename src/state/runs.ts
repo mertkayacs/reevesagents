@@ -41,7 +41,7 @@ export function runsDir(): string {
   return join(stateRoot(), 'runs')
 }
 
-export function historyDir(): string {
+function historyDir(): string {
   return join(stateRoot(), 'history', 'runs')
 }
 
@@ -49,7 +49,7 @@ export function runDir(runId: string): string {
   return join(runsDir(), runId)
 }
 
-export function agentsDir(runId: string): string {
+function agentsDir(runId: string): string {
   return join(runDir(runId), 'agents')
 }
 

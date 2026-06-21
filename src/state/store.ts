@@ -108,7 +108,7 @@ export function deleteSavedTree(name: string): void {
 
 // Filesystem-safe preset name: presets are stored as <name>.json under the presets
 // dir, so restrict a user-supplied name to characters that cannot traverse paths.
-export function sanitizePresetName(raw: string): string {
+function sanitizePresetName(raw: string): string {
   return raw.trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 64)
 }
 

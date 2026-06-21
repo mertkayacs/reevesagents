@@ -55,7 +55,6 @@
     "@xterm/xterm": "^6.0.0",
     "eslint": "10.3.0",
     "ink-testing-library": "^4.0.0",
-    "prettier": "3.8.3",
     "release-it": "^20.2.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",

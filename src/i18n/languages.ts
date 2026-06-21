@@ -2,7 +2,7 @@ import type { LanguageCode } from '../state/types.js'
 
 export type { LanguageCode }
 
-export const LANGUAGES = ['en', 'de', 'fr', 'es', 'pt', 'it', 'tr', 'ru', 'zh-Hans', 'ar'] as const
+const LANGUAGES = ['en', 'de', 'fr', 'es', 'pt', 'it', 'tr', 'ru', 'zh-Hans', 'ar'] as const
 
 export interface LanguageOption {
   code: LanguageCode

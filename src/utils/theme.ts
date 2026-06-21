@@ -15,14 +15,6 @@ export function colorLevel(): 0 | 1 | 2 | 3 {
   return chalk.level as 0 | 1 | 2 | 3
 }
 
-export function supportsTruecolor(): boolean {
-  return colorLevel() >= 3
-}
-
-export function supportsAnsi256(): boolean {
-  return colorLevel() >= 2
-}
-
 // Dark is the default. Light is opt-in via REEVES_THEME=light.
 // The /theme picker is deferred per the rebuild plan.
 export function themeMode(): ThemeMode {

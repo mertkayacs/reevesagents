@@ -8,7 +8,6 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
-  unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -204,11 +203,5 @@ export function resolveRunApproval(approvalId: string, decision: 'approved' | 'd
     }
     writeApprovalUnlocked(updated)
     return redactApproval(updated)
-  })
-}
-
-export function removeRunApproval(runId: string, approvalId: string): void {
-  withRunsLock(() => {
-    try { unlinkSync(runApprovalPath(runId, approvalId)) } catch { /* already gone */ }
   })
 }

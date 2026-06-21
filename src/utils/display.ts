@@ -1,7 +1,6 @@
 // Display utilities: provider/model colors, color capability checks, secret redaction.
 // Invariant: providerColor and modelColor always return a valid hex string or named color.
 
-import chalk from 'chalk'
 import type { Provider } from '../state/types.js'
 import { PROVIDER_DEFS, PROVIDER_REGISTRY } from '../launcher/provider-registry.js'
 import { colors } from './tokens.js'
@@ -59,14 +58,6 @@ export function modelBadgeLabel(model: string): string {
 function truncateLabel(label: string, max: number): string {
   if (label.length <= max) return label
   return `${label.slice(0, Math.max(1, max - 3))}...`
-}
-
-export function supportsColor(): boolean {
-  return chalk.level >= 2
-}
-
-export function supportsHex(): boolean {
-  return chalk.level >= 3
 }
 
 // Ordered: longer prefix patterns must come before shorter ones (e.g. sk-ant before sk-)
