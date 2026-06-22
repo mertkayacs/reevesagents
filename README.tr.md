@@ -183,9 +183,9 @@ saklamaz ve model trafiğini proxy'lemez.
 ## Hızlı Başlangıç
 
 ```sh
-reevesagents                 # launch the TUI
-reevesagents web             # open the local Web UI
-reevesagents doctor          # check the machine
+reevesagents                 # TUI'yi başlat
+reevesagents web             # yerel Web UI'yi aç
+reevesagents doctor          # makineyi kontrol et
 ```
 
 CLI'den adlandırılmış bir run başlatın. İlk spec lider, geri kalanı worker'dır
@@ -266,10 +266,10 @@ Durum `~/.reeves` altında yaşar:
 
 ```text
 ~/.reeves/
-  config.json     global settings (peek interval, language, default permissions, limits)
-  presets/        saved run presets
-  runs/           one folder per active run (run.json plus agents/<id>.json)
-  history/        archived ended and stale runs (history/runs/<id>.json)
+  config.json     global ayarlar (peek aralığı, dil, varsayılan izinler, limitler)
+  presets/        kaydedilmiş run hazır ayarları
+  runs/           aktif run başına bir klasör (run.json artı agents/<id>.json)
+  history/        arşivlenmiş, biten ve eskimiş run'lar (history/runs/<id>.json)
 ```
 
 İki ortam değişkeni varsayılanları geçersiz kılar, başlıca izole test veya
@@ -295,7 +295,7 @@ Neyin canlı olduğunu listeleyin ve run id'sini alın:
 
 ```sh
 reevesagents runs
-reevesagents runs --json   # script-friendly
+reevesagents runs --json   # script dostu
 ```
 
 Kabuğunuzdan çıkmadan tek bir agent'ı izleyin, sonra sizi gerektiğinde içine
@@ -335,7 +335,7 @@ yönlendirin. Yerleşik bir tünel yoktur:
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
-# then browse to http://localhost:8080
+# sonra tarayıcıda http://localhost:8080 adresini açın
 ```
 
 ## Sorun Giderme

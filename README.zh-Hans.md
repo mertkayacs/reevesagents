@@ -165,9 +165,9 @@ ReevesAgents 以本地为先。它期望一台普通的开发者机器，已安�
 ## 快速开始
 
 ```sh
-reevesagents                 # launch the TUI
-reevesagents web             # open the local Web UI
-reevesagents doctor          # check the machine
+reevesagents                 # 启动 TUI
+reevesagents web             # 打开本地 Web UI
+reevesagents doctor          # 检查机器
 ```
 
 从 CLI 启动一个具名运行。第一个 spec 是主控，其余是工作者，每个 spec 的格式为 `provider[:nickname[:model]]`：
@@ -221,10 +221,10 @@ ReevesAgents 附带一个可选的 MCP 服务器，让一个 AI CLI 生成并驱
 
 ```text
 ~/.reeves/
-  config.json     global settings (peek interval, language, default permissions, limits)
-  presets/        saved run presets
-  runs/           one folder per active run (run.json plus agents/<id>.json)
-  history/        archived ended and stale runs (history/runs/<id>.json)
+  config.json     全局设置（peek 间隔、语言、默认权限、限制）
+  presets/        保存的运行预设
+  runs/           每个活跃运行一个文件夹（run.json 加上 agents/<id>.json）
+  history/        归档的已结束和陈旧运行（history/runs/<id>.json）
 ```
 
 两个环境变量可覆盖默认值，主要用于隔离测试或多配置场景：
@@ -247,7 +247,7 @@ reevesagents spawn deepseek:backend claude-code:product codex:review \
 
 ```sh
 reevesagents runs
-reevesagents runs --json   # script-friendly
+reevesagents runs --json   # 适合脚本使用
 ```
 
 不离开你的 shell 即可观察单个智能体，在它需要你时再切进去：
@@ -279,7 +279,7 @@ Web UI 使用两个可选的运行时模块，`ws` 和 `@lydell/node-pty`。npm 
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
-# then browse to http://localhost:8080
+# 然后在浏览器中访问 http://localhost:8080
 ```
 
 ## 故障排查

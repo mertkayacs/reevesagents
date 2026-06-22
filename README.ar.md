@@ -179,9 +179,9 @@ ReevesAgents محلي أولًا. يتوقع جهاز مطوّر اعتيادي�
 ## البداية السريعة
 
 ```sh
-reevesagents                 # launch the TUI
-reevesagents web             # open the local Web UI
-reevesagents doctor          # check the machine
+reevesagents                 # تشغيل واجهة TUI
+reevesagents web             # فتح واجهة Web UI المحلية
+reevesagents doctor          # فحص الجهاز
 ```
 
 ابدأ تشغيلة مُسمّاة من CLI. أول مواصفة هي القائد، والبقية عاملون، وكل مواصفة هي
@@ -256,10 +256,10 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 
 ```text
 ~/.reeves/
-  config.json     global settings (peek interval, language, default permissions, limits)
-  presets/        saved run presets
-  runs/           one folder per active run (run.json plus agents/<id>.json)
-  history/        archived ended and stale runs (history/runs/<id>.json)
+  config.json     إعدادات عامة (فترة peek واللغة والأذونات الافتراضية والحدود)
+  presets/        إعدادات تشغيلة جاهزة محفوظة
+  runs/           مجلد واحد لكل تشغيلة نشطة (run.json بالإضافة إلى agents/<id>.json)
+  history/        تشغيلات منتهية وقديمة مؤرشفة (history/runs/<id>.json)
 ```
 
 يتجاوز متغيّرا بيئة الإعدادات الافتراضية، أساسًا للاستخدام في اختبار معزول أو
@@ -284,7 +284,7 @@ reevesagents spawn deepseek:backend claude-code:product codex:review \
 
 ```sh
 reevesagents runs
-reevesagents runs --json   # script-friendly
+reevesagents runs --json   # مناسب للبرمجة النصية
 ```
 
 راقب وكيلًا واحدًا دون مغادرة صدفتك، ثم انتقل إليه حين يحتاج إليك:
@@ -320,7 +320,7 @@ reevesagents web
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
-# then browse to http://localhost:8080
+# ثم تصفّح إلى http://localhost:8080
 ```
 
 ## استكشاف الأخطاء وإصلاحها

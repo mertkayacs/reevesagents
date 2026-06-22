@@ -257,10 +257,10 @@ codex, kimi, qwen, opencode, hermes), и позволяет подключить
 
 ```text
 ~/.reeves/
-  config.json     global settings (peek interval, language, default permissions, limits)
-  presets/        saved run presets
-  runs/           one folder per active run (run.json plus agents/<id>.json)
-  history/        archived ended and stale runs (history/runs/<id>.json)
+  config.json     глобальные настройки (интервал peek, язык, разрешения по умолчанию, лимиты)
+  presets/        сохранённые пресеты run'ов
+  runs/           по одной папке на активный run (run.json плюс agents/<id>.json)
+  history/        архив завершённых и устаревших run'ов (history/runs/<id>.json)
 ```
 
 Две переменные окружения переопределяют значения по умолчанию, в основном для изолированного теста или
@@ -285,7 +285,7 @@ reevesagents spawn deepseek:backend claude-code:product codex:review \
 
 ```sh
 reevesagents runs
-reevesagents runs --json   # script-friendly
+reevesagents runs --json   # удобно для скриптов
 ```
 
 Наблюдайте за одним агентом, не покидая оболочку, затем переходите к нему, когда он вам
@@ -324,7 +324,7 @@ Web UI использует два опциональных модуля вре�
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
-# then browse to http://localhost:8080
+# затем откройте http://localhost:8080 в браузере
 ```
 
 ## Устранение неполадок

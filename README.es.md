@@ -267,10 +267,10 @@ El estado vive bajo `~/.reeves`:
 
 ```text
 ~/.reeves/
-  config.json     global settings (peek interval, language, default permissions, limits)
-  presets/        saved run presets
-  runs/           one folder per active run (run.json plus agents/<id>.json)
-  history/        archived ended and stale runs (history/runs/<id>.json)
+  config.json     ajustes globales (intervalo de peek, idioma, permisos por defecto, límites)
+  presets/        preajustes de run guardados
+  runs/           una carpeta por run activo (run.json más agents/<id>.json)
+  history/        runs finalizados y obsoletos archivados (history/runs/<id>.json)
 ```
 
 Dos variables de entorno anulan los valores predeterminados, principalmente para
@@ -297,7 +297,7 @@ Lista lo que está vivo y obtén el id del run:
 
 ```sh
 reevesagents runs
-reevesagents runs --json   # script-friendly
+reevesagents runs --json   # apto para scripts
 ```
 
 Observa un solo agente sin salir de tu shell y luego entra en él cuando te
@@ -337,7 +337,7 @@ No hay un túnel integrado:
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
-# then browse to http://localhost:8080
+# luego abre http://localhost:8080 en el navegador
 ```
 
 ## Resolución de problemas
