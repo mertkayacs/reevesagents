@@ -116,7 +116,7 @@ describe('Router startup', () => {
       const { lastFrame, unmount } = render(React.createElement(Component, { initialScreen: 'Runs' }))
       const frame = lastFrame() ?? ''
 
-      expect(frame).toContain('Runlar')
+      expect(frame).toContain("Run'lar")
       expect(frame).toContain('İşlemler')
       expect(frame).toContain('Yeni run')
       expect(frame).not.toContain('New Run')
