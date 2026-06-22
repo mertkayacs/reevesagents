@@ -100,7 +100,6 @@ export const zhHans = {
     'web.archived': '已归档',
     'web.askFirst': '先询问',
     'web.askFirstMeta': '保留服务商审批提示',
-    'web.beta': 'Web · beta',
     'web.cancel': '取消',
     'web.closed': '已关闭',
     'web.connecting': '连接中',

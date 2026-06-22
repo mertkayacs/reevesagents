@@ -99,7 +99,6 @@ export const pt = {
     'web.archived': 'arquivados',
     'web.askFirst': 'Perguntar',
     'web.askFirstMeta': 'Manter aprovações do fornecedor',
-    'web.beta': 'Web · beta',
     'web.cancel': 'Cancelar',
     'web.closed': 'fechado',
     'web.connecting': 'a ligar',

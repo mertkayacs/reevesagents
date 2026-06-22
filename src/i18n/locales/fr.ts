@@ -94,7 +94,6 @@ export const fr = {
     'web.archived': 'archivés',
     'web.askFirst': 'Demander',
     'web.askFirstMeta': 'Garder les droits fournisseur',
-    'web.beta': 'Web · beta',
     'web.cancel': 'Annuler',
     'web.closed': 'fermé',
     'web.connecting': 'connexion',

@@ -99,7 +99,6 @@ export const ru = {
     'web.archived': 'архив',
     'web.askFirst': 'Сначала спросить',
     'web.askFirstMeta': 'Сохранять запросы подтверждения провайдера',
-    'web.beta': 'Web · beta',
     'web.cancel': 'Отмена',
     'web.closed': 'закрыто',
     'web.connecting': 'подключение',

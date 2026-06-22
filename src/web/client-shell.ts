@@ -62,7 +62,7 @@ export function placeholderPage(): string {
 <body>
 <header>
   <h1>ReevesAgents</h1>
-  <span class="tag">web ui (beta) · loopback only</span>
+  <span class="tag">web ui · loopback only</span>
 </header>
 <main id="app"><p class="empty">Loading agents...</p></main>
 <script>

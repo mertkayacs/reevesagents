@@ -42,7 +42,7 @@ export function Welcome() {
       { label: t('welcome.doctor'), hint: t('welcome.doctorHint'), screen: 'Doctor' },
       { label: t('welcome.agentControl'), hint: t('welcome.agentControlHint'), screen: 'AgentControl' },
       { label: t('welcome.approvals'), hint: t('welcome.approvalsHint'), screen: 'Approvals' },
-      { label: `${t('welcome.startWeb')} (beta)`, hint: t('welcome.startWebHint'), launchWeb: true },
+      { label: `${t('welcome.startWeb')}`, hint: t('welcome.startWebHint'), launchWeb: true },
       { label: t('common.settings'), hint: t('welcome.settingsHint'), screen: 'Settings' },
       { label: t('welcome.reference'), hint: t('welcome.referenceHint'), screen: 'Reference' },
       { label: t('welcome.credits'), hint: t('welcome.creditsHint'), screen: 'Credits' },

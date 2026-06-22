@@ -21,7 +21,7 @@
 
   const WEB_EN = {
     'common.delete': 'Delete',
-    'web.beta': 'web · beta',
+    'web.beta': 'web',
     'web.live': 'live',
     'web.offline': 'offline',
     'web.languageTitle': 'Language',

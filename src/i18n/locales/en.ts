@@ -99,7 +99,7 @@ export const en = {
   'web.archived': 'archived',
   'web.askFirst': 'Ask first',
   'web.askFirstMeta': 'Keep provider approval prompts',
-  'web.beta': 'web · beta',
+  'web.beta': 'web',
   'web.cancel': 'Cancel',
   'web.closed': 'closed',
   'web.connecting': 'connecting',

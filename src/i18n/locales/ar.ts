@@ -100,7 +100,6 @@ export const ar = {
     'web.archived': 'مؤرشف',
     'web.askFirst': 'اسأل أولاً',
     'web.askFirstMeta': 'أبقِ موافقات المزوّد',
-    'web.beta': 'Web · beta',
     'web.cancel': 'إلغاء',
     'web.closed': 'مغلق',
     'web.connecting': 'يتصل',

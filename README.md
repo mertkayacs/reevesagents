@@ -14,7 +14,7 @@
 
 GitHub: https://github.com/mertkayacs/reevesagents
 
-The TUI and the local Web UI (beta) driving the same run:
+The TUI and the local Web UI driving the same run:
 
 ![ReevesAgents TUI: language picker, welcome screen, and runs](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
 
@@ -35,7 +35,7 @@ Portuguese, Italian, Turkish, Russian, Simplified Chinese, and Arabic.
 | Surface | What it is good for |
 | --- | --- |
 | **TUI** | Fast keyboard-first control inside the terminal. |
-| **Web UI (beta)** | One visual view of runs, agents, live panes, and history. |
+| **Web UI** | One visual view of runs, agents, live panes, and history. |
 | **CLI** | Scripts, quick spawn commands, doctor checks, and tmux opening. |
 | **tmux** | Real provider CLI windows that keep running locally. |
 | **Agent Control (opt-in)** | An MCP you turn on per CLI so one agent can spawn and drive others (Claude Code running Codex, Hermes, and Claude Code agents at once). |
@@ -301,7 +301,7 @@ When the work is done, stop the whole run in one call:
 reevesagents stop "feature x" --yes
 ```
 
-## Web UI (beta)
+## Web UI
 
 The Web UI is local and loopback-only.
 

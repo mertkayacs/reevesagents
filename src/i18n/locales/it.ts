@@ -97,7 +97,6 @@ export const it = {
     'web.archived': 'archiviati',
     'web.askFirst': 'Chiedi',
     'web.askFirstMeta': 'Mantieni approvazioni provider',
-    'web.beta': 'Web · beta',
     'web.cancel': 'Annulla',
     'web.closed': 'chiuso',
     'web.connecting': 'connessione',

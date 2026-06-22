@@ -93,7 +93,6 @@ export const de = {
     'web.archived': 'archiviert',
     'web.askFirst': 'Erst fragen',
     'web.askFirstMeta': 'Provider-Freigaben behalten',
-    'web.beta': 'Web · Beta',
     'web.cancel': 'Abbrechen',
     'web.closed': 'geschlossen',
     'web.connecting': 'verbindet',

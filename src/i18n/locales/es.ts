@@ -98,7 +98,6 @@ export const es = {
     'web.archived': 'archivados',
     'web.askFirst': 'Preguntar',
     'web.askFirstMeta': 'Mantener aprobaciones del proveedor',
-    'web.beta': 'Web · beta',
     'web.cancel': 'Cancelar',
     'web.closed': 'cerrado',
     'web.connecting': 'conectando',

@@ -97,7 +97,6 @@ export const tr = {
     'web.archived': 'arşiv',
     'web.askFirst': 'Önce sor',
     'web.askFirstMeta': 'Sağlayıcı onaylarını koru',
-    'web.beta': 'Web · beta',
     'web.cancel': 'İptal',
     'web.closed': 'kapalı',
     'web.connecting': 'bağlanıyor',
