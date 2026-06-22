@@ -8,6 +8,8 @@
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
+**English** · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
+
 *Let one agent create and control others. A local, tmux-first workspace to spawn and drive agents (Claude Code, Codex, Hermes, DeepSeek, Kimi, and more) from a TUI, Web UI, CLI, and MCP. No API keys, no changes to your Agent.md or Claude.md.*
 
 **In more than 10 languages!**

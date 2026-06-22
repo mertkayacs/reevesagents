@@ -1,0 +1,381 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+</p>
+
+[![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
+[![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
+[![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
+
+[English](README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · **Русский** · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
+
+*Пусть один агент создаёт и управляет другими. Локальное, ориентированное на tmux рабочее пространство для запуска и управления агентами (Claude Code, Codex, Hermes, DeepSeek, Kimi и другими) из TUI, Web UI, CLI и MCP. Без API-ключей, без изменений в вашем Agent.md или Claude.md.*
+
+**Более чем на 10 языках!**
+
+GitHub: https://github.com/mertkayacs/reevesagents
+
+TUI и локальный Web UI управляют одним и тем же run:
+
+![ReevesAgents TUI: выбор языка, экран приветствия и run'ы](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
+
+![ReevesAgents Web UI: живой мультиагентный run](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web.png)
+
+ReevesAgents — это бесплатный менеджер рабочего пространства с открытым исходным кодом для агентов AI CLI. Запускайте
+несколько одновременно, и через MCP позвольте одному агенту запускать другие и управлять ими: агент Claude Code
+управляет агентами Codex и Claude Code по отдельным задачам. Поставьте каждый CLI
+туда, где он сильнее всего, например DeepSeek на бэкенд, Claude на продукт и веб-направление, Codex на дизайн-систему или проход реализации,
+а Hermes на почту, поиск или исследования.
+
+Интерфейс доступен на 10 языках: английский, немецкий, французский, испанский,
+португальский, итальянский, турецкий, русский, упрощённый китайский и арабский.
+
+## Поверхности
+
+| Поверхность | Для чего она хороша |
+| --- | --- |
+| **TUI** | Быстрое управление с приоритетом клавиатуры прямо в терминале. |
+| **Web UI** | Единый визуальный обзор run'ов, агентов, живых панелей и истории. |
+| **CLI** | Скрипты, быстрые команды запуска, проверки doctor и открытие tmux. |
+| **tmux** | Реальные окна провайдерских CLI, которые продолжают работать локально. |
+| **Agent Control (по желанию)** | MCP, который вы включаете для каждого CLI, чтобы один агент мог запускать другие и управлять ими (Claude Code, одновременно управляющий агентами Codex, Hermes и Claude Code). |
+
+## Почему ReevesAgents
+
+- **Пусть ваш агент управляет агентами.** Ваш ведущий CLI (скажем, Claude Code) запускает набор агентов Claude, Codex, DeepSeek, Hermes, OpenCode или других и направляет их через MCP.
+- **Многозадачность и циклы.** Компонуйте агентов с помощью run'ов на основе оркестрации и поставьте впереди роутер-модель низкой или средней стоимости, чтобы управлять более умными или более компактными моделями. Запускайте несколько параллельно на разных частях проекта, поддерживайте работу циклящихся агентов и наблюдайте за всей оркестрацией из одного обзора.
+- **Держите стоимость практичной.** Пусть дешёвые или бесплатные модели пишут CRUD'ы и тесты, пока вы планируете и проектируете с более крупной моделью, вместо того чтобы прогонять всё через одну дорогую модель по умолчанию.
+- **Одно рабочее пространство, ни одной потерянной нити.** Если вы уже переключаетесь между Claude, Codex, DeepSeek, Hermes или OpenCode, ReevesAgents помещает эти сессии в одно локальное место; откройте любого агента из TUI или Web UI, чтобы управлять им напрямую.
+- **Сохраняйте гибкость по вендорам.** Вход к провайдеру остаётся за каждым CLI. ReevesAgents никогда не хранит учётные данные и не проксирует трафик моделей, поэтому вы можете свободно добавлять, удалять или менять CLI.
+- **Вся работа как на ладони.** Активные run'ы, агенты, модели, режимы разрешений, действия остановки и удаления, а также история в одном обзоре Web UI, пока tmux держит реальные CLI запущенными.
+
+Это не облачная платформа агентов. Это небольшой локальный слой вокруг реальных CLI: без базы данных, без Docker, без фонового демона и без хранимых ReevesAgents API-ключей.
+
+## Установка
+
+ReevesAgents опубликован в npm как `reevesagents`. Установите его глобально с помощью
+менеджера пакетов, которым вы уже пользуетесь, затем проверьте машину с помощью `doctor`.
+
+```sh
+npm install -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+Чтобы закрепить версию, добавьте `@<version>` к имени пакета, например
+`npm install -g reevesagents@1.2.0`.
+
+<details>
+<summary><b>pnpm</b></summary>
+
+```sh
+pnpm add -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+Разовый запуск, без глобальной установки:
+
+```sh
+pnpm dlx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>Yarn</b></summary>
+
+Разовый запуск с Yarn (Berry):
+
+```sh
+yarn dlx reevesagents doctor
+```
+
+Глобальная установка с Yarn Classic:
+
+```sh
+yarn global add reevesagents
+reevesagents doctor
+reevesagents
+```
+
+</details>
+
+<details>
+<summary><b>Bun</b></summary>
+
+```sh
+bun add -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+Разовый запуск, без глобальной установки:
+
+```sh
+bunx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>npx (без установки)</b></summary>
+
+```sh
+npx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>Homebrew</b></summary>
+
+```sh
+brew tap mertkayacs/reevesagents
+brew install reevesagents
+reevesagents doctor
+reevesagents
+```
+
+</details>
+
+<details>
+<summary><b>Из исходников</b></summary>
+
+Используйте исходники, когда хотите изучить код, внести вклад или запустить из
+репозитория.
+
+```sh
+git clone https://github.com/mertkayacs/reevesagents.git
+cd reevesagents
+pnpm install
+pnpm build
+pnpm link --global
+reevesagents doctor
+reevesagents
+```
+
+</details>
+
+## Требования
+
+ReevesAgents ориентирован на локальную работу. Он рассчитан на обычную машину разработчика с tmux и
+хотя бы одним уже установленным провайдерским CLI.
+
+- macOS, Linux или WSL. Нативный Windows не является целевой средой выполнения; используйте WSL.
+- Node.js `20.19+`.
+- tmux. Рекомендуется версия `3.0+`.
+- Обычная интерактивная оболочка в `PATH`.
+- Хотя бы один поддерживаемый провайдерский CLI в `PATH`.
+
+ReevesAgents может запускать эти провайдерские CLI, когда они установлены и
+аутентифицированы на вашей машине: Claude Code, Codex CLI, OpenCode, Hermes, Kimi,
+DeepSeek, Pi, Qwen и Aider. Вход к провайдеру, модели, инструменты, квоты и
+запросы разрешений остаются за каждым провайдером. ReevesAgents не хранит провайдерские
+API-ключи и не проксирует трафик моделей.
+
+## Быстрый старт
+
+```sh
+reevesagents                 # запустить TUI
+reevesagents web             # открыть локальный Web UI
+reevesagents doctor          # проверить машину
+```
+
+Запустите именованный run из CLI. Первая спецификация — это ведущий, остальные —
+рабочие, и каждая спецификация имеет вид `provider[:nickname[:model]]`:
+
+```sh
+reevesagents spawn deepseek:backend claude-code:product codex:system hermes:research \
+  --name "launch week build" \
+  --prompt "Plan the backend, product surface, design system, and research notes."
+```
+
+## Команды
+
+Без аргументов запускается TUI. Подкоманды — это операторская поверхность для
+людей и скриптов.
+
+| Команда | Назначение | Ключевые флаги |
+| --- | --- | --- |
+| `reevesagents` | Запустить TUI (без подкоманды). | нет |
+| `spawn [spec...]` | Запустить run с одним или несколькими провайдерскими агентами. Каждая `spec` имеет вид `provider[:nickname[:model]]`. Первая спецификация — это ведущий, остальные — рабочие. Без спецификации по умолчанию `codex`. | `--name <name>` (по умолчанию `run`), `--cwd <dir>` (по умолчанию текущий каталог), `--prompt <text>` (вставляется в каждого агента) |
+| `runs` | Перечислить активные run'ы, по одному на строку. | `--json` (полные записи run'ов в виде JSON-массива) |
+| `open <id>` | Переключить tmux на окно Reeves этого run'а или на окно агента. Внутри tmux переключает; вне tmux на TTY подключается; иначе печатает готовую к вставке команду tmux. Принимает id/имя run'а или id/никнейм агента (допускается совпадение по префиксу). | нет |
+| `peek <agent-id>` | Напечатать недавний вывод одного агента. | `-n, --lines <n>` (по умолчанию `20`), `--json` (строки в виде массива) |
+| `stop <run-id>` | Остановить один run. | `-y, --yes` (или `ALLOW_DESTRUCTIVE=1`) |
+| `kill <agent-id>` | Остановить одного агента. | `-y, --yes` (или `ALLOW_DESTRUCTIVE=1`) |
+| `doctor` | Запустить проверки работоспособности окружения (Node, tmux, путь состояния, провайдерские CLI). Завершается с ненулевым кодом при любой проваленной проверке. | `--json` |
+| `web` | Запустить Web UI по требованию, только на петлевом интерфейсе. Работает на переднем плане; агенты продолжают работать после его остановки. | `--port <n>` (предпочтительный порт, откатывается к следующему свободному порту), `--no-open` (не открывать браузер) |
+| `mcp` | Запустить сервер Agent Control MCP через stdio. Не запускается вручную; его запускает тот CLI, к которому вы подключаете его с экрана Agent Control. | нет |
+
+`stop` и `kill` — единственные деструктивные команды. Они отказываются работать без
+`--yes` или `ALLOW_DESTRUCTIVE=1`.
+
+## Agent Control (MCP по желанию)
+
+ReevesAgents поставляется с опциональным сервером MCP, который позволяет одному AI CLI запускать другие AI CLI и управлять ими:
+запустить агента, вставить промпт, отправить нажатия клавиш, прочитать вывод и
+разрешать запросы на подтверждение. Это плоский механизм, а не политика оркестрации:
+без ролей, без автономных циклов, без протокола координации.
+
+По умолчанию он выключен. ReevesAgents никогда не подключает его к CLI самостоятельно.
+
+Вы включаете его с экрана **Agent control** в TUI или Web UI. Этот
+экран перечисляет CLI на этой машине, которые могут размещать сервер MCP (claude,
+codex, kimi, qwen, opencode, hermes), и позволяет подключить, отключить или подключить все.
+Подключение запускает собственную команду `mcp add` этого CLI (например,
+`claude mcp add reevesagents -- reevesagents mcp`); отключение запускает соответствующее
+удаление. ReevesAgents только вызывает собственную команду каждого CLI и никогда не редактирует
+конфигурационные файлы провайдеров вручную. OpenCode — исключение: его `mcp add` интерактивен
+и не имеет удаления, поэтому экран помечает его как подключаемый вручную.
+
+Как только CLI подключён, у него есть инструменты Agent Control при каждом запуске.
+Его установка — ваш явный выбор, и этот выбор является согласием. Один run —
+это управляющий CLI в роли головы плюс агенты, которые он запустил, и вся
+группа отображается в TUI и Web UI как любой другой run.
+
+Запущенные рабочие по умолчанию не получают MCP, поэтому они не могут запускать дальнейших
+агентов. Чтобы позволить рабочему управлять собственными суб-рабочими, подключите MCP к CLI этого
+рабочего с того же экрана. Ограничители стоят на уровне ресурсов: лимит агентов на run
+(`max_agents`), применяемый, когда инструмент spawn добавляет к run'у, и
+тот факт, что каждый агент — это реальный процесс CLI в собственной панели tmux.
+
+Подключённый CLI может также узнать, что он может запустить: инструмент `list_providers`
+и ресурс `reevesagents://providers` возвращают провайдеров на этой машине
+с их id, статусом установки, алиасами и известными моделями, так что агент передаёт
+реальный id в `spawn`, а не угадывает.
+
+См. [docs/mcp.md](docs/mcp.md) для полного описания дизайна и списка инструментов.
+
+## Конфигурация
+
+Состояние и конфигурация — это локальный JSON. Без базы данных, без демона.
+
+Состояние находится в `~/.reeves`:
+
+```text
+~/.reeves/
+  config.json     global settings (peek interval, language, default permissions, limits)
+  presets/        saved run presets
+  runs/           one folder per active run (run.json plus agents/<id>.json)
+  history/        archived ended and stale runs (history/runs/<id>.json)
+```
+
+Две переменные окружения переопределяют значения по умолчанию, в основном для изолированного теста или
+многопрофильного использования:
+
+- `REEVES_REGISTRY`: переопределение корня состояния. Заменяет `~/.reeves` как каталог
+  для `runs/`, `history/` и `presets/`.
+- `REEVES_CONFIG`: переопределение пути к файлу конфигурации. Заменяет `~/.reeves/config.json`.
+
+Текстовые поля, которые могут содержать секреты, редактируются перед записью в состояние.
+
+## Примеры
+
+Распределите один проект по тем CLI, которые подходят для каждой задачи:
+
+```sh
+reevesagents spawn deepseek:backend claude-code:product codex:review \
+  --name "feature x" --prompt "Backend, product copy, and a review pass."
+```
+
+Перечислите, что живо, и возьмите id run'а:
+
+```sh
+reevesagents runs
+reevesagents runs --json   # script-friendly
+```
+
+Наблюдайте за одним агентом, не покидая оболочку, затем переходите к нему, когда он вам
+понадобится:
+
+```sh
+reevesagents peek backend -n 40
+reevesagents open backend
+```
+
+Когда работа сделана, остановите весь run одним вызовом:
+
+```sh
+reevesagents stop "feature x" --yes
+```
+
+## Web UI
+
+Web UI локален и работает только на петлевом интерфейсе.
+
+```sh
+reevesagents web
+```
+
+Он привязывается к `127.0.0.1`, работает на переднем плане и завершается при остановке.
+Агенты после этого продолжают работать в tmux. Из браузера вы можете создавать run'ы, добавлять
+агентов, выбирать провайдерские модели и режимы разрешений, останавливать агентов, удалять завершённую
+работу и просматривать историю, пока реальные CLI продолжают работать.
+
+Web UI использует два опциональных модуля времени выполнения, `ws` и `@lydell/node-pty`. npm
+устанавливает их по умолчанию. CLI и TUI продолжают работать без них, и
+команда `web` объясняет, чего не хватает.
+
+Чтобы достучаться до Web UI с другой машины, пробросьте петлевой порт через SSH.
+Встроенного туннеля нет:
+
+```sh
+ssh -L 8080:127.0.0.1:8080 user@host
+# then browse to http://localhost:8080
+```
+
+## Устранение неполадок
+
+**tmux не установлен.** ReevesAgents нужен tmux для навигации на основе окон.
+Установите его (`brew install tmux` или `apt install tmux`) и запустите
+`reevesagents doctor`. TUI автоматически оборачивает себя в сессию tmux с именем
+`reeves`; задайте `REEVES_NO_TMUX_WRAPPER=1`, чтобы пропустить это поведение.
+
+**Провайдерский CLI отсутствует, или Doctor сообщает об ошибке.** ReevesAgents запускает только
+провайдерские CLI, которые уже есть в вашем `PATH` и аутентифицированы. Запустите
+`reevesagents doctor`, чтобы увидеть, какие провайдеры обнаружены и что не работает,
+затем установите нужный провайдерский CLI или войдите в него.
+
+**Web UI сообщает об отсутствующих пакетах.** Web UI нужны `ws` и
+`@lydell/node-pty`. Они могут быть пропущены, когда для платформы нет готового
+бинарника `@lydell/node-pty` или когда при установке были опущены опциональные зависимости.
+Переустановите с включёнными опциональными зависимостями, затем запустите `reevesagents doctor`.
+
+**Порт уже используется.** `reevesagents web` стартует на порту `8080` по умолчанию. Если
+он занят, сервер привязывается к следующему свободному порту в небольшом диапазоне и печатает
+выбранный URL. Передайте `--port <n>`, чтобы выбрать другой стартовый порт.
+
+## Не требуется
+
+Вам не нужны хранимые ReevesAgents API-ключи, база данных, Docker, фоновая
+служба или настройка MCP для обычных стабильных run'ов агентов. Установка пассивна:
+у стабильного пакета нет скрипта postinstall, и он не переписывает провайдерскую
+конфигурацию. Подключение Agent Control MCP — это единственный явный шаг по желанию,
+который касается провайдерской конфигурации, и только через собственную команду `mcp add` каждого CLI.
+
+## Вклад в проект
+
+См. [CONTRIBUTING.md](.github/CONTRIBUTING.md) для веток и процесса pull request,
+[SECURITY.md](.github/SECURITY.md) для сообщения об уязвимостях и
+[CHANGELOG.md](CHANGELOG.md) для недавних изменений. Модель дизайна находится в
+[REEVESAGENTS_DESIGN.md](docs/REEVESAGENTS_DESIGN.md), а документация для контрибьюторов —
+в [docs/](docs).
+
+Конечным пользователям инструментарий разработки не нужен. Контрибьюторы используют pnpm,
+TypeScript, tsup, Vitest и ESLint из репозитория.
+
+## Ссылки
+
+- npm: https://www.npmjs.com/package/reevesagents
+- GitHub: https://github.com/mertkayacs/reevesagents
+- Releases: https://github.com/mertkayacs/reevesagents/releases
+- Issues: https://github.com/mertkayacs/reevesagents/issues
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- License: [Apache-2.0](LICENSE)
+
+## Лицензия
+
+Apache-2.0
