@@ -9,6 +9,7 @@ import { glyphs } from '../../utils/glyphs.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
+import { displayWidth, padEndDisplay } from '../../utils/width.js'
 
 interface Badge {
   label: string
@@ -81,9 +82,9 @@ export function Row({
   const displayHint = hint ? translatePhrase(language, hint) : hint
   const displayTrailing = trailing ? translatePhrase(language, trailing) : trailing
   const buttonPrimaryWidth = buttonLike
-    ? Math.max(primaryWidth ?? 0, displayPrimary.length, 12)
+    ? Math.max(primaryWidth ?? 0, displayWidth(displayPrimary), 12)
     : primaryWidth
-  const primaryText = buttonPrimaryWidth ? displayPrimary.padEnd(buttonPrimaryWidth) : displayPrimary
+  const primaryText = buttonPrimaryWidth ? padEndDisplay(displayPrimary, buttonPrimaryWidth) : displayPrimary
   const railColor = selected ? colors.accent.deep : colors.surface.border
   const availableWidth = Math.max(1, width - 6)
   const canFitTrailing = availableWidth >= 24
