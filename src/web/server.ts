@@ -19,7 +19,7 @@ import { normalizeProvider } from '../core/providers.js'
 import { modelValuesForProvider } from '../core/model-catalog.js'
 import { providerDisplayName } from '../utils/display.js'
 import type { AuthMode, Effort, Permissions, Provider } from '../core/types.js'
-import { loadConfig, saveConfig, setConfigValues, CONFIG_FIELDS } from '../core/config.js'
+import { loadConfig, setConfigValues, CONFIG_FIELDS } from '../core/config.js'
 import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
 import { localeCatalog } from '../i18n/catalog.js'
 import { listPresets, savePresetFromRun, deletePreset } from '../core/store.js'
@@ -286,9 +286,9 @@ function requireConfirm(body: Record<string, unknown>): void {
 
 function updateLanguage(body: Record<string, unknown>): unknown {
   if (!isLanguageCode(body.language)) throw new Error('unknown language')
-  const cfg = loadConfig()
-  cfg.global.language = body.language
-  saveConfig(cfg)
+  // Route through setConfigValues like every other config write, so validation
+  // and persistence can never drift from the CLI/MCP/TUI path.
+  setConfigValues({ language: body.language })
   return webLanguagePayload()
 }
 
@@ -328,7 +328,9 @@ function configPayload(): unknown {
 
 function updateConfigAction(body: Record<string, unknown>): unknown {
   const patch: Record<string, unknown> = {}
-  for (const field of CONFIG_FIELDS) {
+  // Language is intentionally excluded (handled by /api/language, which returns the
+  // live translation payload); mirror the GET filter so the panel cannot set it here.
+  for (const field of CONFIG_FIELDS.filter(field => field.kind !== 'language')) {
     if (body[field.key] !== undefined) patch[field.key] = body[field.key]
   }
   if (Object.keys(patch).length === 0) throw new Error('no config fields to set')

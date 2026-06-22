@@ -160,7 +160,7 @@ async function main() {
       await waitForHealth(webPort)
       const state = await http('GET', webPort, '/api/state')
       assert(state.status === 200 && Array.isArray(JSON.parse(state.body).runs), 'web state should return a runs array')
-      ok('CLI/TUI + Web install starts loopback Web beta')
+      ok('CLI/TUI + Web install starts loopback Web UI')
     } finally {
       await web.stop()
     }

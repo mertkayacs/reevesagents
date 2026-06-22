@@ -191,15 +191,6 @@ button { letter-spacing: 0; }
   letter-spacing: 0;
 }
 
-.brand-beta {
-  width: fit-content;
-  color: var(--muted);
-  font-size: var(--fs-xs);
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
 .topbar-actions {
   flex: 0 0 auto;
   display: flex;
@@ -1931,10 +1922,6 @@ button { letter-spacing: 0; }
 
   .brand-name {
     font-size: var(--fs-md);
-  }
-
-  .brand-beta {
-    display: none;
   }
 
   .topbar-actions {

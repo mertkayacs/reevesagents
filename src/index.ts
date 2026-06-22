@@ -2,8 +2,6 @@
 // Inputs: function arguments. Outputs: typed return values.
 // Invariant: all exports are pure functions or constants; no side effects on import.
 
-export { ErrorBoundary } from './tui/components/ErrorBoundary.js'
-
 export {
   startRun,
   openReeves,

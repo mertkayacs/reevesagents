@@ -3,7 +3,7 @@
 // Outputs: typed reads with defaults; atomic writes.
 // Invariant: all reads return defaults on any parse error.
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync, renameSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync, renameSync, existsSync, chmodSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import type { AgentRecord, Preset, PresetSlot } from './types.js'
 import { listAgents, nowIso, readRun, stateRoot } from './runs.js'
@@ -22,6 +22,7 @@ function atomicWrite(path: string, data: unknown): void {
   mkdirSync(dirname(path), { recursive: true })
   const tmp = `${path}.tmp`
   writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8')
+  chmodSync(tmp, 0o600) // presets can hold prompt text; match the runs/approvals 0600 hardening
   try {
     renameSync(tmp, path)
   } catch {

@@ -21,7 +21,6 @@
 
   const WEB_EN = {
     'common.delete': 'Delete',
-    'web.beta': 'web',
     'web.live': 'live',
     'web.offline': 'offline',
     'web.languageTitle': 'Language',
@@ -149,6 +148,25 @@
     'web.mcpDetachError': 'Could not detach {{name}}: {{message}}',
     'web.mcpAttachAllError': 'Could not attach all: {{message}}',
     'web.mcpLoadError': 'Could not load MCP hosts: {{message}}',
+    'web.config': 'Config',
+    'web.presets': 'Presets',
+    'web.doctor': 'Doctor',
+    'web.about': 'About',
+    'web.loading': 'Loading...',
+    'web.runningChecks': 'Running checks...',
+    'web.start': 'Start',
+    'web.presetsNoRun': 'Open a run first, then save it as a preset.',
+    'web.aboutVersion': 'Version',
+    'web.aboutPurpose': 'Purpose',
+    'web.aboutPurposeValue': 'Local tmux-first workspace manager for AI CLI agents',
+    'web.aboutInterface': 'Interface',
+    'web.aboutInterfaceValue': 'Ink TUI, Web UI, and agent run CLI',
+    'web.aboutRuntime': 'Runtime',
+    'web.aboutRuntimeValue': 'tmux sessions and provider CLI windows',
+    'web.aboutProviders': 'Providers',
+    'web.aboutProvidersNone': 'none detected',
+    'web.aboutLicense': 'License',
+    'web.aboutRepository': 'Repository',
   }
 
   const el = {
@@ -157,7 +175,6 @@
     sidebarCount: document.getElementById('sidebar-count'),
     conn: document.getElementById('conn'),
     brandDuck: document.getElementById('brand-duck'),
-    brandBeta: document.getElementById('brand-beta'),
     languageLabel: document.getElementById('language-label'),
     languageSelect: document.getElementById('language-select'),
     stageTitle: document.getElementById('stage-title'),
@@ -350,7 +367,6 @@
   }
 
   function applyStaticTranslations() {
-    el.brandBeta.textContent = t('web.beta')
     el.languageLabel.textContent = t('web.languageTitle')
     el.languageSelect.setAttribute('aria-label', t('web.languageTitle'))
     el.languageSelect.parentElement.title = t('web.languageTitle')
@@ -359,6 +375,10 @@
     el.newRunBtn.title = t('web.newRunTitle')
     el.agentControlBtn.textContent = t('web.agentControl')
     el.agentControlBtn.title = t('web.agentControlTitle')
+    el.configBtn.textContent = t('web.config')
+    el.presetsBtn.textContent = t('web.presets')
+    el.doctorBtn.textContent = t('web.doctor')
+    el.aboutBtn.textContent = t('web.about')
     el.mcpDialogTitle.textContent = t('web.mcpTitle')
     el.mcpDialogSubtitle.textContent = t('web.mcpSubtitle')
     el.mcpEmpty.textContent = t('web.mcpEmpty')
@@ -1494,12 +1514,12 @@
   function openAboutDialog() {
     el.aboutList.innerHTML = ''
     const rows = [
-      ['Version', appVersion || 'unknown'],
-      ['Purpose', 'Local tmux-first workspace manager for AI CLI agents'],
-      ['Interface', 'Ink TUI, Web UI, and agent run CLI'],
-      ['Runtime', 'tmux sessions and provider CLI windows'],
-      ['Providers', providers.map(p => p.name).join(', ') || 'none detected'],
-      ['License', 'Apache-2.0'],
+      [t('web.aboutVersion'), appVersion || t('web.unknown')],
+      [t('web.aboutPurpose'), t('web.aboutPurposeValue')],
+      [t('web.aboutInterface'), t('web.aboutInterfaceValue')],
+      [t('web.aboutRuntime'), t('web.aboutRuntimeValue')],
+      [t('web.aboutProviders'), providers.map(p => p.name).join(', ') || t('web.aboutProvidersNone')],
+      [t('web.aboutLicense'), 'Apache-2.0'],
     ]
     for (const [label, value] of rows) {
       const row = document.createElement('div')
@@ -1518,7 +1538,7 @@
     repoRow.className = 'about-row'
     const repoKey = document.createElement('span')
     repoKey.className = 'about-key'
-    repoKey.textContent = 'Repository'
+    repoKey.textContent = t('web.aboutRepository')
     const link = document.createElement('a')
     link.className = 'about-value about-link'
     link.href = 'https://github.com/mertkayacs/reevesagents'
@@ -1539,7 +1559,7 @@
 
   async function loadDoctor() {
     el.doctorError.hidden = true
-    el.doctorList.textContent = 'Running checks...'
+    el.doctorList.textContent = t('web.runningChecks')
     try {
       const result = await api('GET', '/api/doctor')
       renderDoctorChecks((result && result.checks) || [])
@@ -1728,7 +1748,7 @@
 
   async function loadConfig() {
     el.configError.hidden = true
-    el.configList.textContent = 'Loading...'
+    el.configList.textContent = t('web.loading')
     try {
       const payload = await api('GET', '/api/config')
       renderConfigFields(payload)
@@ -1801,7 +1821,7 @@
 
   async function loadPresets() {
     el.presetsError.hidden = true
-    el.presetsList.textContent = 'Loading...'
+    el.presetsList.textContent = t('web.loading')
     try {
       const payload = await api('GET', '/api/presets')
       renderPresets((payload && payload.presets) || [])
@@ -1836,7 +1856,7 @@
       const start = document.createElement('button')
       start.type = 'button'
       start.className = 'mcp-host-action'
-      start.textContent = 'Start'
+      start.textContent = t('web.start')
       start.addEventListener('click', () => startPreset(preset.name))
       row.appendChild(start)
 
@@ -1881,7 +1901,7 @@
     const runId = preferredRunId()
     if (!runId) {
       el.presetsError.hidden = false
-      el.presetsError.textContent = 'Open a run first, then save it as a preset.'
+      el.presetsError.textContent = t('web.presetsNoRun')
       return
     }
     const name = el.presetNameInput.value.trim()

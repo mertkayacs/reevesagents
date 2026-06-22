@@ -11,6 +11,7 @@ import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from 
 import { findAgent, listAgents, readRun } from '../../core/runs.js'
 import { openAgent } from '../../core/runtime.js'
 import { useToast } from '../contexts/ToastContext.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
 import type { AgentRecord } from '../../core/types.js'
 
 type RowItem = 'Output' | 'Task' | '__section__' | 'OpenCLI' | 'AgentLifecycle' | 'Back'
@@ -37,6 +38,7 @@ interface SelectableItem {
 export function AgentDetail() {
   const { selectedAgentId, push, pop } = useRouter()
   const { toast } = useToast()
+  const { t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 8
@@ -179,7 +181,7 @@ export function AgentDetail() {
         { label: 'provider', value: providerLabel },
         { label: 'status', value: agent.task_status },
       ]}
-      tagline={`${providerLabel} agent in ${run.name}. Open output, prompt, or lifecycle actions.`}
+      tagline={t('agentDetail.tagline', { provider: providerLabel, name: run.name })}
       statusContext={statusContext}
       statusKeys="↑↓ move · enter select · esc back"
     >

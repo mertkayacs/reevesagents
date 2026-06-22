@@ -1,6 +1,6 @@
 # ReevesAgents Design
 
-This document is the canonical design for the reevesagents package: the spawner CLI and TUI, the optional Web beta, and the opt-in agent-control MCP. The MCP is a flat mechanism (spawn and drive agents, read their output, resolve approvals); it has no roles, autonomous loops, or coordination protocol.
+This document is the canonical design for the reevesagents package: the spawner CLI and TUI, the optional Web UI, and the opt-in agent-control MCP. The MCP is a flat mechanism (spawn and drive agents, read their output, resolve approvals); it has no roles, autonomous loops, or coordination protocol.
 
 ## Product Thesis
 
@@ -113,7 +113,7 @@ The TUI is visible-menu first:
 
 Pages:
 
-- Welcome: persistent main menu, current run shortcut, and Start Web UI (beta).
+- Welcome: persistent main menu, current run shortcut, and Start Web UI.
 - Runs: sectioned run dashboard with stable, low-flicker rows.
 - Run: workspace view for one run.
 - Agents: list provider windows in the run.
@@ -164,14 +164,14 @@ Config is local and optional. Doctor should check only things the main package n
 
 Doctor must not write provider config files or ask for provider secrets.
 
-## Web UI (Beta)
+## Web UI
 
 The web UI is an optional, on-demand surface for driving spawner terminals from a browser. It is part of the stable package, not connected-agent coordination. It does not change the spawner model: a run is still a tmux session, a terminal is still one provider CLI window. The web UI reads the same registry and drives the same tmux targets the TUI and CLI use. It is a viewer and controller over state that already exists, never a new control plane.
 
 It stays inside the product rules:
 
 - on-demand foreground process, started and stopped by the human, not a background service
-- loopback only, with no network-exposure flag in the beta
+- loopback only, with no network-exposure flag
 - no provider config writes and no injected ReevesAgents environment into terminals
 - destructive actions confirm, matching CLI and TUI
 
@@ -196,7 +196,7 @@ Acceptance criteria use EARS. Launch and lifecycle:
 - When the server starts, the system shall print the access URL and open the browser unless `--no-open` is passed.
 - When the server receives SIGINT or SIGTERM, the system shall close every node-pty terminal bridge it opened and exit without leaving an orphaned listener.
 
-Local-access safety (no user login in the loopback beta):
+Local-access safety (no user login in the loopback web UI):
 
 - If a request Host header is outside the loopback allowlist, then the system shall reject the request.
 - If a state-changing request Origin does not match the server origin, then the system shall reject the request.
@@ -228,7 +228,7 @@ Doctor and packaging:
 ## Install Choices
 
 - CLI/TUI only: install `reevesagents` without optional dependencies.
-- CLI/TUI plus Web beta: install `reevesagents` normally.
+- CLI/TUI plus Web UI: install `reevesagents` normally.
 
 Invariants:
 

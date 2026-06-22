@@ -63,7 +63,7 @@ pnpm check:install-matrix
 The matrix proves:
 
 - `npm install --omit=optional ./reevesagents-1.2.0.tgz` keeps CLI/TUI usable and disables Web cleanly.
-- `npm install ./reevesagents-1.2.0.tgz` starts the loopback Web beta.
+- `npm install ./reevesagents-1.2.0.tgz` starts the loopback Web UI.
 
 Use this to verify the packed package installs in a clean project without touching the real home directory:
 
@@ -143,4 +143,4 @@ Observed results:
 - CLI smoke passed against isolated fake setup.
 - Package content check passed with 43 files and only root package paths.
 - Root `pnpm pack --dry-run` and `npm pack --dry-run` contained only `dist`, README, changelog, license, and package metadata.
-- Clean install matrix checks returned version `1.2.0`, disabled Web cleanly without optional extras, and started the Web beta with optional extras.
+- Clean install matrix checks returned version `1.2.0`, disabled Web cleanly without optional extras, and started the Web UI with optional extras.

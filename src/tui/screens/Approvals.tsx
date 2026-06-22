@@ -9,6 +9,7 @@ import { Dialog } from '../components/Dialog.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
 import { useToast } from '../contexts/ToastContext.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
 import { listRunApprovals, resolveRunApproval, type RunApproval } from '../../core/approvals.js'
 import { colors } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
@@ -31,6 +32,7 @@ function riskBadge(risk: RunApproval['risk']): { label: string; color: string } 
 export function Approvals() {
   const { pop, resetStack } = useRouter()
   const { toast } = useToast()
+  const { t } = useLanguage()
   const [approvals, setApprovals] = useState<RunApproval[]>(() => listRunApprovals(undefined, 'pending'))
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [selectedApprovalId, setSelectedApprovalId] = useState<string | null>(() => approvals[0]?.id ?? null)
@@ -64,7 +66,12 @@ export function Approvals() {
     resolveRunApproval(approval.id, decision)
     setPending(null)
     refresh()
-    toast(`${decision === 'approved' ? 'Approved' : 'Denied'}: ${approval.action}`, 'info')
+    toast(
+      decision === 'approved'
+        ? t('approvals.approvedToast', { action: approval.action })
+        : t('approvals.deniedToast', { action: approval.action }),
+      'info',
+    )
   }
 
   function handleActivate(): void {

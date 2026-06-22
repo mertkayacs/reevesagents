@@ -6,7 +6,7 @@ This repository uses a simple open-source branch model.
 
 | Branch | Purpose | Who Targets It |
 | --- | --- | --- |
-| `master` | Default development branch. Feature, fix, Web beta, docs, and test work lands here after review. | Contributors and maintainers. |
+| `master` | Default development branch. Feature, fix, Web UI, docs, and test work lands here after review. | Contributors and maintainers. |
 | `release/v1.2` | Stable 1.2 release line. Keep this branch boring: verified release fixes, release notes, packaging fixes, and version metadata only. | Maintainers. |
 | `fix/*`, `feature/*`, `web/*`, `docs/*` | Short-lived work branches. | Contributors and maintainers. |
 
@@ -67,7 +67,7 @@ Publish only from a verified tag. The publish workflow runs on `v*` tags.
 
 ## Clean Package Surface
 
-The root npm package is guarded by `pnpm check:package`. It must include only the stable package surface and Web beta assets. It must not include:
+The root npm package is guarded by `pnpm check:package`. It must include only the stable package surface and Web UI assets. It must not include:
 
 - `src/`
 - `test/`

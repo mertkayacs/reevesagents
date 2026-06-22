@@ -12,6 +12,7 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { TextField } from '../components/TextField.js'
 import { useRouter } from '../router.js'
 import { useToast } from '../contexts/ToastContext.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
 import { deletePreset, listPresets, savePresetFromRun } from '../../core/store.js'
 import { startRunFromPreset } from '../../core/runtime.js'
 import type { Preset } from '../../core/types.js'
@@ -30,6 +31,7 @@ const ACTION_LABEL_WIDTH = Math.max(...ACTIONS.map(action => ACTION_COPY[action]
 export function Presets() {
   const { pop, resetStack, selectedRunId, setSelectedRunId } = useRouter()
   const { toast } = useToast()
+  const { t } = useLanguage()
   const [presets, setPresets] = useState<Preset[]>(() => listPresets())
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [actOnName, setActOnName] = useState<string | null>(() => presets[0]?.name ?? null)
@@ -60,16 +62,16 @@ export function Presets() {
     deletePreset(preset.name)
     setPendingDelete(null)
     refresh()
-    toast(`Deleted preset ${preset.name}`, 'info')
+    toast(t('presets.deletedToast', { name: preset.name }), 'info')
   }
 
   function commitSave(): void {
     setSaving(false)
     if (!selectedRunId) return
     try {
-      const tree = savePresetFromRun(selectedRunId, draftName)
+      const preset = savePresetFromRun(selectedRunId, draftName)
       refresh()
-      toast(`Saved preset ${tree.name}`, 'info')
+      toast(t('presets.savedToast', { name: preset.name }), 'info')
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'error')
     }
@@ -79,7 +81,7 @@ export function Presets() {
     if (action === 'Back') { pop(); return }
     if (action === 'Main Menu') { resetStack('Welcome', ['Welcome']); return }
     if (action === 'Start') {
-      if (!targetPreset) { toast('No preset to start', 'error'); return }
+      if (!targetPreset) { toast(t('presets.noStartTarget'), 'error'); return }
       try {
         const result = startRunFromPreset(targetPreset.name)
         setSelectedRunId(result.run.id)
@@ -94,7 +96,7 @@ export function Presets() {
       return
     }
     if (action === 'SaveCurrentRun') {
-      if (!selectedRunId) { toast('Open a run first, then save it as a preset', 'error'); return }
+      if (!selectedRunId) { toast(t('presets.openRunFirst'), 'error'); return }
       setDraftName('')
       setSaving(true)
     }
@@ -141,7 +143,7 @@ export function Presets() {
     return (
       <Frame breadcrumb={['ReevesAgents', 'Presets']} statusKeys="enter select · esc cancel">
         <Dialog
-          title={`Delete preset ${pendingDelete.name}?`}
+          title={t('presets.deleteTitle', { name: pendingDelete.name })}
           body="This removes the saved preset. Running runs are not affected."
           intent="danger"
           confirmLabel="Delete"

@@ -11,6 +11,7 @@ import { StepIndicator } from '../../components/StepIndicator.js'
 import { TextField } from '../../components/TextField.js'
 import { useRouter } from '../../router.js'
 import { useToast } from '../../contexts/ToastContext.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
 import { useWizard } from '../../contexts/WizardContext.js'
 
 type FieldId = 'name' | 'workingDir'
@@ -20,6 +21,7 @@ const ACTION_LABEL_WIDTH = Math.max('Continue'.length, 'Back'.length, 'Reset Wiz
 export function NewRunBasics() {
   const { push, pop } = useRouter()
   const { toast } = useToast()
+  const { t } = useLanguage()
   const { state, update, reset } = useWizard()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, false)
@@ -59,7 +61,7 @@ export function NewRunBasics() {
 
   function handleAction(id: ActionId): void {
     if (id === 'continue') {
-      if (!state.name.trim()) { toast('Run name is required', 'error'); return }
+      if (!state.name.trim()) { toast(t('newRun.nameRequired'), 'error'); return }
       push('NewRunRoot')
     } else if (id === 'back') {
       pop()

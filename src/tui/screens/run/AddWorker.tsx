@@ -12,6 +12,7 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { TextField } from '../../components/TextField.js'
 import { useRouter } from '../../router.js'
 import { useToast } from '../../contexts/ToastContext.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
 import { useWorkerDraft } from '../../contexts/WorkerDraftContext.js'
 import { readRun } from '../../../core/runs.js'
 import { spawnWorker } from '../../../core/runtime.js'
@@ -45,6 +46,7 @@ function cycle<T>(values: readonly T[], current: T, dir: 1 | -1): T {
 export function AddWorker() {
   const { selectedRunId, pop } = useRouter()
   const { toast } = useToast()
+  const { t } = useLanguage()
   const { draft, update, reset } = useWorkerDraft()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, false)
@@ -130,8 +132,8 @@ export function AddWorker() {
   }
 
   function handleAdd(): void {
-    if (!selectedRunId) { toast('No run selected', 'error'); return }
-    if (!draft.provider) { toast('Provider is required', 'error'); return }
+    if (!selectedRunId) { toast(t('addWorker.noRunSelected'), 'error'); return }
+    if (!draft.provider) { toast(t('addWorker.providerRequired'), 'error'); return }
     try {
       spawnWorker({
         run_id: selectedRunId,
@@ -198,7 +200,7 @@ export function AddWorker() {
   return (
     <Frame
       breadcrumb={['ReevesAgents', 'Runs', run.name, 'Add Agent']}
-      tagline={`Configure a new agent for ${run.name}.`}
+      tagline={t('addWorker.tagline', { name: run.name })}
       statusKeys={modelPickerOpen ? 'enter choose model · ↑↓ move · esc close' : 'enter edit/select · ←→ quick cycle · esc done/back'}
     >
       {compactBody && modelPickerOpen ? (
