@@ -536,6 +536,7 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
 export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: string[]; archived: string[] } {
   const sessionExists = options.sessionExists ?? defaultTmuxSessionExists
   const targetExists = options.targetExists ?? defaultTmuxTargetExists
+  // If the caller injected tmux checks (test drivers), treat tmux as available and skip the real probe.
   const tmuxAvailable = options.sessionExists || options.targetExists
     ? () => true
     : options.tmuxAvailable ?? defaultTmuxAvailable

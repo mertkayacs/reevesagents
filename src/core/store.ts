@@ -1,5 +1,5 @@
 // App persistence: JSON presets.
-// Inputs: Preset preset definitions.
+// Inputs: preset definitions.
 // Outputs: typed reads with defaults; atomic writes.
 // Invariant: all reads return defaults on any parse error.
 

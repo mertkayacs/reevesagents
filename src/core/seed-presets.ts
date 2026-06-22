@@ -23,7 +23,7 @@ function slot(overrides: Partial<PresetSlot>): PresetSlot {
   }
 }
 
-// Preset 1: hermes-led implementation team using the original provider mix.
+// Preset 1: hermes-led research team using the original provider mix.
 function makeResearchTeam(createdAt: string): Preset {
   return {
     name: 'research-team',

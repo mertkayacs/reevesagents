@@ -146,8 +146,8 @@ function checkPathAccess(name: string, path: string): CheckResult {
   }
 }
 
-// The web UI is optional. Resolvability is the quick glance; `reevesagents web`
-// runs the truer load-check (checkWebExtras) at launch. Missing extras is a warn,
+// The web UI is optional. Resolvability here is the quick glance; `reevesagents web`
+// runs the truer load-check at launch. Missing extras is a warn,
 // never a fail, so a TUI-only install keeps a clean bill of health.
 function checkWebExtras(): CheckResult {
   const requireFrom = createRequire(import.meta.url)

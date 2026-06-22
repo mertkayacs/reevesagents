@@ -648,6 +648,7 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
   const driver = options.driver ?? realDriver
   const run = readRun(runId)
   const endedAt = nowIso()
+  // Only kill the run's tmux session when it differs from the reeves TUI session; a shared one would close the TUI.
   const runOwnsSession = !!run.reeves_session && run.reeves_session !== run.tmux_session
   if (runOwnsSession) {
     try {
