@@ -2,14 +2,14 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { Frame } from '../../components/Frame.js'
-import { Primary } from '../../components/Primary.js'
-import { Row } from '../../components/Row.js'
-import { Section, SectionEnd } from '../../components/Section.js'
-import { useRouter } from '../../router.js'
-import { colors } from '../../../utils/tokens.js'
-import { glyphs } from '../../../utils/glyphs.js'
-import { runDoctor } from '../../../core/doctor.js'
+import { Frame } from '../components/Frame.js'
+import { Primary } from '../components/Primary.js'
+import { Row } from '../components/Row.js'
+import { Section, SectionEnd } from '../components/Section.js'
+import { useRouter } from '../router.js'
+import { colors } from '../../utils/tokens.js'
+import { glyphs } from '../../utils/glyphs.js'
+import { runDoctor } from '../../core/doctor.js'
 
 function statusGlyph(status: 'ok' | 'warn' | 'fail'): { char: string; color: string } {
   if (status === 'ok') return { char: glyphs.status.ok, color: colors.status.ok }

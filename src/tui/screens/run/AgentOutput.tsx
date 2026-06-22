@@ -3,17 +3,17 @@
 
 import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput, useWindowSize } from 'ink'
-import { Frame, frameBodyRows } from '../../../components/Frame.js'
-import { Row } from '../../../components/Row.js'
-import { Section, SectionEnd } from '../../../components/Section.js'
-import { Pagination } from '../../../components/Pagination.js'
-import { useRouter } from '../../../router.js'
-import { useToast } from '../../../contexts/ToastContext.js'
-import { colors, space } from '../../../../utils/tokens.js'
-import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../../utils/display.js'
-import { findAgent, readRun } from '../../../../core/runs.js'
-import { peekAgent, openAgent } from '../../../../core/runtime.js'
-import type { AgentRecord } from '../../../../core/types.js'
+import { Frame, frameBodyRows } from '../../components/Frame.js'
+import { Row } from '../../components/Row.js'
+import { Section, SectionEnd } from '../../components/Section.js'
+import { Pagination } from '../../components/Pagination.js'
+import { useRouter } from '../../router.js'
+import { useToast } from '../../contexts/ToastContext.js'
+import { colors, space } from '../../../utils/tokens.js'
+import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
+import { findAgent, readRun } from '../../../core/runs.js'
+import { peekAgent, openAgent } from '../../../core/runtime.js'
+import type { AgentRecord } from '../../../core/types.js'
 
 const PEEK_INTERVAL_MS = 5000
 const DETAIL_LINES = 50

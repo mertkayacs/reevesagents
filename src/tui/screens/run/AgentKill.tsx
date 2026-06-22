@@ -2,16 +2,16 @@
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { Frame } from '../../../components/Frame.js'
-import { Row } from '../../../components/Row.js'
-import { Dialog } from '../../../components/Dialog.js'
-import { useRouter } from '../../../router.js'
-import { colors } from '../../../../utils/tokens.js'
-import { translatePhrase } from '../../../../i18n/catalog.js'
-import { useLanguage } from '../../../contexts/LanguageContext.js'
-import { deleteAgent, findAgent, listAgents, readRun } from '../../../../core/runs.js'
-import { killAgent } from '../../../../core/runtime.js'
-import type { AgentRecord } from '../../../../core/types.js'
+import { Frame } from '../../components/Frame.js'
+import { Row } from '../../components/Row.js'
+import { Dialog } from '../../components/Dialog.js'
+import { useRouter } from '../../router.js'
+import { colors } from '../../../utils/tokens.js'
+import { translatePhrase } from '../../../i18n/catalog.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
+import { deleteAgent, findAgent, listAgents, readRun } from '../../../core/runs.js'
+import { killAgent } from '../../../core/runtime.js'
+import type { AgentRecord } from '../../../core/types.js'
 
 export function AgentKill() {
   const { selectedAgentId, pop, resetStack } = useRouter()

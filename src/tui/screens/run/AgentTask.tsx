@@ -2,13 +2,13 @@
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { Frame } from '../../../components/Frame.js'
-import { Row } from '../../../components/Row.js'
-import { Section, SectionEnd } from '../../../components/Section.js'
-import { useRouter } from '../../../router.js'
-import { colors } from '../../../../utils/tokens.js'
-import { findAgent, readRun } from '../../../../core/runs.js'
-import type { AgentRecord } from '../../../../core/types.js'
+import { Frame } from '../../components/Frame.js'
+import { Row } from '../../components/Row.js'
+import { Section, SectionEnd } from '../../components/Section.js'
+import { useRouter } from '../../router.js'
+import { colors } from '../../../utils/tokens.js'
+import { findAgent, readRun } from '../../../core/runs.js'
+import type { AgentRecord } from '../../../core/types.js'
 
 export function AgentTask() {
   const { selectedAgentId, pop } = useRouter()
