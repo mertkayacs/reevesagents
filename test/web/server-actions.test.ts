@@ -585,6 +585,13 @@ describe('config and presets web actions', () => {
     const empty = await post(handle.port, '/api/config', {})
     expect(empty.status).toBe(400)
     expect(JSON.parse(empty.body).error).toMatch(/no config fields/)
+
+    // Language is not settable here (handled by /api/language); it is filtered out,
+    // so a language-only patch leaves nothing to set and must not change the config.
+    const lang = await post(handle.port, '/api/config', { language: 'fr' })
+    expect(lang.status).toBe(400)
+    expect(JSON.parse(lang.body).error).toMatch(/no config fields/)
+    expect(loadConfig().global.language).not.toBe('fr')
   })
 
   it('saves a run as a preset, lists, starts, and deletes it through HTTP', async () => {
