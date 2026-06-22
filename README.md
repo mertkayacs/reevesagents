@@ -246,7 +246,7 @@ and the `reevesagents://providers` resource return the providers on this machine
 with their ids, install status, aliases, and known models, so an agent passes a
 real id to `spawn` instead of guessing.
 
-See [docs/agent-mcp.md](docs/agent-mcp.md) for the full design and tool list.
+See [docs/mcp.md](docs/mcp.md) for the full design and tool list.
 
 ## Configuration
 
@@ -364,7 +364,7 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for branches and pull request flo
 under [docs/](docs).
 
 End users do not need the development toolchain. Contributors use pnpm,
-TypeScript, tsup, Vitest, ESLint, and Prettier from the repository.
+TypeScript, tsup, Vitest, and ESLint from the repository.
 
 ## Links
 
