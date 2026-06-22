@@ -113,7 +113,7 @@ export interface AgentRecord {
 }
 
 // Per-slot config inside a saved preset.
-export interface SavedTreeSlot {
+export interface PresetSlot {
   nickname_template: string  // e.g. "researcher-1"
   provider: Provider
   model: string
@@ -126,11 +126,11 @@ export interface SavedTreeSlot {
 }
 
 // ~/.reeves/presets/<name>.json
-export interface SavedTree {
+export interface Preset {
   name: string
   description: string
-  root: SavedTreeSlot
-  workers: SavedTreeSlot[]
+  root: PresetSlot
+  workers: PresetSlot[]
   working_dir_pattern?: string
   created_at: string
   updated_at: string

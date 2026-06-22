@@ -78,7 +78,7 @@ async function waitForFrame(lastFrame: () => string | undefined, text: string): 
 describe('New Run keyboard flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(StoreModule.listSavedTrees).mockReturnValue([])
+    vi.mocked(StoreModule.listPresets).mockReturnValue([])
     vi.mocked(RunsModule.listRuns).mockReturnValue([])
     vi.mocked(RunsModule.listAgents).mockReturnValue([])
     vi.mocked(RunsModule.autoCleanupRuns).mockReturnValue({ removed: [], archived: [] })

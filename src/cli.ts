@@ -23,7 +23,7 @@ import {
 } from './core/runs.js'
 import { listRunApprovals, resolveRunApproval } from './core/approvals.js'
 import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './core/config.js'
-import { listSavedTrees, savePresetFromRun, deleteSavedTree } from './core/store.js'
+import { listPresets, savePresetFromRun, deletePreset } from './core/store.js'
 import { MODEL_CATALOG } from './core/model-catalog.js'
 import { hostStatus, attach, attachAll, detach } from './mcp/installer.js'
 import { writeTuiOpenToken } from './core/tui-open.js'
@@ -666,7 +666,7 @@ program
   .description('list saved presets')
   .option('--json', 'output JSON array')
   .action((opts) => {
-    const presets = listSavedTrees()
+    const presets = listPresets()
     if (opts.json) {
       console.log(JSON.stringify(presets, null, 2))
       return
@@ -700,8 +700,8 @@ program
   .option('-y, --yes', 'confirm delete')
   .action((name: string, opts) => {
     requireDestructiveConfirmation(opts, 'delete preset')
-    if (!listSavedTrees().some(preset => preset.name === name)) throw new Error(`preset not found: ${name}`)
-    deleteSavedTree(name)
+    if (!listPresets().some(preset => preset.name === name)) throw new Error(`preset not found: ${name}`)
+    deletePreset(name)
     console.log(`deleted preset ${name}`)
   })
 
@@ -712,7 +712,7 @@ program
   .option('--cwd <dir>', 'working directory', process.cwd())
   .action((name: string, opts) => {
     try {
-      if (!listSavedTrees().some(preset => preset.name === name)) throw new Error(`preset not found: ${name}`)
+      if (!listPresets().some(preset => preset.name === name)) throw new Error(`preset not found: ${name}`)
       const result = startRunFromPreset(name, { name: opts.name, working_dir: opts.cwd })
       console.log(`started ${result.run.id.slice(0, 8)}  ${result.run.name}  ${result.agents.length} agents`)
     } catch (err) {

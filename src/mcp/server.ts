@@ -52,7 +52,7 @@ import { detectAvailable, isProvider } from '../core/providers.js'
 import { PROVIDER_DEFS } from '../core/provider-registry.js'
 import { runDoctor } from '../core/doctor.js'
 import { hostStatus, attach, attachAll, detach } from './installer.js'
-import { listSavedTrees, savePresetFromRun, deleteSavedTree } from '../core/store.js'
+import { listPresets, savePresetFromRun, deletePreset } from '../core/store.js'
 import { CONFIG_FIELDS, loadConfig, setConfigValues } from '../core/config.js'
 import {
   createRunApproval,
@@ -506,7 +506,7 @@ const TOOLS: ToolDef[] = [
     name: 'list_presets',
     description: 'List saved run presets: reusable agent-team templates, each with a root agent and workers. Launch a whole team at once by passing a preset name to start_preset.',
     inputSchema: { type: 'object', properties: {} },
-    handler: () => ok(listSavedTrees()),
+    handler: () => ok(listPresets()),
   },
   {
     name: 'save_preset',
@@ -536,7 +536,7 @@ const TOOLS: ToolDef[] = [
     },
     handler: (a) => {
       const presetName = asString(a.name)
-      if (!listSavedTrees().some(preset => preset.name === presetName)) return fail(`preset not found: ${presetName}`)
+      if (!listPresets().some(preset => preset.name === presetName)) return fail(`preset not found: ${presetName}`)
       const result = startRunFromPreset(presetName, {
         name: typeof a.run_name === 'string' ? a.run_name : undefined,
         working_dir: typeof a.working_dir === 'string' ? a.working_dir : undefined,
@@ -554,8 +554,8 @@ const TOOLS: ToolDef[] = [
     },
     handler: (a) => {
       const name = asString(a.name)
-      if (!listSavedTrees().some(preset => preset.name === name)) return fail('preset not found')
-      deleteSavedTree(name)
+      if (!listPresets().some(preset => preset.name === name)) return fail('preset not found')
+      deletePreset(name)
       return ok({ deleted: true, name })
     },
   },

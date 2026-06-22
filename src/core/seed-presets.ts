@@ -4,11 +4,11 @@
 // so deleted samples stay deleted.
 
 import { existsSync, readdirSync } from 'node:fs'
-import { savedTreesDir, saveSavedTree } from './store.js'
+import { presetsDir, savePreset } from './store.js'
 import { nowIso } from './runs.js'
-import type { SavedTree, SavedTreeSlot } from './types.js'
+import type { Preset, PresetSlot } from './types.js'
 
-function slot(overrides: Partial<SavedTreeSlot>): SavedTreeSlot {
+function slot(overrides: Partial<PresetSlot>): PresetSlot {
   return {
     nickname_template: 'worker',
     provider: 'cc',
@@ -24,7 +24,7 @@ function slot(overrides: Partial<SavedTreeSlot>): SavedTreeSlot {
 }
 
 // Preset 1: hermes-led implementation team using the original provider mix.
-function makeResearchTeam(createdAt: string): SavedTree {
+function makeResearchTeam(createdAt: string): Preset {
   return {
     name: 'research-team',
     description: 'Hermes leads; Claude Code analyzes, Codex CLI builds, OpenCode CLI reviews.',
@@ -59,7 +59,7 @@ function makeResearchTeam(createdAt: string): SavedTree {
 }
 
 // Preset 2: Claude Code-led pair, with a second Claude Code executing and Codex CLI coding.
-function makeClaudeCodePair(createdAt: string): SavedTree {
+function makeClaudeCodePair(createdAt: string): Preset {
   return {
     name: 'claude-code-pair',
     description: 'Claude Code plans; a second Claude Code plus Codex CLI implement.',
@@ -87,7 +87,7 @@ function makeClaudeCodePair(createdAt: string): SavedTree {
   }
 }
 
-export function defaultPresets(): SavedTree[] {
+export function defaultPresets(): Preset[] {
   // Distinct timestamps so the second preset sorts above the first by updated_at desc.
   const t1 = nowIso()
   const t2 = new Date(new Date(t1).getTime() + 1).toISOString()
@@ -97,7 +97,7 @@ export function defaultPresets(): SavedTree[] {
 // Seed the presets dir with the default presets if and only if it has no
 // presets yet. Returns the names that were written, empty when nothing happened.
 export function seedDefaultPresetsIfEmpty(): string[] {
-  const dir = savedTreesDir()
+  const dir = presetsDir()
   let hasAny = false
   try {
     if (existsSync(dir)) {
@@ -110,7 +110,7 @@ export function seedDefaultPresetsIfEmpty(): string[] {
   const written: string[] = []
   for (const preset of defaultPresets()) {
     try {
-      saveSavedTree(preset)
+      savePreset(preset)
       written.push(preset.name)
     } catch {
       /* skip on write failure; leave the rest */

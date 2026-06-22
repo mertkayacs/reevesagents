@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentRecord, Provider, RunRecord, SavedTreeSlot } from '../src/core/types.js'
+import type { AgentRecord, Provider, RunRecord, PresetSlot } from '../src/core/types.js'
 import { PROVIDERS } from '../src/core/providers.js'
 import type { RuntimeDriver } from '../src/core/runtime.js'
 
@@ -83,7 +83,7 @@ function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = 
   }
 }
 
-function slot(overrides: Partial<SavedTreeSlot>): SavedTreeSlot {
+function slot(overrides: Partial<PresetSlot>): PresetSlot {
   return {
     nickname_template: 'worker',
     provider: 'cc',
@@ -101,7 +101,7 @@ function slot(overrides: Partial<SavedTreeSlot>): SavedTreeSlot {
 describe('savePresetFromRun', () => {
   it('captures the root and workers into a sanitized preset', async () => {
     const { writeRun, writeAgent } = await import('../src/core/runs.js')
-    const { savePresetFromRun, loadSavedTree } = await import('../src/core/store.js')
+    const { savePresetFromRun, loadPreset } = await import('../src/core/store.js')
     writeRun(makeRun('r1'))
     writeAgent(makeAgent('r1-root', 'r1', { role: 'root', nickname: 'lead', provider: 'cc', model: 'opus', task: 'plan it', permissions: 'skip', started_at: '2026-01-01T00:00:01.000Z' }))
     writeAgent(makeAgent('r1-w', 'r1', { role: 'worker', nickname: 'builder', provider: 'codex', task: 'build it', started_at: '2026-01-01T00:00:02.000Z' }))
@@ -114,7 +114,7 @@ describe('savePresetFromRun', () => {
     expect(tree.root.initial_prompt).toBe('plan it')
     expect(tree.root.permissions).toBe('skip')
     expect(tree.workers.map(w => w.nickname_template)).toEqual(['builder'])
-    expect(loadSavedTree('My-Team')?.workers).toHaveLength(1)
+    expect(loadPreset('My-Team')?.workers).toHaveLength(1)
   })
 
   it('keeps created_at when re-saving under the same name', async () => {
@@ -139,10 +139,10 @@ describe('savePresetFromRun', () => {
 
 describe('startRunFromPreset', () => {
   it('starts a run from a saved preset, root first then workers', async () => {
-    const { saveSavedTree } = await import('../src/core/store.js')
+    const { savePreset } = await import('../src/core/store.js')
     const { startRunFromPreset } = await import('../src/core/runtime.js')
     const { listRuns, listAgents } = await import('../src/core/runs.js')
-    saveSavedTree({
+    savePreset({
       name: 'duo',
       description: '',
       working_dir_pattern: '',

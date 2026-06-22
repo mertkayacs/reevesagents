@@ -1,11 +1,11 @@
 // App persistence: JSON presets.
-// Inputs: SavedTree preset definitions.
+// Inputs: Preset preset definitions.
 // Outputs: typed reads with defaults; atomic writes.
 // Invariant: all reads return defaults on any parse error.
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync, renameSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import type { AgentRecord, SavedTree, SavedTreeSlot } from './types.js'
+import type { AgentRecord, Preset, PresetSlot } from './types.js'
 import { listAgents, nowIso, readRun, stateRoot } from './runs.js'
 import { isProvider } from './providers.js'
 
@@ -13,11 +13,10 @@ function stateDir(): string {
   return stateRoot()
 }
 
-export function savedTreesDir(): string {
+export function presetsDir(): string {
   return join(stateDir(), 'presets')
 }
 
-export const presetsDir = savedTreesDir
 
 function atomicWrite(path: string, data: unknown): void {
   mkdirSync(dirname(path), { recursive: true })
@@ -30,11 +29,11 @@ function atomicWrite(path: string, data: unknown): void {
   }
 }
 
-function isEffort(value: unknown): value is SavedTreeSlot['effort'] {
+function isEffort(value: unknown): value is PresetSlot['effort'] {
   return value === 'default' || value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh' || value === 'max'
 }
 
-function normalizeSlot(raw: Record<string, unknown>, fallbackDir = ''): SavedTreeSlot {
+function normalizeSlot(raw: Record<string, unknown>, fallbackDir = ''): PresetSlot {
   // Read new field name first; fall back to legacy task_template for old presets.
   const promptRaw = typeof raw.initial_prompt === 'string'
     ? raw.initial_prompt
@@ -54,7 +53,7 @@ function normalizeSlot(raw: Record<string, unknown>, fallbackDir = ''): SavedTre
   }
 }
 
-function normalizeSavedTree(raw: unknown): SavedTree | null {
+function normalizePreset(raw: unknown): Preset | null {
   if (typeof raw !== 'object' || raw === null) return null
   const obj = raw as Record<string, unknown>
   const legacyDir = typeof obj.working_dir_pattern === 'string' ? obj.working_dir_pattern : ''
@@ -74,36 +73,36 @@ function normalizeSavedTree(raw: unknown): SavedTree | null {
   }
 }
 
-export function listSavedTrees(): SavedTree[] {
-  const dir = savedTreesDir()
+export function listPresets(): Preset[] {
+  const dir = presetsDir()
   if (!existsSync(dir)) return []
   try {
     return readdirSync(dir)
       .filter(f => f.endsWith('.json'))
       .map(f => {
-        try { return normalizeSavedTree(JSON.parse(readFileSync(join(dir, f), 'utf-8'))) }
+        try { return normalizePreset(JSON.parse(readFileSync(join(dir, f), 'utf-8'))) }
         catch { return null }
       })
-      .filter((t): t is SavedTree => t !== null)
+      .filter((t): t is Preset => t !== null)
   } catch {
     return []
   }
 }
 
-export function loadSavedTree(name: string): SavedTree | null {
+export function loadPreset(name: string): Preset | null {
   try {
-    return normalizeSavedTree(JSON.parse(readFileSync(join(savedTreesDir(), `${name}.json`), 'utf-8')))
+    return normalizePreset(JSON.parse(readFileSync(join(presetsDir(), `${name}.json`), 'utf-8')))
   } catch {
     return null
   }
 }
 
-export function saveSavedTree(tree: SavedTree): void {
-  atomicWrite(join(savedTreesDir(), `${tree.name}.json`), tree)
+export function savePreset(tree: Preset): void {
+  atomicWrite(join(presetsDir(), `${tree.name}.json`), tree)
 }
 
-export function deleteSavedTree(name: string): void {
-  try { unlinkSync(join(savedTreesDir(), `${name}.json`)) } catch { /* already gone */ }
+export function deletePreset(name: string): void {
+  try { unlinkSync(join(presetsDir(), `${name}.json`)) } catch { /* already gone */ }
 }
 
 // Filesystem-safe preset name: presets are stored as <name>.json under the presets
@@ -112,7 +111,7 @@ function sanitizePresetName(raw: string): string {
   return raw.trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 64)
 }
 
-function agentToSlot(agent: AgentRecord): SavedTreeSlot {
+function agentToSlot(agent: AgentRecord): PresetSlot {
   // AgentRecord does not persist auth_mode/effort, so a run -> preset capture
   // defaults those two; every other launch field carries over verbatim.
   return {
@@ -132,7 +131,7 @@ function agentToSlot(agent: AgentRecord): SavedTreeSlot {
 // the preset root and the remaining windowed agents become workers in start order.
 // Re-saving under an existing name keeps its created_at. Throws on an empty name or
 // a run with no capturable (non-headless) agents.
-export function savePresetFromRun(runId: string, name: string, description = ''): SavedTree {
+export function savePresetFromRun(runId: string, name: string, description = ''): Preset {
   const presetName = sanitizePresetName(name)
   if (!presetName) throw new Error('preset name is required')
   const run = readRun(runId)
@@ -140,9 +139,9 @@ export function savePresetFromRun(runId: string, name: string, description = '')
   if (agents.length === 0) throw new Error('run has no agents to save as a preset')
   const root = agents.find(agent => agent.role === 'root') ?? agents[0]!
   const workers = agents.filter(agent => agent !== root)
-  const existing = loadSavedTree(presetName)
+  const existing = loadPreset(presetName)
   const now = nowIso()
-  const tree: SavedTree = {
+  const tree: Preset = {
     name: presetName,
     description,
     root: agentToSlot(root),
@@ -150,6 +149,6 @@ export function savePresetFromRun(runId: string, name: string, description = '')
     created_at: existing?.created_at ?? now,
     updated_at: now,
   }
-  saveSavedTree(tree)
+  savePreset(tree)
   return tree
 }

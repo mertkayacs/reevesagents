@@ -12,9 +12,9 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { TextField } from '../components/TextField.js'
 import { useRouter } from '../router.js'
 import { useToast } from '../contexts/ToastContext.js'
-import { deleteSavedTree, listSavedTrees, savePresetFromRun } from '../../core/store.js'
+import { deletePreset, listPresets, savePresetFromRun } from '../../core/store.js'
 import { startRunFromPreset } from '../../core/runtime.js'
-import type { SavedTree } from '../../core/types.js'
+import type { Preset } from '../../core/types.js'
 
 const ACTIONS = ['Start', 'SaveCurrentRun', 'Delete', 'Back', 'Main Menu'] as const
 type Action = typeof ACTIONS[number]
@@ -30,10 +30,10 @@ const ACTION_LABEL_WIDTH = Math.max(...ACTIONS.map(action => ACTION_COPY[action]
 export function Presets() {
   const { pop, resetStack, selectedRunId, setSelectedRunId } = useRouter()
   const { toast } = useToast()
-  const [presets, setPresets] = useState<SavedTree[]>(() => listSavedTrees())
+  const [presets, setPresets] = useState<Preset[]>(() => listPresets())
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [actOnName, setActOnName] = useState<string | null>(() => presets[0]?.name ?? null)
-  const [pendingDelete, setPendingDelete] = useState<SavedTree | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Preset | null>(null)
   const [saving, setSaving] = useState(false)
   const [draftName, setDraftName] = useState('')
 
@@ -51,13 +51,13 @@ export function Presets() {
   }, [onPreset, clampedIdx, presets])
 
   function refresh(): void {
-    const next = listSavedTrees()
+    const next = listPresets()
     setPresets(next)
     setActOnName(current => (current && next.some(p => p.name === current) ? current : next[0]?.name ?? null))
   }
 
-  function confirmDelete(preset: SavedTree): void {
-    deleteSavedTree(preset.name)
+  function confirmDelete(preset: Preset): void {
+    deletePreset(preset.name)
     setPendingDelete(null)
     refresh()
     toast(`Deleted preset ${preset.name}`, 'info')

@@ -13,7 +13,7 @@ import type {
   Permissions,
   Provider,
   RunRecord,
-  SavedTreeSlot,
+  PresetSlot,
 } from './types.js'
 import {
   archiveAndRemoveRun,
@@ -31,7 +31,7 @@ import {
   writeRun,
 } from './runs.js'
 import { loadConfig } from './config.js'
-import { loadSavedTree } from './store.js'
+import { loadPreset } from './store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { providerDisplayName, redactSecrets } from '../utils/display.js'
@@ -396,7 +396,7 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
   }
 }
 
-function slotToLaunchConfig(slot: SavedTreeSlot): AgentLaunchConfig {
+function slotToLaunchConfig(slot: PresetSlot): AgentLaunchConfig {
   return {
     nickname: slot.nickname_template,
     provider: slot.provider,
@@ -418,7 +418,7 @@ export function startRunFromPreset(
   opts: { name?: string; working_dir?: string } = {},
   options: RuntimeOptions = {},
 ): { run: RunRecord; agents: AgentRecord[] } {
-  const tree = loadSavedTree(presetName)
+  const tree = loadPreset(presetName)
   if (!tree) throw new Error(`preset not found: ${presetName}`)
   return startRun({
     name: opts.name?.trim() || tree.name,

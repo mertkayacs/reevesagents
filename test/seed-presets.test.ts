@@ -45,12 +45,12 @@ describe('seed-presets', () => {
 
   it('seedDefaultPresetsIfEmpty writes both presets when the dir is empty', async () => {
     const { seedDefaultPresetsIfEmpty } = await import('../src/core/seed-presets.js')
-    const { listSavedTrees } = await import('../src/core/store.js')
+    const { listPresets } = await import('../src/core/store.js')
 
     const written = seedDefaultPresetsIfEmpty()
     expect(written.sort()).toEqual(['claude-code-pair', 'research-team'])
 
-    const loaded = listSavedTrees()
+    const loaded = listPresets()
     expect(loaded.map(t => t.name).sort()).toEqual(['claude-code-pair', 'research-team'])
     expect(loaded.find(t => t.name === 'research-team')?.workers).toHaveLength(3)
     expect(loaded.find(t => t.name === 'claude-code-pair')?.workers).toHaveLength(2)
@@ -58,10 +58,10 @@ describe('seed-presets', () => {
 
   it('seedDefaultPresetsIfEmpty is a no-op when any preset already exists', async () => {
     const { seedDefaultPresetsIfEmpty } = await import('../src/core/seed-presets.js')
-    const { savedTreesDir, saveSavedTree } = await import('../src/core/store.js')
+    const { presetsDir, savePreset } = await import('../src/core/store.js')
 
     // Pre-seed a single user preset.
-    saveSavedTree({
+    savePreset({
       name: 'my-thing',
       description: 'user-owned',
       working_dir_pattern: '',
@@ -80,22 +80,22 @@ describe('seed-presets', () => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    expect(existsSync(savedTreesDir())).toBe(true)
+    expect(existsSync(presetsDir())).toBe(true)
 
     const written = seedDefaultPresetsIfEmpty()
     expect(written).toEqual([])
 
-    const { listSavedTrees } = await import('../src/core/store.js')
-    const names = listSavedTrees().map(t => t.name)
+    const { listPresets } = await import('../src/core/store.js')
+    const names = listPresets().map(t => t.name)
     expect(names).toEqual(['my-thing'])
   })
 
   it('survives an unreadable presets dir', async () => {
     // Pre-create the dir as a regular file so readdir fails. seed should
-    // catch the error and either skip or write through saveSavedTree (which
+    // catch the error and either skip or write through savePreset (which
     // will fail too); either way it must not throw.
-    const { savedTreesDir } = await import('../src/core/store.js')
-    const dir = savedTreesDir()
+    const { presetsDir } = await import('../src/core/store.js')
+    const dir = presetsDir()
     mkdirSync(join(dir, '..'), { recursive: true })
     writeFileSync(dir, 'not a dir', 'utf-8')
 

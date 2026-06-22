@@ -7,14 +7,14 @@ import { tmpdir } from 'node:os'
 import { Presets } from '../../src/tui/screens/Presets.js'
 import * as RouterModule from '../../src/tui/router.js'
 import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
-import { saveSavedTree } from '../../src/core/store.js'
-import type { SavedTreeSlot } from '../../src/core/types.js'
+import { savePreset } from '../../src/core/store.js'
+import type { PresetSlot } from '../../src/core/types.js'
 
 vi.mock('../../src/tui/router.js')
 
 let tmpDir: string
 
-function slot(overrides: Partial<SavedTreeSlot>): SavedTreeSlot {
+function slot(overrides: Partial<PresetSlot>): PresetSlot {
   return {
     nickname_template: 'agent',
     provider: 'cc',
@@ -76,7 +76,7 @@ describe('Presets screen', () => {
   })
 
   it('lists saved presets', () => {
-    saveSavedTree({
+    savePreset({
       name: 'my-team',
       description: 'two builders',
       working_dir_pattern: '',

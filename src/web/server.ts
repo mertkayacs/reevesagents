@@ -22,7 +22,7 @@ import type { AuthMode, Effort, Permissions, Provider } from '../core/types.js'
 import { loadConfig, saveConfig, setConfigValues, CONFIG_FIELDS } from '../core/config.js'
 import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
 import { localeCatalog } from '../i18n/catalog.js'
-import { listSavedTrees, savePresetFromRun, deleteSavedTree } from '../core/store.js'
+import { listPresets, savePresetFromRun, deletePreset } from '../core/store.js'
 import {
   archiveAndRemoveRun,
   autoCleanupRuns,
@@ -337,7 +337,7 @@ function updateConfigAction(body: Record<string, unknown>): unknown {
 
 // Saved presets: reusable agent-team templates shared with the CLI, MCP, and TUI.
 function presetsPayload(): unknown {
-  return { presets: listSavedTrees() }
+  return { presets: listPresets() }
 }
 
 function savePresetAction(body: Record<string, unknown>): unknown {
@@ -345,18 +345,18 @@ function savePresetAction(body: Record<string, unknown>): unknown {
   if (!runId) throw new Error('run_id is required')
   const name = typeof body.name === 'string' ? body.name : ''
   const description = typeof body.description === 'string' ? body.description : ''
-  return { preset: savePresetFromRun(runId, name, description), presets: listSavedTrees() }
+  return { preset: savePresetFromRun(runId, name, description), presets: listPresets() }
 }
 
 function startPresetAction(name: string): unknown {
-  if (!listSavedTrees().some(preset => preset.name === name)) throw new Error('preset not found')
+  if (!listPresets().some(preset => preset.name === name)) throw new Error('preset not found')
   const result = startRunFromPreset(name)
   return { run: result.run, agents: result.agents }
 }
 
 function deletePresetAction(name: string): void {
-  if (!listSavedTrees().some(preset => preset.name === name)) throw new Error('preset not found')
-  deleteSavedTree(name)
+  if (!listPresets().some(preset => preset.name === name)) throw new Error('preset not found')
+  deletePreset(name)
 }
 
 function killTerminal(id: string): void {

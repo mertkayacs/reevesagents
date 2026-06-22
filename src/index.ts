@@ -38,7 +38,7 @@ export {
 
 export { loadConfig, saveConfig, defaultConfig } from './core/config.js'
 export {
-  listSavedTrees, loadSavedTree, saveSavedTree, deleteSavedTree, presetsDir,
+  listPresets, loadPreset, savePreset, deletePreset, presetsDir,
 } from './core/store.js'
 
 export type {

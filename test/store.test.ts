@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SavedTree } from '../src/core/types.js'
+import type { Preset } from '../src/core/types.js'
 
 let testName: string
 let tmpHome: string
@@ -17,14 +17,14 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  const { deleteSavedTree } = await import('../src/core/store.js')
-  deleteSavedTree(testName)
+  const { deletePreset } = await import('../src/core/store.js')
+  deletePreset(testName)
   if (oldHome === undefined) delete process.env.HOME
   else process.env.HOME = oldHome
   rmSync(tmpHome, { recursive: true, force: true })
 })
 
-function makeTree(name: string, overrides: Partial<SavedTree> = {}): SavedTree {
+function makeTree(name: string, overrides: Partial<Preset> = {}): Preset {
   const now = new Date().toISOString()
   return {
     name,
@@ -49,29 +49,29 @@ function makeTree(name: string, overrides: Partial<SavedTree> = {}): SavedTree {
 }
 
 describe('store', () => {
-  it('listSavedTrees returns an array', async () => {
-    const { listSavedTrees } = await import('../src/core/store.js')
-    expect(Array.isArray(listSavedTrees())).toBe(true)
+  it('listPresets returns an array', async () => {
+    const { listPresets } = await import('../src/core/store.js')
+    expect(Array.isArray(listPresets())).toBe(true)
   })
 
-  it('saveSavedTree + loadSavedTree roundtrip', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
-    saveSavedTree(makeTree(testName))
-    const loaded = loadSavedTree(testName)
+  it('savePreset + loadPreset roundtrip', async () => {
+    const { savePreset, loadPreset } = await import('../src/core/store.js')
+    savePreset(makeTree(testName))
+    const loaded = loadPreset(testName)
     expect(loaded?.name).toBe(testName)
     expect(loaded?.description).toBe('test tree')
     expect(loaded?.root.provider).toBe('cc')
     expect(loaded?.root.initial_prompt).toBe('do the work')
   })
 
-  it('saveSavedTree makes tree appear in listSavedTrees', async () => {
-    const { saveSavedTree, listSavedTrees } = await import('../src/core/store.js')
-    saveSavedTree(makeTree(testName))
-    expect(listSavedTrees().map(t => t.name)).toContain(testName)
+  it('savePreset makes tree appear in listPresets', async () => {
+    const { savePreset, listPresets } = await import('../src/core/store.js')
+    savePreset(makeTree(testName))
+    expect(listPresets().map(t => t.name)).toContain(testName)
   })
 
-  it('saveSavedTree with workers preserves worker array', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
+  it('savePreset with workers preserves worker array', async () => {
+    const { savePreset, loadPreset } = await import('../src/core/store.js')
     const tree = makeTree(testName, {
       workers: [{
         nickname_template: 'worker-1',
@@ -85,39 +85,39 @@ describe('store', () => {
         rc_enabled: false,
       }]
     })
-    saveSavedTree(tree)
-    const loaded = loadSavedTree(testName)
+    savePreset(tree)
+    const loaded = loadPreset(testName)
     expect(loaded?.workers).toHaveLength(1)
     expect(loaded?.workers[0]?.provider).toBe('codex')
     expect(loaded?.workers[0]?.initial_prompt).toBe('help with research')
   })
 
-  it('deleteSavedTree removes tree from listSavedTrees', async () => {
-    const { saveSavedTree, deleteSavedTree, listSavedTrees } = await import('../src/core/store.js')
-    saveSavedTree(makeTree(testName))
-    deleteSavedTree(testName)
-    expect(listSavedTrees().map(t => t.name)).not.toContain(testName)
+  it('deletePreset removes tree from listPresets', async () => {
+    const { savePreset, deletePreset, listPresets } = await import('../src/core/store.js')
+    savePreset(makeTree(testName))
+    deletePreset(testName)
+    expect(listPresets().map(t => t.name)).not.toContain(testName)
   })
 
-  it('loadSavedTree returns null for a missing tree', async () => {
-    const { loadSavedTree } = await import('../src/core/store.js')
-    expect(loadSavedTree('definitely-does-not-exist-xyzzy-999')).toBeNull()
+  it('loadPreset returns null for a missing tree', async () => {
+    const { loadPreset } = await import('../src/core/store.js')
+    expect(loadPreset('definitely-does-not-exist-xyzzy-999')).toBeNull()
   })
 
-  it('deleteSavedTree on a missing tree does not throw', async () => {
-    const { deleteSavedTree } = await import('../src/core/store.js')
-    expect(() => deleteSavedTree('definitely-does-not-exist-xyzzy-999')).not.toThrow()
+  it('deletePreset on a missing tree does not throw', async () => {
+    const { deletePreset } = await import('../src/core/store.js')
+    expect(() => deletePreset('definitely-does-not-exist-xyzzy-999')).not.toThrow()
   })
 
-  it('overwriting a tree with saveSavedTree updates it', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
-    saveSavedTree(makeTree(testName, { description: 'original' }))
-    saveSavedTree(makeTree(testName, { description: 'updated' }))
-    expect(loadSavedTree(testName)?.description).toBe('updated')
+  it('overwriting a tree with savePreset updates it', async () => {
+    const { savePreset, loadPreset } = await import('../src/core/store.js')
+    savePreset(makeTree(testName, { description: 'original' }))
+    savePreset(makeTree(testName, { description: 'updated' }))
+    expect(loadPreset(testName)?.description).toBe('updated')
   })
 
   it('persists a tree with one worker of every provider', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
+    const { savePreset, loadPreset } = await import('../src/core/store.js')
     const tree = makeTree(testName, {
       workers: [
         { nickname_template: 'claude-w', provider: 'cc',     model: 'sonnet',   auth_mode: 'default', effort: 'high', initial_prompt: 'cc prompt',     working_dir: '/tmp', permissions: 'ask', rc_enabled: true  },
@@ -131,8 +131,8 @@ describe('store', () => {
         { nickname_template: 'aider-w', provider: 'aider', model: 'deepseek/deepseek-chat', auth_mode: 'default', effort: 'default', initial_prompt: 'aider prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
       ],
     })
-    saveSavedTree(tree)
-    const loaded = loadSavedTree(testName)
+    savePreset(tree)
+    const loaded = loadPreset(testName)
     expect(loaded?.workers).toHaveLength(9)
     expect(loaded?.workers.map(w => w.provider)).toEqual(['cc', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider'])
     expect(loaded?.workers.map(w => w.nickname_template)).toEqual(['claude-w', 'codex-w', 'opencode-w', 'hermes-w', 'kimi-w', 'deepseek-w', 'pi-w', 'qwen-w', 'aider-w'])
@@ -145,7 +145,7 @@ describe('store', () => {
   })
 
   it('persists heterogeneous workers with their own providers and prompts', async () => {
-    const { saveSavedTree, loadSavedTree } = await import('../src/core/store.js')
+    const { savePreset, loadPreset } = await import('../src/core/store.js')
     const tree = makeTree(testName, {
       workers: [
         {
@@ -183,8 +183,8 @@ describe('store', () => {
         },
       ],
     })
-    saveSavedTree(tree)
-    const loaded = loadSavedTree(testName)
+    savePreset(tree)
+    const loaded = loadPreset(testName)
     expect(loaded?.workers).toHaveLength(3)
     expect(loaded?.workers[0]?.provider).toBe('cc')
     expect(loaded?.workers[0]?.nickname_template).toBe('researcher')
@@ -198,8 +198,8 @@ describe('store', () => {
   })
 
   it('loads legacy task_template field as initial_prompt', async () => {
-    const { loadSavedTree, savedTreesDir } = await import('../src/core/store.js')
-    const dir = savedTreesDir()
+    const { loadPreset, presetsDir } = await import('../src/core/store.js')
+    const dir = presetsDir()
     mkdirSync(dir, { recursive: true })
     const legacy = {
       name: testName,
@@ -231,7 +231,7 @@ describe('store', () => {
       updated_at: new Date().toISOString(),
     }
     writeFileSync(join(dir, `${testName}.json`), JSON.stringify(legacy), 'utf-8')
-    const loaded = loadSavedTree(testName)
+    const loaded = loadPreset(testName)
     expect(loaded?.root.initial_prompt).toBe('inherited from old preset')
     expect(loaded?.workers[0]?.initial_prompt).toBe('legacy worker prompt')
   })
