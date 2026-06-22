@@ -109,6 +109,8 @@ describe('AddWorker', () => {
     await press(stdin, down)
     await press(stdin, down)
     await press(stdin, down)
+    await press(stdin, down)
+    await press(stdin, down)
     await press(stdin, '\r')
 
     expect(RuntimeModule.spawnWorker).toHaveBeenCalledOnce()
@@ -118,6 +120,8 @@ describe('AddWorker', () => {
       provider: 'codex',
       task: 'line one\nline two',
       permissions: 'ask',
+      auth_mode: 'default',
+      effort: 'default',
     })
 
     unmount()
@@ -126,7 +130,7 @@ describe('AddWorker', () => {
   it('allows spawning an agent without an initial prompt', async () => {
     const { stdin, unmount } = renderAddWorker()
 
-    for (let i = 0; i < 6; i++) await press(stdin, down)
+    for (let i = 0; i < 8; i++) await press(stdin, down)
     await press(stdin, '\r')
 
     expect(RuntimeModule.spawnWorker).toHaveBeenCalledOnce()

@@ -19,15 +19,21 @@ import { spawnWorker } from '../../../core/runtime.js'
 import { PROVIDERS } from '../../../core/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../../core/model-catalog.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
-import type { Permissions, Provider } from '../../../core/types.js'
+import type { Permissions, Provider, AuthMode, Effort } from '../../../core/types.js'
 
 const PERMISSIONS_VALUES: Permissions[] = ['ask', 'skip']
+const EFFORT_VALUES: Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
+const AUTH_MODE_VALUES: AuthMode[] = ['default', 'api-key']
 
 function permissionDisplay(value: Permissions): string {
   return value === 'skip' ? 'Skip prompts' : 'Ask first'
 }
 
-type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions'
+function authModeDisplay(value: AuthMode): string {
+  return value === 'api-key' ? 'API key' : 'Default login'
+}
+
+type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'authMode' | 'effort'
 type ActionId = 'add' | 'cancel'
 const ACTION_LABEL_WIDTH = Math.max('Add Agent'.length, 'Cancel'.length)
 
@@ -76,6 +82,8 @@ export function AddWorker() {
       display: permissionDisplay(draft.permissions),
       hint: draft.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
     },
+    { kind: 'picker', id: 'authMode', label: 'Auth', current: draft.authMode, values: AUTH_MODE_VALUES, display: authModeDisplay(draft.authMode), hint: 'api-key uses the API key instead of the default login' },
+    { kind: 'picker', id: 'effort', label: 'Effort', current: draft.effort, values: EFFORT_VALUES },
   ], [draft])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
@@ -129,6 +137,8 @@ export function AddWorker() {
     if (id === 'provider') update({ provider: cycle(PROVIDERS, draft.provider, dir), model: '' })
     else if (id === 'model') update({ model: cycle(modelValuesForProvider(draft.provider), draft.model, dir) })
     else if (id === 'permissions') update({ permissions: cycle(PERMISSIONS_VALUES, draft.permissions, dir) })
+    else if (id === 'authMode') update({ authMode: cycle(AUTH_MODE_VALUES, draft.authMode, dir) })
+    else if (id === 'effort') update({ effort: cycle(EFFORT_VALUES, draft.effort, dir) })
   }
 
   function handleAdd(): void {
@@ -143,6 +153,8 @@ export function AddWorker() {
         task: draft.prompt,
         working_dir: draft.workingDir || undefined,
         permissions: draft.permissions,
+        auth_mode: draft.authMode,
+        effort: draft.effort,
       })
       reset()
       pop()

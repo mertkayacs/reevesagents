@@ -2,7 +2,7 @@
 // Holds one worker draft. Resets on unmount or explicit reset().
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import type { Provider, Permissions } from '../../core/types.js'
+import type { Provider, Permissions, AuthMode, Effort } from '../../core/types.js'
 
 export interface WorkerDraft {
   nickname: string
@@ -11,6 +11,8 @@ export interface WorkerDraft {
   prompt: string
   workingDir: string
   permissions: Permissions
+  authMode: AuthMode
+  effort: Effort
 }
 
 interface WorkerDraftContextValue {
@@ -28,6 +30,8 @@ const INITIAL_DRAFT: WorkerDraft = {
   prompt: '',
   workingDir: process.cwd(),
   permissions: 'ask',
+  authMode: 'default',
+  effort: 'default',
 }
 
 export function useWorkerDraft(): WorkerDraftContextValue {
