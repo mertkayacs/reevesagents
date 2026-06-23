@@ -9,6 +9,8 @@ import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { Legend } from '../components/Legend.js'
 import { useRouter } from '../router.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
+import { agentCountLabel } from '../../utils/agentLabel.js'
 import { colors } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../utils/display.js'
@@ -56,6 +58,7 @@ function moveSelectedIndex(idx: number, delta: number, runCount: number): number
 
 export function Runs() {
   const { exit } = useApp()
+  const { t } = useLanguage()
   const { push, resetStack, setSelectedRunId } = useRouter()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
@@ -224,14 +227,14 @@ export function Runs() {
                 primaryWidth={runNameWidth}
                 glyph={statusGlyph(runStatus(run))}
                 badges={badges}
-                hint={`${agents.length} agents`}
+                hint={agentCountLabel(t, agents.length)}
               />
             )
           })}
           {selectableEntries.length > compactEntryCount && (
             <Row
               selected={false}
-              primary={`${compactFirstEntry + 1}-${compactFirstEntry + compactEntries.length} of ${selectableEntries.length}`}
+              primary={t('runtime.pageRange', { from: compactFirstEntry + 1, to: compactFirstEntry + compactEntries.length, total: selectableEntries.length })}
               trailing="scroll with arrows"
               disabled
             />
@@ -270,7 +273,7 @@ export function Runs() {
                   primaryWidth={runNameWidth}
                   glyph={statusGlyph(runStatus(run))}
                   badges={badges}
-                  hint={`${agents.length} agents`}
+                  hint={agentCountLabel(t, agents.length)}
                 />
               )
             })
@@ -278,7 +281,7 @@ export function Runs() {
           {runs.length > visibleRunCount && (
             <Row
               selected={false}
-              primary={`${runScroll + 1}-${runScroll + visibleRuns.length} of ${runs.length}`}
+              primary={t('runtime.pageRange', { from: runScroll + 1, to: runScroll + visibleRuns.length, total: runs.length })}
               trailing="scroll with arrows"
               disabled
             />

@@ -30,7 +30,7 @@ type SelectableItem =
 export function AgentOutput() {
   const { selectedAgentId, pop } = useRouter()
   const { toast } = useToast()
-  const { language } = useLanguage()
+  const { language, t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 9
@@ -169,9 +169,9 @@ export function AgentOutput() {
   const isAgentEnded = agent.ended_at !== null
   const canOpenAgent = !isAgentEnded && !isHeadless && !!agent.tmux_window_id
   const openDisabledHint = isAgentEnded ? 'agent has ended' : 'no tmux window'
-  let statusContext = `${agent.nickname} · output`
+  let statusContext = `${agent.nickname} · ${t('runtime.output')}`
   if (selected?.type === 'pagination') {
-    statusContext = `output page ${activePage} of ${totalPages} · ← → turn page`
+    statusContext = t('runtime.outputPageNav', { page: activePage, total: totalPages })
   } else if (selected?.type === 'action') {
     const actionLabels: Record<RowItem, string> = {
       RefreshNow: 'fetch output now',

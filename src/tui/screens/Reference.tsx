@@ -6,6 +6,7 @@ import { Frame, frameBodyRows } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
 
 type ReferenceItem =
   | { type: 'section'; label: string }
@@ -34,6 +35,7 @@ const CONTENT: ReferenceItem[] = [
 
 export function Reference() {
   const { pop } = useRouter()
+  const { t } = useLanguage()
   const { rows } = useWindowSize()
   const bodyRows = frameBodyRows(rows, true, true)
   const compactBody = bodyRows <= 10
@@ -55,7 +57,7 @@ export function Reference() {
 
   const visible = CONTENT.slice(scroll, scroll + visibleCount)
   const statusContext = maxScroll > 0
-    ? `Reference ${scroll + 1}-${Math.min(CONTENT.length, scroll + visibleCount)} of ${CONTENT.length}`
+    ? t('runtime.referenceRange', { from: scroll + 1, to: Math.min(CONTENT.length, scroll + visibleCount), total: CONTENT.length })
     : 'ReevesAgents reference'
   const contentRows: React.ReactNode[] = []
   let openSection = false
@@ -88,7 +90,7 @@ export function Reference() {
           {maxScroll > 0 && (
             <Row
               selected={false}
-              primary={`${scroll + 1}-${Math.min(CONTENT.length, scroll + visibleCount)} of ${CONTENT.length}`}
+              primary={t('runtime.pageRange', { from: scroll + 1, to: Math.min(CONTENT.length, scroll + visibleCount), total: CONTENT.length })}
               trailing="scroll with arrows"
               disabled
             />

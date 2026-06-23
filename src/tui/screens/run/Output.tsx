@@ -11,6 +11,7 @@ import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
 import { translatePhrase } from '../../../i18n/catalog.js'
 import { useLanguage } from '../../contexts/LanguageContext.js'
+import { agentCountLabel } from '../../../utils/agentLabel.js'
 import { colors, space } from '../../../utils/tokens.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import { listAgents, readRun } from '../../../core/runs.js'
@@ -47,7 +48,7 @@ function peekAgents(agents: AgentRecord[]): Record<string, string> {
 
 export function RunOutput() {
   const { selectedRunId, pop, push, setSelectedAgentId } = useRouter()
-  const { language } = useLanguage()
+  const { language, t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 12
@@ -217,10 +218,10 @@ export function RunOutput() {
   }
 
   const secondsAgo = Math.floor((Date.now() - lastPeekAt) / 1000)
-  const lastPeekLabel = secondsAgo === 0 ? 'just now' : `${secondsAgo}s ago`
-  let statusContext = agents.length > 0 ? `${agents.length} agent${agents.length === 1 ? '' : 's'}` : 'no agents'
-  if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · enter opens output`
-  if (selected?.type === 'pagination') statusContext = `page ${activePage} of ${totalPages} · ← → turn page`
+  const lastPeekLabel = secondsAgo === 0 ? 'just now' : t('runtime.secondsAgo', { seconds: secondsAgo })
+  let statusContext = agents.length > 0 ? agentCountLabel(t, agents.length) : 'no agents'
+  if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · ${t('runtime.enterOpensOutput')}`
+  if (selected?.type === 'pagination') statusContext = t('runtime.pageNav', { page: activePage, total: totalPages })
 
   return (
     <Frame

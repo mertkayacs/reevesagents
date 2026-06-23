@@ -6,10 +6,12 @@ import { Frame, frameBodyRows } from '../components/Frame.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
 import { REEVESAGENTS_VERSION } from '../../version.js'
 
 export function Credits() {
   const { pop } = useRouter()
+  const { t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 8
@@ -49,7 +51,7 @@ export function Credits() {
         {maxScroll > 0 && (
           <Row
             selected={false}
-            primary={`${scroll + 1}-${scroll + visible.length} of ${content.length}`}
+            primary={t('runtime.pageRange', { from: scroll + 1, to: scroll + visible.length, total: content.length })}
             trailing="scroll with arrows"
             disabled
           />

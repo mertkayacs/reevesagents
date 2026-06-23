@@ -9,6 +9,8 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { StepIndicator } from '../../components/StepIndicator.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../contexts/WizardContext.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
+import { agentCountLabel } from '../../../utils/agentLabel.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import type { Permissions } from '../../../core/types.js'
 
@@ -22,6 +24,7 @@ function permissionDisplay(value: Permissions): string {
 export function NewRunReview() {
   const { push, pop } = useRouter()
   const { state, reset } = useWizard()
+  const { t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, false)
   const compactBody = bodyRows <= 14
@@ -68,7 +71,7 @@ export function NewRunReview() {
         <>
           <Section label="Review" />
           {showCompactSummary && (
-            <Row selected={false} primary={state.name || '(unset)'} trailing={`${state.workers.length + 1} agents`} alwaysShowTrailing disabled />
+            <Row selected={false} primary={state.name || '(unset)'} trailing={agentCountLabel(t, state.workers.length + 1)} alwaysShowTrailing disabled />
           )}
           {actions.map((action, idx) => (
             <Row
@@ -97,7 +100,7 @@ export function NewRunReview() {
 
           {state.workers.length > 0 && (
             <>
-              <Section label={`Additional Agents (${state.workers.length})`} />
+              <Section label={t('runtime.additionalAgentsCount', { count: state.workers.length })} />
               {state.workers.map((worker, idx) => (
                 <Row
                   key={`worker-${idx}`}
@@ -115,12 +118,12 @@ export function NewRunReview() {
           )}
 
           <Section label="Planned Tmux Windows" />
-          <Row selected={false} primary="agent 1" trailing={providerDisplayName(state.root.provider)} />
+          <Row selected={false} primary={t('runtime.agentN', { n: 1 })} trailing={providerDisplayName(state.root.provider)} />
           {state.workers.map((worker, idx) => (
             <Row
               key={`tmux-${idx}`}
               selected={false}
-              primary={`agent ${idx + 2}`}
+              primary={t('runtime.agentN', { n: idx + 2 })}
               trailing={worker.nickname || providerDisplayName(worker.provider)}
             />
           ))}

@@ -14,7 +14,7 @@ import type { AgentRecord } from '../../../core/types.js'
 
 export function AgentTask() {
   const { selectedAgentId, pop } = useRouter()
-  const { language } = useLanguage()
+  const { language, t } = useLanguage()
   const [agent] = useState<AgentRecord | null>(() =>
     selectedAgentId ? (() => { try { return findAgent(selectedAgentId) } catch { return null } })() : null
   )
@@ -57,7 +57,7 @@ export function AgentTask() {
           selected={false}
           primary="Last seen"
           trailing={agent.last_seen
-            ? `${Math.round((Date.now() - agent.last_seen) / 1000)}s ago`
+            ? t('runtime.secondsAgo', { seconds: Math.round((Date.now() - agent.last_seen) / 1000) })
             : 'never'}
         />
         <SectionEnd />
