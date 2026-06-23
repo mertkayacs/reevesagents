@@ -10,7 +10,7 @@
 
 [English](README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · **Türkçe** · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
-*Bir agent diğerlerini oluştursun ve kontrol etsin. Agent'ları (Claude Code, Codex, Hermes, DeepSeek, Kimi ve daha fazlası) bir TUI, Web UI, CLI ve MCP üzerinden oluşturup yönetmek için yerel, tmux öncelikli bir çalışma alanı. API anahtarı yok, Agent.md veya Claude.md dosyanızda değişiklik yok.*
+*Bir agent diğerlerini oluştursun ve kontrol etsin. Agent'larınızı (Claude Code, Codex, Hermes, DeepSeek, Kimi ve daha fazlası) bir TUI, Web UI, CLI ve MCP üzerinden oluşturup yönetmek için yerel, tmux öncelikli bir çalışma alanı. API anahtarı yok, Agent.md veya Claude.md dosyanızda değişiklik yok.*
 
 **10'dan fazla dilde!**
 
