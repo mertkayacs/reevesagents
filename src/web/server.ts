@@ -21,7 +21,7 @@ import { providerDisplayName } from '../utils/display.js'
 import type { AuthMode, Effort, Permissions, Provider } from '../core/types.js'
 import { loadConfig, setConfigValues, CONFIG_FIELDS } from '../core/config.js'
 import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
-import { localeCatalog } from '../i18n/catalog.js'
+import { localeCatalog, translatePhrase } from '../i18n/catalog.js'
 import { listPresets, savePresetFromRun, deletePreset } from '../core/store.js'
 import {
   archiveAndRemoveRun,
@@ -323,7 +323,13 @@ function attachAllMcpHostsAction(): unknown {
 // the CLI, MCP, and TUI do. Language is handled by /api/language (it needs the
 // live language payload), so the panel edits only the numeric and permission fields.
 function configPayload(): unknown {
-  return { config: loadConfig().global, fields: CONFIG_FIELDS.filter(field => field.kind !== 'language') }
+  const config = loadConfig().global
+  // Localize the field labels with the saved language so the panel reads in the user's language.
+  return {
+    config,
+    fields: CONFIG_FIELDS.filter(field => field.kind !== 'language')
+      .map(field => ({ ...field, label: translatePhrase(config.language, field.label) })),
+  }
 }
 
 function updateConfigAction(body: Record<string, unknown>): unknown {
