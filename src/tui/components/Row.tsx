@@ -118,7 +118,7 @@ export function Row({
         )}
         {glyph && <Text>{' '}</Text>}
         {inlineBadges.map((item, idx) => {
-          const label = truncateBadgeLabel(item.label, compact)
+          const label = truncateBadgeLabel(translatePhrase(language, item.label), compact)
           const displayLabel = item.width && !compact ? label.padEnd(item.width) : label
           return (
             <React.Fragment key={`${item.label}-${idx}`}>

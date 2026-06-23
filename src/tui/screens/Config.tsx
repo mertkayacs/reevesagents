@@ -11,6 +11,8 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { TextField } from '../components/TextField.js'
 import { useRouter } from '../router.js'
 import { useToast } from '../contexts/ToastContext.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
+import { translatePhrase } from '../../i18n/catalog.js'
 import { CONFIG_FIELDS, loadConfig, parseConfigValue, setConfigValues } from '../../core/config.js'
 import type { ConfigFieldSpec } from '../../core/config.js'
 import type { GlobalConfig, Permissions } from '../../core/types.js'
@@ -25,6 +27,7 @@ function isNumeric(field: ConfigFieldSpec): boolean {
 export function Config() {
   const { pop } = useRouter()
   const { toast } = useToast()
+  const { language } = useLanguage()
   const [global, setGlobal] = useState<GlobalConfig>(() => loadConfig().global)
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -103,7 +106,7 @@ export function Config() {
               key={field.key}
               selected={selectedIdx === idx}
               primary={field.label}
-              trailing={`‹ ${String(value)} ›`}
+              trailing={`‹ ${translatePhrase(language, String(value))} ›`}
               hint={selectedIdx === idx ? '← → cycle' : undefined}
             />
           )

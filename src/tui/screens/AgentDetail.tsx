@@ -12,6 +12,7 @@ import { findAgent, listAgents, readRun } from '../../core/runs.js'
 import { openAgent } from '../../core/runtime.js'
 import { useToast } from '../contexts/ToastContext.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
+import { translatePhrase } from '../../i18n/catalog.js'
 import type { AgentRecord } from '../../core/types.js'
 
 type RowItem = 'Output' | 'Task' | '__section__' | 'OpenCLI' | 'AgentLifecycle' | 'Back'
@@ -38,7 +39,7 @@ interface SelectableItem {
 export function AgentDetail() {
   const { selectedAgentId, push, pop } = useRouter()
   const { toast } = useToast()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 8
@@ -134,7 +135,7 @@ export function AgentDetail() {
         statusContext="Agent not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Agent not found.</Text>
+          <Text color={colors.text.dim}>{translatePhrase(language, 'Agent not found.')}</Text>
           <Box marginTop={1}>
             <Row
               selected={selectedIdx === 0}

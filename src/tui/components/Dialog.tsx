@@ -6,6 +6,8 @@ import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { colors } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
+import { translatePhrase } from '../../i18n/catalog.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
 
 interface DialogProps {
   title: string
@@ -26,9 +28,14 @@ export function Dialog({
   onConfirm,
   onCancel,
 }: DialogProps) {
+  const { language } = useLanguage()
   const [focusedButton, setFocusedButton] = useState<'cancel' | 'confirm'>('cancel')
 
   const borderColor = intent === 'danger' ? colors.status.warn : colors.accent.primary
+  const displayTitle = translatePhrase(language, title)
+  const displayBody = translatePhrase(language, body)
+  const displayConfirm = translatePhrase(language, confirmLabel)
+  const displayCancel = translatePhrase(language, cancelLabel)
 
   useInput((input, key) => {
     if (key.leftArrow) {
@@ -66,15 +73,15 @@ export function Dialog({
     <Box flexDirection="column" borderStyle="round" borderColor={borderColor} paddingX={2} paddingY={1} marginY={1}>
       <Box marginBottom={1}>
         <Text color={borderColor} bold>
-          {title}
+          {displayTitle}
         </Text>
       </Box>
       <Box marginBottom={1}>
-        <Text color={colors.text.primary}>{body}</Text>
+        <Text color={colors.text.primary}>{displayBody}</Text>
       </Box>
       <Box marginTop={1} flexDirection="row" gap={1}>
-        {renderButton(cancelLabel, 'cancel')}
-        {renderButton(confirmLabel, 'confirm')}
+        {renderButton(displayCancel, 'cancel')}
+        {renderButton(displayConfirm, 'confirm')}
       </Box>
     </Box>
   )

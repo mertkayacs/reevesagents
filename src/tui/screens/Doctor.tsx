@@ -12,6 +12,8 @@ import { Legend } from '../components/Legend.js'
 import { Spinner } from '../components/Spinner.js'
 import { Pagination } from '../components/Pagination.js'
 import { useRouter } from '../router.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
+import { translatePhrase } from '../../i18n/catalog.js'
 import { colors } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
 import { runDoctor } from '../../core/doctor.js'
@@ -26,6 +28,7 @@ function statusGlyph(status: 'ok' | 'warn' | 'fail'): { char: string; color: str
 
 export function Doctor() {
   const { pop, push, setSelectedCheckName } = useRouter()
+  const { language } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 10
@@ -101,7 +104,7 @@ export function Doctor() {
         <Primary>
           <Section label={selectedIdx < pagedChecks.length ? 'Checks' : 'Actions'} />
           {isSpinning ? (
-            <Spinner label="checking..." color={colors.accent.bright} />
+            <Spinner label={translatePhrase(language, 'checking...')} color={colors.accent.bright} />
           ) : compactEntryIndexes.map(idx => {
             if (idx < pagedChecks.length) {
               const check = pagedChecks[idx]!
@@ -137,7 +140,7 @@ export function Doctor() {
         </Primary>
       ) : (
         <Primary>
-          {isSpinning && <Spinner label="checking..." color={colors.accent.bright} />}
+          {isSpinning && <Spinner label={translatePhrase(language, 'checking...')} color={colors.accent.bright} />}
           {!isSpinning && pagedChecks.map((check, idx) => (
             <Row
               key={check.name}

@@ -8,6 +8,8 @@ import { Row } from '../../components/Row.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
+import { translatePhrase } from '../../../i18n/catalog.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
 import { colors } from '../../../utils/tokens.js'
 import { glyphs } from '../../../utils/glyphs.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
@@ -35,6 +37,7 @@ function statusGlyph(status: string): { char: string; color: string } {
 
 export function RunAgents() {
   const { selectedRunId, setSelectedAgentId, push, pop } = useRouter()
+  const { language } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 9
@@ -140,7 +143,7 @@ export function RunAgents() {
     return (
       <Frame breadcrumb={['ReevesAgents', 'Runs']} statusContext="Run not found">
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Run not found.</Text>
+          <Text color={colors.text.dim}>{translatePhrase(language, 'Run not found.')}</Text>
           <Box marginTop={1}>
             <Row selected={true} primary="Back" hint="return to all runs" />
           </Box>

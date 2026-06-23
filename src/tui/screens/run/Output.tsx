@@ -9,6 +9,8 @@ import { Row } from '../../components/Row.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
+import { translatePhrase } from '../../../i18n/catalog.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
 import { colors, space } from '../../../utils/tokens.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import { listAgents, readRun } from '../../../core/runs.js'
@@ -45,6 +47,7 @@ function peekAgents(agents: AgentRecord[]): Record<string, string> {
 
 export function RunOutput() {
   const { selectedRunId, pop, push, setSelectedAgentId } = useRouter()
+  const { language } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 12
@@ -204,7 +207,7 @@ export function RunOutput() {
         statusContext="Run not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Run not found.</Text>
+          <Text color={colors.text.dim}>{translatePhrase(language, 'Run not found.')}</Text>
           <Box marginTop={1}>
             <Row selected={true} primary="Back" hint="return to run" />
           </Box>
@@ -281,7 +284,7 @@ export function RunOutput() {
       ) : (
         <Box flexDirection="column">
           {agents.length === 0 ? (
-            <Text color={colors.text.dim}>No agents in this run.</Text>
+            <Text color={colors.text.dim}>{translatePhrase(language, 'No agents in this run.')}</Text>
           ) : (
             pagedAgents.map((agent) => {
               const peek = peeks[agent.id] || ''
@@ -306,7 +309,7 @@ export function RunOutput() {
                       </Text>
                       <Box marginTop={space.sm}>
                         {lines.length === 0 ? (
-                          <Text color={colors.text.dim}>(no output yet)</Text>
+                          <Text color={colors.text.dim}>{translatePhrase(language, '(no output yet)')}</Text>
                         ) : (
                           <Box flexDirection="column">
                             {lines.map((line, lineIdx) => (
