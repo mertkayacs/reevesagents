@@ -79,9 +79,12 @@ body {
 }
 
 html[dir="rtl"] .topbar,
-html[dir="rtl"] .layout,
-html[dir="rtl"] .dialog {
+html[dir="rtl"] .layout {
   direction: ltr;
+}
+
+html[dir="rtl"] .dialog {
+  direction: rtl;
 }
 
 html[dir="rtl"] .stage-title,
@@ -130,13 +133,16 @@ button { letter-spacing: 0; }
 /* topbar */
 .topbar {
   position: relative;
-  height: var(--topbar-h);
+  min-height: var(--topbar-h);
+  height: auto;
   flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  align-content: center;
   justify-content: space-between;
   gap: var(--s-4);
-  padding: 0 var(--s-4);
+  padding: var(--s-2) var(--s-4);
   border-bottom: 1px solid var(--border-soft);
   background:
     linear-gradient(90deg, rgba(111, 176, 168, 0.065), transparent 28%, rgba(168, 144, 209, 0.052) 64%, rgba(215, 168, 79, 0.045)),
@@ -148,7 +154,8 @@ button { letter-spacing: 0; }
 }
 
 .brand {
-  min-width: 0;
+  min-width: max-content;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -189,12 +196,16 @@ button { letter-spacing: 0; }
   font-weight: 750;
   line-height: 1.05;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .topbar-actions {
-  flex: 0 0 auto;
+  min-width: 0;
+  flex: 1 1 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--s-3);
 }
 
@@ -858,9 +869,9 @@ button { letter-spacing: 0; }
 .card {
   --agent-color: var(--accent);
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--s-2);
   width: 100%;
   min-height: 66px;
@@ -922,6 +933,7 @@ button { letter-spacing: 0; }
 
 .card-main {
   min-width: 0;
+  width: 100%;
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
@@ -1015,10 +1027,14 @@ button { letter-spacing: 0; }
 }
 
 .card-tail {
+  min-width: 0;
+  width: 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--s-2);
+  padding-left: calc(38px + var(--s-3));
 }
 
 .dot {
@@ -1375,12 +1391,13 @@ button { letter-spacing: 0; }
 }
 
 .dialog form {
+  --dialog-pad: var(--s-5);
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-  padding: var(--s-5);
+  padding: var(--dialog-pad);
 }
 
 .dialog-header {
@@ -1712,6 +1729,16 @@ button { letter-spacing: 0; }
   margin-top: var(--s-2);
 }
 
+.dialog form .dialog-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: var(--s-2) calc(-1 * var(--dialog-pad)) calc(-1 * var(--dialog-pad));
+  padding: var(--s-3) var(--dialog-pad) var(--dialog-pad);
+  border-top: 1px solid var(--border-soft);
+  background: var(--panel);
+}
+
 /* agent control (MCP installer) dialog */
 .mcp-dialog { width: min(560px, calc(100vw - 32px)); }
 
@@ -1744,6 +1771,10 @@ button { letter-spacing: 0; }
   border-color: color-mix(in srgb, var(--ok) 46%, var(--border));
 }
 
+.mcp-host-row[data-state="loading"] {
+  border-style: dashed;
+}
+
 .mcp-host-body {
   display: flex;
   flex-direction: column;
@@ -1773,7 +1804,8 @@ button { letter-spacing: 0; }
 .mcp-host-row[data-state="attached"] .mcp-host-status { color: var(--ok); }
 .mcp-host-row[data-state="detached"] .mcp-host-status { color: var(--warn); }
 .mcp-host-row[data-state="absent"] .mcp-host-status,
-.mcp-host-row[data-state="manual"] .mcp-host-status { color: var(--faint); }
+.mcp-host-row[data-state="manual"] .mcp-host-status,
+.mcp-host-row[data-state="loading"] .mcp-host-status { color: var(--faint); }
 
 .mcp-host-action {
   min-height: 30px;
@@ -1911,7 +1943,7 @@ button { letter-spacing: 0; }
   }
 
   .brand {
-    min-width: 0;
+    min-width: max-content;
   }
 
   .brand-duck {
@@ -2011,6 +2043,10 @@ button { letter-spacing: 0; }
     padding-inline: var(--s-1);
   }
 
+  .card-tail {
+    padding-left: calc(34px + var(--s-2));
+  }
+
   .stage-status {
     min-width: 64px;
     padding-inline: var(--s-2);
@@ -2034,7 +2070,8 @@ button { letter-spacing: 0; }
   }
 
   .dialog form {
-    padding: var(--s-4);
+    --dialog-pad: var(--s-4);
+    padding: var(--dialog-pad);
   }
 }
 

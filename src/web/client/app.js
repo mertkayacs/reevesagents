@@ -264,6 +264,9 @@
   let createSubmitting = false
   let mcpHosts = []
   let mcpBusy = false
+  let mcpLoading = false
+  let mcpLoadFailed = false
+  let doctorLoading = false
 
   // --- http helpers ---------------------------------------------------------
 
@@ -1558,6 +1561,9 @@
   }
 
   async function loadDoctor() {
+    if (doctorLoading) return
+    doctorLoading = true
+    el.doctorRefresh.disabled = true
     el.doctorError.hidden = true
     el.doctorList.textContent = t('web.runningChecks')
     try {
@@ -1567,6 +1573,9 @@
       el.doctorList.textContent = ''
       el.doctorError.hidden = false
       el.doctorError.textContent = err.message
+    } finally {
+      doctorLoading = false
+      el.doctorRefresh.disabled = false
     }
   }
 
@@ -1595,19 +1604,29 @@
 
   function openMcpDialog() {
     setMcpError(null)
-    el.mcpHostList.innerHTML = ''
-    el.mcpEmpty.hidden = true
+    mcpHosts = []
+    mcpLoading = true
+    mcpLoadFailed = false
+    renderMcpHosts()
     el.mcpDialog.showModal()
     loadMcpHosts()
   }
 
   async function loadMcpHosts() {
+    mcpLoading = true
+    mcpLoadFailed = false
+    renderMcpHosts()
     try {
       const data = await api('GET', '/api/mcp-hosts')
       mcpHosts = (data && data.hosts) || []
-      renderMcpHosts()
+      setMcpError(null)
     } catch (err) {
+      mcpHosts = []
+      mcpLoadFailed = true
       setMcpError(t('web.mcpLoadError', { message: err.message }))
+    } finally {
+      mcpLoading = false
+      renderMcpHosts()
     }
   }
 
@@ -1625,6 +1644,31 @@
 
   function renderMcpHosts() {
     el.mcpHostList.innerHTML = ''
+    if (mcpLoading) {
+      el.mcpEmpty.hidden = true
+      const row = document.createElement('div')
+      row.className = 'mcp-host-row'
+      row.dataset.state = 'loading'
+      const body = document.createElement('div')
+      body.className = 'mcp-host-body'
+      const name = document.createElement('span')
+      name.className = 'mcp-host-name'
+      name.textContent = t('web.loading')
+      body.appendChild(name)
+      row.appendChild(body)
+      const status = document.createElement('span')
+      status.className = 'mcp-host-status'
+      status.textContent = t('web.loading')
+      row.appendChild(status)
+      el.mcpHostList.appendChild(row)
+      el.mcpAttachAll.disabled = true
+      return
+    }
+    if (mcpLoadFailed) {
+      el.mcpEmpty.hidden = true
+      el.mcpAttachAll.disabled = true
+      return
+    }
     el.mcpEmpty.hidden = mcpHosts.length > 0
     for (const host of mcpHosts) {
       const row = document.createElement('div')
@@ -1666,7 +1710,7 @@
       }
       el.mcpHostList.appendChild(row)
     }
-    el.mcpAttachAll.disabled = mcpBusy || !mcpHosts.some(h => h.installed && !h.manual && !h.attached)
+    el.mcpAttachAll.disabled = mcpBusy || mcpLoading || !mcpHosts.some(h => h.installed && !h.manual && !h.attached)
   }
 
   function setMcpError(message) {
@@ -1677,13 +1721,14 @@
 
   function applyMcpResult(data) {
     if (data && Array.isArray(data.hosts)) {
+      mcpLoadFailed = false
       mcpHosts = data.hosts
       renderMcpHosts()
     }
   }
 
   async function attachHost(host) {
-    if (mcpBusy) return
+    if (mcpBusy || mcpLoading) return
     mcpBusy = true
     setMcpError(null)
     renderMcpHosts()
@@ -1702,7 +1747,7 @@
   }
 
   async function detachHost(host) {
-    if (mcpBusy) return
+    if (mcpBusy || mcpLoading) return
     mcpBusy = true
     setMcpError(null)
     renderMcpHosts()
@@ -1721,7 +1766,7 @@
   }
 
   async function attachAllHosts() {
-    if (mcpBusy) return
+    if (mcpBusy || mcpLoading || mcpLoadFailed) return
     mcpBusy = true
     setMcpError(null)
     renderMcpHosts()
