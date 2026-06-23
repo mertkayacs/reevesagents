@@ -1,5 +1,46 @@
 # Changelog
 
+# [1.3.0](https://github.com/mertkayacs/reevesagents/compare/v0.7.0...v1.3.0) (2026-06-23)
+
+
+### Bug Fixes
+
+* address critical-review findings across web, i18n, and docs ([0ca9718](https://github.com/mertkayacs/reevesagents/commit/0ca9718166efa7aa0849dd62fbda0c55af51664b))
+* clamp the read tool line count to a positive value ([10c3a28](https://github.com/mertkayacs/reevesagents/commit/10c3a28d87b1b5886850667796f3e0a9793f16a5))
+* **cli:** resolve bin symlink before entrypoint check ([33d0ee4](https://github.com/mertkayacs/reevesagents/commit/33d0ee490ac61123c1791ae72c48e3bfba86483e))
+* correct run-head detection, session reuse, and head-run lifecycle ([5c904cf](https://github.com/mertkayacs/reevesagents/commit/5c904cf74446e666ddf18100b74b123f55de56d0))
+* guard the read line count and blank run names ([01a6918](https://github.com/mertkayacs/reevesagents/commit/01a6918b292189a0ca97d40952504ac8adf49670))
+* make attach-all idempotent for already-attached hosts ([226e1aa](https://github.com/mertkayacs/reevesagents/commit/226e1aa5f579a998d52cd7d3de4c5ab1e84955f6))
+* redact approvals before returning them from the store ([d8ef7e2](https://github.com/mertkayacs/reevesagents/commit/d8ef7e2dc39c523777469517dda4cbbe615aa707))
+* return an error when read targets a missing agent ([b75b798](https://github.com/mertkayacs/reevesagents/commit/b75b79855cd479eb2cdb9f11aab2ea1e07297180))
+* **scripts:** correct render-mascot brand paths after the tui/ move ([b1c3854](https://github.com/mertkayacs/reevesagents/commit/b1c3854a1d579fed258209511326a230718acde1))
+* tighten MCP attach detection and surface CLI errors ([1c5e2d0](https://github.com/mertkayacs/reevesagents/commit/1c5e2d0506a4b97ddb0c3a33a80a0df26592984e))
+
+
+### Features
+
+* add Agent Control to the Web UI as a first-class feature ([f97da03](https://github.com/mertkayacs/reevesagents/commit/f97da03f88bdd1c73101bbda5e22b6b50174c7d6))
+* add lean agent control MCP server ([eafd520](https://github.com/mertkayacs/reevesagents/commit/eafd5201677dfcd95a37ef89be348f4f820a7208))
+* add MCP installer engine for attaching to host CLIs ([e74bd7c](https://github.com/mertkayacs/reevesagents/commit/e74bd7cd8968bbdaecf4eb4da09cb868f1a2d669))
+* add reevesagents mcp subcommand ([f9e6b46](https://github.com/mertkayacs/reevesagents/commit/f9e6b46c2c00b1f16f4ff640010d4b1e6fd3cc66))
+* add Russian as the tenth UI language ([c949a57](https://github.com/mertkayacs/reevesagents/commit/c949a57802507c4e3cd52a8a38eadfd8389a27dd))
+* add the Agent Control TUI screen to attach the MCP to host CLIs ([3c52cb4](https://github.com/mertkayacs/reevesagents/commit/3c52cb45d99707aab0bd35d92939bcfe51284e78))
+* cap agents per run on MCP spawn (max_agents) ([9ac5f43](https://github.com/mertkayacs/reevesagents/commit/9ac5f43f8f00735bd711fe7ebaa19d3fdb00df94))
+* **cli:** agents, config, and preset commands + spawn auth/effort ([a14a752](https://github.com/mertkayacs/reevesagents/commit/a14a752a7a6d4a0467785910622c1bfa7b3827d5))
+* **cli:** bring the CLI to parity with the TUI and Web UI ([ce549d9](https://github.com/mertkayacs/reevesagents/commit/ce549d94c5050863dae83508419b0df40c464f4f))
+* **core:** config-edit + preset save/spawn domain helpers ([80e0080](https://github.com/mertkayacs/reevesagents/commit/80e0080cfe387af46aa487cfa8df0a5d1fe99169))
+* **i18n:** complete all 10 languages and restructure into per-language files ([c79aa7f](https://github.com/mertkayacs/reevesagents/commit/c79aa7fbaabb211e2c9ee90ace24486acc26a9b1))
+* **i18n:** German translations for the newer screens ([35bf4ae](https://github.com/mertkayacs/reevesagents/commit/35bf4aed36dd82beb3f809760144db68301c9afb))
+* make the host CLI the head of an MCP session's run ([faa92b9](https://github.com/mertkayacs/reevesagents/commit/faa92b9b09c90d7dc58ae6c16f3586e779adfb5e))
+* **mcp:** add an open tool and make every tool description self-explanatory ([8a5733b](https://github.com/mertkayacs/reevesagents/commit/8a5733b03ec77ac83305dbd232851dcc6409ccdf))
+* **mcp:** add delete tools and spawn permission controls ([a29934d](https://github.com/mertkayacs/reevesagents/commit/a29934d003288f7755776dd176ab1e831db5a060))
+* **mcp:** config, preset, host, and doctor tools ([4f50d35](https://github.com/mertkayacs/reevesagents/commit/4f50d35e68884d5bac65495c18cb90172086326b))
+* **mcp:** expose provider and model catalog over the agent-control MCP ([93ea9aa](https://github.com/mertkayacs/reevesagents/commit/93ea9aa4d7034053c966555bb4baebf1cea40bb5))
+* **parity:** approvals in TUI and web, plus Doctor, About, and agent prompt in web ([a7d322d](https://github.com/mertkayacs/reevesagents/commit/a7d322da58be78ca08fd44ea10f597587d9d41a6))
+* **tui:** config editor + presets screen + wizard auth picker ([953aea8](https://github.com/mertkayacs/reevesagents/commit/953aea8c5056063191bd07eee7d0ee3e54e4b973))
+* **tui:** set auth mode and effort when adding an agent to a live run ([b0aa43e](https://github.com/mertkayacs/reevesagents/commit/b0aa43e3bf985e08ece54eda57f788b0e00bb455))
+* **web:** config + presets panels and auth/effort selectors ([96a342d](https://github.com/mertkayacs/reevesagents/commit/96a342d4d39ad8e8e9620f4194155c4441cbed84))
+
 Entries before `0.9.0` describe internal development milestones from the reorganized pre-release history. The first public prerelease is `0.9.0`.
 
 ## 1.2.0 - Language And Web UX Polish
