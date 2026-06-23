@@ -29,6 +29,8 @@ That is the whole idea: one AI agent creates and drives the others. An agent CLI
 
 Now your agent CLI can **create and drive other agents**: start an agent on a task, send it text or keypresses, read what it is doing, and approve or deny what it requests. One Claude Code agent can run a team of Codex and Claude Code agents on separate issues. To disconnect later, run `reevesagents detach claude`.
 
+Prefer to script it from the command line instead? [AGENTS.md](AGENTS.md) is the operator's guide written for agents: provider ids and aliases, the `spawn` spec, and how to watch and steer a running team.
+
 Prefer to set it up by hand? Turn it on from the **Agent control** screen in the TUI or Web UI; see [Agent control](#agent-control) below.
 
 The TUI and the local Web UI driving the same run:

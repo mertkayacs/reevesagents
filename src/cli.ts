@@ -38,6 +38,14 @@ program
   .name('reevesagents')
   .description('local tmux-first workspace manager for AI CLI agents')
   .version(REEVESAGENTS_VERSION)
+  .addHelpText('after', `
+First steps:
+  reevesagents doctor        check tmux, Node, and which provider CLIs are installed
+  reevesagents providers     list provider ids and aliases you can spawn
+  reevesagents spawn --help   agent spec syntax and a multi-agent example
+
+Let one agent drive others: "reevesagents attach <cli>" gives that CLI the
+agent-control tools (spawn, send, read, stop) over MCP. Full agent guide: AGENTS.md.`)
 
 function age(startedAt: string): string {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000))
@@ -293,6 +301,18 @@ program
       process.exit(1)
     }
   })
+  .addHelpText('after', `
+Agent spec: provider[:nickname[:model]]  (nickname and model are optional)
+  The first agent leads the run; the rest join it as workers.
+  Provider ids and aliases come from "reevesagents providers"
+  (e.g. cc or claude, codex, kimi, qwen, opencode, hermes, pi, aider).
+
+Example: a Claude Code lead with two Codex and one Kimi worker
+  reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \\
+    --name "feature x" --prompt "Build feature X. Lead coordinates; each worker takes a slice."
+
+Run "reevesagents doctor" first: it reports tmux, Node, and which provider
+CLIs are installed and logged in, so a spawn does not fail on a missing CLI.`)
 
 program
   .command('runs')
