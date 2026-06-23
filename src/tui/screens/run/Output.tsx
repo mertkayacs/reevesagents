@@ -218,7 +218,7 @@ export function RunOutput() {
   }
 
   const secondsAgo = Math.floor((Date.now() - lastPeekAt) / 1000)
-  const lastPeekLabel = secondsAgo === 0 ? 'just now' : t('runtime.secondsAgo', { seconds: secondsAgo })
+  const lastPeekLabel = secondsAgo === 0 ? t('runtime.justNow') : t('runtime.secondsAgo', { seconds: secondsAgo })
   let statusContext = agents.length > 0 ? agentCountLabel(t, agents.length) : 'no agents'
   if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · ${t('runtime.enterOpensOutput')}`
   if (selected?.type === 'pagination') statusContext = t('runtime.pageNav', { page: activePage, total: totalPages })
@@ -276,7 +276,7 @@ export function RunOutput() {
                   { label: providerLabel, color: providerColor(agent.provider) },
                   { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider) },
                 ]}
-                hint="enter opens output"
+                hint={t('runtime.enterOpensOutput')}
               />
             )
           })}

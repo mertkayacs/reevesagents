@@ -10,6 +10,7 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { Legend } from '../components/Legend.js'
 import { useRouter } from '../router.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
+import { translatePhrase } from '../../i18n/catalog.js'
 import { agentCountLabel } from '../../utils/agentLabel.js'
 import { colors } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
@@ -58,7 +59,7 @@ function moveSelectedIndex(idx: number, delta: number, runCount: number): number
 
 export function Runs() {
   const { exit } = useApp()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { push, resetStack, setSelectedRunId } = useRouter()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
@@ -170,7 +171,7 @@ export function Runs() {
   let statusContext = ''
   if (selectedRun) {
     const agents = listAgents(selectedRun.id)
-    statusContext = `${selectedRun.name} · ${runStatus(selectedRun)} · ${agents.length} agents · ${selectedRun.working_dir}`
+    statusContext = `${selectedRun.name} · ${translatePhrase(language, runStatus(selectedRun))} · ${agentCountLabel(t, agents.length)} · ${selectedRun.working_dir}`
   } else if (selected?.type === 'action' && selected.action) {
     statusContext = ACTION_COPY[selected.action]?.hint ?? selected.action
   }

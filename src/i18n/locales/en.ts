@@ -82,6 +82,7 @@ export const en = {
   'runtime.agentsOne': '{{count}} agent',
   'runtime.enterOpensOutput': 'enter opens output',
   'runtime.errorPrefix': 'Error: ',
+  'runtime.justNow': 'just now',
   'runtime.launching': 'Launching {{name}}...',
   'runtime.output': 'output',
   'runtime.outputPageNav': 'output page {{page}} of {{total}} · ← → turn page',
