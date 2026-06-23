@@ -5,10 +5,10 @@
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
 [![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
 [![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
-[![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
+[![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
-[English](README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · **العربية**
+[English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · **العربية**
 
 *دع وكيلًا واحدًا ينشئ غيره ويتحكم فيه. مساحة عمل محلية تعتمد tmux أولًا لإطلاق الوكلاء وقيادتهم (Claude Code وCodex وHermes وDeepSeek وKimi وغيرها) من واجهة TUI وWeb UI وCLI وMCP. بلا مفاتيح API، وبلا أي تغييرات على Agent.md أو Claude.md الخاص بك.*
 
@@ -246,7 +246,7 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 والأسماء البديلة والنماذج المعروفة، فيمرّر الوكيل معرّفًا حقيقيًا إلى `spawn` بدلًا
 من التخمين.
 
-راجع [docs/mcp.md](docs/mcp.md) للاطلاع على التصميم الكامل وقائمة الأدوات.
+راجع [docs/mcp.md](../mcp.md) للاطلاع على التصميم الكامل وقائمة الأدوات.
 
 ## الإعدادات
 
@@ -354,11 +354,11 @@ Control MCP هو الخطوة الصريحة الوحيدة الاختيارية
 
 ## المساهمة
 
-راجع [CONTRIBUTING.md](.github/CONTRIBUTING.md) لمعرفة الفروع وسير طلبات السحب،
-و[SECURITY.md](.github/SECURITY.md) للإبلاغ عن الثغرات، و[CHANGELOG.md](CHANGELOG.md)
+راجع [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) لمعرفة الفروع وسير طلبات السحب،
+و[SECURITY.md](../../.github/SECURITY.md) للإبلاغ عن الثغرات، و[CHANGELOG.md](../../CHANGELOG.md)
 لأحدث التغييرات. يقيم نموذج التصميم في
-[REEVESAGENTS_DESIGN.md](docs/REEVESAGENTS_DESIGN.md) وتوجد وثائق المساهمين
-ضمن [docs/](docs).
+[REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) وتوجد وثائق المساهمين
+ضمن [docs/](..).
 
 لا يحتاج المستخدمون النهائيون إلى سلسلة أدوات التطوير. يستخدم المساهمون pnpm
 وTypeScript وtsup وVitest وESLint من المستودع.
@@ -369,8 +369,8 @@ Control MCP هو الخطوة الصريحة الوحيدة الاختيارية
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Releases: https://github.com/mertkayacs/reevesagents/releases
 - Issues: https://github.com/mertkayacs/reevesagents/issues
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- License: [Apache-2.0](LICENSE)
+- Changelog: [CHANGELOG.md](../../CHANGELOG.md)
+- License: [Apache-2.0](../../LICENSE)
 
 ## الترخيص
 
