@@ -29,6 +29,8 @@ GitHub: https://github.com/mertkayacs/reevesagents
 
 Şimdi agent CLI'niz **diğer agent'ları oluşturabilir ve kontrol edebilir**: bir agent'ı bir görevde başlat, ona metin veya tuş vuruşları gönder, ne yaptığını oku ve isteklerini onayla veya reddet. Bir Claude Code agent'ı ayrı issue'lar üzerinde Codex ve Claude Code agent'larından oluşan bir takım çalıştırabilir. Daha sonra bağlantıyı kesmek için `reevesagents detach claude` komutunu çalıştır.
 
+Bunun yerine komut satırından script yazmayı tercih ediyor musunuz? [AGENTS.tr.md](AGENTS.tr.md) agent'lar için yazılmış operatör rehberidir: sağlayıcı id'leri ve takma adları, `spawn` spec'i ve çalışan bir takımı nasıl izleyip yönlendirecekleri.
+
 El ile kurulumı tercih ediyor musunuz? TUI veya Web UI'daki **Agent Kontrol** ekranından aç; aşağıdaki [Agent Kontrol](#agent-kontrol) bölümüne bakın.
 
 TUI ve yerel Web UI aynı run'ı sürüyor:

@@ -29,6 +29,8 @@ GitHub: https://github.com/mertkayacs/reevesagents
 
 现在你的代理 CLI 可以**创建并驱动其他智能体**：在一个任务上启动一个智能体、发送文本或按键、读取它在做什么，以及批准或拒绝它请求的操作。一个 Claude Code 智能体可以在不同的议题上运行一个 Codex 和 Claude Code 智能体团队。要稍后断开连接，运行 `reevesagents detach claude`。
 
+更喜欢从命令行编写脚本？[AGENTS.zh-Hans.md](AGENTS.zh-Hans.md) 是为智能体编写的操作员指南：提供方 id 和别名、`spawn` 规范，以及如何观察和控制正在运行的团队。
+
 更喜欢手动设置？从 TUI 或 Web UI 中的**智能体控制**屏幕打开它；见下方的 [智能体控制](#智能体控制)。
 
 TUI 与本地 Web UI 同时驱动同一个运行：

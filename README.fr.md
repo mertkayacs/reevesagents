@@ -29,6 +29,8 @@ C'est toute l'idée : un agent d'IA en crée et en pilote d'autres. Une CLI d'ag
 
 Maintenant votre CLI d'agent peut **créer et piloter d'autres agents** : démarrez un agent sur une tâche, envoyez-lui du texte ou des touches, lisez ce qu'il fait, et approuvez ou refusez ce qu'il demande. Un agent Claude Code peut exécuter une équipe d'agents Codex et Claude Code sur des issues distinctes. Pour vous déconnecter plus tard, exécutez `reevesagents detach claude`.
 
+Préférez le scripter depuis la ligne de commande plutôt ? [AGENTS.fr.md](AGENTS.fr.md) est le guide de l'opérateur écrit pour les agents : ids de fournisseur et alias, le spec `spawn`, et comment regarder et diriger une équipe en cours d'exécution.
+
 Préférez le configurer à la main ? Activez-le depuis l'écran **Contrôle d'agent** dans la TUI ou la Web UI ; voir [Contrôle d'agent](#contrôle-dagent) ci-dessous.
 
 La TUI et la Web UI locale pilotant le même run :

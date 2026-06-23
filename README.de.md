@@ -29,6 +29,8 @@ Das ist die ganze Idee: Ein KI-Agent erstellt und steuert die anderen. Ein Agent
 
 Jetzt kann dein Agent-CLI **andere Agenten erstellen und steuern**: Starte einen Agenten bei einer Aufgabe, sende ihm Text oder Tastatureingaben, lies, was er tut, und genehmige oder verweigere, was er anfodert. Ein Claude-Code-Agent kann ein Team von Codex- und Claude-Code-Agenten an separaten Issues ausführen. Um ihn später zu trennen, führe `reevesagents detach claude` aus.
 
+Möchtest du es lieber von der Kommandozeile aus scripten? [AGENTS.de.md](AGENTS.de.md) ist die Betreiberanleitung für Agenten: Provider-ids und Aliases, die `spawn`-Spec und wie du ein laufendes Team beobachtest und leitest.
+
 Möchtest du es lieber von Hand aufsetzen? Schalte es über den Bildschirm **Agent-Control** in der TUI oder Web UI ein; siehe [Agent-Control](#agent-control) unten.
 
 Die TUI und die lokale Web UI steuern denselben Run:
