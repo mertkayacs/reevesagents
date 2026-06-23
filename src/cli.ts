@@ -4,6 +4,7 @@
 
 import { Command } from 'commander'
 import { execFileSync } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { prepareTuiColorEnv } from './utils/color-env.js'
 import { runDoctor } from './core/doctor.js'
@@ -828,7 +829,9 @@ function isEntrypoint(): boolean {
   const entry = process.argv[1]
   if (!entry) return false
   try {
-    return fileURLToPath(import.meta.url) === entry
+    // argv[1] may be a bin symlink (npm/global/brew installs) while import.meta.url
+    // is already the realpath, so resolve both sides before comparing.
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(entry)
   } catch {
     return false
   }
