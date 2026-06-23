@@ -1,5 +1,7 @@
 # Branching
 
+[Docs](README.md) / Branching
+
 This repository uses a simple open-source branch model.
 
 ## Branch Map

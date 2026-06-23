@@ -25,6 +25,7 @@ assets/
 !src/brand/assets/
 !src/brand/assets/duck.svg
 .playwright-mcp/
+.aider*
 reevesagents-latestnotes.md
 
 # internal working docs: kept local, never committed to the public repo

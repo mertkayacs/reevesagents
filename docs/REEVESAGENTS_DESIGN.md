@@ -1,5 +1,7 @@
 # ReevesAgents Design
 
+[Docs](README.md) / Architecture
+
 This document is the canonical design for the reevesagents package: the spawner CLI and TUI, the optional Web UI, and the opt-in agent-control MCP. The MCP is a flat mechanism (spawn and drive agents, read their output, resolve approvals); it has no roles, autonomous loops, or coordination protocol.
 
 ## Product Thesis

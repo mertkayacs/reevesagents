@@ -1,5 +1,7 @@
 # Releasing
 
+[Docs](README.md) / Releasing
+
 ReevesAgents uses convention-driven releases. You do not edit the version by
 hand. The version number, the changelog, the git tag, and the npm publish all
 follow from the commit history, so a release is one command.

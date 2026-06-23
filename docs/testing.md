@@ -1,5 +1,7 @@
 # Testing ReevesAgents
 
+[Docs](README.md) / Testing
+
 This document covers the stable main package. The current release path is spawner-only.
 
 ## Isolation Rules

@@ -1,9 +1,11 @@
 # Agent Control MCP (design)
 
+[Docs](README.md) / Agent Control MCP
+
 Status: implemented. The MCP server and its tools, the `reevesagents mcp`
 subcommand, the per-run agent cap, the installer engine, the run-head model, the
 Agent Control screen in both the TUI and the Web UI, and unit tests are all in
-place. Still open: the user-facing README. The steps at the end track this.
+place. The user-facing README is in place too; the steps at the end track each piece.
 
 ## What this is
 
