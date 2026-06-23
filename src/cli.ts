@@ -221,7 +221,10 @@ function parseAgentSpec(spec: string): { provider: Provider; nickname?: string; 
   const [providerRaw = '', nickname, model = ''] = spec.split(':')
   const provider = normalizeProvider(providerRaw)
   if (!provider) {
-    throw new Error(`agent spec must start with a supported provider name: ${PROVIDERS.map(providerDisplayName).join(', ')}: ${spec}`)
+    throw new Error(
+      `unknown provider in "${spec}". Use a provider id: ${PROVIDERS.join(', ')} ` +
+      `(aliases like "claude" for cc also work). Run "reevesagents providers" for the full list.`,
+    )
   }
   return { provider, nickname: nickname || undefined, model }
 }
@@ -240,6 +243,46 @@ function parseEffortOpt(value?: string): Effort | undefined {
   throw new Error(`--effort must be one of ${EFFORT_LEVELS.join(', ')}`)
 }
 
+// Fail fast before any tmux work when a requested CLI is not on PATH, naming
+// every missing one at once instead of the first. Auth cannot be checked without
+// launching, so a signed-out CLI still passes here; peek catches that afterwards.
+function preflightAvailability(providers: Provider[]): Record<Provider, boolean> {
+  const available = detectAvailable()
+  const missing = [...new Set(providers)].filter(provider => !available[provider])
+  if (missing.length > 0) {
+    const names = missing.map(provider => `${providerDisplayName(provider)} (${provider})`).join(', ')
+    throw new Error(
+      `provider CLI not installed: ${names}\n` +
+      `Run "reevesagents doctor" to see what is installed and compatible, or "reevesagents providers" for ids and aliases.\n` +
+      `Install the missing CLI and sign in, then run spawn again.`,
+    )
+  }
+  return available
+}
+
+function printSpawnAgentLine(agent: AgentRecord): void {
+  const role = agent.role === 'root' ? '  (lead)' : ''
+  console.log(`  ${agent.id.slice(0, 8)}  ${providerDisplayName(agent.provider).padEnd(14)} ${agent.nickname}${role}`)
+}
+
+// Spawn is fire-and-forget: it returns ids, not results. Print the next commands
+// with the real ids so an agent can watch and steer without guessing the surface.
+function printSpawnHints(run: RunRecord, skip: boolean): void {
+  if (!skip) console.log('agents may pause on their own permission prompts; re-run with --skip to launch past them')
+  console.log('watch & steer:')
+  console.log('  reevesagents peek <agent-id> -n 40    read recent output from an agent')
+  console.log('  reevesagents send <agent-id> "text"   paste a message into an agent, then')
+  console.log('  reevesagents key  <agent-id> enter    submit it')
+  console.log(`  reevesagents runs                     list every run, or  reevesagents open ${run.id.slice(0, 8)}  to open this run in tmux`)
+}
+
+function printSpawnJson(run: RunRecord, agents: AgentRecord[]): void {
+  console.log(JSON.stringify({
+    run: { id: run.id, name: run.name },
+    agents: agents.map(agent => ({ id: agent.id, nickname: agent.nickname, provider: agent.provider, role: agent.role })),
+  }, null, 2))
+}
+
 program
   .command('spawn [agent...]')
   .description('start a run with one or more provider agents')
@@ -250,10 +293,12 @@ program
   .option('--run <run-id>', 'add the agents to an existing run instead of starting a new one')
   .option('--auth-mode <mode>', 'auth mode for every agent: default or api-key')
   .option('--effort <level>', 'reasoning effort for every agent: default, low, medium, high, xhigh, max')
+  .option('--json', 'output JSON: the run id and the spawned agent ids')
   .action((agentSpecs: string[], opts) => {
     try {
       const specs = agentSpecs.length > 0 ? agentSpecs : ['codex']
       const parsed = specs.map(parseAgentSpec)
+      const available = preflightAvailability(parsed.map(spec => spec.provider))
       const permissions = opts.skip ? 'skip' as const : undefined
       const auth_mode = parseAuthModeOpt(opts.authMode)
       const effort = parseEffortOpt(opts.effort)
@@ -268,8 +313,11 @@ program
           permissions,
           auth_mode,
           effort,
-        }))
+        }, { available }))
+        if (opts.json) { printSpawnJson(run, agents); return }
         console.log(`added ${agents.length} agents to ${run.id.slice(0, 8)}  ${run.name}`)
+        for (const agent of agents) printSpawnAgentLine(agent)
+        printSpawnHints(run, !!opts.skip)
         return
       }
       const [first, ...rest] = parsed
@@ -294,8 +342,11 @@ program
           auth_mode,
           effort,
         })),
-      })
+      }, { available })
+      if (opts.json) { printSpawnJson(result.run, result.agents); return }
       console.log(`started ${result.run.id.slice(0, 8)}  ${result.run.name}  ${result.agents.length} agents`)
+      for (const agent of result.agents) printSpawnAgentLine(agent)
+      printSpawnHints(result.run, !!opts.skip)
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)

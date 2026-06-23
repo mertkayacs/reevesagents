@@ -126,6 +126,26 @@ function wireTmux(): void {
   })
 }
 
+// Same as wireTmux, but makes `which <bin>` throw for the listed binaries so the
+// spawn preflight sees them as not installed.
+function wireTmuxWithMissing(missingBins: string[]): void {
+  let next = 1
+  execFileSync.mockImplementation((file: string, args: string[]) => {
+    if (file === 'which') {
+      if (missingBins.includes(args[0] as string)) throw new Error(`which: no ${args[0]}`)
+      return Buffer.from('')
+    }
+    if (file !== 'tmux') return Buffer.from('')
+    if (args[0] === 'display-message') return '@0 %0'
+    if (args[0] === 'new-window') {
+      const id = next++
+      return `@${id} %${id}`
+    }
+    if (args[0] === 'capture-pane') return 'ready'
+    return ''
+  })
+}
+
 describe('cli parity', () => {
   describe('spawn options', () => {
     it('spawns into an existing run with --run and applies --skip permissions', async () => {
@@ -149,11 +169,38 @@ describe('cli parity', () => {
 
       const { out } = await runCli(['spawn', 'cc:lead', 'codex:worker', '--skip', '--name', 'team'])
       expect(out).toMatch(/started/)
+      // watch/steer hints are always shown; the permission-prompt hint is suppressed when skipping.
+      expect(out).toContain('watch & steer')
+      expect(out).not.toContain('re-run with --skip')
 
       const run = listRuns()[0]!
       expect(run.name).toBe('team')
       const perms = listAgents(run.id).map(agent => agent.permissions)
       expect(perms).toEqual(['skip', 'skip'])
+    })
+
+    it('shows the permission-prompt hint when --skip is not set', async () => {
+      wireTmux()
+      const { out } = await runCli(['spawn', 'cc:lead', '--name', 'team'])
+      expect(out).toContain('re-run with --skip')
+      expect(out).toContain('watch & steer')
+    })
+
+    it('prints JSON with the run id and agent ids under --json', async () => {
+      wireTmux()
+      const { out } = await runCli(['spawn', 'cc:lead', 'codex:worker', '--json', '--name', 'team'])
+      const parsed = JSON.parse(out)
+      expect(parsed.run.id).toBeTruthy()
+      expect(parsed.agents).toHaveLength(2)
+      expect(parsed.agents[0].role).toBe('root')
+      expect(parsed.agents.every((agent: { id: string }) => typeof agent.id === 'string' && agent.id.length > 0)).toBe(true)
+    })
+
+    it('refuses to spawn and does not start a run when a provider CLI is missing', async () => {
+      wireTmuxWithMissing(['deepseek'])
+      const { listRuns } = await import('../src/core/runs.js')
+      await expect(runCli(['spawn', 'cc:lead', 'deepseek:x'])).rejects.toThrow()
+      expect(listRuns()).toHaveLength(0)
     })
   })
 
