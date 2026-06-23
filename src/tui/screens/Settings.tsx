@@ -50,7 +50,12 @@ export function Settings() {
   const { language, setLanguage, t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
-  const compactBody = bodyRows <= 13
+  // The full grouped layout below renders every provider, language, state path and
+  // action at once; use it only when the body is tall enough to hold them all,
+  // otherwise it overflows and Ink corrupts the rows. Below that, the compact
+  // scrolling list handles any height.
+  const nonCompactRows = PROVIDERS.length + LANGUAGE_OPTIONS.length + 3 + 4 + 8
+  const compactBody = bodyRows < nonCompactRows
   const showCompactStatePaths = compactBody && bodyRows >= 10
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
