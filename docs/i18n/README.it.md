@@ -5,10 +5,10 @@
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
 [![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
 [![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
-[![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
+[![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
-[English](README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · **Italiano** · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
+[English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · **Italiano** · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
 *Crea e guida agenti da altri agenti. ReevesAgents è uno spazio di lavoro locale gratuito dove agenti di codifica (come Claude Code, Codex, Hermes, DeepSeek e Kimi) girano fianco a fianco, e un agente può generare, sterzare e supervisionare gli altri. Nessuna chiave API, e nessuna modifica al tuo Agent.md o Claude.md.*
 
@@ -268,7 +268,7 @@ e la risorsa `reevesagents://providers` restituiscono i provider su questa macch
 con i loro id, lo stato di installazione, gli alias e i modelli noti, così che un agente passi un
 id reale a `spawn` invece di tirare a indovinare.
 
-Vedi [docs/mcp.md](docs/mcp.md) per il design completo e l'elenco degli strumenti.
+Vedi [docs/mcp.md](../mcp.md) per il design completo e l'elenco degli strumenti.
 
 ## Configurazione
 
@@ -379,11 +379,11 @@ tocca la configurazione dei provider, e solo tramite il comando `mcp add` propri
 
 ## Contribuire
 
-Vedi [CONTRIBUTING.md](.github/CONTRIBUTING.md) per i branch e il flusso di pull request,
-[SECURITY.md](.github/SECURITY.md) per segnalare vulnerabilità e
-[CHANGELOG.md](CHANGELOG.md) per le modifiche recenti. Il modello di design si trova in
-[REEVESAGENTS_DESIGN.md](docs/REEVESAGENTS_DESIGN.md) e la documentazione per i contributori è
-sotto [docs/](docs).
+Vedi [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) per i branch e il flusso di pull request,
+[SECURITY.md](../../.github/SECURITY.md) per segnalare vulnerabilità e
+[CHANGELOG.md](../../CHANGELOG.md) per le modifiche recenti. Il modello di design si trova in
+[REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) e la documentazione per i contributori è
+sotto [docs/](..).
 
 Gli utenti finali non hanno bisogno della toolchain di sviluppo. I contributori usano pnpm,
 TypeScript, tsup, Vitest ed ESLint dal repository.
@@ -394,8 +394,8 @@ TypeScript, tsup, Vitest ed ESLint dal repository.
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Release: https://github.com/mertkayacs/reevesagents/releases
 - Issue: https://github.com/mertkayacs/reevesagents/issues
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- Licenza: [Apache-2.0](LICENSE)
+- Changelog: [CHANGELOG.md](../../CHANGELOG.md)
+- Licenza: [Apache-2.0](../../LICENSE)
 
 ## Licenza
 

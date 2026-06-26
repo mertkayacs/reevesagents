@@ -11,6 +11,7 @@ import { Row } from '../../components/Row.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../contexts/WizardContext.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
 import { startRun } from '../../../core/runtime.js'
 import type { StartRunRequest } from '../../../core/runtime.js'
 
@@ -20,6 +21,7 @@ const ACTION_LABEL_WIDTH = Math.max('Retry'.length, 'Back to Review'.length)
 export function NewRunStarting() {
   const { pop, resetStack, setSelectedRunId } = useRouter()
   const { state, reset } = useWizard()
+  const { t } = useLanguage()
   const [error, setError] = useState<string | null>(null)
   const [actionIdx, setActionIdx] = useState(0)
   const [retryCount, setRetryCount] = useState(0)
@@ -95,7 +97,7 @@ export function NewRunStarting() {
         statusKeys="enter select · ↑↓ move · esc back"
       >
         <Box flexDirection="column" marginY={1}>
-          <Text>Error: {error}</Text>
+          <Text>{t('runtime.errorPrefix')}{error}</Text>
         </Box>
 
         <Section label="Actions" />
@@ -121,7 +123,7 @@ export function NewRunStarting() {
     >
       <Box flexDirection="row" marginY={1}>
         <Spinner />
-        <Text> Launching {state.name}...</Text>
+        <Text> {t('runtime.launching', { name: state.name })}</Text>
       </Box>
     </Frame>
   )

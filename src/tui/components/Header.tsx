@@ -10,6 +10,7 @@ import React from 'react'
 import { Box, Text } from 'ink'
 import { colors, sep } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
+import { displayWidth } from '../../utils/width.js'
 
 export interface HeaderProps {
   breadcrumb: string[]
@@ -27,7 +28,7 @@ export function Header({ breadcrumb, meta, tmuxSession, columns }: HeaderProps) 
     metaList = [...metaList, { label: 'tmux', value: tmuxSession }]
   }
   const metaText = metaList.map(({ label, value }) => `${label} ${value}`).join(sep.dot)
-  const metaWidth = Math.min(metaText.length, Math.max(0, Math.floor(width * 0.42)))
+  const metaWidth = Math.min(displayWidth(metaText), Math.max(0, Math.floor(width * 0.42)))
   const leftWidth = Math.max(1, width - metaWidth)
 
   if (isNarrow) {

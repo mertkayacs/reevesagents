@@ -39,6 +39,7 @@
     "commander": "^14.0.3",
     "ink": "^7.0.2",
     "react": "^19.2.6",
+    "string-width": "^8.2.1",
     "strip-ansi": "^7.1.0"
   },
   "optionalDependencies": {

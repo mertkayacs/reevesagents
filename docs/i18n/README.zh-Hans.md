@@ -5,10 +5,10 @@
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
 [![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
 [![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
-[![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
+[![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
-[English](README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · **简体中文** · [العربية](README.ar.md)
+[English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · **简体中文** · [العربية](README.ar.md)
 
 *让一个智能体创建并驱动其他智能体。ReevesAgents 是一个免费的本地工作区，其中编码智能体（如 Claude Code、Codex、Hermes、DeepSeek 和 Kimi）并行运行，一个智能体可以生成、控制并监督其余的智能体。无需 API 密钥，无需改动你的 Agent.md 或 Claude.md。*
 
@@ -237,7 +237,7 @@ ReevesAgents 附带一个可选的 MCP 服务器，让一个 AI CLI 生成并驱
 
 被附加的 CLI 还能发现自己可以启动什么：`list_providers` 工具和 `reevesagents://providers` 资源会返回本机上的提供方及其 id、安装状态、别名和已知模型，这样智能体就能把一个真实的 id 传给 `spawn`，而不是靠猜。
 
-完整设计与工具列表见 [docs/mcp.md](docs/mcp.md)。
+完整设计与工具列表见 [docs/mcp.md](../mcp.md)。
 
 ## 配置
 
@@ -324,7 +324,7 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## 参与贡献
 
-分支与拉取请求流程见 [CONTRIBUTING.md](.github/CONTRIBUTING.md)，漏洞报告见 [SECURITY.md](.github/SECURITY.md)，近期变更见 [CHANGELOG.md](CHANGELOG.md)。设计模型位于 [REEVESAGENTS_DESIGN.md](docs/REEVESAGENTS_DESIGN.md)，贡献者文档在 [docs/](docs) 下。
+分支与拉取请求流程见 [CONTRIBUTING.md](../../.github/CONTRIBUTING.md)，漏洞报告见 [SECURITY.md](../../.github/SECURITY.md)，近期变更见 [CHANGELOG.md](../../CHANGELOG.md)。设计模型位于 [REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md)，贡献者文档在 [docs/](..) 下。
 
 终端用户不需要开发工具链。贡献者使用仓库中的 pnpm、TypeScript、tsup、Vitest 和 ESLint。
 
@@ -334,8 +334,8 @@ ssh -L 8080:127.0.0.1:8080 user@host
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Releases: https://github.com/mertkayacs/reevesagents/releases
 - Issues: https://github.com/mertkayacs/reevesagents/issues
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- License: [Apache-2.0](LICENSE)
+- Changelog: [CHANGELOG.md](../../CHANGELOG.md)
+- License: [Apache-2.0](../../LICENSE)
 
 ## 许可证
 

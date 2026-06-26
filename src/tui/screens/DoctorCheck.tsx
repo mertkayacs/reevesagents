@@ -7,6 +7,8 @@ import { Primary } from '../components/Primary.js'
 import { Row } from '../components/Row.js'
 import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
+import { useLanguage } from '../contexts/LanguageContext.js'
+import { translatePhrase } from '../../i18n/catalog.js'
 import { colors } from '../../utils/tokens.js'
 import { glyphs } from '../../utils/glyphs.js'
 import { runDoctor } from '../../core/doctor.js'
@@ -26,6 +28,7 @@ function findFixHint(check: { name: string; detail: string }): string | null {
 
 export function DoctorCheck() {
   const { pop, selectedCheckName } = useRouter()
+  const { language } = useLanguage()
   const [selectedIdx, setSelectedIdx] = useState(0)
   const result = useMemo(() => runDoctor(), [])
   const check = result.checks.find(c => c.name === selectedCheckName)
@@ -74,8 +77,8 @@ export function DoctorCheck() {
             <Box marginY={1} />
             <Section label="Fix" />
             <Box marginY={1} marginLeft={2} flexDirection="column">
-              <Text color={colors.text.dim}>Suggested fix:</Text>
-              <Text color={colors.accent.primary}>{fixHint}</Text>
+              <Text color={colors.text.dim}>{translatePhrase(language, 'Suggested fix:')}</Text>
+              <Text color={colors.accent.primary}>{translatePhrase(language, fixHint)}</Text>
             </Box>
             <SectionEnd />
           </>
@@ -86,7 +89,7 @@ export function DoctorCheck() {
             <Box marginY={1} />
             <Section label="Fix" />
             <Box marginY={1} marginLeft={2}>
-              <Text color={colors.text.dim}>No suggested fix. Check the source code or open an issue.</Text>
+              <Text color={colors.text.dim}>{translatePhrase(language, 'No suggested fix. Check the source code or open an issue.')}</Text>
             </Box>
             <SectionEnd />
           </>

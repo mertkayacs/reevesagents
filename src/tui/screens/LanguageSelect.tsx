@@ -67,7 +67,7 @@ export function LanguageSelect() {
         {LANGUAGE_OPTIONS.length > visibleLanguageCount && (
           <Row
             selected={false}
-            primary={`${firstVisible + 1}-${firstVisible + visibleOptions.length} of ${LANGUAGE_OPTIONS.length}`}
+            primary={t('runtime.pageRange', { from: firstVisible + 1, to: firstVisible + visibleOptions.length, total: LANGUAGE_OPTIONS.length })}
             trailing="scroll with arrows"
             disabled
           />

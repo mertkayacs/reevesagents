@@ -167,6 +167,24 @@
     'web.aboutProvidersNone': 'none detected',
     'web.aboutLicense': 'License',
     'web.aboutRepository': 'Repository',
+    'web.doctorSubtitle': 'Environment health checks for this machine.',
+    'web.refresh': 'Refresh',
+    'web.aboutSubtitle': 'Local tmux-first workspace manager for AI CLI agents.',
+    'web.configSubtitle': 'Edit global settings.',
+    'web.save': 'Save',
+    'web.presetsSubtitle': 'Saved agent-team templates.',
+    'web.saveCurrentRun': 'Save current run',
+    'web.auth': 'Auth',
+    'web.authDefaultLogin': 'Default login',
+    'web.authApiKey': 'API key',
+    'web.authHelp': 'Default uses the signed-in CLI session. API key forces key-based auth.',
+    'web.effort': 'Reasoning effort',
+    'web.effortLow': 'Low',
+    'web.effortMedium': 'Medium',
+    'web.effortHigh': 'High',
+    'web.effortXhigh': 'Extra high',
+    'web.effortMax': 'Max',
+    'web.effortHelp': 'Higher effort spends more on reasoning. Provider default is safest.',
   }
 
   const el = {
@@ -264,6 +282,9 @@
   let createSubmitting = false
   let mcpHosts = []
   let mcpBusy = false
+  let mcpLoading = false
+  let mcpLoadFailed = false
+  let doctorLoading = false
 
   // --- http helpers ---------------------------------------------------------
 
@@ -435,6 +456,34 @@
       el.stageTitle.textContent = t('web.noAgentSelected')
       el.stageSub.textContent = t('web.noAgentSub')
     }
+    document.querySelector('#auth-mode-field .field-label').textContent = t('web.auth')
+    document.querySelector('#f-auth-mode option[value=""]').textContent = t('web.authDefaultLogin')
+    document.querySelector('#f-auth-mode option[value="api-key"]').textContent = t('web.authApiKey')
+    document.querySelector('#auth-mode-field .field-help').textContent = t('web.authHelp')
+    document.querySelector('#effort-field .field-label').textContent = t('web.effort')
+    document.querySelector('#f-effort option[value=""]').textContent = t('web.providerDefault')
+    document.querySelector('#f-effort option[value="low"]').textContent = t('web.effortLow')
+    document.querySelector('#f-effort option[value="medium"]').textContent = t('web.effortMedium')
+    document.querySelector('#f-effort option[value="high"]').textContent = t('web.effortHigh')
+    document.querySelector('#f-effort option[value="xhigh"]').textContent = t('web.effortXhigh')
+    document.querySelector('#f-effort option[value="max"]').textContent = t('web.effortMax')
+    document.querySelector('#effort-field .field-help').textContent = t('web.effortHelp')
+    document.querySelector('#doctor-dialog .dialog-title').textContent = t('web.doctor')
+    document.querySelector('#doctor-dialog .dialog-subtitle').textContent = t('web.doctorSubtitle')
+    el.doctorRefresh.textContent = t('web.refresh')
+    el.doctorClose.textContent = t('web.mcpClose')
+    document.querySelector('#about-dialog .dialog-title').textContent = `${t('web.about')} ReevesAgents`
+    document.querySelector('#about-dialog .dialog-subtitle').textContent = t('web.aboutSubtitle')
+    el.aboutClose.textContent = t('web.mcpClose')
+    document.querySelector('#config-dialog .dialog-title').textContent = t('web.config')
+    document.querySelector('#config-dialog .dialog-subtitle').textContent = t('web.configSubtitle')
+    el.configSave.textContent = t('web.save')
+    el.configClose.textContent = t('web.mcpClose')
+    document.querySelector('#presets-dialog .dialog-title').textContent = t('web.presets')
+    document.querySelector('#presets-dialog .dialog-subtitle').textContent = t('web.presetsSubtitle')
+    document.querySelector('#preset-save-field .field-label').textContent = t('web.saveCurrentRun')
+    el.presetSave.textContent = t('web.saveCurrentRun')
+    el.presetsClose.textContent = t('web.mcpClose')
     renderSidebar()
   }
 
@@ -1558,6 +1607,9 @@
   }
 
   async function loadDoctor() {
+    if (doctorLoading) return
+    doctorLoading = true
+    el.doctorRefresh.disabled = true
     el.doctorError.hidden = true
     el.doctorList.textContent = t('web.runningChecks')
     try {
@@ -1567,6 +1619,9 @@
       el.doctorList.textContent = ''
       el.doctorError.hidden = false
       el.doctorError.textContent = err.message
+    } finally {
+      doctorLoading = false
+      el.doctorRefresh.disabled = false
     }
   }
 
@@ -1595,19 +1650,29 @@
 
   function openMcpDialog() {
     setMcpError(null)
-    el.mcpHostList.innerHTML = ''
-    el.mcpEmpty.hidden = true
+    mcpHosts = []
+    mcpLoading = true
+    mcpLoadFailed = false
+    renderMcpHosts()
     el.mcpDialog.showModal()
     loadMcpHosts()
   }
 
   async function loadMcpHosts() {
+    mcpLoading = true
+    mcpLoadFailed = false
+    renderMcpHosts()
     try {
       const data = await api('GET', '/api/mcp-hosts')
       mcpHosts = (data && data.hosts) || []
-      renderMcpHosts()
+      setMcpError(null)
     } catch (err) {
+      mcpHosts = []
+      mcpLoadFailed = true
       setMcpError(t('web.mcpLoadError', { message: err.message }))
+    } finally {
+      mcpLoading = false
+      renderMcpHosts()
     }
   }
 
@@ -1625,6 +1690,31 @@
 
   function renderMcpHosts() {
     el.mcpHostList.innerHTML = ''
+    if (mcpLoading) {
+      el.mcpEmpty.hidden = true
+      const row = document.createElement('div')
+      row.className = 'mcp-host-row'
+      row.dataset.state = 'loading'
+      const body = document.createElement('div')
+      body.className = 'mcp-host-body'
+      const name = document.createElement('span')
+      name.className = 'mcp-host-name'
+      name.textContent = t('web.loading')
+      body.appendChild(name)
+      row.appendChild(body)
+      const status = document.createElement('span')
+      status.className = 'mcp-host-status'
+      status.textContent = t('web.loading')
+      row.appendChild(status)
+      el.mcpHostList.appendChild(row)
+      el.mcpAttachAll.disabled = true
+      return
+    }
+    if (mcpLoadFailed) {
+      el.mcpEmpty.hidden = true
+      el.mcpAttachAll.disabled = true
+      return
+    }
     el.mcpEmpty.hidden = mcpHosts.length > 0
     for (const host of mcpHosts) {
       const row = document.createElement('div')
@@ -1666,7 +1756,7 @@
       }
       el.mcpHostList.appendChild(row)
     }
-    el.mcpAttachAll.disabled = mcpBusy || !mcpHosts.some(h => h.installed && !h.manual && !h.attached)
+    el.mcpAttachAll.disabled = mcpBusy || mcpLoading || !mcpHosts.some(h => h.installed && !h.manual && !h.attached)
   }
 
   function setMcpError(message) {
@@ -1677,13 +1767,14 @@
 
   function applyMcpResult(data) {
     if (data && Array.isArray(data.hosts)) {
+      mcpLoadFailed = false
       mcpHosts = data.hosts
       renderMcpHosts()
     }
   }
 
   async function attachHost(host) {
-    if (mcpBusy) return
+    if (mcpBusy || mcpLoading) return
     mcpBusy = true
     setMcpError(null)
     renderMcpHosts()
@@ -1702,7 +1793,7 @@
   }
 
   async function detachHost(host) {
-    if (mcpBusy) return
+    if (mcpBusy || mcpLoading) return
     mcpBusy = true
     setMcpError(null)
     renderMcpHosts()
@@ -1721,7 +1812,7 @@
   }
 
   async function attachAllHosts() {
-    if (mcpBusy) return
+    if (mcpBusy || mcpLoading || mcpLoadFailed) return
     mcpBusy = true
     setMcpError(null)
     renderMcpHosts()

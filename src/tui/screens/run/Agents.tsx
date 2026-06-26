@@ -8,6 +8,9 @@ import { Row } from '../../components/Row.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
+import { translatePhrase } from '../../../i18n/catalog.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
+import { agentCountLabel } from '../../../utils/agentLabel.js'
 import { colors } from '../../../utils/tokens.js'
 import { glyphs } from '../../../utils/glyphs.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
@@ -35,6 +38,7 @@ function statusGlyph(status: string): { char: string; color: string } {
 
 export function RunAgents() {
   const { selectedRunId, setSelectedAgentId, push, pop } = useRouter()
+  const { language, t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 9
@@ -140,7 +144,7 @@ export function RunAgents() {
     return (
       <Frame breadcrumb={['ReevesAgents', 'Runs']} statusContext="Run not found">
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Run not found.</Text>
+          <Text color={colors.text.dim}>{translatePhrase(language, 'Run not found.')}</Text>
           <Box marginTop={1}>
             <Row selected={true} primary="Back" hint="return to all runs" />
           </Box>
@@ -157,8 +161,8 @@ export function RunAgents() {
     'Add Agent'.length,
     'Back'.length,
   )
-  let statusContext = `${run.name} · ${agents.length} agents`
-  if (selected?.type === 'pagination') statusContext = `page ${page} of ${totalPages} · ← → turn page`
+  let statusContext = `${run.name} · ${agentCountLabel(t, agents.length)}`
+  if (selected?.type === 'pagination') statusContext = t('runtime.pageNav', { page, total: totalPages })
   if (selected?.type === 'action' && selected.action === 'AddWorker') statusContext = isRunEnded ? 'run is ended' : 'add an agent to this run'
   if (selected?.type === 'action' && selected.action === 'Back') statusContext = 'return to run hub'
 

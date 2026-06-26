@@ -55,7 +55,7 @@ export function AgentKill() {
         statusContext="Agent not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Agent not found.</Text>
+          <Text color={colors.text.dim}>{translatePhrase(language, 'Agent not found.')}</Text>
           <Box marginTop={1}>
             <Row
               selected={true}

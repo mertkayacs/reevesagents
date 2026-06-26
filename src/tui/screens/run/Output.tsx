@@ -9,6 +9,9 @@ import { Row } from '../../components/Row.js'
 import { Section, SectionEnd } from '../../components/Section.js'
 import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
+import { translatePhrase } from '../../../i18n/catalog.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
+import { agentCountLabel } from '../../../utils/agentLabel.js'
 import { colors, space } from '../../../utils/tokens.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import { listAgents, readRun } from '../../../core/runs.js'
@@ -45,6 +48,7 @@ function peekAgents(agents: AgentRecord[]): Record<string, string> {
 
 export function RunOutput() {
   const { selectedRunId, pop, push, setSelectedAgentId } = useRouter()
+  const { language, t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 12
@@ -204,7 +208,7 @@ export function RunOutput() {
         statusContext="Run not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Run not found.</Text>
+          <Text color={colors.text.dim}>{translatePhrase(language, 'Run not found.')}</Text>
           <Box marginTop={1}>
             <Row selected={true} primary="Back" hint="return to run" />
           </Box>
@@ -214,10 +218,10 @@ export function RunOutput() {
   }
 
   const secondsAgo = Math.floor((Date.now() - lastPeekAt) / 1000)
-  const lastPeekLabel = secondsAgo === 0 ? 'just now' : `${secondsAgo}s ago`
-  let statusContext = agents.length > 0 ? `${agents.length} agent${agents.length === 1 ? '' : 's'}` : 'no agents'
-  if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · enter opens output`
-  if (selected?.type === 'pagination') statusContext = `page ${activePage} of ${totalPages} · ← → turn page`
+  const lastPeekLabel = secondsAgo === 0 ? t('runtime.justNow') : t('runtime.secondsAgo', { seconds: secondsAgo })
+  let statusContext = agents.length > 0 ? agentCountLabel(t, agents.length) : 'no agents'
+  if (selected?.type === 'agent' && selected.agent) statusContext = `${selected.agent.nickname} · ${t('runtime.enterOpensOutput')}`
+  if (selected?.type === 'pagination') statusContext = t('runtime.pageNav', { page: activePage, total: totalPages })
 
   return (
     <Frame
@@ -272,7 +276,7 @@ export function RunOutput() {
                   { label: providerLabel, color: providerColor(agent.provider) },
                   { label: modelBadgeLabel(agent.model), color: modelColor(agent.model, agent.provider) },
                 ]}
-                hint="enter opens output"
+                hint={t('runtime.enterOpensOutput')}
               />
             )
           })}
@@ -281,7 +285,7 @@ export function RunOutput() {
       ) : (
         <Box flexDirection="column">
           {agents.length === 0 ? (
-            <Text color={colors.text.dim}>No agents in this run.</Text>
+            <Text color={colors.text.dim}>{translatePhrase(language, 'No agents in this run.')}</Text>
           ) : (
             pagedAgents.map((agent) => {
               const peek = peeks[agent.id] || ''
@@ -306,7 +310,7 @@ export function RunOutput() {
                       </Text>
                       <Box marginTop={space.sm}>
                         {lines.length === 0 ? (
-                          <Text color={colors.text.dim}>(no output yet)</Text>
+                          <Text color={colors.text.dim}>{translatePhrase(language, '(no output yet)')}</Text>
                         ) : (
                           <Box flexDirection="column">
                             {lines.map((line, lineIdx) => (

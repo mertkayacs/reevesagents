@@ -7,6 +7,7 @@ import { colors } from '../../utils/tokens.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
+import { displayWidth } from '../../utils/width.js'
 
 interface Props {
   label: string
@@ -16,7 +17,7 @@ export function Section({ label }: Props) {
   const { language } = useLanguage()
   const columns = useLayoutColumns()
   const displayLabel = translatePhrase(language, label)
-  const labelTextWidth = displayLabel ? displayLabel.length + 2 : 0
+  const labelTextWidth = displayLabel ? displayWidth(displayLabel) + 2 : 0
   const width = Math.max(labelTextWidth + 7, panelWidth(columns))
   const suffix = '─'.repeat(Math.max(2, width - labelTextWidth - 5))
 

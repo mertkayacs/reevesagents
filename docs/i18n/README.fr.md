@@ -5,10 +5,10 @@
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
 [![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
 [![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
-[![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
+[![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
-[English](README.md) · [Deutsch](README.de.md) · **Français** · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
+[English](../../README.md) · [Deutsch](README.de.md) · **Français** · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
 *Créez et pilotez des agents d'IA depuis d'autres agents. ReevesAgents est un espace de travail libre et local où des agents de programmation (Claude Code, Codex, Hermes, DeepSeek et Kimi) s'exécutent côte à côte, et un agent peut créer, diriger et superviser les autres. Aucune clé API, et aucune modification de votre Agent.md ou Claude.md.*
 
@@ -237,7 +237,7 @@ Les workers lancés ne reçoivent pas le MCP par défaut, ils ne peuvent donc pa
 
 Une CLI attachée peut aussi découvrir ce qu'elle peut lancer : l'outil `list_providers` et la ressource `reevesagents://providers` renvoient les fournisseurs présents sur cette machine avec leurs ids, leur état d'installation, leurs alias et leurs modèles connus, afin qu'un agent passe un id réel à `spawn` au lieu de deviner.
 
-Voir [docs/mcp.md](docs/mcp.md) pour la conception complète et la liste des outils.
+Voir [docs/mcp.md](../mcp.md) pour la conception complète et la liste des outils.
 
 ## Configuration
 
@@ -324,7 +324,7 @@ Vous n'avez pas besoin de clés API stockées par ReevesAgents, d'une base de do
 
 ## Contribuer
 
-Voir [CONTRIBUTING.md](.github/CONTRIBUTING.md) pour les branches et le flux des pull requests, [SECURITY.md](.github/SECURITY.md) pour signaler des vulnérabilités, et [CHANGELOG.md](CHANGELOG.md) pour les changements récents. Le modèle de conception se trouve dans [REEVESAGENTS_DESIGN.md](docs/REEVESAGENTS_DESIGN.md) et la documentation pour les contributeurs est sous [docs/](docs).
+Voir [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) pour les branches et le flux des pull requests, [SECURITY.md](../../.github/SECURITY.md) pour signaler des vulnérabilités, et [CHANGELOG.md](../../CHANGELOG.md) pour les changements récents. Le modèle de conception se trouve dans [REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) et la documentation pour les contributeurs est sous [docs/](..).
 
 Les utilisateurs finaux n'ont pas besoin de la chaîne d'outils de développement. Les contributeurs utilisent pnpm, TypeScript, tsup, Vitest et ESLint depuis le dépôt.
 
@@ -334,8 +334,8 @@ Les utilisateurs finaux n'ont pas besoin de la chaîne d'outils de développemen
 - GitHub : https://github.com/mertkayacs/reevesagents
 - Releases : https://github.com/mertkayacs/reevesagents/releases
 - Issues : https://github.com/mertkayacs/reevesagents/issues
-- Changelog : [CHANGELOG.md](CHANGELOG.md)
-- Licence : [Apache-2.0](LICENSE)
+- Changelog : [CHANGELOG.md](../../CHANGELOG.md)
+- Licence : [Apache-2.0](../../LICENSE)
 
 ## Licence
 

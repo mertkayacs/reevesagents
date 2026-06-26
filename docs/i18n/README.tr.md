@@ -5,10 +5,10 @@
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
 [![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
 [![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
-[![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
+[![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
-[English](README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · **Türkçe** · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
+[English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · **Türkçe** · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
 *Bir agent diğerlerini oluştur ve kontrol et. ReevesAgents, AI kodlama agent'larının (Claude Code, Codex, Hermes, DeepSeek ve Kimi gibi) yan yana çalıştığı ve bir agent'ın geri kalanını oluşturabildiği, yönlendirebildiği ve denetleyebildiği ücretsiz, yerel bir çalışma alanıdır. API anahtarı yok, mevcut Agent.md veya Claude.md dosyanızda değişiklik yok.*
 
@@ -276,7 +276,7 @@ aracı ve `reevesagents://providers` kaynağı, bu makinedeki sağlayıcıları
 id'leri, kurulum durumu, takma adları ve bilinen modelleriyle döndürür, böylece
 bir agent tahmin yürütmek yerine `spawn`'a gerçek bir id geçirir.
 
-Tam tasarım ve araç listesi için [docs/mcp.md](docs/mcp.md) dosyasına bakın.
+Tam tasarım ve araç listesi için [docs/mcp.md](../mcp.md) dosyasına bakın.
 
 ## Yapılandırma
 
@@ -394,11 +394,11 @@ CLI'nin kendi `mcp add` komutu üzerinden.
 
 ## Katkıda Bulunma
 
-Branch'ler ve pull request akışı için [CONTRIBUTING.md](.github/CONTRIBUTING.md),
-güvenlik açıklarını bildirmek için [SECURITY.md](.github/SECURITY.md) ve son
-değişiklikler için [CHANGELOG.md](CHANGELOG.md) dosyalarına bakın. Tasarım
-modeli [REEVESAGENTS_DESIGN.md](docs/REEVESAGENTS_DESIGN.md) içinde yaşar ve
-katkıda bulunan belgeleri [docs/](docs) altındadır.
+Branch'ler ve pull request akışı için [CONTRIBUTING.md](../../.github/CONTRIBUTING.md),
+güvenlik açıklarını bildirmek için [SECURITY.md](../../.github/SECURITY.md) ve son
+değişiklikler için [CHANGELOG.md](../../CHANGELOG.md) dosyalarına bakın. Tasarım
+modeli [REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) içinde yaşar ve
+katkıda bulunan belgeleri [docs/](..) altındadır.
 
 Son kullanıcıların geliştirme araç zincirine ihtiyacı yoktur. Katkıda
 bulunanlar depodan pnpm, TypeScript, tsup, Vitest ve ESLint kullanır.
@@ -409,8 +409,8 @@ bulunanlar depodan pnpm, TypeScript, tsup, Vitest ve ESLint kullanır.
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Releases: https://github.com/mertkayacs/reevesagents/releases
 - Issues: https://github.com/mertkayacs/reevesagents/issues
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- License: [Apache-2.0](LICENSE)
+- Changelog: [CHANGELOG.md](../../CHANGELOG.md)
+- License: [Apache-2.0](../../LICENSE)
 
 ## Lisans
 

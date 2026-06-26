@@ -9,6 +9,8 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { Pagination } from '../../components/Pagination.js'
 import { useRouter } from '../../router.js'
 import { useToast } from '../../contexts/ToastContext.js'
+import { translatePhrase } from '../../../i18n/catalog.js'
+import { useLanguage } from '../../contexts/LanguageContext.js'
 import { colors, space } from '../../../utils/tokens.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import { findAgent, readRun } from '../../../core/runs.js'
@@ -28,6 +30,7 @@ type SelectableItem =
 export function AgentOutput() {
   const { selectedAgentId, pop } = useRouter()
   const { toast } = useToast()
+  const { language, t } = useLanguage()
   const { rows: termRows } = useWindowSize()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 9
@@ -149,7 +152,7 @@ export function AgentOutput() {
         statusContext="Agent not found"
       >
         <Box flexDirection="column">
-          <Text color={colors.text.dim}>Agent not found.</Text>
+          <Text color={colors.text.dim}>{translatePhrase(language, 'Agent not found.')}</Text>
           <Box marginTop={1}>
             <Row
               selected={true}
@@ -166,9 +169,9 @@ export function AgentOutput() {
   const isAgentEnded = agent.ended_at !== null
   const canOpenAgent = !isAgentEnded && !isHeadless && !!agent.tmux_window_id
   const openDisabledHint = isAgentEnded ? 'agent has ended' : 'no tmux window'
-  let statusContext = `${agent.nickname} · output`
+  let statusContext = `${agent.nickname} · ${t('runtime.output')}`
   if (selected?.type === 'pagination') {
-    statusContext = `output page ${activePage} of ${totalPages} · ← → turn page`
+    statusContext = t('runtime.outputPageNav', { page: activePage, total: totalPages })
   } else if (selected?.type === 'action') {
     const actionLabels: Record<RowItem, string> = {
       RefreshNow: 'fetch output now',
@@ -221,7 +224,7 @@ export function AgentOutput() {
                 <Text key={idx} color={colors.text.dim}>{line}</Text>
               ))}
               {visibleOutputLines.length === 0 && (
-                <Text color={colors.text.muted}>(no output yet)</Text>
+                <Text color={colors.text.muted}>{translatePhrase(language, '(no output yet)')}</Text>
               )}
             </Box>
           </Box>

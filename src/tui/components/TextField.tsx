@@ -9,6 +9,7 @@ import { glyphs } from '../../utils/glyphs.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
+import { displayWidth } from '../../utils/width.js'
 
 interface Props {
   label: string
@@ -101,7 +102,7 @@ export function TextField({
   const displayHelpText = helpText ? translatePhrase(language, helpText) : helpText
   const labelText = `${displayLabel}${required ? ' *' : ''}`
   const contentWidth = Math.max(1, width - 6)
-  const labelWidth = Math.max(1, Math.min(Math.max(12, labelText.length), Math.floor(contentWidth * 0.35)))
+  const labelWidth = Math.max(1, Math.min(Math.max(12, displayWidth(labelText)), Math.floor(contentWidth * 0.35)))
   const valueWidth = Math.max(1, contentWidth - labelWidth - sep.pipe.length)
   const lines = multiline ? wrapLines(displayValue, valueWidth) : [displayValue]
 
