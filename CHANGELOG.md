@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.3.1](https://github.com/mertkayacs/reevesagents/compare/v1.3.0...v1.3.1) (2026-06-26)
+
+
+### Bug Fixes
+
+* **i18n:** Turkish consistency (Effort->Çaba; action hint eylem->işlem) ([6be8bac](https://github.com/mertkayacs/reevesagents/commit/6be8baccbc2b0b5ae3a7af62c00b8f6c181bc947))
+* **i18n:** word-by-word correctness audit of all 9 languages ([a9ee6a8](https://github.com/mertkayacs/reevesagents/commit/a9ee6a878c27b8ac352c89923ccc58cedbebade7))
+* **tui:** size columns and borders by display width, not code units ([f008ffc](https://github.com/mertkayacs/reevesagents/commit/f008ffc82725de4d975b958ff3a350ca08b275a2))
+* **tui:** use the compact Settings layout until the body fits the full view ([2bd5a95](https://github.com/mertkayacs/reevesagents/commit/2bd5a95ac97571a0a180f02f5eda6fc2396251aa))
+* **web:** make agent cards readable and dialogs robust at all sizes ([2a8ed4d](https://github.com/mertkayacs/reevesagents/commit/2a8ed4d18d113c942895f9c0016d1fec4a484c47))
+
+
+### Features
+
+* **cli:** ease fresh-agent friction in spawn ([840c25a](https://github.com/mertkayacs/reevesagents/commit/840c25a9a91e8aa8ed60fa6d0e8bf7f022e068c0))
+* **i18n:** localize dynamic TUI strings (agent counts, pagination, status context) ([4fe24e3](https://github.com/mertkayacs/reevesagents/commit/4fe24e375b3a8e45237adf9f091e245a19293aa5))
+* **i18n:** localize the Config editor field labels ([e24d85e](https://github.com/mertkayacs/reevesagents/commit/e24d85e590a723fcbb2526d4469c260d36e6a95d))
+* **i18n:** localize the remaining TUI dialog, doctor, and run-view strings ([aa6c7cf](https://github.com/mertkayacs/reevesagents/commit/aa6c7cf711ba29890f1119940b21db05b0dec8c7))
+* **i18n:** wire localization for the web Doctor/About/Config/Presets dialogs and Auth/Effort fields ([34810f2](https://github.com/mertkayacs/reevesagents/commit/34810f27b8d4b8f47cd0f168e0cc68920deeea09))
+
 # [1.3.0](https://github.com/mertkayacs/reevesagents/compare/v0.7.0...v1.3.0) (2026-06-23)
 
 
