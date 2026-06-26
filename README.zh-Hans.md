@@ -45,7 +45,7 @@ ReevesAgents 是一个面向 AI 编码智能体的免费开源工作区。同时
 
 界面提供 10 种语言：英语、德语、法语、西班牙语、葡萄牙语、意大利语、土耳其语、俄语、简体中文和阿拉伯语。
 
-新来 ReevesAgents？[用户指南](docs/GUIDE.zh-Hans.md)会带你了解安装、第一次运行以及让一个智能体驱动其他的。
+新来 ReevesAgents？[用户指南](docs/GUIDE.zh-Hans.md)会带你了解安装、第一次运行以及如何让一个智能体驱动其他智能体。
 
 ## 界面
 
@@ -216,10 +216,10 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 | `kill <agent-id>` | 停止一个智能体。 | `-y, --yes`（或 `ALLOW_DESTRUCTIVE=1`） |
 | `doctor` | 运行环境健康检查（Node、tmux、状态路径、提供方 CLI）。任一检查失败时以非零状态退出。 | `--json` |
 | `web` | 启动按需、仅回环的 Web UI。在前台运行；停止后智能体继续运行。 | `--port <n>`（首选端口，被占用时退回到下一个空闲端口）、`--no-open`（不打开浏览器） |
-| `hosts` | 列出本机上的代理 CLI 并显示 ReevesAgents 已连接到哪些。 | none |
-| `attach [cli]` | 连接 ReevesAgents 到一个代理 CLI，或在不指定名称时连接到每个已安装的 CLI。运行该 CLI 自己的 `mcp add`。 | none |
-| `detach <cli>` | 从一个代理 CLI 断开 ReevesAgents。运行该 CLI 自己的 `mcp remove`。 | none |
-| `mcp` | 通过 stdio 启动智能体控制 MCP 服务器。不手动运行；你连接到它的 CLI 会运行它。 | none |
+| `hosts` | 列出本机上的代理 CLI 并显示 ReevesAgents 已连接到哪些。 | 无 |
+| `attach [cli]` | 连接 ReevesAgents 到一个代理 CLI，或在不指定名称时连接到每个已安装的 CLI。运行该 CLI 自己的 `mcp add`。 | 无 |
+| `detach <cli>` | 从一个代理 CLI 断开 ReevesAgents。运行该 CLI 自己的 `mcp remove`。 | 无 |
+| `mcp` | 通过 stdio 启动智能体控制 MCP 服务器。不手动运行；你连接到它的 CLI 会运行它。 | 无 |
 
 `stop` 和 `kill` 是仅有的破坏性命令。没有 `--yes` 或 `ALLOW_DESTRUCTIVE=1` 时它们会拒绝运行。
 
@@ -318,7 +318,7 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 **端口已被占用。** `reevesagents web` 默认在端口 `8080` 上启动。如果该端口被占用，服务器会在一个小范围内绑定下一个空闲端口并打印所选的 URL。传入 `--port <n>` 以选择不同的起始端口。
 
-## 无需事项
+## 无需准备的东西
 
 对于正常稳定的智能体运行，你不需要由 ReevesAgents 存储的 API 密钥、数据库、Docker、后台服务或 MCP 设置。安装是被动的：稳定版包没有 postinstall 脚本，也不会重写提供方配置。附加 Agent Control MCP 是唯一明确的、按需启用的步骤，它会触及提供方配置，而且只通过每个 CLI 自带的 `mcp add` 命令。
 

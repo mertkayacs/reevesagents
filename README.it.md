@@ -10,13 +10,13 @@
 
 [English](README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · **Italiano** · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
-*Crea e guida agenti da altri agenti. ReevesAgents è uno spazio di lavoro locale gratuito dove agenti di codifica (come Claude Code, Codex, Hermes, DeepSeek e Kimi) corrono fianco a fianco, e un agente può generare, sterzare e supervisionare gli altri. Nessuna chiave API, e nessuna modifica al tuo Agent.md o Claude.md.*
+*Crea e guida agenti da altri agenti. ReevesAgents è uno spazio di lavoro locale gratuito dove agenti di codifica (come Claude Code, Codex, Hermes, DeepSeek e Kimi) girano fianco a fianco, e un agente può generare, sterzare e supervisionare gli altri. Nessuna chiave API, e nessuna modifica al tuo Agent.md o Claude.md.*
 
 **In più di 10 lingue!**
 
 GitHub: https://github.com/mertkayacs/reevesagents
 
-## Lascia che un agente installi e esegua gli altri
+## Lascia che un agente installi ed esegua gli altri
 
 Questo è l'idea principale: un agente di IA crea e guida gli altri. Una CLI di agente (un agente di codifica da riga di comando come Claude Code, Codex o Hermes) può anche installare e collegare ReevesAgents da sola, e poi iniziare a eseguire un team.
 
@@ -27,7 +27,7 @@ Questo è l'idea principale: un agente di IA crea e guida gli altri. Una CLI di 
 - **Verifica che abbia funzionato:** `reevesagents hosts` elenca le CLI di agenti su questa macchina e mostra quali sono collegate.
 - **Ricarica i tuoi strumenti:** riavvia la sessione della CLI così carica la connessione (usa MCP, il modo standard in cui uno strumento di agente espone comandi a un altro).
 
-Ora la tua CLI di agente può **creare e guidare altri agenti**: avvia un agente su un compito, invigli testo o pressioni di tasti, leggi quello che sta facendo, e approva o nega ciò che chiede. Un agente Claude Code può eseguire un team di agenti Codex e Claude Code su issue separate. Per scollegare dopo, esegui `reevesagents detach claude`.
+Ora la tua CLI di agente può **creare e guidare altri agenti**: avvia un agente su un compito, invii testo o pressioni di tasti, leggi quello che sta facendo, e approva o nega ciò che chiede. Un agente Claude Code può eseguire un team di agenti Codex e Claude Code su issue separate. Per scollegare dopo, esegui `reevesagents detach claude`.
 
 Preferisci programmarlo dalla riga di comando invece? [AGENTS.it.md](AGENTS.it.md) è la guida dell'operatore scritta per gli agenti: id dei provider e alias, la spec `spawn` e come osservare e sterzare un team in esecuzione.
 

@@ -29,7 +29,7 @@ Essa é a ideia toda: um agente de IA cria e conduz os outros. Uma CLI de agente
 
 Agora a sua CLI de agente pode **criar e conduzir outros agentes**: inicie um agente numa tarefa, envie-lhe texto ou teclas, leia o que está a fazer, e aprove ou recuse o que pede. Um agente Claude Code pode executar um grupo de agentes Codex e Claude Code em issues separadas. Para desconectar depois, execute `reevesagents detach claude`.
 
-Prefere script à partir da linha de comandos em vez disso? [AGENTS.pt.md](AGENTS.pt.md) é o guia de operação escrito para agentes: ids de fornecedores e aliases, a spec `spawn` e como observar e orientar um grupo em execução.
+Prefere usar scripts a partir da linha de comandos em vez disso? [AGENTS.pt.md](AGENTS.pt.md) é o guia de operação escrito para agentes: ids de fornecedores e aliases, a spec `spawn` e como observar e orientar um grupo em execução.
 
 Prefere configurá-lo à mão? Ative-o no ecrã **Agent control** na TUI ou Web UI; consulte [Agent control](#agent-control) abaixo.
 

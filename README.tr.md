@@ -10,7 +10,7 @@
 
 [English](README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · **Türkçe** · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
-*Bir agent diğerlerini oluştur ve kontrol et. ReevesAgents, AI kodlama agent'larının (Claude Code, Codex, Hermes, DeepSeek ve Kimi gibi) yan yana çalıştığı ve bir agent'ın geri kalanını oluşturabilip, yönlendirebilip denetleyebildiği ücretsiz, yerel bir çalışma alanıdır. API anahtarı yok, mevcut Agent.md veya Claude.md dosyanızda değişiklik yok.*
+*Bir agent diğerlerini oluştur ve kontrol et. ReevesAgents, AI kodlama agent'larının (Claude Code, Codex, Hermes, DeepSeek ve Kimi gibi) yan yana çalıştığı ve bir agent'ın geri kalanını oluşturabildiği, yönlendirebildiği ve denetleyebildiği ücretsiz, yerel bir çalışma alanıdır. API anahtarı yok, mevcut Agent.md veya Claude.md dosyanızda değişiklik yok.*
 
 **10'dan fazla dilde!**
 
@@ -25,13 +25,13 @@ GitHub: https://github.com/mertkayacs/reevesagents
 - **Kur:** `npm install -g reevesagents`
 - **Kendi CLI'nize bağla:** `reevesagents attach` ReevesAgents'ı yüklü olduğunuz agent CLI'lerine bağlar. Sadece bir tanesi için adını ver, örneğin `reevesagents attach claude`.
 - **Çalıştığını kontrol et:** `reevesagents hosts` bu makinedeki agent CLI'lerini listeler ve hangilerine bağlı olduğunu gösterir.
-- **Araçlarını yenile:** CLI oturumunu yeniden başlat ve bağlantıyı yükle (bu MCP kullanır, bir agent aracının komutları diğer bir agent'a nasıl ortaya koyar).
+- **Araçlarını yenile:** CLI oturumunu yeniden başlat ve bağlantıyı yükle (bu, MCP kullanır; bir agent aracının komutlarını diğerine açmanın standart yoludur).
 
 Şimdi agent CLI'niz **diğer agent'ları oluşturabilir ve kontrol edebilir**: bir agent'ı bir görevde başlat, ona metin veya tuş vuruşları gönder, ne yaptığını oku ve isteklerini onayla veya reddet. Bir Claude Code agent'ı ayrı issue'lar üzerinde Codex ve Claude Code agent'larından oluşan bir takım çalıştırabilir. Daha sonra bağlantıyı kesmek için `reevesagents detach claude` komutunu çalıştır.
 
 Bunun yerine komut satırından script yazmayı tercih ediyor musunuz? [AGENTS.tr.md](AGENTS.tr.md) agent'lar için yazılmış operatör rehberidir: sağlayıcı id'leri ve takma adları, `spawn` spec'i ve çalışan bir takımı nasıl izleyip yönlendirecekleri.
 
-El ile kurulumı tercih ediyor musunuz? TUI veya Web UI'daki **Agent Kontrol** ekranından aç; aşağıdaki [Agent Kontrol](#agent-kontrol) bölümüne bakın.
+El ile kurmayı tercih ediyor musunuz? TUI veya Web UI'daki **Agent Kontrol** ekranından aç; aşağıdaki [Agent Kontrol](#agent-kontrol) bölümüne bakın.
 
 TUI ve yerel Web UI aynı run'ı sürüyor:
 

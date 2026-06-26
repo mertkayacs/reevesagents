@@ -27,7 +27,7 @@ Das ist die ganze Idee: Ein KI-Agent erstellt und steuert die anderen. Ein Agent
 - **Überprüfe, ob es funktioniert hat:** `reevesagents hosts` listet die Agent-CLIs auf dieser Maschine auf und zeigt, welche verbunden sind.
 - **Lade deine Tools neu:** Starte deine CLI-Sitzung neu, damit sie die Verbindung lädt (dies nutzt MCP, die Standard-Art, wie ein Agent-Tool Befehle einem anderen bereitstellt).
 
-Jetzt kann dein Agent-CLI **andere Agenten erstellen und steuern**: Starte einen Agenten bei einer Aufgabe, sende ihm Text oder Tastatureingaben, lies, was er tut, und genehmige oder verweigere, was er anfodert. Ein Claude-Code-Agent kann ein Team von Codex- und Claude-Code-Agenten an separaten Issues ausführen. Um ihn später zu trennen, führe `reevesagents detach claude` aus.
+Jetzt kann dein Agent-CLI **andere Agenten erstellen und steuern**: Starte einen Agenten bei einer Aufgabe, sende ihm Text oder Tastatureingaben, lies, was er tut, und genehmige oder verweigere, was er anfordert. Ein Claude-Code-Agent kann ein Team von Codex- und Claude-Code-Agenten an separaten Issues ausführen. Um ihn später zu trennen, führe `reevesagents detach claude` aus.
 
 Möchtest du es lieber von der Kommandozeile aus scripten? [AGENTS.de.md](AGENTS.de.md) ist die Betreiberanleitung für Agenten: Provider-ids und Aliases, die `spawn`-Spec und wie du ein laufendes Team beobachtest und leitest.
 
@@ -61,7 +61,7 @@ Neu bei ReevesAgents? Das [Benutzerhandbuch](docs/GUIDE.de.md) führt dich durch
 | **Web UI** | Eine visuelle Ansicht von Runs, Agenten, Live-Panes und Verlauf. |
 | **CLI** | Skripte, schnelle spawn-Befehle, doctor-Prüfungen und das Öffnen von tmux. |
 | **tmux** | Echte Provider-CLI-Fenster, die lokal weiterlaufen. |
-| **Agent-Control** | Die Kernidee: Ein Agent erstellt und steuert die anderen. Du schaltets pro CLI ein, dann kann ein Claude-Code-Agent gleichzeitig Codex-, Hermes- und Claude-Code-Agenten ausführen. |
+| **Agent-Control** | Die Kernidee: Ein Agent erstellt und steuert die anderen. Du schaltest pro CLI ein, dann kann ein Claude-Code-Agent gleichzeitig Codex-, Hermes- und Claude-Code-Agenten ausführen. |
 
 ## Warum ReevesAgents
 
@@ -235,7 +235,7 @@ Menschen und Skripte.
 | `hosts` | Listet die Agent-CLIs auf dieser Maschine auf und zeigt, mit welchen ReevesAgents verbunden ist. | keine |
 | `attach [cli]` | Verbinde ReevesAgents mit einem Agent-CLI, oder mit jedem installierten, wenn kein Name angegeben ist. Führt den eigenen `mcp add`-Befehl dieser CLI aus. | keine |
 | `detach <cli>` | Trenne ReevesAgents von einem Agent-CLI. Führt den jeweils eigenen `mcp remove`-Befehl aus. | keine |
-| `mcp` | Starten Sie den Agent-Control-MCP-Server über stdio. Nicht von Hand auszuführen; die CLI, an die du ihn anhängst, führt ihn aus. | keine |
+| `mcp` | Starte den Agent-Control-MCP-Server über stdio. Nicht von Hand auszuführen; die CLI, an die du ihn anhängst, führt ihn aus. | keine |
 
 `stop` und `kill` sind die einzigen destruktiven Befehle. Sie verweigern die Ausführung ohne
 `--yes` oder `ALLOW_DESTRUCTIVE=1`.
@@ -263,8 +263,8 @@ Die Installation ist deine ausdrückliche Wahl, und diese Wahl ist die Zustimmun
 besteht aus der steuernden CLI als Kopf plus den von ihr gestarteten Agenten, und die gesamte
 Gruppe erscheint in der TUI und Web UI wie jeder andere Run.
 
-Gestartete Worker erhalten die MCP standardmäßig nicht, sodass sie keine weiteren
-Agenten starten können. Um einem Worker zu erlauben, eigene Sub-Worker zu steuern, hänge die MCP
+Gestartete Worker erhalten den MCP standardmäßig nicht, sodass sie keine weiteren
+Agenten starten können. Um einem Worker zu erlauben, eigene Sub-Worker zu steuern, hänge den MCP
 über denselben Bildschirm an die CLI dieses Workers an. Die Leitplanken sitzen auf Ressourcenebene: eine
 Agenten-Obergrenze pro Run (`max_agents`), die durchgesetzt wird, wenn das spawn-Tool einem Run etwas hinzufügt,
 sowie die Tatsache, dass jeder Agent ein echter CLI-Prozess in seinem eigenen tmux-Pane ist.
@@ -380,7 +380,7 @@ gewählte URL aus. Übergib `--port <n>`, um einen anderen Startport zu wählen.
 Du brauchst keine von ReevesAgents gespeicherten API-Schlüssel, keine Datenbank, kein Docker, keinen Hintergrund-
 Dienst und kein MCP-Setup für normale, stabile Agenten-Runs. Die Installation ist passiv: das
 stabile Paket hat kein postinstall-Skript und schreibt die Provider-Konfiguration nicht um.
-Das Anhängen der Agent-Control-MCP ist der eine ausdrückliche, opt-in-Schritt, der die Provider-Konfiguration
+Das Anhängen des Agent-Control-MCP ist der eine ausdrückliche, opt-in-Schritt, der die Provider-Konfiguration
 berührt, und das nur über den jeweils eigenen `mcp add`-Befehl jeder CLI.
 
 ## Mitwirken
