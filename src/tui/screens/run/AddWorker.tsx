@@ -16,7 +16,7 @@ import { useLanguage } from '../../contexts/LanguageContext.js'
 import { useWorkerDraft } from '../../contexts/WorkerDraftContext.js'
 import { readRun } from '../../../core/runs.js'
 import { spawnWorker } from '../../../core/runtime.js'
-import { PROVIDERS } from '../../../core/providers.js'
+import { PROVIDERS, providerSupportsAuthMode, providerSupportsEffort } from '../../../core/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../../core/model-catalog.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import type { Permissions, Provider, AuthMode, Effort } from '../../../core/types.js'
@@ -59,32 +59,39 @@ export function AddWorker() {
   const compactBody = bodyRows <= 9
   const run = selectedRunId ? safeReadRun(selectedRunId) : null
 
-  const fields: Field[] = useMemo(() => [
-    { kind: 'text', id: 'nickname', label: 'Nickname', value: draft.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
-    { kind: 'picker', id: 'provider', label: 'Provider', current: draft.provider, values: PROVIDERS, display: providerDisplayName(draft.provider) },
-    {
-      kind: 'picker',
-      id: 'model',
-      label: 'Model',
-      current: draft.model,
-      values: modelValuesForProvider(draft.provider),
-      display: modelDisplayName(draft.model),
-      hint: 'optional · blank uses provider default',
-    },
-    { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
-    { kind: 'text', id: 'workingDir', label: 'Working Dir', value: draft.workingDir, helpText: 'defaults to the run working dir', required: false },
-    {
-      kind: 'picker',
-      id: 'permissions',
-      label: 'Permissions',
-      current: draft.permissions,
-      values: PERMISSIONS_VALUES,
-      display: permissionDisplay(draft.permissions),
-      hint: draft.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
-    },
-    { kind: 'picker', id: 'authMode', label: 'Auth', current: draft.authMode, values: AUTH_MODE_VALUES, display: authModeDisplay(draft.authMode), hint: 'api-key uses the API key instead of the default login' },
-    { kind: 'picker', id: 'effort', label: 'Effort', current: draft.effort, values: EFFORT_VALUES },
-  ], [draft])
+  const fields: Field[] = useMemo(() => {
+    const list: Field[] = [
+      { kind: 'text', id: 'nickname', label: 'Nickname', value: draft.nickname, helpText: 'tmux window name; letters, digits, dashes', required: true },
+      { kind: 'picker', id: 'provider', label: 'Provider', current: draft.provider, values: PROVIDERS, display: providerDisplayName(draft.provider) },
+      {
+        kind: 'picker',
+        id: 'model',
+        label: 'Model',
+        current: draft.model,
+        values: modelValuesForProvider(draft.provider),
+        display: modelDisplayName(draft.model),
+        hint: 'optional · blank uses provider default',
+      },
+      { kind: 'text', id: 'prompt', label: 'Prompt', value: draft.prompt, helpText: 'optional initial prompt · enter newline · esc done', required: false },
+      { kind: 'text', id: 'workingDir', label: 'Working Dir', value: draft.workingDir, helpText: 'defaults to the run working dir', required: false },
+      {
+        kind: 'picker',
+        id: 'permissions',
+        label: 'Permissions',
+        current: draft.permissions,
+        values: PERMISSIONS_VALUES,
+        display: permissionDisplay(draft.permissions),
+        hint: draft.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
+      },
+    ]
+    if (providerSupportsAuthMode(draft.provider)) {
+      list.push({ kind: 'picker', id: 'authMode', label: 'Auth', current: draft.authMode, values: AUTH_MODE_VALUES, display: authModeDisplay(draft.authMode), hint: 'api-key uses the API key instead of the default login' })
+    }
+    if (providerSupportsEffort(draft.provider)) {
+      list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: draft.effort, values: EFFORT_VALUES })
+    }
+    return list
+  }, [draft])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
     { id: 'add', label: 'Add Agent', hint: 'add this agent to the run' },

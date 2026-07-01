@@ -10,7 +10,7 @@ import {
   runHasLiveTmuxTarget,
   computeRunStatus,
 } from '../core/runs.js'
-import { PROVIDERS, detectAvailable } from '../core/providers.js'
+import { PROVIDERS, detectAvailable, providerSupportsAuthMode, providerSupportsEffort } from '../core/providers.js'
 import { modelValuesForProvider } from '../core/model-catalog.js'
 import { providerColor, providerDisplayName } from '../utils/display.js'
 import { listRunApprovals, type ApprovalRisk } from '../core/approvals.js'
@@ -89,6 +89,8 @@ export interface WebProvider {
   available: boolean
   color: string
   models: string[]
+  supportsAuthMode: boolean
+  supportsEffort: boolean
 }
 
 function monogram(nickname: string, provider: string): string {
@@ -188,5 +190,7 @@ export function listWebProviders(): WebProvider[] {
     available: available[id],
     color: providerColor(id),
     models: [...modelValuesForProvider(id)],
+    supportsAuthMode: providerSupportsAuthMode(id),
+    supportsEffort: providerSupportsEffort(id),
   }))
 }

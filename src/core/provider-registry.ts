@@ -44,6 +44,10 @@ export interface ProviderDef {
   models: readonly string[]
   modelSource: string
   helpRequirements: readonly HelpRequirement[]
+  // Launch knobs this provider honors. UI surfaces read these so their auth-mode
+  // and effort pickers never drift from buildArgs; absent means no launch effect.
+  supportsAuthMode?: boolean
+  supportsEffort?: boolean
   // Launch args after the binary. Excludes the binary name itself.
   buildArgs: (_opts: BuildArgsOptions) => string[]
   // Args for the --help inspection, after the binary. Defaults to ['--help'].
@@ -87,6 +91,8 @@ export const PROVIDER_REGISTRY: Record<Provider, ProviderDef> = {
     helpRequirements: [
       { feature: 'skip permissions', tokens: ['--dangerously-skip-permissions'] },
     ],
+    supportsAuthMode: true,
+    supportsEffort: true,
     buildArgs: ({ permissions, model, auth_mode, effort }) => {
       const args: string[] = []
       if (permissions === 'skip') args.push('--dangerously-skip-permissions')

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PROVIDER_REGISTRY, PROVIDER_DEFS } from '../src/core/provider-registry.js'
-import { PROVIDERS, BIN, buildCommand, helpCommand, normalizeProvider } from '../src/core/providers.js'
+import { PROVIDERS, BIN, buildCommand, helpCommand, normalizeProvider, providerSupportsAuthMode, providerSupportsEffort } from '../src/core/providers.js'
 import { providerColor, providerDisplayName, PROVIDER_DISPLAY_NAMES } from '../src/utils/display.js'
 import { MODEL_CATALOG } from '../src/core/model-catalog.js'
 import { colors } from '../src/utils/tokens.js'
@@ -40,6 +40,21 @@ describe('provider registry', () => {
       expect(MODEL_CATALOG[provider].source).toBe(def.modelSource)
       expect(buildCommand({ provider, permissions: 'ask', model: '' })[0]).toBe(def.bin)
       expect(helpCommand(provider)[0]).toBe(def.bin)
+    }
+  })
+
+  it('declares auth-mode/effort capabilities that match what buildArgs emits', () => {
+    // The wizard, Add Agent, and web form show the auth-mode and effort pickers from
+    // these flags. A flag that disagrees with buildArgs would show a control that does
+    // nothing, or hide one that works. Assert each flag equals the observable behavior.
+    const base = { permissions: 'ask', model: '', auth_mode: 'default', effort: 'default' } as const
+    for (const provider of PROVIDERS) {
+      const def = PROVIDER_REGISTRY[provider]
+      const baseArgs = JSON.stringify(def.buildArgs(base))
+      const authAffectsArgs = JSON.stringify(def.buildArgs({ ...base, auth_mode: 'api-key' })) !== baseArgs
+      const effortAffectsArgs = JSON.stringify(def.buildArgs({ ...base, effort: 'high' })) !== baseArgs
+      expect(providerSupportsAuthMode(provider), `${provider} supportsAuthMode`).toBe(authAffectsArgs)
+      expect(providerSupportsEffort(provider), `${provider} supportsEffort`).toBe(effortAffectsArgs)
     }
   })
 

@@ -151,6 +151,8 @@ export function buildProviderCatalog() {
     aliases: [...def.aliases],
     models: [...def.models],
     model_source: def.modelSource,
+    supports_auth_mode: def.supportsAuthMode === true,
+    supports_effort: def.supportsEffort === true,
   }))
 }
 

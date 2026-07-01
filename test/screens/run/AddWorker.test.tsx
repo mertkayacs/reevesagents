@@ -106,8 +106,8 @@ describe('AddWorker', () => {
     await press(stdin, 'line two')
     await press(stdin, '\u001B')
 
-    await press(stdin, down)
-    await press(stdin, down)
+    // Default draft provider is codex, which shows no auth/effort pickers, so six
+    // fields precede the actions: from Prompt (row 3) three downs reach Add Agent.
     await press(stdin, down)
     await press(stdin, down)
     await press(stdin, down)
@@ -130,7 +130,8 @@ describe('AddWorker', () => {
   it('allows spawning an agent without an initial prompt', async () => {
     const { stdin, unmount } = renderAddWorker()
 
-    for (let i = 0; i < 8; i++) await press(stdin, down)
+    // codex draft has six fields before the actions; six downs land on Add Agent.
+    for (let i = 0; i < 6; i++) await press(stdin, down)
     await press(stdin, '\r')
 
     expect(RuntimeModule.spawnWorker).toHaveBeenCalledOnce()

@@ -642,12 +642,13 @@
     updateCreateSubmitState()
   }
 
-  // auth_mode only applies to Claude Code; reasoning effort applies to cc and codex.
-  // Hide the irrelevant knobs and reset them so a stale value is never submitted.
+  // Auth mode and reasoning effort apply only to providers whose launch command
+  // uses them; the flags come from the provider registry via /api/state. Hide the
+  // irrelevant knobs and reset them so a stale value is never submitted.
   function updateLaunchKnobVisibility() {
-    const provider = el.fProvider.value
-    const showAuthMode = provider === 'cc'
-    const showEffort = provider === 'cc' || provider === 'codex'
+    const provider = providerById(el.fProvider.value)
+    const showAuthMode = !!(provider && provider.supportsAuthMode)
+    const showEffort = !!(provider && provider.supportsEffort)
     el.authModeField.hidden = !showAuthMode
     el.effortField.hidden = !showEffort
     if (!showAuthMode) el.fAuthMode.value = ''

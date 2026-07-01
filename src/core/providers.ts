@@ -46,6 +46,17 @@ export function normalizeProvider(value: unknown): Provider | null {
   return PROVIDER_ALIASES[value.trim().toLowerCase()] ?? null
 }
 
+// Which launch knobs a provider honors. UI pickers read these so an auth-mode or
+// effort control appears only when buildArgs uses it. The provider-capabilities
+// test asserts these match what buildArgs actually emits, so they cannot drift.
+export function providerSupportsAuthMode(provider: Provider): boolean {
+  return PROVIDER_REGISTRY[provider]?.supportsAuthMode === true
+}
+
+export function providerSupportsEffort(provider: Provider): boolean {
+  return PROVIDER_REGISTRY[provider]?.supportsEffort === true
+}
+
 export function buildCommand(opts: BuildCommandOptions): string[] {
   const { provider, permissions, model, auth_mode = 'default', effort = 'default' } = opts
   if (!isProvider(provider)) {

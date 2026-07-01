@@ -12,7 +12,7 @@ import { TextField } from '../../components/TextField.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../contexts/WizardContext.js'
 import type { WorkerConfig } from '../../contexts/WizardContext.js'
-import { PROVIDERS } from '../../../core/providers.js'
+import { PROVIDERS, providerSupportsAuthMode, providerSupportsEffort } from '../../../core/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../../core/model-catalog.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import type { Permissions, Effort, AuthMode, Provider } from '../../../core/types.js'
@@ -80,10 +80,10 @@ export function NewRunWorker() {
         hint: worker.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
       },
     ]
-    if (worker.provider === 'cc') {
+    if (providerSupportsAuthMode(worker.provider)) {
       list.push({ kind: 'picker', id: 'authMode', label: 'Auth', current: worker.authMode, values: AUTH_MODE_VALUES, display: authModeDisplay(worker.authMode), hint: 'api-key uses the API key instead of the default login' })
     }
-    if (worker.provider === 'cc' || worker.provider === 'codex') {
+    if (providerSupportsEffort(worker.provider)) {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: worker.effort, values: EFFORT_VALUES })
     }
     return list

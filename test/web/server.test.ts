@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { startWebServer, type WebServerHandle } from '../../src/web/server.js'
+import { PROVIDERS } from '../../src/core/providers.js'
 
 let tmpDir: string
 let handles: WebServerHandle[]
@@ -90,10 +91,12 @@ describe('startWebServer', () => {
     expect(parsed.runs).toEqual([])
     expect(parsed.history).toEqual([])
     expect(Array.isArray(parsed.providers)).toBe(true)
-    expect(parsed.providers).toHaveLength(9)
+    expect(parsed.providers).toHaveLength(PROVIDERS.length)
     expect(parsed.providers[0]).toHaveProperty('available')
     expect(parsed.providers[0]).toHaveProperty('name')
     expect(parsed.providers[0]).toHaveProperty('models')
+    expect(parsed.providers[0]).toHaveProperty('supportsAuthMode')
+    expect(parsed.providers[0]).toHaveProperty('supportsEffort')
     expect(parsed.providers[0].models).toContain('')
     expect(parsed.language.current).toBe('en')
     expect(parsed.language.languages).toHaveLength(10)

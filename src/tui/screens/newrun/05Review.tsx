@@ -12,6 +12,7 @@ import { useWizard } from '../../contexts/WizardContext.js'
 import { useLanguage } from '../../contexts/LanguageContext.js'
 import { agentCountLabel } from '../../../utils/agentLabel.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
+import { providerSupportsEffort } from '../../../core/providers.js'
 import type { Permissions } from '../../../core/types.js'
 
 type ActionId = 'start' | 'back' | 'cancel'
@@ -54,7 +55,7 @@ export function NewRunReview() {
   const promptPreview = state.root.prompt.length > 40
     ? state.root.prompt.slice(0, 40) + '...'
     : state.root.prompt
-  const showEffort = state.root.provider === 'cc' || state.root.provider === 'codex'
+  const showEffort = providerSupportsEffort(state.root.provider)
   const permissionsSummary = showEffort
     ? `${permissionDisplay(state.root.permissions)} · ${state.root.effort}`
     : permissionDisplay(state.root.permissions)

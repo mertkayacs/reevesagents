@@ -1,5 +1,5 @@
 // Step 2/4: first agent configuration. Provider, model, prompt,
-// permissions, plus conditional effort (Claude Code and Codex CLI only).
+// permissions, plus auth and effort where the provider supports them.
 // Pickers cycle inline with Left/Right. Text fields edit inline with Enter.
 
 import React, { useState, useMemo } from 'react'
@@ -12,7 +12,7 @@ import { StepIndicator } from '../../components/StepIndicator.js'
 import { TextField } from '../../components/TextField.js'
 import { useRouter } from '../../router.js'
 import { useWizard } from '../../contexts/WizardContext.js'
-import { PROVIDERS } from '../../../core/providers.js'
+import { PROVIDERS, providerSupportsAuthMode, providerSupportsEffort } from '../../../core/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../../core/model-catalog.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import type { Permissions, Effort, AuthMode, Provider } from '../../../core/types.js'
@@ -90,10 +90,10 @@ export function NewRunRoot() {
         hint: state.root.permissions === 'skip' ? 'trusted workspaces only' : 'provider asks before sensitive actions',
       },
     ]
-    if (state.root.provider === 'cc') {
+    if (providerSupportsAuthMode(state.root.provider)) {
       list.push({ kind: 'picker', id: 'authMode', label: 'Auth', current: state.root.authMode, values: AUTH_MODE_VALUES, display: authModeDisplay(state.root.authMode), hint: 'api-key uses the API key instead of the default login' })
     }
-    if (state.root.provider === 'cc' || state.root.provider === 'codex') {
+    if (providerSupportsEffort(state.root.provider)) {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: state.root.effort, values: EFFORT_VALUES })
     }
     return list
