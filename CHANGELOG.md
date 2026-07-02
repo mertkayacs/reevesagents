@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/mertkayacs/reevesagents/compare/v1.3.1...v1.3.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* **providers:** show auth-mode and effort pickers only where they apply ([43fc16d](https://github.com/mertkayacs/reevesagents/commit/43fc16dae8e4544c6a40218956e3bee7cfafeb96))
+
 ## [1.3.1](https://github.com/mertkayacs/reevesagents/compare/v1.3.0...v1.3.1) (2026-06-26)
 
 
