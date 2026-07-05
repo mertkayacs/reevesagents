@@ -43,7 +43,7 @@ tmux = execution and viewing surface
 Typical run layout:
 
 ```text
-tmux session: reeves_<run-name>_<id>
+tmux session: reeves-<run-name>-<id>
   window 0: reeves when tmux linking succeeds
   window 1: <provider-or-nickname>
   window 2: <provider-or-nickname>
@@ -65,6 +65,11 @@ Runtime state lives under `~/.reeves` unless `REEVES_REGISTRY` points to an isol
       run.json
       agents/
         <terminal-id>.json
+      approvals/
+        <approval-id>.json
+  history/
+    runs/
+      <run-id>.json
 ```
 
 The `agents` directory name remains for compatibility with earlier state. Stable UI and CLI copy should call those records terminals.
@@ -122,7 +127,11 @@ Pages:
 - Agent detail: inspect provider, status, working directory, ids, prompt, output, open, and close.
 - New Run: configure a run and its initial agents.
 - Add Agent: add one agent to an existing run.
-- Settings: provider detection and state paths.
+- Presets: saved run shapes; capture a live run, start a new run from one.
+- Settings: provider detection, state paths, and language.
+- Config: edit the global settings.
+- Agent control: attach or detach the opt-in MCP per host CLI.
+- Approvals: pending agent requests, approve or deny.
 - Doctor: environment health checks only.
 - Reference: compact in-app map.
 - Credits: package metadata and project credits.

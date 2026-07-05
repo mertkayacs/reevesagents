@@ -12,7 +12,7 @@
 
 *Create and drive AI agents from other agents. ReevesAgents is a free, local workspace where coding agents (such as Claude Code, Codex, Hermes, DeepSeek, and Kimi) run side by side, and one agent can spawn, steer, and supervise the rest. No API keys, and no changes to your existing Agent.md or Claude.md.*
 
-**In more than 10 languages!**
+**In 10 languages!**
 
 GitHub: https://github.com/mertkayacs/reevesagents
 
@@ -35,7 +35,7 @@ Prefer to set it up by hand? Turn it on from the **Agent control** screen in the
 
 The TUI and the local Web UI driving the same run:
 
-![ReevesAgents TUI: language picker, welcome screen, and runs](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
+![ReevesAgents TUI: language picker, welcome menu, and doctor](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
 
 ![ReevesAgents Web UI: runs and live agent panes](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web-en.png)
 
@@ -87,7 +87,7 @@ reevesagents
 ```
 
 To pin a version, append `@<version>` to the package name, for example
-`npm install -g reevesagents@1.2.0`.
+`npm install -g reevesagents@1.3.1`.
 
 <details>
 <summary><b>pnpm</b></summary>
@@ -222,24 +222,48 @@ For a full walkthrough, see the [User Guide](docs/GUIDE.md).
 No arguments launches the TUI. The subcommands are the operator surface for
 humans and scripts.
 
+The everyday surface:
+
 | Command | Purpose | Key flags |
 | --- | --- | --- |
 | `reevesagents` | Launch the TUI (no subcommand). | none |
-| `spawn [spec...]` | Start a run with one or more provider agents. Each `spec` is `provider[:nickname[:model]]`. The first spec is the lead, the rest are workers. No spec defaults to `codex`. | `--name <name>` (default `run`), `--cwd <dir>` (default current dir), `--prompt <text>` (pasted into each agent) |
+| `spawn [spec...]` | Start a run with one or more provider agents. Each `spec` is `provider[:nickname[:model]]`. The first spec is the lead, the rest are workers. No spec defaults to `codex`. | `--name <name>` (default `run`), `--cwd <dir>` (default current dir), `--prompt <text>` (pasted into each agent), `--skip` (skip permission prompts), `--run <run-id>` (add agents to an existing run), `--auth-mode <mode>`, `--effort <level>`, `--json` |
 | `runs` | List active runs, one per line. | `--json` (full run records as a JSON array) |
+| `agents [run-id]` | List agents across all runs, or the agents in one run. | `--json` |
 | `open <id>` | Switch tmux to a run's Reeves window or an agent window. Inside tmux it switches; outside tmux on a TTY it attaches; otherwise it prints a pasteable tmux command. Accepts a run id/name or an agent id/nickname (prefix match allowed). | none |
 | `peek <agent-id>` | Print recent output from one agent. | `-n, --lines <n>` (default `20`), `--json` (lines as an array) |
+| `send <agent-id> <text...>` | Paste text at an agent's prompt. It does not submit; follow with `key <agent-id> enter`. | none |
+| `key <agent-id> <key>` | Send one key: `enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`, `right`, or `ctrl-c`. | none |
+| `interrupt <agent-id>` | Send ctrl-c to one agent. | none |
 | `stop <run-id>` | Stop one run. | `-y, --yes` (or `ALLOW_DESTRUCTIVE=1`) |
 | `kill <agent-id>` | Stop one agent. | `-y, --yes` (or `ALLOW_DESTRUCTIVE=1`) |
 | `doctor` | Run environment health checks (Node, tmux, state path, provider CLIs). Exits non-zero on any failed check. | `--json` |
 | `web` | Start the on-demand, loopback-only Web UI. Runs in the foreground; agents keep running after you stop it. | `--port <n>` (preferred port, falls back to the next free port), `--no-open` (do not open the browser) |
+
+Discovery, approvals, agent control, config, and cleanup:
+
+| Command | Purpose | Key flags |
+| --- | --- | --- |
+| `providers` | List every provider with availability, aliases, and known models. | `--models`, `--json` |
+| `approvals` | List pending approval requests from agents. | `--json` |
+| `approve <approval-id> [note]` | Resolve an approval request as approved. | none |
+| `deny <approval-id> [note]` | Resolve an approval request as denied. | none |
 | `hosts` | List the agent CLIs on this machine and show which ones ReevesAgents is connected to. | none |
 | `attach [cli]` | Connect ReevesAgents to one agent CLI, or to every installed one when no name is given. Runs that CLI's own `mcp add`. | none |
 | `detach <cli>` | Disconnect ReevesAgents from one agent CLI. Runs that CLI's own `mcp remove`. | none |
 | `mcp` | Start the Agent control MCP server over stdio. Not run by hand; the CLI you connect it to runs it. | none |
+| `config [key] [value]` | Show all editable settings, read one, or set one. | `--json` |
+| `presets` | List saved run presets. | `--json` |
+| `save-preset <run-id> <name> [description...]` | Capture a live run as a reusable preset. | none |
+| `start-preset <name>` | Start a new run from a preset. | `--name <run>`, `--cwd <dir>` |
+| `delete-preset <name>` | Delete a preset. | `-y, --yes` |
+| `delete <agent-id>` | Delete one ended agent's record. | `-y, --yes` |
+| `delete-run <run-id>` | Delete one ended run and archive it to history. | `-y, --yes` |
+| `history` | List archived ended and stale runs. | `--json` |
+| `delete-history <id>` | Delete one archived history record. | `-y, --yes` |
 
-`stop` and `kill` are the only destructive commands. They refuse to run without
-`--yes` or `ALLOW_DESTRUCTIVE=1`.
+`stop`, `kill`, and the `delete` commands are destructive. They refuse to run
+without `--yes` or `ALLOW_DESTRUCTIVE=1`.
 
 ## Agent control
 

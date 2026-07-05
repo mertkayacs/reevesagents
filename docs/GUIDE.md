@@ -54,9 +54,9 @@ reevesagents spawn claude-code:lead codex:worker \
 Prefer a visual start? Run `reevesagents` for the TUI or `reevesagents web` for
 the local Web UI and create the run from there.
 
-## The four ways to use it
+## The five ways to use it
 
-You reach the same runs through four surfaces. Pick whichever fits the moment:
+You reach the same runs through five surfaces. Pick whichever fits the moment:
 
 - **TUI** (`reevesagents`): fast, keyboard-first control inside the terminal.
 - **Web UI** (`reevesagents web`): one visual view of runs, agents, live panes,
@@ -65,6 +65,8 @@ You reach the same runs through four surfaces. Pick whichever fits the moment:
   commands, and health checks.
 - **tmux**: every agent is a real CLI in its own tmux pane, so the sessions keep
   running locally even after you close the TUI or Web UI.
+- **Agent control** (`reevesagents attach <cli>`): the opt-in MCP that lets one
+  agent drive the rest. The next section walks through it.
 
 ## Let one agent drive the rest
 
@@ -99,8 +101,10 @@ agent on another, then watch and steer both.
 - Jump into an agent's tmux pane: `reevesagents open <agent>`.
 - Stop a whole run: `reevesagents stop <run> --yes`.
 - Stop a single agent: `reevesagents kill <agent> --yes`.
-- `stop` and `kill` are the only commands that end work, so they refuse to run
-  without `--yes`.
+- See what agents are asking for: `reevesagents approvals`, then
+  `approve <id>` or `deny <id>`.
+- `stop` and `kill` end work, and the `delete` commands remove ended records.
+  All of them refuse to run without `--yes`.
 
 ## Keeping cost down
 

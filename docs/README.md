@@ -19,7 +19,7 @@ The command and option reference lives in the main README:
 - [Configuration](../README.md#configuration): what lives under `~/.reeves`.
 - [Agent control](../README.md#agent-control): the opt-in model for one agent driving others.
 
-README languages: [English](../README.md) · [Deutsch](../README.de.md) · [Français](../README.fr.md) · [Español](../README.es.md) · [Português](../README.pt.md) · [Italiano](../README.it.md) · [Türkçe](../README.tr.md) · [Русский](../README.ru.md) · [简体中文](../README.zh-Hans.md) · [العربية](../README.ar.md)
+README languages: [English](../README.md) · [Deutsch](i18n/README.de.md) · [Français](i18n/README.fr.md) · [Español](i18n/README.es.md) · [Português](i18n/README.pt.md) · [Italiano](i18n/README.it.md) · [Türkçe](i18n/README.tr.md) · [Русский](i18n/README.ru.md) · [简体中文](i18n/README.zh-Hans.md) · [العربية](i18n/README.ar.md)
 
 ## Design and internals
 

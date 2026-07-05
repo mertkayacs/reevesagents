@@ -8,15 +8,15 @@ This repository uses a simple open-source branch model.
 
 | Branch | Purpose | Who Targets It |
 | --- | --- | --- |
-| `master` | Default development branch. Feature, fix, Web UI, docs, and test work lands here after review. | Contributors and maintainers. |
-| `release/v1.2` | Stable 1.2 release line. Keep this branch boring: verified release fixes, release notes, packaging fixes, and version metadata only. | Maintainers. |
+| `master` | Default development branch. Feature, fix, Web UI, docs, and test work lands here after review. Releases are normally cut from a clean `master` (see [Releasing](releasing.md)). | Contributors and maintainers. |
+| `release/v*` (for example `release/v1.2`) | A frozen stable release line. Keep these branches boring: verified release fixes, release notes, packaging fixes, and version metadata only. | Maintainers. |
 | `fix/*`, `feature/*`, `web/*`, `docs/*` | Short-lived work branches. | Contributors and maintainers. |
 
 Avoid long-running personal branches in the public repository. If a branch is not active review or release work, delete it after merge.
 
 ## Release Branch Rules
 
-`release/v1.2` should stay easy to traverse:
+A release branch should stay easy to traverse:
 
 - Use linear history where possible.
 - Prefer cherry-picking one reviewed fix at a time from `master`.
@@ -24,7 +24,7 @@ Avoid long-running personal branches in the public repository. If a branch is no
 - Do not land unrelated refactors on the release branch.
 - Run release verification before tagging.
 
-Release commits should be understandable from `git log --first-parent --oneline release/v1.2`.
+Release commits should be understandable from `git log --first-parent --oneline release/v<minor>`.
 
 ## Normal Contributor Flow
 
@@ -42,19 +42,21 @@ Open the pull request against `master`.
 
 ## Release Flow
 
-Start or update the release branch from a verified development commit:
+Normal releases are cut from a clean `master`; the full process is in
+[Releasing](releasing.md). A release branch exists to maintain a line that has
+already shipped. Start or update one from a verified development commit:
 
 ```sh
 git switch master
 git pull --ff-only origin master
-git switch -c release/v1.2
+git switch -c release/v<minor>
 pnpm verify:release
 ```
 
 For a fix that is already reviewed on `master`, cherry-pick it:
 
 ```sh
-git switch release/v1.2
+git switch release/v<minor>
 git cherry-pick <commit>
 pnpm verify:release
 ```

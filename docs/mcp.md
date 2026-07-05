@@ -65,12 +65,20 @@ agent").
 - `list_providers`: list the CLI providers this machine can launch, with their ids,
   install status, aliases, and known models (so an agent can discover what to spawn
   instead of guessing provider ids)
+- `list_hosts`: list the CLIs that can host this MCP and whether each one is attached
+- `doctor`: run the environment health checks and return the results
 - `delete`: delete one ended agent's record (it must be stopped first)
 - `delete_run`: delete one ended run, archiving it to history (it must be stopped first)
 - `delete_history`: delete one archived run history record
 - `request_approval`: ask for approval before an action
 - `resolve_approval`: approve or deny a request
 - `check_approval` and `list_approvals`: read approval state
+- `get_config` and `set_config`: read and edit the same global settings the CLI,
+  TUI, and Web UI use
+- `list_presets`, `save_preset`, `start_preset`, and `delete_preset`: manage saved
+  run shapes, capture a live run as a preset, and start a new run from one
+- `attach_host` and `detach_host`: attach or detach this MCP for a host CLI, the
+  same engine behind the Agent control screen
 
 No inbox, no task-status protocol, no role scoping here. The MCP stays a flat
 control surface by design. The delete tools mirror the Web UI delete actions and

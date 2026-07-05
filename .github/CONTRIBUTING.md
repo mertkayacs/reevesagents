@@ -15,12 +15,14 @@ Recommended branch names:
 
 Long-lived branches:
 
-- `master`: default development branch and normal pull request target.
-- `release/v1.2`: current stable release line. Use this only for verified release fixes, release notes, and packaging corrections.
+- `master`: default development branch and normal pull request target. Releases
+  are cut from a clean `master` (see Releasing below).
+- `release/v*` (for example `release/v1.2`): frozen stable release lines. Use
+  them only for verified release fixes, release notes, and packaging corrections.
 
 Tags use `v<version>`, for example `v1.2.0`, and should point at a verified release commit.
 
-More detail is in [docs/branching.md](docs/branching.md).
+More detail is in [docs/branching.md](../docs/branching.md).
 
 ## Before Opening A Pull Request
 
@@ -47,7 +49,7 @@ Releases are automated. You do not edit the version by hand. From a clean
 `master`, `pnpm verify` then `pnpm release` bumps the version from the
 Conventional Commit history, writes the changelog, tags, pushes, and the tag
 push publishes to npm through CI. The full process is in
-[docs/releasing.md](docs/releasing.md).
+[docs/releasing.md](../docs/releasing.md).
 
 ## Package Boundaries
 

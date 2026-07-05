@@ -93,6 +93,8 @@ reevesagents send <agent-id> "do X"    # paste text at the agent's prompt
 reevesagents key <agent-id> enter      # submit it (send does not submit on its own)
 reevesagents interrupt <agent-id>      # ctrl-c the agent
 reevesagents open <run-id|agent-id>    # jump to its tmux window
+reevesagents approvals                 # pending approval requests (add --json)
+reevesagents approve <approval-id>     # resolve one; deny <approval-id> refuses it
 ```
 
 `send` only pastes; follow it with `key <agent-id> enter` to submit. Keys accepted by
@@ -106,8 +108,9 @@ reevesagents stop <run-id> --yes       # end a whole run and tear down its tmux 
 reevesagents kill <agent-id> --yes     # end one agent
 ```
 
-`stop` and `kill` are the only destructive commands, so they refuse to run without
-`--yes`.
+`stop` and `kill` refuse to run without `--yes`. The same gate covers cleanup:
+`delete <agent-id>` and `delete-run <run-id>` remove ended records, and
+`delete-history <id>` removes an archived one.
 
 ## A worked example: five agents, then drive them
 
@@ -164,7 +167,7 @@ Don't:
 - Don't `send` and assume it ran; nothing submits until you `key <agent-id> enter`.
 - Don't spawn a provider that is missing or signed out; spawn refuses the first, and the
   second leaves a window parked at a login prompt that never does the work.
-- Don't run `stop` or `kill` without `--yes`; they are the only destructive commands.
+- Don't run `stop`, `kill`, or the `delete` commands without `--yes`; those are the destructive ones.
 - Don't target native Windows; run inside WSL with tmux and the CLIs installed there.
 - Don't paste secrets into a `--prompt` or `send`; output is captured and shown through `peek` and the web UI.
 
