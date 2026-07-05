@@ -204,6 +204,49 @@ describe('cli parity', () => {
     })
   })
 
+  describe('add command', () => {
+    it('adds an agent to the most recent active run without a run id', async () => {
+      wireTmux()
+      const { writeRun, writeAgent, listAgents } = await import('../src/core/runs.js')
+      writeRun(makeRun('old', { started_at: '2026-01-01T00:00:00.000Z' }))
+      writeAgent(makeAgent('old-root', 'old', { role: 'root', id: 'old-root' }))
+      writeRun(makeRun('new', { started_at: '2026-02-01T00:00:00.000Z' }))
+      writeAgent(makeAgent('new-root', 'new', { role: 'root', id: 'new-root' }))
+
+      const { out } = await runCli(['add', 'codex:helper'])
+      expect(out).toMatch(/added 1 agents to/)
+      // it joined the newer run, not the older one
+      expect(listAgents('new').some(agent => agent.nickname === 'helper')).toBe(true)
+      expect(listAgents('old').some(agent => agent.nickname === 'helper')).toBe(false)
+    })
+
+    it('targets a specific run with --run', async () => {
+      wireTmux()
+      const { writeRun, writeAgent, listAgents } = await import('../src/core/runs.js')
+      writeRun(makeRun('old', { started_at: '2026-01-01T00:00:00.000Z' }))
+      writeAgent(makeAgent('old-root', 'old', { role: 'root', id: 'old-root' }))
+      writeRun(makeRun('new', { started_at: '2026-02-01T00:00:00.000Z' }))
+      writeAgent(makeAgent('new-root', 'new', { role: 'root', id: 'new-root' }))
+
+      await runCli(['add', 'codex:helper', '--run', 'old'])
+      expect(listAgents('old').some(agent => agent.nickname === 'helper')).toBe(true)
+      expect(listAgents('new').some(agent => agent.nickname === 'helper')).toBe(false)
+    })
+
+    it('errors when there is no active workspace', async () => {
+      wireTmux()
+      await expect(runCli(['add', 'codex'])).rejects.toThrow()
+    })
+
+    it('errors when no agent spec is given', async () => {
+      wireTmux()
+      const { writeRun, writeAgent } = await import('../src/core/runs.js')
+      writeRun(makeRun('rr'))
+      writeAgent(makeAgent('rr-root', 'rr', { role: 'root', id: 'rr-root' }))
+      await expect(runCli(['add'])).rejects.toThrow()
+    })
+  })
+
   describe('remote control', () => {
     it('send pastes text into an agent pane', async () => {
       wireTmux()

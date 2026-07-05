@@ -323,6 +323,15 @@ export function listRuns(): RunRecord[] {
   return listRunsUnlocked()
 }
 
+// The current workspace: the most recently started run that is still active.
+// The `add` command uses it so agents can join without naming a run. Returns
+// null when nothing is running, since listRuns already drops ended runs.
+export function latestActiveRun(): RunRecord | null {
+  const active = listRuns()
+  if (active.length === 0) return null
+  return active.reduce((latest, run) => (run.started_at > latest.started_at ? run : latest))
+}
+
 export function listRunHistory(): RunHistoryRecord[] {
   return listRunHistoryUnlocked()
 }

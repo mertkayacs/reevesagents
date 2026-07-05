@@ -14,6 +14,7 @@ import {
   autoCleanupRuns,
   listAgents,
   listRuns,
+  latestActiveRun,
   readRun,
   computeRunStatus,
   runHasLiveTmuxTarget,
@@ -283,6 +284,44 @@ function printSpawnJson(run: RunRecord, agents: AgentRecord[]): void {
   }, null, 2))
 }
 
+interface SpawnIntoRunOpts {
+  prompt: string
+  skip?: boolean
+  authMode?: string
+  effort?: string
+  extraArgs?: string
+  json?: boolean
+}
+
+// Shared by `spawn --run` and `add`: launch each spec as a worker in an existing
+// run and print the result. Both commands expose the same per-agent options.
+function spawnIntoRun(
+  run: RunRecord,
+  parsed: ReturnType<typeof parseAgentSpec>[],
+  opts: SpawnIntoRunOpts,
+  available: Record<Provider, boolean>,
+): void {
+  const permissions = opts.skip ? 'skip' as const : undefined
+  const auth_mode = parseAuthModeOpt(opts.authMode)
+  const effort = parseEffortOpt(opts.effort)
+  const extra_args = coerceExtraArgs(opts.extraArgs)
+  const agents = parsed.map(spec => spawnWorker({
+    run_id: run.id,
+    provider: spec.provider,
+    nickname: spec.nickname,
+    model: spec.model,
+    task: opts.prompt,
+    permissions,
+    auth_mode,
+    effort,
+    extra_args,
+  }, { available }))
+  if (opts.json) { printSpawnJson(run, agents); return }
+  console.log(`added ${agents.length} agents to ${run.id.slice(0, 8)}  ${run.name}`)
+  for (const agent of agents) printSpawnAgentLine(agent)
+  printSpawnHints(run, !!opts.skip)
+}
+
 program
   .command('spawn [agent...]')
   .description('start a run with one or more provider agents')
@@ -305,22 +344,7 @@ program
       const effort = parseEffortOpt(opts.effort)
       const extra_args = coerceExtraArgs(opts.extraArgs)
       if (opts.run) {
-        const run = resolveRun(opts.run)
-        const agents = parsed.map(spec => spawnWorker({
-          run_id: run.id,
-          provider: spec.provider,
-          nickname: spec.nickname,
-          model: spec.model,
-          task: opts.prompt,
-          permissions,
-          auth_mode,
-          effort,
-          extra_args,
-        }, { available }))
-        if (opts.json) { printSpawnJson(run, agents); return }
-        console.log(`added ${agents.length} agents to ${run.id.slice(0, 8)}  ${run.name}`)
-        for (const agent of agents) printSpawnAgentLine(agent)
-        printSpawnHints(run, !!opts.skip)
+        spawnIntoRun(resolveRun(opts.run), parsed, opts, available)
         return
       }
       const [first, ...rest] = parsed
@@ -369,6 +393,45 @@ Example: a Claude Code lead with two Codex and one Kimi worker
 
 Run "reevesagents doctor" first: it reports tmux, Node, and which provider
 CLIs are installed and logged in, so a spawn does not fail on a missing CLI.`)
+
+program
+  .command('add [agent...]')
+  .description('add agents to the current workspace (the most recent active run)')
+  .option('--run <run-id>', 'target a specific run instead of the most recent active one')
+  .option('--prompt <text>', 'initial prompt pasted into each agent', '')
+  .option('--skip', 'skip permission prompts for every agent (sets permissions to skip)')
+  .option('--auth-mode <mode>', 'auth mode for every agent: default or api-key')
+  .option('--effort <level>', 'reasoning effort for every agent: default, low, medium, high, xhigh, max')
+  .option('--extra-args <args>', 'extra flags appended to every agent launch, e.g. "--remote-control"')
+  .option('--json', 'output JSON: the run id and the spawned agent ids')
+  .action((agentSpecs: string[], opts) => {
+    try {
+      if (agentSpecs.length === 0) {
+        throw new Error('add needs at least one agent, e.g. "reevesagents add codex"')
+      }
+      const parsed = agentSpecs.map(parseAgentSpec)
+      const available = preflightAvailability(parsed.map(spec => spec.provider))
+      const run = opts.run ? resolveRun(opts.run) : latestActiveRun()
+      if (!run) {
+        throw new Error('no active workspace to add to. Start one with "reevesagents spawn"')
+      }
+      spawnIntoRun(run, parsed, opts, available)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+  .addHelpText('after', `
+Adds agents to a workspace you already have, so you can grow it one at a time
+without passing a run id. With no --run it targets your most recent active run.
+
+Example: start a workspace, then keep adding to it
+  reevesagents spawn cc
+  reevesagents add codex
+  reevesagents add kimi:docs
+
+Agents added this way just run side by side; none controls the others unless
+you attach the Agent control MCP.`)
 
 program
   .command('runs')
