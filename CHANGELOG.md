@@ -1,5 +1,13 @@
 # Changelog
 
+# [1.4.0](https://github.com/mertkayacs/reevesagents/compare/v1.3.2...v1.4.0) (2026-07-05)
+
+
+### Features
+
+* **cli:** add an `add` command to grow a workspace one agent at a time ([07f9cde](https://github.com/mertkayacs/reevesagents/commit/07f9cdedb3b33f742f209a2f1453f5af5a5d69e4))
+* **spawn:** pass extra launch flags through to the provider CLI ([011f923](https://github.com/mertkayacs/reevesagents/commit/011f9233578158d1399e2580154de56f5d17bc8c))
+
 ## [1.3.2](https://github.com/mertkayacs/reevesagents/compare/v1.3.1...v1.3.2) (2026-07-02)
 
 
