@@ -13,6 +13,7 @@ export interface WorkerDraft {
   permissions: Permissions
   authMode: AuthMode
   effort: Effort
+  extraArgs: string
 }
 
 interface WorkerDraftContextValue {
@@ -32,6 +33,7 @@ const INITIAL_DRAFT: WorkerDraft = {
   permissions: 'ask',
   authMode: 'default',
   effort: 'default',
+  extraArgs: '',
 }
 
 export function useWorkerDraft(): WorkerDraftContextValue {

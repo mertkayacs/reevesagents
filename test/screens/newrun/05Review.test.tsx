@@ -48,6 +48,7 @@ describe('NewRunReview', () => {
           permissions: 'ask',
           authMode: 'default',
           effort: 'default',
+          extraArgs: '',
         },
         workers: [],
       },

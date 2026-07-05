@@ -15,7 +15,7 @@ import { buildWebState, listWebProviders } from './state.js'
 import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
 import { startRun, startRunFromPreset, spawnWorker, killAgent, stopRun } from '../core/runtime.js'
-import { normalizeProvider } from '../core/providers.js'
+import { normalizeProvider, coerceExtraArgs } from '../core/providers.js'
 import { modelValuesForProvider } from '../core/model-catalog.js'
 import { providerDisplayName } from '../utils/display.js'
 import type { AuthMode, Effort, Permissions, Provider } from '../core/types.js'
@@ -256,6 +256,7 @@ async function createTerminal(body: Record<string, unknown>): Promise<{ id: stri
   const permissions = normalizePermissionsInput(body.permissions)
   const auth_mode = parseAuthModeInput(body.auth_mode)
   const effort = parseEffortInput(body.effort)
+  const extra_args = coerceExtraArgs(body.extra_args)
   const nickname = sanitizeNickname(typeof body.nickname === 'string' ? body.nickname : '')
   const runName = sanitizeRunName(typeof body.run_name === 'string' ? body.run_name : '')
   const prompt = typeof body.prompt === 'string' ? body.prompt : ''
@@ -263,7 +264,7 @@ async function createTerminal(body: Record<string, unknown>): Promise<{ id: stri
 
   if (runId) {
     readRun(runId)
-    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model, permissions, auth_mode, effort, task: prompt })
+    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model, permissions, auth_mode, effort, extra_args, task: prompt })
     return { id: agent.id, run_id: agent.run_id }
   }
 
@@ -273,7 +274,7 @@ async function createTerminal(body: Record<string, unknown>): Promise<{ id: stri
   const result = startRun({
     name: runName || nickname || providerDisplayName(normalizedProvider),
     working_dir: workingDir,
-    root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, auth_mode, effort, task: prompt },
+    root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, auth_mode, effort, extra_args, task: prompt },
   })
   const root = result.agents[0]
   if (!root) throw new Error('run created no agent')

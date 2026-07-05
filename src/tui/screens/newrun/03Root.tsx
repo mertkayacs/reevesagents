@@ -29,7 +29,7 @@ function authModeDisplay(value: AuthMode): string {
   return value === 'api-key' ? 'API key' : 'Default login'
 }
 
-type FieldId = 'provider' | 'model' | 'prompt' | 'permissions' | 'authMode' | 'effort'
+type FieldId = 'provider' | 'model' | 'prompt' | 'permissions' | 'authMode' | 'effort' | 'extraArgs'
 type ActionId = 'continue' | 'back' | 'cancel'
 const ACTION_LABEL_WIDTH = Math.max('Continue'.length, 'Back'.length, 'Reset Wizard'.length)
 
@@ -96,8 +96,9 @@ export function NewRunRoot() {
     if (providerSupportsEffort(state.root.provider)) {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: state.root.effort, values: EFFORT_VALUES })
     }
+    list.push({ kind: 'text', id: 'extraArgs', label: 'Extra Args', value: state.root.extraArgs, helpText: 'optional launch flags, e.g. --remote-control', required: false })
     return list
-  }, [state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.authMode, state.root.effort])
+  }, [state.root.provider, state.root.model, state.root.prompt, state.root.permissions, state.root.authMode, state.root.effort, state.root.extraArgs])
 
   const actions: Array<{ id: ActionId; label: string; hint: string }> = [
     { id: 'continue', label: 'Continue', hint: 'to additional agents' },
@@ -148,6 +149,7 @@ export function NewRunRoot() {
 
   function commitText(id: FieldId, value: string): void {
     if (id === 'prompt') updateRoot({ prompt: value })
+    else if (id === 'extraArgs') updateRoot({ extraArgs: value })
   }
 
   function cyclePicker(id: FieldId, dir: 1 | -1): void {

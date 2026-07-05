@@ -13,6 +13,7 @@ export interface WorkerConfig {
   permissions: Permissions
   authMode: AuthMode
   effort: Effort
+  extraArgs: string
 }
 
 export interface WizardState {
@@ -44,6 +45,7 @@ const INITIAL_WORKER: WorkerConfig = {
   permissions: 'ask',
   authMode: 'default',
   effort: 'default',
+  extraArgs: '',
 }
 
 const INITIAL_STATE: WizardState = {

@@ -230,6 +230,8 @@ export const en = {
   'web.presets': 'Presets',
   'web.presetsNoRun': 'Open a run first, then save it as a preset.',
   'web.presetsSubtitle': 'Saved agent-team templates.',
+  'web.extraArgs': 'Extra flags',
+  'web.extraArgsHelp': 'Passed to the CLI on launch, after the flags ReevesAgents sets.',
   'web.promptHelp': 'Sent to the agent after its window opens.',
   'web.promptPlaceholder': 'What should this agent start working on?',
   'web.provider': 'Provider',

@@ -1,8 +1,23 @@
 import { describe, it, expect } from 'vitest'
-import { buildCommand, helpCommand, missingHelpFeatures, normalizeProvider, PROVIDERS } from '../src/core/providers.js'
+import { buildCommand, coerceExtraArgs, helpCommand, missingHelpFeatures, normalizeProvider, PROVIDERS } from '../src/core/providers.js'
 import type { BuildCommandOptions } from '../src/core/providers.js'
 
 describe('providers', () => {
+  describe('coerceExtraArgs', () => {
+    it('splits a string on whitespace', () => {
+      expect(coerceExtraArgs('--remote-control --foo bar')).toEqual(['--remote-control', '--foo', 'bar'])
+    })
+    it('passes an array through, trimming and dropping blanks', () => {
+      expect(coerceExtraArgs([' --foo ', '', 'bar'])).toEqual(['--foo', 'bar'])
+    })
+    it('treats blank, undefined, and non-strings as no flags', () => {
+      expect(coerceExtraArgs('   ')).toEqual([])
+      expect(coerceExtraArgs(undefined)).toEqual([])
+      expect(coerceExtraArgs(42)).toEqual([])
+      expect(coerceExtraArgs([1, 'ok', null])).toEqual(['ok'])
+    })
+  })
+
   describe('normalizeProvider', () => {
     it('accepts readable provider aliases for CLI and API input', () => {
       expect(normalizeProvider('claude-code')).toBe('cc')
@@ -41,6 +56,26 @@ describe('providers', () => {
       const cmd = buildCommand(opts)
       expect(cmd).toContain('--effort')
       expect(cmd).toContain('high')
+    })
+
+    it('appends extra_args verbatim after the flags it builds', () => {
+      const opts: BuildCommandOptions = { provider: 'cc', permissions: 'skip', model: 'opus', extra_args: ['--remote-control'] }
+      const cmd = buildCommand(opts)
+      expect(cmd[cmd.length - 1]).toBe('--remote-control')
+      // and it does not disturb the flags ReevesAgents sets
+      expect(cmd).toContain('--dangerously-skip-permissions')
+      expect(cmd).toContain('opus')
+    })
+
+    it('appends extra_args for any provider, not just Claude Code', () => {
+      const cmd = buildCommand({ provider: 'codex', permissions: 'ask', model: '', extra_args: ['--foo', 'bar'] })
+      expect(cmd.slice(-2)).toEqual(['--foo', 'bar'])
+    })
+
+    it('with no extra_args, the command is unchanged', () => {
+      const withEmpty = buildCommand({ provider: 'cc', permissions: 'ask', model: '', extra_args: [] })
+      const without = buildCommand({ provider: 'cc', permissions: 'ask', model: '' })
+      expect(withEmpty).toEqual(without)
     })
 
     it('codex with skip permissions includes correct flag', () => {

@@ -14,6 +14,7 @@ import { useWizard } from '../../contexts/WizardContext.js'
 import { useLanguage } from '../../contexts/LanguageContext.js'
 import { startRun } from '../../../core/runtime.js'
 import type { StartRunRequest } from '../../../core/runtime.js'
+import { coerceExtraArgs } from '../../../core/providers.js'
 
 type ActionId = 'retry' | 'back'
 const ACTION_LABEL_WIDTH = Math.max('Retry'.length, 'Back to Review'.length)
@@ -37,6 +38,7 @@ export function NewRunStarting() {
         effort: state.root.effort,
         task: state.root.prompt,
         permissions: state.root.permissions,
+        extra_args: coerceExtraArgs(state.root.extraArgs),
       },
       workers: state.workers.map(w => ({
         nickname: w.nickname,
@@ -47,6 +49,7 @@ export function NewRunStarting() {
         task: w.prompt,
         working_dir: w.workingDir,
         permissions: w.permissions,
+        extra_args: coerceExtraArgs(w.extraArgs),
       })),
       preset_name: state.presetName,
     }

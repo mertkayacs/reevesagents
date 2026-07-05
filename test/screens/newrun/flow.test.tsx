@@ -120,6 +120,7 @@ describe('New Run keyboard flow', () => {
     await press(stdin, lastFrame, down)
     await press(stdin, lastFrame, down)
     await press(stdin, lastFrame, down) // cc root has an Auth field before Effort
+    await press(stdin, lastFrame, down) // and an Extra Args field after Effort
     await press(stdin, lastFrame, '\r') // Continue -> Workers
     await waitForFrame(lastFrame, 'Agents')
 
@@ -144,6 +145,7 @@ describe('New Run keyboard flow', () => {
     await press(stdin, lastFrame, down)
     await press(stdin, lastFrame, down)
     await press(stdin, lastFrame, down) // cc worker has an Auth field before Effort
+    await press(stdin, lastFrame, down) // and an Extra Args field after Effort
     await press(stdin, lastFrame, '\r') // Done -> Workers
     await waitForFrame(lastFrame, 'reviewer')
 

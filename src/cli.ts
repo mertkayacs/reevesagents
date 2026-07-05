@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { prepareTuiColorEnv } from './utils/color-env.js'
 import { runDoctor } from './core/doctor.js'
 import { peekAgent, startRun, startRunFromPreset, spawnWorker, stopRun, killAgent, sendText, sendKey, interrupt, type AllowedKey, ALLOWED_KEYS } from './core/runtime.js'
-import { normalizeProvider, PROVIDERS, detectAvailable } from './core/providers.js'
+import { normalizeProvider, PROVIDERS, detectAvailable, coerceExtraArgs } from './core/providers.js'
 import {
   autoCleanupRuns,
   listAgents,
@@ -293,6 +293,7 @@ program
   .option('--run <run-id>', 'add the agents to an existing run instead of starting a new one')
   .option('--auth-mode <mode>', 'auth mode for every agent: default or api-key')
   .option('--effort <level>', 'reasoning effort for every agent: default, low, medium, high, xhigh, max')
+  .option('--extra-args <args>', 'extra flags appended to every agent launch, e.g. "--remote-control"')
   .option('--json', 'output JSON: the run id and the spawned agent ids')
   .action((agentSpecs: string[], opts) => {
     try {
@@ -302,6 +303,7 @@ program
       const permissions = opts.skip ? 'skip' as const : undefined
       const auth_mode = parseAuthModeOpt(opts.authMode)
       const effort = parseEffortOpt(opts.effort)
+      const extra_args = coerceExtraArgs(opts.extraArgs)
       if (opts.run) {
         const run = resolveRun(opts.run)
         const agents = parsed.map(spec => spawnWorker({
@@ -313,6 +315,7 @@ program
           permissions,
           auth_mode,
           effort,
+          extra_args,
         }, { available }))
         if (opts.json) { printSpawnJson(run, agents); return }
         console.log(`added ${agents.length} agents to ${run.id.slice(0, 8)}  ${run.name}`)
@@ -332,6 +335,7 @@ program
           permissions,
           auth_mode,
           effort,
+          extra_args,
         },
         workers: rest.map(spec => ({
           provider: spec.provider,
@@ -341,6 +345,7 @@ program
           permissions,
           auth_mode,
           effort,
+          extra_args,
         })),
       }, { available })
       if (opts.json) { printSpawnJson(result.run, result.agents); return }

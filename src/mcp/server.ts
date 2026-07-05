@@ -48,7 +48,7 @@ import {
   listRuns,
   readRun,
 } from '../core/runs.js'
-import { detectAvailable, isProvider } from '../core/providers.js'
+import { detectAvailable, isProvider, coerceExtraArgs } from '../core/providers.js'
 import { PROVIDER_DEFS } from '../core/provider-registry.js'
 import { runDoctor } from '../core/doctor.js'
 import { hostStatus, attach, attachAll, detach } from './installer.js'
@@ -167,6 +167,7 @@ function spawnHandler(a: Record<string, unknown>): ToolResult {
     permissions: parsePermissions(a.permissions),
     auth_mode: parseAuthMode(a.auth_mode),
     effort: parseEffort(a.effort),
+    extra_args: coerceExtraArgs(a.extra_args),
   }
   if (typeof a.run_id === 'string' && a.run_id.trim()) {
     // Adding to an existing run: enforce the size cap. A new run (no run_id,
@@ -231,6 +232,7 @@ const TOOLS: ToolDef[] = [
         permissions: { type: 'string', enum: ['ask', 'skip'], description: 'ask prompts for each action; skip runs autonomously. Blank uses the global default.' },
         auth_mode: { type: 'string', enum: ['default', 'api-key'], description: 'How the CLI authenticates. Blank uses the provider default.' },
         effort: { type: 'string', enum: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], description: 'Reasoning effort, for providers that support it. Blank uses the provider default.' },
+        extra_args: { type: 'array', items: { type: 'string' }, description: 'Extra flags appended verbatim to the launch, for provider options ReevesAgents does not model. Each flag and its value is a separate item, e.g. ["--remote-control"].' },
       },
       required: ['provider'],
     },

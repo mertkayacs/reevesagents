@@ -97,6 +97,7 @@ export function NewRunReview() {
           <Row selected={false} primary="Model" badge={{ label: modelBadgeLabel(state.root.model), color: modelColor(state.root.model, state.root.provider) }} />
           <Row selected={false} primary="Prompt" trailing={promptPreview || '(none)'} />
           <Row selected={false} primary={showEffort ? 'Permissions / Effort' : 'Permissions'} trailing={permissionsSummary} />
+          {state.root.extraArgs.trim().length > 0 ? <Row selected={false} primary="Extra Args" trailing={state.root.extraArgs.trim()} /> : null}
           <SectionEnd />
 
           {state.workers.length > 0 && (

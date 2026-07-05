@@ -16,7 +16,7 @@ import { useLanguage } from '../../contexts/LanguageContext.js'
 import { useWorkerDraft } from '../../contexts/WorkerDraftContext.js'
 import { readRun } from '../../../core/runs.js'
 import { spawnWorker } from '../../../core/runtime.js'
-import { PROVIDERS, providerSupportsAuthMode, providerSupportsEffort } from '../../../core/providers.js'
+import { PROVIDERS, providerSupportsAuthMode, providerSupportsEffort, coerceExtraArgs } from '../../../core/providers.js'
 import { modelDisplayName, modelValuesForProvider } from '../../../core/model-catalog.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import type { Permissions, Provider, AuthMode, Effort } from '../../../core/types.js'
@@ -33,7 +33,7 @@ function authModeDisplay(value: AuthMode): string {
   return value === 'api-key' ? 'API key' : 'Default login'
 }
 
-type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'authMode' | 'effort'
+type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'authMode' | 'effort' | 'extraArgs'
 type ActionId = 'add' | 'cancel'
 const ACTION_LABEL_WIDTH = Math.max('Add Agent'.length, 'Cancel'.length)
 
@@ -90,6 +90,7 @@ export function AddWorker() {
     if (providerSupportsEffort(draft.provider)) {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: draft.effort, values: EFFORT_VALUES })
     }
+    list.push({ kind: 'text', id: 'extraArgs', label: 'Extra Args', value: draft.extraArgs, helpText: 'optional launch flags, e.g. --remote-control', required: false })
     return list
   }, [draft])
 
@@ -138,6 +139,7 @@ export function AddWorker() {
     if (id === 'nickname') update({ nickname: value })
     else if (id === 'prompt') update({ prompt: value })
     else if (id === 'workingDir') update({ workingDir: value })
+    else if (id === 'extraArgs') update({ extraArgs: value })
   }
 
   function cyclePicker(id: FieldId, dir: 1 | -1): void {
@@ -162,6 +164,7 @@ export function AddWorker() {
         permissions: draft.permissions,
         auth_mode: draft.authMode,
         effort: draft.effort,
+        extra_args: coerceExtraArgs(draft.extraArgs),
       })
       reset()
       pop()

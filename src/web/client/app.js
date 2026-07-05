@@ -68,6 +68,8 @@
     'web.cwdHelp': 'Agents start in this directory.',
     'web.promptHelp': 'Sent to the agent after its window opens.',
     'web.promptPlaceholder': 'What should this agent start working on?',
+    'web.extraArgs': 'Extra flags',
+    'web.extraArgsHelp': 'Passed to the CLI on launch, after the flags ReevesAgents sets.',
     'web.cancel': 'Cancel',
     'web.create': 'Create',
     'web.providerDefault': 'Provider default',
@@ -231,6 +233,7 @@
     fCwd: document.getElementById('f-cwd'),
     cwdField: document.getElementById('cwd-field'),
     fPrompt: document.getElementById('f-prompt'),
+    fExtraArgs: document.getElementById('f-extra-args'),
     newError: document.getElementById('new-error'),
     newCancel: document.getElementById('new-cancel'),
     newSubmit: document.getElementById('new-submit'),
@@ -442,6 +445,8 @@
     document.querySelector('#cwd-field .field-label').textContent = t('web.workingDirectory')
     document.querySelector('#f-cwd').placeholder = t('web.cwdPlaceholder')
     document.querySelector('#prompt-field .field-label').innerHTML = `${t('web.initialPrompt')} <span class="field-opt">${t('web.initialPromptOpt')}</span>`
+    document.querySelector('#extra-args-field .field-label').innerHTML = `${t('web.extraArgs')} <span class="field-opt">${t('web.optional')}</span>`
+    setText('#extra-args-help', t('web.extraArgsHelp'))
     setText('#agent-run-help', t('web.agentRunHelp'))
     setText('#run-name-help', t('web.runNameHelp'))
     setText('#provider-help', t('web.providerHelp'))
@@ -1415,6 +1420,7 @@
     el.fPermissions.value = 'ask'
     el.fPrompt.value = ''
     el.fCwd.value = ''
+    el.fExtraArgs.value = ''
     updatePermissionSelection()
   }
 
@@ -1530,6 +1536,7 @@
       permissions: el.fPermissions.value,
       nickname: el.fNickname.value.trim(),
       prompt: el.fPrompt.value,
+      extra_args: el.fExtraArgs.value.trim(),
       run_id: createContext.kind === 'agent' ? createContext.runId : undefined,
       run_name: createContext.kind === 'run' ? el.fRunName.value.trim() || undefined : undefined,
       working_dir: createContext.kind === 'run' ? el.fCwd.value.trim() || undefined : undefined,

@@ -46,6 +46,9 @@ export interface AgentLaunchConfig {
   working_dir?: string
   permissions?: Permissions
   rc_enabled?: boolean
+  // Extra launch flags appended after the args we build. Launch-only, like
+  // auth_mode and effort: not stored on the record and not captured into presets.
+  extra_args?: string[]
 }
 
 export interface StartRunRequest {
@@ -235,6 +238,7 @@ function terminalShellCommand(config: AgentLaunchConfig, permissions: Permission
     auth_mode: config.auth_mode,
     effort: config.effort,
     rc_enabled: false,
+    extra_args: config.extra_args,
   })
   return `exec ${cmd.map(shellQuote).join(' ')}`
 }

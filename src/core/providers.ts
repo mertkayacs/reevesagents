@@ -14,6 +14,25 @@ export interface BuildCommandOptions {
   auth_mode?: AuthMode
   effort?: Effort
   rc_enabled?: boolean
+  // Raw flags appended verbatim after everything ReevesAgents builds, so the
+  // user can pass provider-specific options we do not model (e.g. Claude Code's
+  // --remote-control). Last position lets them override our earlier flags.
+  extra_args?: string[]
+}
+
+// Normalize user-supplied extra launch flags into an argv array. Accepts a raw
+// string (whitespace-split, the shape the CLI and UI text inputs produce) or an
+// already-split array (the shape MCP passes). Blank tokens are dropped, so an
+// empty value yields no flags. Splitting is whitespace-only; a flag value that
+// itself contains spaces is not a launch-flag case we support.
+export function coerceExtraArgs(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value.trim().split(/\s+/).filter(Boolean)
+  }
+  return []
 }
 
 export const BIN = Object.fromEntries(
@@ -58,12 +77,12 @@ export function providerSupportsEffort(provider: Provider): boolean {
 }
 
 export function buildCommand(opts: BuildCommandOptions): string[] {
-  const { provider, permissions, model, auth_mode = 'default', effort = 'default' } = opts
+  const { provider, permissions, model, auth_mode = 'default', effort = 'default', extra_args = [] } = opts
   if (!isProvider(provider)) {
     throw new Error(`Unsupported provider: ${String(provider)}`)
   }
   const def = PROVIDER_REGISTRY[provider]
-  return [def.bin, ...def.buildArgs({ permissions, model, auth_mode, effort })]
+  return [def.bin, ...def.buildArgs({ permissions, model, auth_mode, effort }), ...extra_args]
 }
 
 export function detectAvailable(): Record<Provider, boolean> {

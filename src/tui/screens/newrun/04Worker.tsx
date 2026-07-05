@@ -29,7 +29,7 @@ function authModeDisplay(value: AuthMode): string {
   return value === 'api-key' ? 'API key' : 'Default login'
 }
 
-type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'authMode' | 'effort'
+type FieldId = 'nickname' | 'provider' | 'model' | 'prompt' | 'workingDir' | 'permissions' | 'authMode' | 'effort' | 'extraArgs'
 type ActionId = 'save' | 'remove' | 'cancel'
 const ACTION_LABEL_WIDTH = Math.max('Done'.length, 'Remove This Agent'.length, 'Back'.length)
 
@@ -86,6 +86,7 @@ export function NewRunWorker() {
     if (providerSupportsEffort(worker.provider)) {
       list.push({ kind: 'picker', id: 'effort', label: 'Effort', current: worker.effort, values: EFFORT_VALUES })
     }
+    list.push({ kind: 'text', id: 'extraArgs', label: 'Extra Args', value: worker.extraArgs, helpText: 'optional launch flags, e.g. --remote-control', required: false })
     return list
   }, [worker])
 
@@ -143,6 +144,7 @@ export function NewRunWorker() {
     if (id === 'nickname') updateWorker(idx, { nickname: value })
     else if (id === 'prompt') updateWorker(idx, { prompt: value })
     else if (id === 'workingDir') updateWorker(idx, { workingDir: value })
+    else if (id === 'extraArgs') updateWorker(idx, { extraArgs: value })
   }
 
   function cyclePicker(id: FieldId, dir: 1 | -1): void {
