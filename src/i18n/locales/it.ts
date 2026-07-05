@@ -227,6 +227,8 @@ export const it = {
     'web.presets': 'Preset',
     'web.presetsNoRun': 'Apri prima un run, poi salvalo come preset.',
     'web.presetsSubtitle': 'Modelli di team di agenti salvati.',
+    'web.extraArgs': 'Flag extra',
+    'web.extraArgsHelp': 'Passati alla CLI al lancio, dopo i flag impostati da ReevesAgents.',
     'web.promptHelp': 'Inviato all’agente dopo l’apertura della finestra.',
     'web.promptPlaceholder': 'Da cosa deve iniziare questo agente?',
     'web.providerDefault': 'Predefinito del provider',

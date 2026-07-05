@@ -221,6 +221,8 @@ export const de = {
     'web.presets': 'Vorlagen',
     'web.presetsNoRun': 'Öffne zuerst einen Run, dann speichere ihn als Vorlage.',
     'web.presetsSubtitle': 'Gespeicherte Agententeam-Vorlagen.',
+    'web.extraArgs': 'Zusätzliche Flags',
+    'web.extraArgsHelp': 'Wird der CLI beim Start übergeben, nach den Flags, die ReevesAgents setzt.',
     'web.promptHelp': 'Wird an den Agenten gesendet, nachdem sein Fenster geöffnet ist.',
     'web.promptPlaceholder': 'Woran soll dieser Agent zuerst arbeiten?',
     'web.providerDefault': 'Provider-Standard',

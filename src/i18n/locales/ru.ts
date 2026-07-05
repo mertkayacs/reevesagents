@@ -230,6 +230,8 @@ export const ru = {
     'web.presets': 'Пресеты',
     'web.presetsNoRun': 'Сначала откройте run, затем сохраните его как пресет.',
     'web.presetsSubtitle': 'Сохранённые шаблоны команд агентов.',
+    'web.extraArgs': 'Дополнительные флаги',
+    'web.extraArgsHelp': 'Передаются CLI при запуске, после флагов, которые задаёт ReevesAgents.',
     'web.promptHelp': 'Отправляется агенту после открытия его окна.',
     'web.promptPlaceholder': 'С чего должен начать этот агент?',
     'web.provider': 'Провайдер',

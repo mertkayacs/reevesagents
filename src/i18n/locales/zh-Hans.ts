@@ -231,6 +231,8 @@ export const zhHans = {
     'web.presets': '预设',
     'web.presetsNoRun': '先打开一个运行，再将其保存为预设。',
     'web.presetsSubtitle': '已保存的智能体团队模板。',
+    'web.extraArgs': '额外标志',
+    'web.extraArgsHelp': '启动时传给 CLI，排在 ReevesAgents 设置的标志之后。',
     'web.promptHelp': '窗口打开后发送给智能体。',
     'web.promptPlaceholder': '这个智能体应该先做什么？',
     'web.provider': '服务商',

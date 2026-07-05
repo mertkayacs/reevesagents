@@ -226,6 +226,8 @@ export const tr = {
     'web.presets': 'Hazır Ayarlar',
     'web.presetsNoRun': 'Önce bir run aç, sonra onu hazır ayar olarak kaydet.',
     'web.presetsSubtitle': 'Kayıtlı agent ekibi şablonları.',
+    'web.extraArgs': 'Ek flag\'ler',
+    'web.extraArgsHelp': 'Başlatılırken, ReevesAgents\'ın eklediği flag\'lerden sonra CLI\'ya geçirilir.',
     'web.promptHelp': 'Penceresi açıldıktan sonra agent\'a gönderilir.',
     'web.promptPlaceholder': 'Bu agent neyle başlamalı?',
     'web.provider': 'Sağlayıcı',

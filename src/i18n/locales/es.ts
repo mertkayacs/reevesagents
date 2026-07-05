@@ -228,6 +228,8 @@ export const es = {
     'web.presets': 'Preajustes',
     'web.presetsNoRun': 'Abre primero un run, luego guárdalo como preajuste.',
     'web.presetsSubtitle': 'Plantillas de equipos de agentes guardadas.',
+    'web.extraArgs': 'Flags extra',
+    'web.extraArgsHelp': 'Se pasan a la CLI al arrancar, después de los flags que establece ReevesAgents.',
     'web.promptHelp': 'Se envía al agente después de abrir su ventana.',
     'web.promptPlaceholder': '¿En qué debe empezar este agente?',
     'web.provider': 'Proveedor',

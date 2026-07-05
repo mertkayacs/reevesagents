@@ -171,6 +171,8 @@ export const fr = {
     'web.effortXhigh': 'Très élevé',
     'web.error': 'erreur',
     'web.exited': 'terminé',
+    'web.extraArgs': 'Flags supplémentaires',
+    'web.extraArgsHelp': 'Passés à la CLI au lancement, après les flags que ReevesAgents définit.',
     'web.history': 'Historique',
     'web.initialPrompt': 'Prompt initial',
     'web.initialPromptOpt': 'optionnel, saisi au démarrage',

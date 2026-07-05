@@ -231,6 +231,8 @@ export const ar = {
     'web.presets': 'الإعدادات الجاهزة',
     'web.presetsNoRun': 'افتح تشغيلة أولاً ثم احفظها كإعداد جاهز.',
     'web.presetsSubtitle': 'قوالب فِرَق وكلاء محفوظة.',
+    'web.extraArgs': 'الأعلام الإضافية',
+    'web.extraArgsHelp': 'تُمرَّر إلى أداة CLI عند الإطلاق، بعد الأعلام التي يضبطها ReevesAgents.',
     'web.promptHelp': 'يُرسَل إلى الوكيل بعد فتح نافذته.',
     'web.promptPlaceholder': 'بماذا يجب أن يبدأ هذا الوكيل؟',
     'web.provider': 'المزوّد',
