@@ -56,6 +56,13 @@ portoghese, italiano, turco, russo, cinese semplificato e arabo.
 
 È la prima volta con ReevesAgents? La [Guida dell'Utente](../GUIDE.it.md) ti accompagna dall'installazione al primo run, fino al punto in cui è un agente a guidare gli altri.
 
+## Due modi di usarlo
+
+- **Come spazio di lavoro.** Genera gli agenti che vuoi e continua ad aggiungerne altri con `reevesagents add`, uno alla volta. Girano fianco a fianco, ognuno nella propria finestra tmux, e nessuno di loro guida gli altri. È il modo più semplice per iniziare: le tue diverse CLI riunite in un unico posto locale.
+- **Come orchestratore.** Collega a una CLI l'MCP opt-in di Controllo agenti, e quell'agente si ritrova gli strumenti per generare e guidare gli altri. È la funzione di punta, e resta spenta finché non sei tu ad accenderla.
+
+Entrambi usano gli stessi run e le stesse superfici, così puoi partire come semplice spazio di lavoro e passare all'orchestrazione più avanti, o mai.
+
 ## Superfici
 
 | Superficie | A cosa serve |
@@ -233,6 +240,16 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
   --prompt "Plan the backend, product surface, design system, and research notes."
 ```
 
+Oppure parti in piccolo e fai crescere lo spazio di lavoro un agente alla volta.
+`add` si unisce al run più recente, così non devi mai portarti dietro un id di
+run:
+
+```sh
+reevesagents spawn claude-code:product   # start a workspace
+reevesagents add codex:system            # add to it later
+reevesagents add hermes:research
+```
+
 Per il percorso completo, passo dopo passo, c'è la [Guida dell'Utente](../GUIDE.it.md).
 
 ## Comandi
@@ -244,6 +261,7 @@ La superficie di uso quotidiano:
 
 - `reevesagents`: Avvia la TUI (nessun sottocomando).
 - `spawn [spec...]`: Avvia un run con uno o più agenti di provider. Ogni `spec` è `provider[:nickname[:model]]`. La prima spec è il lead, le altre sono worker. Senza spec il default è `codex`. Flag principali: `--name <name>` (default `run`), `--cwd <dir>` (default directory corrente), `--prompt <text>` (incollato in ciascun agente), `--skip` (salta i prompt di permesso), `--run <run-id>` (aggiunge agenti a un run esistente), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (flag aggiunti al lancio di ogni agente, per esempio `"--remote-control"`), `--json`.
+- `add [spec...]`: Aggiunge uno o più agenti allo spazio di lavoro corrente, il run attivo più recente, senza passare un id di run. Usalo per far crescere uno spazio di lavoro un agente alla volta. Stessi flag per agente di `spawn`, più `--run <run-id>` per puntare a un run specifico invece dell'ultimo.
 - `runs`: Elenca i run attivi, uno per riga. Flag principali: `--json` (record completi dei run come array JSON).
 - `agents [run-id]`: Elenca gli agenti di tutti i run, oppure quelli di un singolo run. Flag principali: `--json`.
 - `open <id>`: Passa tmux alla finestra Reeves di un run o a una finestra di agente. All'interno di tmux passa direttamente; fuori da tmux su un TTY si collega; altrimenti stampa un comando tmux incollabile. Accetta un id/nome di run o un id/nickname di agente (è ammessa la corrispondenza per prefisso).

@@ -15,6 +15,10 @@ e de cada opção, está tudo no [README](i18n/README.pt.md).
   outros. Entregue as rédeas a uma sessão de Claude Code e ela põe, sem se
   fazer rogada, uma equipa de agentes Codex e Claude Code a trabalhar em
   tarefas separadas.
+- Mas não tem de usar isso. A forma mais simples de começar é um espaço de
+  trabalho: crie os agentes que quiser e continue a adicionar mais com
+  `reevesagents add`. Ficam simplesmente lado a lado, e ninguém controla
+  ninguém até optar pelo MCP.
 - Assenta em cima das CLIs que já tem, por isso cada início de sessão fica
   onde sempre esteve. O ReevesAgents nunca guarda uma chave de API e nunca
   toca no tráfego dos seus modelos.
@@ -59,6 +63,15 @@ reevesagents spawn claude-code:lead codex:worker \
 
 Prefere um arranque visual? Execute `reevesagents` para a TUI ou
 `reevesagents web` para a Web UI local e crie a execução a partir daí.
+
+Não quer planear a equipa toda à partida? Crie um agente e faça crescer o
+espaço de trabalho à medida que avança. O `add` junta-se à sua execução mais
+recente, por isso não há nenhum id de execução para andar a copiar:
+
+```sh
+reevesagents spawn claude-code:lead
+reevesagents add codex:worker
+```
 
 ## Os cinco modos de utilização
 

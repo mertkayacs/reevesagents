@@ -70,6 +70,12 @@ eigenen Berechtigungsabfragen starten; nutze es, wenn kein Mensch zum Genehmigen
 die ReevesAgents nicht abbildet, zum Beispiel `--remote-control`), `--json` (Run- und
 Agenten-ids als JSON statt Text ausgeben).
 
+Um einen Arbeitsbereich Agent für Agent wachsen zu lassen, hängt `reevesagents add <spec...>`
+Agenten an den jüngsten aktiven Run an, ohne dass du eine Run-id angeben musst (übergib
+`--run <run-id>`, um einen anderen anzusteuern). Es nimmt dieselben Flags pro Agent wie
+`spawn`. So hinzugefügte Agenten laufen nebeneinander und steuern einander nicht; das
+geschieht erst, wenn der Agent-Control-MCP angehängt ist.
+
 ## Provider-ids und Aliasse
 
 Führe `reevesagents providers` aus (mit `--json` für eine Maschinenliste). Jeder Alias

@@ -55,6 +55,13 @@ ReevesAgents 是一个面向 AI 编码智能体的免费开源工作区。多个
 
 第一次接触 ReevesAgents？[用户指南](../GUIDE.zh-Hans.md)会带你装好它、跑通第一个运行，一直到让一个智能体驱动其余的。
 
+## 两种使用方式
+
+- **作为工作区。** 生成你想要的智能体，再用 `reevesagents add` 一次一个地不断往里加。它们并排运行，每个都待在自己的 tmux 窗口里，谁也不控制谁。这是最简单的上手方式：把你手头各式各样的 CLI 凑到本地的同一个地方。
+- **作为编排器。** 把需要手动开启的 Agent Control MCP 附加到某一个 CLI 上，那个智能体就拿到了生成并驱动其余智能体的工具。这是它的招牌功能，在你亲手开启之前一直是关着的。
+
+两者用的是同一批运行、同一批界面，所以你可以先从一个纯粹的工作区起步，之后再上手编排，也可以永远都不碰。
+
 ## 界面
 
 | 界面 | 适用场景 |
@@ -222,6 +229,14 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
   --prompt "Plan the backend, product surface, design system, and research notes."
 ```
 
+或者从小处起步，一次一个地把工作区扩起来。`add` 会加入最近的那个运行，所以你永远不用到处复制运行 id：
+
+```sh
+reevesagents spawn claude-code:product   # start a workspace
+reevesagents add codex:system            # add to it later
+reevesagents add hermes:research
+```
+
 完整的操作流程见[用户指南](../GUIDE.zh-Hans.md)。
 
 ## 命令
@@ -232,6 +247,7 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 
 - `reevesagents`: 启动 TUI（无子命令）。
 - `spawn [spec...]`: 用一个或多个提供方智能体启动一个运行。每个 `spec` 的格式为 `provider[:nickname[:model]]`。第一个 spec 是主控，其余是工作者。不带 spec 时默认为 `codex`。关键标志: `--name <name>`（默认 `run`）、`--cwd <dir>`（默认当前目录）、`--prompt <text>`（粘贴到每个智能体中）、`--skip`（跳过权限提示）、`--run <run-id>`（把智能体加进现有运行）、`--auth-mode <mode>`、`--effort <level>`、`--extra-args <args>`（追加到每次智能体启动的标志，例如 `"--remote-control"`）、`--json`。
+- `add [spec...]`: 把一个或多个智能体加到当前工作区，也就是最近一个活跃的运行，无需传入运行 id。用它可以一次一个地扩充工作区。各智能体标志与 `spawn` 相同，另外还有 `--run <run-id>`，用来指定某个具体运行，而不是最新的那个。
 - `runs`: 列出活跃的运行，每行一个。关键标志: `--json`（以 JSON 数组形式返回完整运行记录）。
 - `agents [run-id]`: 列出所有运行中的智能体，或某一个运行中的智能体。关键标志: `--json`。
 - `open <id>`: 把 tmux 切换到某个运行的 Reeves 窗口或某个智能体窗口。在 tmux 内会切换；在 tmux 外的 TTY 上会附加；否则打印一条可粘贴的 tmux 命令。接受运行 id/名称或智能体 id/昵称（允许前缀匹配）。

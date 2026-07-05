@@ -69,6 +69,12 @@ prompt di permesso; usalo quando non c'è un umano pronto ad approvare), `--run 
 per esempio `--remote-control`), `--json` (stampa gli id del run e degli agenti come JSON invece
 che come testo).
 
+Per far crescere uno spazio di lavoro un agente alla volta, `reevesagents add <spec...>`
+aggiunge al run attivo più recente senza un id di run (passa `--run <run-id>` per puntare a
+un altro). Prende gli stessi flag per agente di `spawn`. Gli agenti aggiunti così girano
+fianco a fianco e non si guidano a vicenda; questo succede solo quando è collegato l'MCP di
+Controllo agenti.
+
 ## Id del provider e alias
 
 Esegui `reevesagents providers` (aggiungi `--json` per un elenco leggibile da macchina).

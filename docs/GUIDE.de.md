@@ -13,6 +13,10 @@ Option brauchst: Das steht in der [README](i18n/README.de.md).
 - Der Teil, der es interessant macht: Ein Agent kann die anderen erstellen und steuern.
   Gib einer Claude-Code-Sitzung die Zügel, und sie betreibt dir bereitwillig ein Team
   aus Codex- und Claude-Code-Agenten an getrennten Aufgaben.
+- Du musst das aber nicht nutzen. Der einfachste Einstieg ist ein Arbeitsbereich:
+  Spawne die gewünschten Agenten und füge mit `reevesagents add` immer weitere hinzu.
+  Sie sitzen einfach nebeneinander, und niemand steuert irgendwen, bis du dich für
+  den MCP entscheidest.
 - Es setzt auf den CLIs auf, die du ohnehin hast, jedes Login bleibt also da, wo es
   immer war. ReevesAgents hält nie einen API-Schlüssel und rührt deinen Modell-Traffic
   nicht an.
@@ -57,6 +61,15 @@ reevesagents spawn claude-code:lead codex:worker \
 
 Lieber visuell starten? Führe `reevesagents` für die TUI oder `reevesagents web` für
 die lokale Web UI aus und lege den Durchlauf dort an.
+
+Du willst nicht das ganze Team im Voraus planen? Spawne einen Agenten und lass den
+Arbeitsbereich mit der Zeit wachsen. `add` hängt sich an deinen jüngsten Durchlauf,
+es gibt also keine Durchlauf-id zum Herumkopieren:
+
+```sh
+reevesagents spawn claude-code:lead
+reevesagents add codex:worker
+```
 
 ## Die fünf Wege, es zu nutzen
 

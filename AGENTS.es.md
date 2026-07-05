@@ -76,6 +76,12 @@ agente, para opciones de proveedor que ReevesAgents no contempla, por ejemplo
 `--remote-control`), `--json` (imprime los ids del run y de los agentes como JSON
 en lugar de texto).
 
+Para hacer crecer un espacio de trabajo un agente cada vez, `reevesagents add
+<spec...>` añade al run activo más reciente sin un id de run (pasa
+`--run <run-id>` para apuntar a otro). Toma los mismos flags por agente que
+`spawn`. Los agentes añadidos así se ejecutan lado a lado y no se controlan entre
+sí; eso solo ocurre cuando el MCP de Agent control está adjunto.
+
 ## IDs de proveedor y aliases
 
 Ejecuta `reevesagents providers` (añade `--json` para una lista legible por

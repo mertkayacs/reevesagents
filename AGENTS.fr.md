@@ -77,6 +77,13 @@ exécution existante au lieu d'en démarrer une nouvelle), `--extra-args <args>`
 ReevesAgents ne modélise pas, par exemple `--remote-control`), `--json` (affiche
 les ids de l'exécution et des agents en JSON plutôt qu'en texte).
 
+Pour agrandir un espace de travail un agent à la fois,
+`reevesagents add <spec...>` ajoute à l'exécution active la plus récente
+sans id d'exécution (passez `--run <run-id>` pour en cibler une autre).
+Il prend les mêmes flags par agent que `spawn`. Les agents ajoutés ainsi
+tournent côte à côte et ne se pilotent pas les uns les autres ; cela
+n'arrive que lorsque le MCP de contrôle d'agent est attaché.
+
 ## Ids de fournisseur et alias
 
 Lancez `reevesagents providers` (ajoutez `--json` pour une liste exploitable par

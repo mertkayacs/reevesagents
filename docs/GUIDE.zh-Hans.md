@@ -8,6 +8,7 @@
 
 - 一个免费的本地工作区，你的 AI 编码智能体（Claude Code、Codex、Hermes、DeepSeek、Kimi 等）在你的机器上并肩干活。
 - 有意思的正是这一点：一个智能体可以创建并驱动其余的。把缰绳交给一个 Claude Code 会话，它就会很乐意带一队 Codex 和 Claude Code 智能体，分头处理各自的任务。
+- 不过，你并不是非得用它。最简单的上手方式就是把它当成一个工作区：生成你想要的智能体，再用 `reevesagents add` 不断往里加。它们只是并排待着，谁也不控制谁，直到你主动开启 MCP。
 - 它架在你已有的 CLI 之上，所以每一份登录信息都待在原来的地方。ReevesAgents 从不持有 API 密钥，也从不碰你的模型流量。
 - 它的全部状态就是 `~/.reeves` 下的一点 JSON。没有要跑的数据库，没有要拉的 Docker，后台也没有任何东西守着。
 
@@ -39,6 +40,13 @@ reevesagents spawn claude-code:lead codex:worker \
 - `--name` 给运行起名，`--cwd` 指定工作目录（默认就是你所在的位置），`--prompt` 会被粘贴进每个智能体。
 
 想要可视化的入口？运行 `reevesagents` 打开 TUI，或者 `reevesagents web` 打开本地 Web UI，在那里把运行建出来。
+
+不想一上来就把整支团队都规划好？那就先生成一个智能体，边走边扩充工作区。`add` 会加入你最近的那个运行，所以没有运行 id 需要你到处复制：
+
+```sh
+reevesagents spawn claude-code:lead
+reevesagents add codex:worker
+```
 
 ## 五种使用方式
 

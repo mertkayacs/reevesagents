@@ -14,6 +14,10 @@ commande et chaque option, tout est recensé dans le [README](i18n/README.fr.md)
 - Ce qui le rend vraiment intéressant : un agent peut créer et piloter les
   autres. Confiez les rênes à une session Claude Code et elle se fera un plaisir
   de mener une équipe d'agents Codex et Claude Code sur des tâches distinctes.
+- Vous n'êtes pas obligé de vous en servir, cela dit. Le plus simple pour
+  démarrer, c'est un espace de travail : lancez les agents que vous voulez et
+  continuez d'en ajouter avec `reevesagents add`. Ils restent simplement côte à
+  côte, et personne ne pilote personne tant que vous n'activez pas le MCP.
 - Il se pose sur les CLI que vous avez déjà, si bien que chaque connexion reste
   exactement là où elle a toujours été. ReevesAgents ne détient jamais de clé
   API et ne touche jamais à votre trafic de modèles.
@@ -59,6 +63,15 @@ reevesagents spawn claude-code:lead codex:worker \
 Vous préférez un démarrage visuel ? Lancez `reevesagents` pour la TUI ou
 `reevesagents web` pour la Web UI locale, et créez l'exécution directement
 depuis l'interface.
+
+Pas envie de planifier toute l'équipe à l'avance ? Lancez un seul agent et
+agrandissez l'espace de travail au fur et à mesure. `add` rejoint votre
+exécution la plus récente, il n'y a donc aucun id d'exécution à recopier :
+
+```sh
+reevesagents spawn claude-code:lead
+reevesagents add codex:worker
+```
 
 ## Les cinq façons de l'utiliser
 

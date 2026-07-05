@@ -44,6 +44,8 @@ reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \
 
 İşe yarar `spawn` flag'leri: `--name <run>`, `--cwd <dir>` (varsayılanı geçerli dizin), `--prompt <text>` (başlangıçta her agent'a yapıştırılır), `--skip` (agent'ları kendi izin istemleri olmadan başlat; onaylayacak bir insan yokken kullan), `--run <run-id>` (yeni bir run başlatmak yerine agent'ları var olan bir run'a ekle), `--extra-args <args>` (her agent başlatmasına eklenen, ReevesAgents'ın modellemediği sağlayıcı seçenekleri için flag'ler, örneğin `--remote-control`), `--json` (run ve agent id'lerini metin yerine JSON olarak yazdır).
 
+Bir çalışma alanını teker teker büyütmek için `reevesagents add <spec...>`, en son aktif run'a run id'si olmadan ekleme yapar (başka birini hedeflemek için `--run <run-id>` geçir). `spawn` ile aynı agent başına flag'leri alır. Bu şekilde eklenen agent'lar yan yana çalışır ve birbirini kontrol etmez; bu ancak Agent Kontrol MCP'si bağlıyken olur.
+
 ## Sağlayıcı id'leri ve takma adları
 
 `reevesagents providers` çalıştır (makine listesi için `--json` ekle). Spawn spec'inde sağlayıcı olarak herhangi bir takma ad geçer.

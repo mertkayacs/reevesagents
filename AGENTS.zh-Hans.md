@@ -44,6 +44,8 @@ reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \
 
 常用的 `spawn` 标志：`--name <run>`、`--cwd <dir>`（默认当前目录）、`--prompt <text>`（启动时粘贴进每个智能体）、`--skip`（跳过各智能体自己的权限提示；没有人在旁边批准时使用）、`--run <run-id>`（把智能体加进现有运行，而不是新建一个）、`--extra-args <args>`（追加到每次智能体启动的标志，用于 ReevesAgents 未建模的提供方选项，例如 `--remote-control`）、`--json`（以 JSON 而非文本打印运行和智能体 id）。
 
+想一次一个地扩充工作区，`reevesagents add <spec...>` 会加到最近一个活跃的运行，无需运行 id（传 `--run <run-id>` 可指定另一个）。它接受和 `spawn` 相同的各智能体标志。这样加进来的智能体并排运行，彼此互不控制；只有在附加了智能体控制 MCP 之后，才会出现一个控制另一个的情况。
+
 ## 提供方 id 和别名
 
 运行 `reevesagents providers`（加 `--json` 得到机器可读列表）。spawn spec 里的提供方可以用任意别名。

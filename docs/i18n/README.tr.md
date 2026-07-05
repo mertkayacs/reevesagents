@@ -55,6 +55,13 @@ UI 10 dilde mevcut: İngilizce, Almanca, Fransızca, İspanyolca, Portekizce, İ
 
 ReevesAgents'a yeni misiniz? [Kullanıcı Rehberi](../GUIDE.tr.md) kurulumu, ilk run'ınızı ve bir agent'ın diğerlerini yönetmesini adım adım anlatır.
 
+## İki kullanım yolu
+
+- **Çalışma alanı olarak.** İstediğiniz agent'ları oluşturun ve `reevesagents add` ile teker teker eklemeye devam edin. Yan yana çalışırlar, her biri kendi tmux penceresinde durur ve hiçbiri bir diğerini kontrol etmez. En basit giriş yolu budur: farklı CLI'leriniz tek bir yerel çatı altında bir arada.
+- **Orkestratör olarak.** Opt-in Agent Kontrol MCP'sini tek bir CLI'ye bağlayın, o agent da geri kalanını oluşturup yönetecek araçları kazansın. Asıl öne çıkan özellik budur ve siz açana kadar kapalı durur.
+
+İkisi de aynı run'ları ve aynı yüzeyleri kullanır; düz bir çalışma alanı olarak başlayıp orkestrasyona sonra uzanabilir ya da hiç uzanmayabilirsiniz.
+
 ## Yüzeyler
 
 | Yüzey | Ne işe yarar |
@@ -223,6 +230,14 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
   --prompt "Plan the backend, product surface, design system, and research notes."
 ```
 
+Ya da küçük başlayıp çalışma alanını teker teker büyütün. `add`, en son run'a katılır, böylece bir run id'sini oradan oraya taşımak zorunda kalmazsınız:
+
+```sh
+reevesagents spawn claude-code:product   # start a workspace
+reevesagents add codex:system            # add to it later
+reevesagents add hermes:research
+```
+
 Baştan sona bir anlatım için [Kullanıcı Rehberi](../GUIDE.tr.md)'ne bakın.
 
 ## Komutlar
@@ -233,6 +248,7 @@ Gündelik yüzey:
 
 - `reevesagents`: TUI'yi başlat (alt komut yok).
 - `spawn [spec...]`: Bir veya daha fazla sağlayıcı agent'ıyla bir run başlat. Her `spec`, `provider[:nickname[:model]]` biçimindedir. İlk spec lead, geri kalanı worker'dır. Spec verilmezse varsayılan `codex`'tir. Önemli flag'ler: `--name <name>` (varsayılan `run`), `--cwd <dir>` (varsayılan geçerli dizin), `--prompt <text>` (her agent'a yapıştırılır), `--skip` (izin istemlerini atla), `--run <run-id>` (agent'ları var olan bir run'a ekle), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (her agent başlatmasına eklenen flag'ler, örneğin `"--remote-control"`), `--json`.
+- `add [spec...]`: Geçerli çalışma alanına, yani en son aktif run'a, run id'si vermeden bir veya daha fazla agent ekle. Bir çalışma alanını teker teker büyütmek için kullan. `spawn` ile aynı agent başına flag'leri, bir de en sonuncu yerine belirli bir run'ı hedeflemek için `--run <run-id>` flag'ini alır.
 - `runs`: Aktif run'ları, her satıra bir tane olacak şekilde listele. Önemli flag'ler: `--json` (JSON dizisi olarak tam run kayıtları).
 - `agents [run-id]`: Tüm run'lardaki agent'ları ya da tek bir run'dakileri listele. Önemli flag'ler: `--json`.
 - `open <id>`: tmux'u bir run'ın Reeves penceresine veya bir agent penceresine geçir. tmux içindeyken pencere değiştirir; tmux dışında bir TTY'deyse attach eder; aksi halde yapıştırılabilir bir tmux komutu yazdırır. Run id'si/adı ya da agent id'si/takma adı kabul eder (önek eşleşmesine izin verilir).

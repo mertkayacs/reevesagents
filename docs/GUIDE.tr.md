@@ -8,6 +8,7 @@ Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerin
 
 - AI kodlama agent'larınızın (Claude Code, Codex, Hermes, DeepSeek, Kimi ve daha fazlası) makinenizde yan yana çalıştığı ücretsiz, yerel bir çalışma alanı.
 - İşi ilginç kılan taraf şu: bir agent diğerlerini oluşturup yönetebilir. Dizginleri bir Claude Code oturumuna bırakın, ayrı görevlere dağılmış Codex ve Claude Code agent'larından kurulu bir takımı seve seve koşturur.
+- Yine de bunu kullanmak zorunda değilsiniz. En basit giriş yolu bir çalışma alanı: istediğiniz agent'ları oluşturun ve `reevesagents add` ile eklemeye devam edin. Öylece yan yana dururlar; siz MCP'yi devreye alana kadar kimse kimseyi kontrol etmez.
 - Zaten elinizde olan CLI'lerin üstüne oturur, bu yüzden her giriş öteden beri durduğu yerde kalır. ReevesAgents hiçbir zaman API anahtarı tutmaz, model trafiğinize de elini sürmez.
 - Bütün durumu `~/.reeves` altındaki bir avuç JSON'dan ibaret. Ayakta tutulacak bir veritabanı, çekilecek bir Docker imajı, arka planda bekleyen bir süreç yok.
 
@@ -39,6 +40,13 @@ reevesagents spawn claude-code:lead codex:worker \
 - `--name` run'a etiketini verir, `--cwd` çalışma klasörünü seçer (varsayılanı o an bulunduğunuz yer), `--prompt` ise her agent'a yapıştırılır.
 
 Görsel başlamayı tercih ederseniz TUI için `reevesagents`, yerel Web UI için `reevesagents web` çalıştırın ve run'ı oradan oluşturun.
+
+Bütün takımı baştan planlamak istemiyor musunuz? Tek bir agent oluşturun, çalışma alanını da ilerledikçe büyütün. `add`, en son run'ınıza katılır, yani ortada kopyalanacak bir run id'si olmaz:
+
+```sh
+reevesagents spawn claude-code:lead
+reevesagents add codex:worker
+```
 
 ## Kullanmanın beş yolu
 

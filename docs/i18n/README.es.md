@@ -58,6 +58,19 @@ portugués, italiano, turco, ruso, chino simplificado y árabe.
 desde la instalación hasta tu primer run, y de ahí a dejar que un agente dirija
 al resto.
 
+## Dos formas de usarlo
+
+- **Como espacio de trabajo.** Genera los agentes que quieras y sigue añadiendo
+  más con `reevesagents add`, de uno en uno. Se ejecutan codo con codo, cada uno
+  en su propia ventana de tmux, y ninguno controla a otro. Es la forma más
+  sencilla de empezar: tus distintas CLI juntas en un único lugar local.
+- **Como orquestador.** Adjunta el MCP opcional de Agent control a una CLI, y ese
+  agente obtiene las herramientas para generar y dirigir al resto. Es la
+  característica principal, y permanece desactivada hasta que la actives.
+
+Ambas usan los mismos runs y las mismas superficies, así que puedes empezar como
+un simple espacio de trabajo y recurrir a la orquestación más tarde, o nunca.
+
 ## Superficies
 
 | Superficie | Para qué sirve |
@@ -238,6 +251,15 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
   --prompt "Plan the backend, product surface, design system, and research notes."
 ```
 
+O empieza en pequeño y haz crecer el espacio de trabajo un agente cada vez. `add`
+se une al run más reciente, así que nunca tienes que andar copiando un id de run:
+
+```sh
+reevesagents spawn claude-code:product   # start a workspace
+reevesagents add codex:system            # add to it later
+reevesagents add hermes:research
+```
+
 Para un recorrido completo, consulta la [Guía del usuario](../GUIDE.es.md).
 
 ## Comandos
@@ -249,6 +271,7 @@ La superficie del día a día:
 
 - `reevesagents`: Lanza la TUI (sin subcomando).
 - `spawn [spec...]`: Inicia un run con uno o más agentes de proveedor. Cada `spec` es `provider[:nickname[:model]]`. La primera spec es la principal (lead), el resto son trabajadores. Sin spec se usa `codex` por defecto. Flags clave: `--name <name>` (por defecto `run`), `--cwd <dir>` (por defecto el directorio actual), `--prompt <text>` (pegado en cada agente), `--skip` (omite los avisos de permiso), `--run <run-id>` (añade agentes a un run existente), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (flags añadidos a cada lanzamiento de agente, por ejemplo `"--remote-control"`), `--json`.
+- `add [spec...]`: Añade uno o más agentes al espacio de trabajo actual, el run activo más reciente, sin pasar un id de run. Úsalo para hacer crecer un espacio de trabajo un agente cada vez. Los mismos flags por agente que `spawn`, más `--run <run-id>` para apuntar a un run concreto en lugar del más reciente.
 - `runs`: Lista los runs activos, uno por línea. Flags clave: `--json` (registros completos de los runs como un array JSON).
 - `agents [run-id]`: Lista los agentes de todos los runs, o los de un solo run. Flags clave: `--json`.
 - `open <id>`: Cambia tmux a la ventana Reeves de un run o a una ventana de agente. Dentro de tmux cambia; fuera de tmux en un TTY se conecta; de lo contrario imprime un comando de tmux listo para pegar. Acepta un id/nombre de run o un id/apodo de agente (se permite coincidencia por prefijo).

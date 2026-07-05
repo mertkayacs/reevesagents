@@ -8,6 +8,7 @@ Questa guida ti porta da un'installazione pulita fino al punto in cui è un agen
 
 - Uno spazio di lavoro gratuito e locale dove i tuoi agenti di codifica IA (Claude Code, Codex, Hermes, DeepSeek, Kimi e altri) lavorano fianco a fianco sulla tua macchina.
 - La parte che lo rende interessante: un agente può creare e guidare gli altri. Dai le redini a una sessione Claude Code e si metterà volentieri a far lavorare un team di agenti Codex e Claude Code su compiti separati.
+- Non sei però obbligato a usarla. Il modo più semplice per iniziare è uno spazio di lavoro: genera gli agenti che vuoi e continua ad aggiungerne altri con `reevesagents add`. Se ne stanno semplicemente fianco a fianco, e nessuno guida nessuno finché non colleghi l'MCP.
 - Si appoggia alle CLI che hai già, quindi ogni login resta esattamente dov'è sempre stato. ReevesAgents non custodisce mai una chiave API e non tocca mai il tuo traffico verso i modelli.
 - Tutto il suo stato è un po' di JSON sotto `~/.reeves`. Non c'è un database da tenere in piedi, niente Docker da scaricare e niente che rimanga acceso in background.
 
@@ -39,6 +40,13 @@ reevesagents spawn claude-code:lead codex:worker \
 - `--name` etichetta il run, `--cwd` imposta la cartella di lavoro (di default quella in cui ti trovi) e `--prompt` viene incollato in ogni agente.
 
 Preferisci partire da un'interfaccia? Lancia `reevesagents` per la TUI, oppure `reevesagents web` per la Web UI locale, e crea il run da lì.
+
+Non hai voglia di pianificare tutto il team in anticipo? Genera un agente e fai crescere lo spazio di lavoro strada facendo. `add` si unisce al tuo run più recente, così non c'è nessun id di run da copiare in giro:
+
+```sh
+reevesagents spawn claude-code:lead
+reevesagents add codex:worker
+```
 
 ## I cinque modi di usarlo
 
