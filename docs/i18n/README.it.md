@@ -20,7 +20,7 @@
 
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · **Italiano** · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
-*Crea e guida agenti IA a partire da altri agenti. ReevesAgents è uno spazio di lavoro locale e gratuito dove gli agenti di codifica (come Claude Code, Codex, Hermes, DeepSeek e Kimi) girano fianco a fianco e un agente può generare, sterzare e supervisionare gli altri. Nessuna chiave API e nessuna modifica al tuo Agent.md o Claude.md.*
+*Crea e guida agenti IA a partire da altri agenti. ReevesAgents è uno spazio di lavoro locale e gratuito dove gli agenti di codifica (come Claude Code, Codex, Hermes, DeepSeek e Kimi) girano fianco a fianco, e un agente può generare gli altri, pilotarli e supervisionarli. Nessuna chiave API e nessuna modifica al tuo Agent.md o Claude.md.*
 
 **In 10 lingue!**
 
@@ -33,13 +33,13 @@ L'idea è tutta qui: un agente di IA crea e guida gli altri. Una CLI di agente (
 - **Installalo:** `npm install -g reevesagents`
 - **Collegalo alla tua CLI:** `reevesagents attach` collega ReevesAgents alle CLI di agenti che hai installato. Per collegarne una sola, indicala per nome, per esempio `reevesagents attach claude`.
 - **Verifica che abbia funzionato:** `reevesagents hosts` elenca le CLI di agenti su questa macchina e mostra quali sono collegate.
-- **Ricarica i tuoi strumenti:** riavvia la sessione della CLI in modo che carichi la connessione (usa MCP, il modo standard con cui uno strumento di agente espone comandi a un altro).
+- **Ricarica i tuoi strumenti:** riavvia la sessione della CLI in modo che carichi la connessione (il collegamento passa da MCP, il modo standard con cui uno strumento di agente espone comandi a un altro).
 
-Ora la tua CLI di agente può **creare e guidare altri agenti**: avviare un agente su un compito, inviargli testo o pressioni di tasti, leggere cosa sta facendo e approvare o negare ciò che chiede. Un agente Claude Code può far girare un team di agenti Codex e Claude Code su issue separate. Per scollegare in seguito, esegui `reevesagents detach claude`.
+Ora la tua CLI di agente può **creare e guidare altri agenti**: avviare un agente su un compito, inviargli testo o singoli tasti, leggere cosa sta facendo e approvare o negare ciò che chiede. Un agente Claude Code può far girare un team di agenti Codex e Claude Code su issue separate. Per scollegare in seguito, esegui `reevesagents detach claude`.
 
-Preferisci invece usarlo da script dalla riga di comando? [AGENTS.it.md](../../AGENTS.it.md) è la guida dell'operatore scritta per gli agenti: id e alias dei provider, la spec di `spawn` e come osservare e sterzare un team in esecuzione.
+Preferisci invece la riga di comando e gli script? [AGENTS.it.md](../../AGENTS.it.md) è la guida dell'operatore scritta per gli agenti: id e alias dei provider, la spec di `spawn` e come osservare e pilotare un team mentre lavora.
 
-Preferisci configurarlo a mano? Attivalo dalla schermata **Agent control** nella TUI o nella Web UI; vedi [Agent control](#agent-control) più sotto.
+Preferisci configurarlo a mano? Attivalo dalla schermata **Controllo agenti** nella TUI o nella Web UI; vedi [Agent control](#agent-control) più sotto.
 
 La TUI e la Web UI locale che guidano lo stesso run:
 
@@ -54,7 +54,7 @@ ReevesAgents è uno spazio di lavoro gratuito e open source per agenti di codifi
 L'interfaccia è disponibile in 10 lingue: inglese, tedesco, francese, spagnolo,
 portoghese, italiano, turco, russo, cinese semplificato e arabo.
 
-È la prima volta con ReevesAgents? La [Guida dell'Utente](../GUIDE.it.md) ti accompagna nell'installazione, nel tuo primo run e nel lasciare che un agente guidi gli altri.
+È la prima volta con ReevesAgents? La [Guida dell'Utente](../GUIDE.it.md) ti accompagna dall'installazione al primo run, fino al punto in cui è un agente a guidare gli altri.
 
 ## Superfici
 
@@ -75,7 +75,7 @@ portoghese, italiano, turco, russo, cinese semplificato e arabo.
 - **Resta flessibile sui vendor.** Il login del provider resta con ogni CLI. ReevesAgents non memorizza mai le credenziali né fa da proxy al traffico dei modelli, così puoi aggiungere, rimuovere o cambiare CLI liberamente.
 - **Vedi il lavoro a colpo d'occhio.** Run attivi, agenti, modelli, modalità di permesso, azioni di stop ed eliminazione, e cronologia in un'unica vista della Web UI mentre tmux tiene in vita le CLI reali.
 
-Questa non è una piattaforma di agenti cloud. È un piccolo strato locale attorno a CLI reali: nessun database, niente Docker, nessun daemon in background e nessuna chiave API memorizzata da ReevesAgents.
+Questa non è una piattaforma di agenti cloud. È un piccolo strato locale attorno a CLI reali: niente database, niente Docker, nessun daemon in background e nessuna chiave API in mano a ReevesAgents.
 
 ## Installazione
 
@@ -88,7 +88,7 @@ reevesagents doctor
 reevesagents
 ```
 
-Per fissare una versione, aggiungi `@<version>` al nome del pacchetto, per esempio
+Per bloccare una versione precisa, aggiungi `@<version>` al nome del pacchetto, per esempio
 `npm install -g reevesagents@1.3.1`.
 
 <details>
@@ -168,8 +168,8 @@ reevesagents
 <details>
 <summary><b>Dai sorgenti</b></summary>
 
-Usa i sorgenti quando vuoi ispezionare il codice, contribuire o eseguire dal
-repository.
+Usa i sorgenti quando vuoi guardare il codice da vicino, contribuire o lanciare
+tutto direttamente dal repository.
 
 ```sh
 git clone https://github.com/mertkayacs/reevesagents.git
@@ -196,9 +196,10 @@ almeno una CLI di provider già installata.
 
 ReevesAgents può avviare queste CLI di provider quando sono installate e
 autenticate sulla tua macchina: Claude Code, Codex CLI, OpenCode, Hermes, Kimi,
-DeepSeek, Pi, Qwen e Aider. Login del provider, modelli, strumenti, quote e
-richieste di permesso restano con ciascun provider. ReevesAgents non memorizza le
-chiavi API dei provider e non fa da proxy al traffico dei modelli.
+DeepSeek, Pi, Qwen e Aider. Ogni CLI si tiene il suo login, i suoi modelli, le sue
+quote e le sue richieste di permesso, esattamente come se l'avessi avviata tu, ed è
+proprio per questo che ReevesAgents non ha mai bisogno di custodire una chiave API
+né di mettersi in mezzo al traffico.
 
 ## Avvio rapido
 
@@ -217,12 +218,12 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
   --prompt "Plan the backend, product surface, design system, and research notes."
 ```
 
-Per una procedura dettagliata completa, vedi la [Guida dell'Utente](../GUIDE.it.md).
+Per il percorso completo, passo dopo passo, c'è la [Guida dell'Utente](../GUIDE.it.md).
 
 ## Comandi
 
 Senza argomenti avvia la TUI. I sottocomandi sono la superficie operativa per
-le persone e gli script.
+umani e script.
 
 La superficie di uso quotidiano:
 
@@ -240,7 +241,7 @@ La superficie di uso quotidiano:
 - `doctor`: Esegue i controlli di integrità dell'ambiente (Node, tmux, percorso dello stato, CLI dei provider). Esce con codice diverso da zero se un controllo fallisce. Flag principali: `--json`.
 - `web`: Avvia la Web UI on-demand, solo in loopback. Gira in primo piano; gli agenti continuano a girare dopo che la fermi. Flag principali: `--port <n>` (porta preferita, ripiega sulla porta libera successiva), `--no-open` (non apre il browser).
 
-Scoperta, approvazioni, controllo degli agenti, configurazione e pulizia:
+Scoperta, approvazioni, controllo agenti, configurazione e pulizia:
 
 - `providers`: Elenca ogni provider con disponibilità, alias e modelli noti. Flag principali: `--models`, `--json`.
 - `approvals`: Elenca le richieste di approvazione in sospeso degli agenti. Flag principali: `--json`.
@@ -266,43 +267,45 @@ Scoperta, approvazioni, controllo degli agenti, configurazione e pulizia:
 ## Agent control
 
 ReevesAgents include un server MCP opzionale che permette a una CLI di IA di generare e guidare
-altre CLI di IA: avviare un agente, incollare un prompt, inviare tasti, leggere l'output e
-risolvere richieste di approvazione. È un meccanismo piatto, non una policy di orchestrazione:
-nessun ruolo, nessun loop autonomo, nessun protocollo di coordinamento.
+altre CLI di IA: avviare un agente, incollargli un prompt, mandargli tasti, leggere l'output e
+risolvere le richieste di approvazione. È un meccanismo piatto, non una policy di orchestrazione:
+niente ruoli, niente loop autonomi, nessun protocollo di coordinamento.
 
-È disattivato per default. ReevesAgents non lo collega mai a una CLI da solo.
+Per default è spento, e ReevesAgents non lo collega mai a una CLI di propria iniziativa.
 
-Lo attivi dalla schermata **Agent control** nella TUI o nella Web UI. Quella
-schermata elenca le CLI presenti su questa macchina che possono ospitare un server MCP (claude,
-codex, kimi, qwen, opencode, hermes) e ti permette di collegare, scollegare o collegare tutto.
-Il collegamento esegue il comando `mcp add` della CLI stessa (per esempio
-`claude mcp add reevesagents -- reevesagents mcp`); lo scollegamento esegue la
-rimozione corrispondente. ReevesAgents chiama solo il comando proprio di ciascuna CLI e non modifica mai a mano i file di configurazione dei provider. OpenCode è l'eccezione: il suo `mcp add` è interattivo
-e non ha rimozione, quindi la schermata lo segna come da collegare a mano.
+Lo attivi dalla schermata **Controllo agenti** nella TUI o nella Web UI. Quella
+schermata elenca le CLI di questa macchina che possono ospitare un server MCP (claude,
+codex, kimi, qwen, opencode, hermes), e da lì colleghi, scolleghi o colleghi tutto in un
+colpo solo. Collegare vuol dire eseguire il comando `mcp add` della CLI stessa (per esempio
+`claude mcp add reevesagents -- reevesagents mcp`); scollegare esegue la rimozione
+corrispondente. ReevesAgents si limita a chiamare il comando di ciascuna CLI, e i file di
+configurazione dei provider non li tocca mai a mano. L'eccezione è OpenCode: il suo `mcp add`
+è interattivo e una rimozione non ce l'ha, quindi la schermata lo segna come da collegare a mano.
 
-Una volta che una CLI è collegata, dispone degli strumenti di Agent Control ogni volta che si avvia.
-Installarlo è una tua scelta esplicita, e quella scelta è il consenso. Un run
-è la CLI controllante a capo, più gli agenti che ha generato, e l'intero
-gruppo compare nella TUI e nella Web UI come qualsiasi altro run.
+Una volta collegata, una CLI si ritrova gli strumenti di Controllo agenti a ogni avvio.
+Installarlo è una tua scelta esplicita, ed è quella scelta a valere come consenso. Un run
+è la CLI che comanda, in testa, più gli agenti che ha generato, e tutto il gruppo
+compare nella TUI e nella Web UI come un run qualsiasi.
 
-I worker generati non ricevono l'MCP per default, quindi non possono generare ulteriori
-agenti. Per consentire a un worker di guidare i propri sub-worker, collega l'MCP alla CLI di quel
-worker dalla stessa schermata. Le protezioni si trovano a livello di risorsa: un
-limite di agenti per run (`max_agents`), applicato quando lo strumento di spawn aggiunge agenti a un run,
-e il fatto che ogni agente è un processo CLI reale nel proprio riquadro tmux.
+I worker generati non ricevono l'MCP per default, quindi da soli non possono generare
+altri agenti. Se vuoi che un worker guidi dei sub-worker suoi, collega l'MCP alla CLI di
+quel worker dalla stessa schermata. I paletti stanno a livello di risorse: c'è un tetto di
+agenti per run (`max_agents`), applicato quando lo strumento di spawn aggiunge agenti a un run,
+e c'è il fatto che ogni agente è un processo CLI vero, dentro il suo riquadro tmux.
 
-Una CLI collegata può anche scoprire cosa può avviare: lo strumento `list_providers`
-e la risorsa `reevesagents://providers` restituiscono i provider su questa macchina
-con i loro id, lo stato di installazione, gli alias e i modelli noti, così che un agente passi un
-id reale a `spawn` invece di tirare a indovinare.
+Una CLI collegata può anche scoprire cosa ha a disposizione da avviare: lo strumento `list_providers`
+e la risorsa `reevesagents://providers` restituiscono i provider di questa macchina
+con id, stato di installazione, alias e modelli noti, così un agente passa a `spawn` un
+id reale invece di tirare a indovinare.
 
 Vedi [docs/mcp.md](../mcp.md) per il design completo e l'elenco degli strumenti.
 
 ## Configurazione
 
-Lo stato e la configurazione sono JSON locali. Nessun database, nessun daemon.
+Stato e configurazione sono semplici file JSON sul tuo disco, quindi non c'è niente
+da amministrare e niente che giri quando non lo stai usando.
 
-Lo stato risiede sotto `~/.reeves`:
+Lo stato vive sotto `~/.reeves`:
 
 ```text
 ~/.reeves/
@@ -319,7 +322,7 @@ multi-profilo:
   per `runs/`, `history/` e `presets/`.
 - `REEVES_CONFIG`: override del percorso del file di configurazione. Sostituisce `~/.reeves/config.json`.
 
-I campi di testo che possono contenere segreti vengono oscurati prima di essere scritti nello stato.
+Qualsiasi cosa possa contenere un segreto viene oscurata prima di arrivare su file.
 
 ## Esempi
 
@@ -359,17 +362,18 @@ La Web UI è locale e solo in loopback.
 reevesagents web
 ```
 
-Si lega a `127.0.0.1`, gira in primo piano ed esce quando la fermi.
-Gli agenti continuano a girare in tmux anche dopo. Dal browser puoi creare run, aggiungere
-agenti, scegliere modelli di provider e modalità di permesso, fermare agenti, eliminare lavoro
-terminato e ispezionare la cronologia mentre le CLI reali continuano a girare.
+Risponde solo su `127.0.0.1` e resta in primo piano finché non la fermi, il che per
+gli agenti non cambia nulla, perché loro vivono in tmux e non nella pagina. Dal browser
+crei run, aggiungi agenti con il modello e la modalità di permesso che preferisci, fermi
+quello che va fermato e scavi nella cronologia, mentre sotto le CLI reali continuano a
+lavorare.
 
 La Web UI usa due moduli di runtime opzionali, `ws` e `@lydell/node-pty`. npm
-li installa per default. La CLI e la TUI continuano a funzionare senza di essi, e il
-comando `web` spiega cosa manca.
+li installa per default. CLI e TUI funzionano anche senza, e il comando `web` ti dice
+cosa manca.
 
 Per raggiungere la Web UI da un'altra macchina, inoltra la porta di loopback via SSH.
-Non c'è alcun tunnel integrato:
+Un tunnel integrato non c'è:
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
@@ -378,32 +382,33 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## Risoluzione dei problemi
 
-**tmux non è installato.** ReevesAgents ha bisogno di tmux per la navigazione basata su finestre.
-Installalo (`brew install tmux` o `apt install tmux`) ed esegui
-`reevesagents doctor`. La TUI si avvolge automaticamente in una sessione tmux chiamata
-`reeves`; imposta `REEVES_NO_TMUX_WRAPPER=1` per saltare questo comportamento.
+**tmux non è installato.** Senza tmux mancano le finestre su cui si regge tutta la
+navigazione. Installalo (`brew install tmux` o `apt install tmux`) ed esegui
+`reevesagents doctor`. La TUI si mette da sola dentro una sessione tmux chiamata
+`reeves`; se non lo vuoi, imposta `REEVES_NO_TMUX_WRAPPER=1`.
 
 **Una CLI di provider manca o Doctor segnala un fallimento.** ReevesAgents avvia solo
-CLI di provider che sono già nel tuo `PATH` e autenticate. Esegui
-`reevesagents doctor` per vedere quali provider vengono rilevati e cosa sta fallendo,
-poi installa o accedi alla CLI di provider di cui hai bisogno.
+CLI di provider già presenti nel tuo `PATH` e autenticate. Esegui
+`reevesagents doctor` per vedere quali provider rileva e dove si inceppa,
+poi installa o fai il login nella CLI di provider che ti serve.
 
-**La Web UI segnala pacchetti mancanti.** La Web UI ha bisogno di `ws` e
-`@lydell/node-pty`. Possono essere saltati quando la piattaforma non ha un binario `@lydell/node-pty`
-precompilato o quando l'installazione ha omesso le dipendenze opzionali.
-Reinstalla con le dipendenze opzionali abilitate, poi esegui `reevesagents doctor`.
+**La Web UI segnala pacchetti mancanti.** Alla Web UI servono `ws` e
+`@lydell/node-pty`. Possono restare fuori quando la piattaforma non ha un binario
+`@lydell/node-pty` precompilato o quando l'installazione ha saltato le dipendenze
+opzionali. Reinstalla con le dipendenze opzionali abilitate, poi esegui `reevesagents doctor`.
 
-**Porta già in uso.** `reevesagents web` si avvia sulla porta `8080` per default. Se
-è occupata, il server si lega alla porta libera successiva in un piccolo intervallo e stampa l'URL
-scelto. Passa `--port <n>` per scegliere una porta di partenza diversa.
+**Porta già in uso.** `reevesagents web` parte per default dalla porta `8080`. Se è
+occupata, il server prende la prima porta libera in un piccolo intervallo e stampa
+l'URL che ha scelto. Con `--port <n>` decidi tu da dove partire.
 
 ## Non richiesto
 
-Non hai bisogno di chiavi API memorizzate da ReevesAgents, di un database, di Docker, di un servizio in
-background o della configurazione di MCP per i normali run stabili di agenti. L'installazione è passiva: il
-pacchetto stabile non ha alcuno script di postinstall e non riscrive la configurazione dei
-provider. Collegare l'MCP di Agent Control è l'unico passaggio esplicito e opt-in che
-tocca la configurazione dei provider, e solo tramite il comando `mcp add` proprio di ciascuna CLI.
+Per i normali run stabili di agenti non servono chiavi API custodite da ReevesAgents,
+né un database, né Docker, né un servizio in background, né alcuna configurazione MCP.
+L'installazione è passiva: il pacchetto stabile non ha script di postinstall e non
+riscrive la configurazione dei provider. Collegare l'MCP di Controllo agenti è l'unico
+passaggio esplicito e opt-in che tocca la configurazione dei provider, e passa solo dal
+comando `mcp add` di ciascuna CLI.
 
 ## Contribuire
 

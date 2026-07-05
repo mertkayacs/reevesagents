@@ -9,7 +9,7 @@ agents dans vos propres projets.
 ReevesAgents exécute des CLI de codage IA (Claude Code, Codex, Kimi, Qwen,
 OpenCode, Hermes et d'autres) côte à côte, chacune étant une vraie CLI dans sa
 propre fenêtre tmux. Un agent peut créer, diriger et superviser les autres.
-L'état vit en JSON local sous `~/.reeves`. Aucune clé API, aucune base de
+L'état est stocké en JSON local sous `~/.reeves`. Aucune clé API, aucune base de
 données, aucun démon en arrière-plan.
 
 ## Deux façons de l'utiliser
@@ -64,8 +64,8 @@ reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \
 
 Avant de lancer quoi que ce soit, `spawn` vérifie que chaque CLI de fournisseur
 nommée est sur le PATH et cite celles qui manquent : une faute de frappe ou une
-CLI absente échoue donc immédiatement, au lieu de laisser une exécution démarrer
-à moitié. En cas de succès, il affiche l'id de l'exécution, l'id de chaque agent
+CLI absente fait donc échouer la commande immédiatement, au lieu de laisser une
+exécution démarrer à moitié. En cas de succès, il affiche l'id de l'exécution, l'id de chaque agent
 et les commandes `peek`/`send`/`open` exactes pour les piloter.
 
 Flags `spawn` utiles : `--name <run>`, `--cwd <dir>` (par défaut le répertoire
@@ -199,7 +199,7 @@ La CLI hôte appelle elle-même les outils spawn/read/send. Voir
 - `spawn`, `runs`, `agents`, `providers` et `doctor` acceptent tous `--json`.
 - `spawn --json` affiche l'id de l'exécution et l'id de chaque agent ;
   capturez-les, ou relisez-les via `runs --json` et `agents <run-id> --json`.
-- Surchargez le répertoire d'état avec `REEVES_REGISTRY` et le fichier de config
+- Redéfinissez le répertoire d'état avec `REEVES_REGISTRY` et le fichier de config
   avec `REEVES_CONFIG` pour isoler une exécution scriptée de `~/.reeves`.
 
 ## Pour aller plus loin

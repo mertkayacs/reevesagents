@@ -31,7 +31,7 @@ e CLI-compatibili (ispeziona l'output `--help` di ciascuna). Non può verificare
 loggata, quindi una CLI installata ma senza login qui passa comunque. Eseguilo prima di generare,
 così un run non fallisce per una CLI mancante; `peek` (sotto) intercetta una finestra rimasta
 ferma su una schermata di login. `reevesagents doctor --json` restituisce lo stesso risultato
-come JSON leggibile da macchina.
+in JSON leggibile da macchina.
 
 Requisiti: Node 20.19+, tmux 3.0+ e almeno una CLI di provider installata e autenticata.
 macOS, Linux o WSL (Windows nativo non è il target).
@@ -183,10 +183,10 @@ Non fare:
 - `spawn --json` stampa l'id del run e ogni id di agente; catturali, oppure rileggili da
   `runs --json` e `agents <run-id> --json`.
 - Sovrascrivi la cartella dello stato con `REEVES_REGISTRY` e il file di configurazione con
-  `REEVES_CONFIG` per tenere un run lanciato da script isolato da `~/.reeves`.
+  `REEVES_CONFIG`, così un run lanciato da script resta isolato da `~/.reeves`.
 
 ## Altro
 
 - [README](README.md): il tour completo delle funzioni e ogni comando.
 - [docs/GUIDE.md](docs/GUIDE.md): la guida utente passo dopo passo.
-- [docs/mcp.md](docs/mcp.md): il design dell'MCP di controllo degli agenti e l'elenco degli strumenti.
+- [docs/mcp.md](docs/mcp.md): il design dell'MCP di Controllo agenti e l'elenco degli strumenti.

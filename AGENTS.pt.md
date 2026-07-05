@@ -9,8 +9,8 @@ próprios projetos.
 O ReevesAgents executa CLIs de código de IA (Claude Code, Codex, Kimi, Qwen,
 OpenCode, Hermes e outras) lado a lado, cada uma como uma CLI real na sua própria
 janela tmux. Um agente pode criar, orientar e supervisionar os restantes. O
-estado fica em JSON local sob `~/.reeves`. Sem chaves de API, sem base de dados,
-sem daemon em segundo plano.
+estado fica em JSON local, dentro de `~/.reeves`. Sem chaves de API, sem base de
+dados, sem daemon em segundo plano.
 
 ## Duas formas de utilizar
 
@@ -29,8 +29,8 @@ sem daemon em segundo plano.
 reevesagents doctor
 ```
 
-Reporta o tmux, o Node, a pasta de estado `~/.reeves` e quais as CLIs de
-fornecedor instaladas e compatíveis (inspeciona o `--help` de cada uma). Não
+Reporta o tmux, o Node, a pasta de estado `~/.reeves` e que CLIs de
+fornecedor estão instaladas e compatíveis (inspeciona o `--help` de cada uma). Não
 consegue testar se uma CLI tem sessão iniciada, por isso uma CLI
 instalada mas sem sessão iniciada continua a passar aqui. Execute-o antes de
 criar agentes, para que uma execução não falhe por uma CLI em falta; o `peek`
@@ -63,8 +63,8 @@ reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \
 
 Antes de iniciar o que quer que seja, o `spawn` verifica se cada CLI de
 fornecedor indicada está no PATH e nomeia as que faltam, para que um erro de
-escrita ou uma CLI por instalar falhe cedo em vez de deixar uma execução
-iniciada a meio. Em caso de sucesso, imprime o id da execução, o id de cada
+escrita ou uma CLI por instalar falhe cedo, em vez de deixar uma execução meio
+arrancada. Em caso de sucesso, imprime o id da execução, o id de cada
 agente e os comandos exatos de `peek`/`send`/`open` para os conduzir.
 
 Flags úteis de `spawn`: `--name <run>`, `--cwd <dir>` (por defeito, o diretório

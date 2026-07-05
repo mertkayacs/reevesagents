@@ -17,7 +17,7 @@ ReevesAgents 让 AI 编码 CLI（Claude Code、Codex、Kimi、Qwen、OpenCode、
 reevesagents doctor
 ```
 
-它报告 tmux、Node、`~/.reeves` 状态目录，以及哪些提供方 CLI 已安装且兼容（它会检查每个 CLI 的 `--help`）。它测不出 CLI 是否已登录，所以已安装但未登录的 CLI 在这里也会通过。生成智能体前先运行它，运行就不会因为缺少 CLI 而失败；`peek`（见下文）能发现停在登录界面的窗口。`reevesagents doctor --json` 以机器可读的 JSON 返回同样的内容。
+它报告 tmux、Node、`~/.reeves` 状态目录，以及哪些提供方 CLI 已安装且兼容（它会检查每个 CLI 的 `--help`）。它测不出 CLI 是否已登录，所以已安装但未登录的 CLI 在这里也会通过。生成智能体前先跑一遍它，运行就不会因为缺少 CLI 而失败；`peek`（见下文）能发现停在登录界面的窗口。`reevesagents doctor --json` 以机器可读的 JSON 返回同样的内容。
 
 要求：Node 20.19+、tmux 3.0+，以及至少一个已安装并完成认证的提供方 CLI。macOS、Linux 或 WSL（原生 Windows 不是目标）。
 

@@ -16,7 +16,7 @@ demonio en segundo plano.
 
 1. **Dirigir la CLI directamente.** Ejecuta `reevesagents spawn ...` para iniciar
    agentes, luego `runs`, `peek`, `send` y `stop` para observarlos y dirigirlos.
-   Bueno para scripts y orquestación puntual.
+   Útil para scripts y orquestación puntual.
 2. **Dejar que tu CLI anfitriona dirija a las demás por MCP.**
    `reevesagents attach <cli>` le da a esa CLI un conjunto de herramientas de
    control de agentes

@@ -20,13 +20,13 @@
 
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · **简体中文** · [العربية](README.ar.md)
 
-*让一个智能体创建并驱动其他智能体。ReevesAgents 是一个免费的本地工作区，编码智能体（如 Claude Code、Codex、Hermes、DeepSeek 和 Kimi）在这里并行运行，一个智能体可以生成、控制并监督其余智能体。无需 API 密钥，也不会改动你现有的 Agent.md 或 Claude.md。*
+*让一个智能体创建并驱动其他智能体。ReevesAgents 是一个免费的本地工作区，编码智能体（如 Claude Code、Codex、Hermes、DeepSeek 和 Kimi）在这里并行运行，其中一个还能生成、控制并监督其余的。不需要 API 密钥，也不会动你现有的 Agent.md 或 Claude.md。*
 
 **支持 10 种语言！**
 
 ## 让一个智能体安装并运行其他智能体
 
-这就是整个思路：一个 AI 智能体创建并驱动其他智能体。一个代理 CLI（Claude Code、Codex 或 Hermes 这类命令行编码智能体）甚至能自行安装并接好 ReevesAgents，然后开始运行一个团队。
+整个思路就这一句：让一个 AI 智能体去创建并驱动其他智能体。代理 CLI（也就是 Claude Code、Codex、Hermes 这类命令行编码智能体）甚至可以自己动手装好 ReevesAgents、接好线，然后直接带起一个团队。
 
 **如果你是正在阅读本文的智能体，请自己运行这些命令：**
 
@@ -35,11 +35,11 @@
 - **检查是否生效：** `reevesagents hosts` 列出本机的代理 CLI，并显示哪些已连接。
 - **重新加载你的工具：** 重启 CLI 会话以加载这一连接（底层是 MCP，即一个智能体工具向另一个智能体公开命令的标准方式）。
 
-现在你的代理 CLI 就能**创建并驱动其他智能体**：让一个智能体开始处理任务、向它发送文本或按键、查看它在做什么、批准或拒绝它的请求。一个 Claude Code 智能体可以带一队 Codex 和 Claude Code 智能体分别处理不同议题。以后要断开，运行 `reevesagents detach claude`。
+现在你的代理 CLI 就能**创建并驱动其他智能体**了：把一个智能体放到任务上、向它发文本或按键、看它正在做什么，它请求什么就批准或拒绝什么。一个 Claude Code 智能体可以带一队 Codex 和 Claude Code 智能体，分头处理不同议题。以后想断开，运行 `reevesagents detach claude` 就行。
 
-更想在命令行里写脚本？[AGENTS.zh-Hans.md](../../AGENTS.zh-Hans.md) 是写给智能体的操作手册：提供方 id 与别名、`spawn` 规范，以及如何观察和控制一个正在运行的团队。
+更想在命令行里写脚本？[AGENTS.zh-Hans.md](../../AGENTS.zh-Hans.md) 就是写给智能体的操作手册：提供方 id 与别名、`spawn` 规范，还有怎么观察和控制一个正在跑的团队。
 
-更想手动设置？在 TUI 或 Web UI 的**智能体控制**界面里开启；见下方的[智能体控制](#智能体控制)。
+更想手动设置？去 TUI 或 Web UI 的**智能体控制**界面开启，入口见下方的[智能体控制](#智能体控制)。
 
 TUI 与本地 Web UI 同时驱动同一个运行：
 
@@ -49,11 +49,11 @@ TUI 与本地 Web UI 同时驱动同一个运行：
 
 ![ReevesAgents Web UI：启动新的运行](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-newrun-zh-Hans.png)
 
-ReevesAgents 是一个面向 AI 编码智能体的免费开源工作区。同时运行多个智能体，并让其中一个创建和驱动其余的：比如一个 Claude Code 智能体管理分别处理不同议题的 Codex 和 Claude Code 智能体。把每个智能体放到它最擅长的位置，例如 DeepSeek 负责后端，Claude 负责产品和网页方向，Codex 负责设计系统或一轮实现，Hermes 负责邮件、搜索或调研。
+ReevesAgents 是一个面向 AI 编码智能体的免费开源工作区。多个智能体同时跑，其中一个负责创建和驱动其余的，比如让一个 Claude Code 智能体管着几个各自处理不同议题的 Codex 和 Claude Code 智能体。把每个智能体放在它最擅长的地方：DeepSeek 扛后端，Claude 盯产品和网页方向，设计系统或一轮实现交给 Codex，邮件、搜索、调研这类活就归 Hermes。
 
 界面提供 10 种语言：英语、德语、法语、西班牙语、葡萄牙语、意大利语、土耳其语、俄语、简体中文和阿拉伯语。
 
-第一次接触 ReevesAgents？[用户指南](../GUIDE.zh-Hans.md)会带你完成安装、第一次运行，以及让一个智能体驱动其余智能体。
+第一次接触 ReevesAgents？[用户指南](../GUIDE.zh-Hans.md)会带你装好它、跑通第一个运行，一直到让一个智能体驱动其余的。
 
 ## 界面
 
@@ -68,13 +68,13 @@ ReevesAgents 是一个面向 AI 编码智能体的免费开源工作区。同时
 ## 为什么选择 ReevesAgents
 
 - **让你的智能体驱动其他智能体。** 你的主控 CLI（比如 Claude Code）通过 MCP 生成并指挥一组 Claude、Codex、DeepSeek、Hermes、OpenCode 或其他智能体。
-- **多任务与循环。** 在项目的不同部分并行运行多个智能体，让长时间运行的智能体持续工作，并在一个视图里看到全部。在前面放一个更便宜的模型做分派，把工作路由给更聪明或更小的智能体。
-- **把成本控制在合理范围。** 让便宜或免费的模型写日常代码和测试，你用更大的模型做规划和设计，而不是什么都走一个昂贵的默认模型。
-- **一个工作区，思路不中断。** 如果你已经在 Claude、Codex、DeepSeek、Hermes 或 OpenCode 之间来回切换，ReevesAgents 会把这些会话集中在本地一处；从 TUI 或 Web UI 打开任意智能体即可直接驱动它。
+- **多任务与循环。** 让多个智能体在项目的不同部分并行干活，长任务放着继续跑，全部进度在一个视图里就能看完。前面还可以放一个更便宜的模型做分派，把工作路由给更聪明或更小的智能体。
+- **把成本控制在合理范围。** 日常代码和测试交给便宜甚至免费的模型去写，规划和设计你再用大模型，而不是什么都压在一个昂贵的默认模型上。
+- **一个工作区，思路不中断。** 如果你已经在 Claude、Codex、DeepSeek、Hermes 或 OpenCode 之间来回切换，ReevesAgents 会把这些会话集中到本地一处，想驱动哪个智能体，从 TUI 或 Web UI 打开它就行。
 - **不被厂商绑定。** 提供方登录信息留在各自的 CLI 里。ReevesAgents 从不存储凭据，也不代理模型流量，因此你可以随意添加、移除或更换 CLI。
 - **一眼看清工作进展。** 活跃的运行、智能体、模型、权限模式、停止与删除操作以及历史，都汇总在一个 Web UI 视图里，真实的 CLI 则由 tmux 保持存活。
 
-这不是云端智能体平台，而是围绕真实 CLI 的一层轻量本地工具：没有数据库、没有 Docker、没有后台守护进程，也没有由 ReevesAgents 保存的 API 密钥。
+这不是云端智能体平台，只是围着真实 CLI 包了薄薄一层的本地工具。它不带数据库，不需要 Docker，后台没有守护进程，API 密钥更是从不经 ReevesAgents 的手。
 
 ## 安装
 
@@ -189,7 +189,7 @@ ReevesAgents 以本地为先，假定这是一台普通的开发机，已装好 
 - `PATH` 上有一个正常的交互式 shell。
 - `PATH` 上至少有一个受支持的提供方 CLI。
 
-以下提供方 CLI 只要已在你的机器上安装并完成认证，ReevesAgents 就能启动它们：Claude Code、Codex CLI、OpenCode、Hermes、Kimi、DeepSeek、Pi、Qwen 和 Aider。提供方的登录、模型、工具、配额和权限提示都留在各家提供方那里。ReevesAgents 不存储提供方 API 密钥，也不代理模型流量。
+只要这些提供方 CLI 已经在你的机器上装好并完成认证，ReevesAgents 就能启动它们：Claude Code、Codex CLI、OpenCode、Hermes、Kimi、DeepSeek、Pi、Qwen 和 Aider。每个 CLI 保留自己的登录、模型、配额和权限提示，跟你亲手启动它时一模一样，所以 ReevesAgents 从头到尾都不需要保管 API 密钥，也不用挡在流量路径中间。
 
 ## 快速开始
 
@@ -253,23 +253,23 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 
 ## 智能体控制
 
-ReevesAgents 附带一个可选的 MCP 服务器，让一个 AI CLI 生成并驱动其他 AI CLI：启动智能体、粘贴提示词、发送按键、读取输出、处理审批请求。它只是一种扁平机制，不是编排策略：没有角色、没有自主循环、没有协调协议。
+ReevesAgents 附带一个可选的 MCP 服务器，让一个 AI CLI 生成并驱动其他 AI CLI：启动智能体、粘贴提示词、发送按键、读取输出、处理审批请求。它只是一层扁平机制，谈不上编排策略：不分角色，不搞自主循环，也没有什么协调协议。
 
-它默认关闭。ReevesAgents 绝不会自行把它附加到任何 CLI 上。
+它默认关闭，ReevesAgents 也绝不会背着你把它附加到任何 CLI 上。
 
-你在 TUI 或 Web UI 的**智能体控制**界面里开启它。该界面列出本机能托管 MCP 服务器的 CLI（claude、codex、kimi、qwen、opencode、hermes），供你附加、分离或全部附加。附加会运行该 CLI 自带的 `mcp add` 命令（例如 `claude mcp add reevesagents -- reevesagents mcp`）；分离则运行对应的移除命令。ReevesAgents 只调用每个 CLI 自己的命令，绝不手动编辑提供方配置文件。OpenCode 是例外：它的 `mcp add` 是交互式的且没有移除命令，因此界面把它标记为需手动附加。
+你在 TUI 或 Web UI 的**智能体控制**界面里开启它。界面会列出本机能托管 MCP 服务器的 CLI（claude、codex、kimi、qwen、opencode、hermes），让你逐个附加、分离，或者全部附加。附加时它运行该 CLI 自带的 `mcp add` 命令（例如 `claude mcp add reevesagents -- reevesagents mcp`），分离时运行对应的移除命令。ReevesAgents 只调用每个 CLI 自己的命令，从不手动去改提供方的配置文件。OpenCode 是例外：它的 `mcp add` 是交互式的，也没有移除命令，所以界面把它标成需手动附加。
 
-CLI 一旦附加，之后每次启动都会带上 Agent Control 工具。安装它是你的明确选择，而这一选择就是同意。一个运行由作为头节点的控制 CLI 加上它生成的智能体组成，整组会像普通运行一样出现在 TUI 和 Web UI 里。
+CLI 一旦附加，之后每次启动都会带上 Agent Control 工具。要不要装完全是你自己的明确选择，而这个选择本身就是同意。一个运行就是作为头节点的控制 CLI 加上它生成的那些智能体，整组会像普通运行一样出现在 TUI 和 Web UI 里。
 
-被生成的工作者默认不会获得该 MCP，因此无法继续生成智能体。要让某个工作者驱动自己的子工作者，在同一界面把 MCP 附加到该工作者的 CLI 上。防护措施设在资源层面：每个运行有智能体上限（`max_agents`），在 spawn 工具向运行添加智能体时强制执行；同时每个智能体都是自己 tmux 窗格里的一个真实 CLI 进程。
+被生成的工作者默认拿不到这个 MCP，所以没法继续往下生成智能体。想让某个工作者驱动自己的子工作者，就在同一个界面把 MCP 附加到那个工作者的 CLI 上。防护措施设在资源层面：每个运行有智能体上限（`max_agents`），spawn 工具往运行里加智能体时会强制检查，再加上每个智能体本来就是自己 tmux 窗格里的一个真实 CLI 进程。
 
-已附加的 CLI 还能查明自己可以启动什么：`list_providers` 工具和 `reevesagents://providers` 资源会返回本机的提供方及其 id、安装状态、别名和已知模型，这样智能体传给 `spawn` 的就是真实存在的 id，而不是靠猜。
+已附加的 CLI 还能查清自己能启动什么：`list_providers` 工具和 `reevesagents://providers` 资源会返回本机的提供方，连同 id、安装状态、别名和已知模型，这样智能体传给 `spawn` 的就是真实存在的 id，而不是靠猜。
 
 完整设计与工具列表见 [docs/mcp.md](../mcp.md)。
 
 ## 配置
 
-状态和配置都是本地 JSON。没有数据库，也没有守护进程。
+所有状态和配置都是你磁盘上的普通 JSON 文件，所以没有什么需要管理的，不用它的时候也没有任何东西在跑。
 
 状态位于 `~/.reeves` 下：
 
@@ -286,7 +286,7 @@ CLI 一旦附加，之后每次启动都会带上 Agent Control 工具。安装�
 - `REEVES_REGISTRY`：覆盖状态根目录。取代 `~/.reeves`，作为 `runs/`、`history/` 和 `presets/` 的存放目录。
 - `REEVES_CONFIG`：覆盖配置文件路径。取代 `~/.reeves/config.json`。
 
-可能包含机密的文本字段在写入状态前会先脱敏。
+凡是可能含有机密的内容，写进文件之前都会先脱敏。
 
 ## 示例
 
@@ -325,11 +325,11 @@ Web UI 只在本地运行，且仅监听回环地址。
 reevesagents web
 ```
 
-它绑定 `127.0.0.1`，在前台运行，你停止它时才退出，之后智能体继续在 tmux 里运行。在浏览器里你可以创建运行、添加智能体、选择提供方模型和权限模式、停止智能体、删除已结束的工作，并在真实 CLI 持续运行的同时查看历史。
+它只应答 `127.0.0.1`，并且会一直待在前台，直到你把它停掉。停掉也不影响智能体半分，因为它们住在 tmux 里，不在这个页面里。在浏览器里你可以创建运行、按选好的模型和权限模式添加智能体、停掉该停的，再翻翻历史，底下的真实 CLI 一直在干活。
 
 Web UI 用到两个可选的运行时模块：`ws` 和 `@lydell/node-pty`。npm 默认会安装它们。缺了它们，CLI 和 TUI 照常工作，`web` 命令也会说明缺了什么。
 
-要从另一台机器访问 Web UI，请通过 SSH 转发回环端口。没有内置隧道：
+要从另一台机器访问 Web UI，就用 SSH 转发回环端口，这里没有内置隧道：
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
@@ -338,17 +338,17 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## 故障排查
 
-**tmux 未安装。** ReevesAgents 依赖 tmux 做基于窗口的导航。安装它（`brew install tmux` 或 `apt install tmux`）后运行 `reevesagents doctor`。TUI 会自动把自己包进一个名为 `reeves` 的 tmux 会话；设置 `REEVES_NO_TMUX_WRAPPER=1` 可以跳过这一行为。
+**tmux 未安装。** ReevesAgents 依赖 tmux 做基于窗口的导航。装上它（`brew install tmux` 或 `apt install tmux`），再运行 `reevesagents doctor`。TUI 会自动把自己包进一个名为 `reeves` 的 tmux 会话，不想要这个行为就设置 `REEVES_NO_TMUX_WRAPPER=1`。
 
-**缺少某个提供方 CLI，或 Doctor 报告失败。** ReevesAgents 只启动已在 `PATH` 上并完成认证的提供方 CLI。运行 `reevesagents doctor` 查看检测到了哪些提供方、哪里失败，然后安装或登录所需的提供方 CLI。
+**缺少某个提供方 CLI，或 Doctor 报告失败。** ReevesAgents 只启动已经在 `PATH` 上并完成认证的提供方 CLI。运行 `reevesagents doctor` 看看检测到了哪些提供方、哪里失败，然后把需要的那个装上或登录。
 
-**Web UI 报告缺少包。** Web UI 需要 `ws` 和 `@lydell/node-pty`。当平台没有预构建的 `@lydell/node-pty` 二进制文件，或安装时省略了可选依赖，它们可能被跳过。启用可选依赖重新安装，然后运行 `reevesagents doctor`。
+**Web UI 报告缺少包。** Web UI 需要 `ws` 和 `@lydell/node-pty`。平台没有预构建的 `@lydell/node-pty` 二进制文件，或者安装时省略了可选依赖，它们就可能被跳过。启用可选依赖重新安装，然后运行 `reevesagents doctor`。
 
-**端口已被占用。** `reevesagents web` 默认在 `8080` 端口启动。如果被占用，服务器会在一个小范围内绑定下一个空闲端口并打印所选 URL。传入 `--port <n>` 可换一个起始端口。
+**端口已被占用。** `reevesagents web` 默认在 `8080` 端口启动。被占用时，服务器会在一个小范围内绑定下一个空闲端口并打印所选 URL。想换起始端口就传 `--port <n>`。
 
 ## 无需准备的东西
 
-正常的稳定版智能体运行不需要由 ReevesAgents 保存的 API 密钥，也不需要数据库、Docker、后台服务或 MCP 设置。安装是被动的：稳定版包没有 postinstall 脚本，不会重写提供方配置。附加 Agent Control MCP 是唯一会动到提供方配置的步骤，需要你明确启用，而且只通过每个 CLI 自带的 `mcp add` 命令进行。
+正常跑稳定版的智能体运行，不需要 ReevesAgents 替你保存 API 密钥，也用不上数据库、Docker、后台服务或任何 MCP 设置。安装是被动的：稳定版包没有 postinstall 脚本，也不会重写提供方配置。唯一会碰提供方配置的步骤是附加 Agent Control MCP，那一步要你明确启用，而且只通过每个 CLI 自带的 `mcp add` 命令进行。
 
 ## 参与贡献
 

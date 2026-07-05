@@ -202,9 +202,9 @@ at least one provider CLI already installed.
 
 ReevesAgents can launch these provider CLIs when they are installed and
 authenticated on your machine: Claude Code, Codex CLI, OpenCode, Hermes, Kimi,
-DeepSeek, Pi, Qwen, and Aider. Provider login, models, tools, quotas, and
-permission prompts stay with each provider. ReevesAgents does not store provider
-API keys and does not proxy model traffic.
+DeepSeek, Pi, Qwen, and Aider. Each CLI keeps its own login, models, quotas,
+and permission prompts, exactly as if you had started it yourself, which is
+why ReevesAgents never needs to hold an API key or sit in the traffic path.
 
 ## Quick Start
 
@@ -307,7 +307,8 @@ See [docs/mcp.md](docs/mcp.md) for the full design and tool list.
 
 ## Configuration
 
-State and config are local JSON. No database, no daemon.
+All state and config are plain JSON files on your disk, so there is nothing to
+administer and nothing running when you are not using it.
 
 State lives under `~/.reeves`:
 
@@ -326,7 +327,7 @@ multi-profile use:
   for `runs/`, `history/`, and `presets/`.
 - `REEVES_CONFIG`: config file path override. Replaces `~/.reeves/config.json`.
 
-Text fields that can hold secrets are redacted before they are written to state.
+Anything that might contain a secret is scrubbed before it reaches a file.
 
 ## Examples
 
@@ -366,10 +367,11 @@ The Web UI is local and loopback-only.
 reevesagents web
 ```
 
-It binds to `127.0.0.1`, runs in the foreground, and exits when you stop it.
-Agents keep running in tmux afterward. From the browser you can create runs, add
-agents, choose provider models and permission modes, stop agents, delete ended
-work, and inspect history while the real CLIs keep running.
+It answers on `127.0.0.1` only and stays in the foreground until you stop it,
+which changes nothing for the agents, because they live in tmux rather than in
+the page. From the browser you can create runs, add agents with a chosen model
+and permission mode, stop what needs stopping, and dig through history while
+the real CLIs keep working underneath.
 
 The Web UI uses two optional runtime modules, `ws` and `@lydell/node-pty`. npm
 installs them by default. The CLI and TUI keep working without them, and the

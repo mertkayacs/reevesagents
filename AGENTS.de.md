@@ -29,7 +29,7 @@ reevesagents doctor
 
 Meldet tmux, Node, das State-Verzeichnis `~/.reeves` und welche Provider-CLIs installiert
 und CLI-kompatibel sind (dazu inspiziert es das `--help` jeder CLI). Ob eine CLI angemeldet
-ist, kann es nicht prüfen; eine installierte, aber abgemeldete CLI besteht hier also trotzdem.
+ist, kann es nicht prüfen; eine installierte, aber abgemeldete CLI kommt hier also trotzdem durch.
 Führe es vor dem Spawnen aus, damit ein Run nicht an einer fehlenden CLI scheitert; `peek`
 (unten) entlarvt ein Fenster, das an einem Login-Bildschirm hängt. `reevesagents doctor --json`
 liefert dasselbe als maschinenlesbares JSON.
@@ -168,11 +168,11 @@ Dos:
 Don'ts:
 
 - Erwarte nicht, dass `spawn` das Ergebnis eines Agenten zurückliefert; starte das Team und lies dann nach.
-- Geh nach `send` nicht davon aus, dass etwas lief; nichts wird abgeschickt, bevor du `key <agent-id> enter` sendest.
-- Spawne keinen Provider, der fehlt oder abgemeldet ist; beim ersten verweigert spawn den
-  Start, beim zweiten bleibt ein Fenster an einem Login-Prompt hängen, und die Arbeit passiert nie.
+- Geh nach einem `send` nicht davon aus, dass etwas ausgeführt wurde; abgeschickt wird erst, wenn du `key <agent-id> enter` sendest.
+- Spawne keinen Provider, der fehlt oder abgemeldet ist; im ersten Fall verweigert spawn den
+  Start, im zweiten bleibt ein Fenster an einem Login-Prompt hängen, und die Arbeit wird nie erledigt.
 - Führe `stop`, `kill` oder die `delete`-Befehle nicht ohne `--yes` aus; das sind die destruktiven.
-- Ziele nicht auf natives Windows; arbeite in WSL, mit tmux und den CLIs dort installiert.
+- Ziele nicht auf natives Windows; arbeite in WSL und installiere tmux und die CLIs dort.
 - Füge keine Geheimnisse in `--prompt` oder `send` ein; die Ausgabe wird mitgeschnitten und über `peek` und die Web UI angezeigt.
 
 ## Scripting-Notizen

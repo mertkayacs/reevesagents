@@ -2,7 +2,7 @@
 
 [English](AGENTS.md) · [Deutsch](AGENTS.de.md) · [Français](AGENTS.fr.md) · [Español](AGENTS.es.md) · [Português](AGENTS.pt.md) · [Italiano](AGENTS.it.md) · **Türkçe** · [Русский](AGENTS.ru.md) · [简体中文](AGENTS.zh-Hans.md) · [العربية](AGENTS.ar.md)
 
-Bir AI kodlama agent'ının ReevesAgents'ı nasıl yönettiği. Bu dosya, aracın kendisi için operatör rehberidir; agent'ların kendi projelerinizdeki davranışını değiştirmez.
+Bir AI kodlama agent'ı ReevesAgents'ı nasıl yönetir, bu dosya onu anlatır. Aracın kendisi için yazılmış operatör rehberidir ve agent'ların kendi projelerinizdeki davranışını değiştirmez.
 
 ReevesAgents, AI kodlama CLI'lerini (Claude Code, Codex, Kimi, Qwen, OpenCode, Hermes ve diğerleri) yan yana çalıştırır; her biri kendi tmux penceresinde gerçek bir CLI'dir. Bir agent diğerlerini oluşturabilir, yönlendirebilir ve denetleyebilir. Durum, `~/.reeves` altında yerel JSON olarak tutulur. API anahtarı yok, veritabanı yok, arka plan daemon'u yok.
 
@@ -83,7 +83,7 @@ reevesagents stop <run-id> --yes       # run'ın tamamını bitir ve tmux oturum
 reevesagents kill <agent-id> --yes     # tek bir agent'ı bitir
 ```
 
-`stop` ve `kill`, `--yes` olmadan çalışmayı reddeder. Aynı kapı temizliği de kapsar: `delete <agent-id>` ve `delete-run <run-id>` sonlanmış kayıtları, `delete-history <id>` ise arşivlenmiş bir kaydı siler.
+`stop` ve `kill`, `--yes` olmadan çalışmayı reddeder. Aynı kural temizlik komutları için de geçerli: `delete <agent-id>` ve `delete-run <run-id>` sonlanmış kayıtları, `delete-history <id>` ise arşivlenmiş bir kaydı siler.
 
 ## Somut bir örnek: beş agent, sonra hepsini yönet
 

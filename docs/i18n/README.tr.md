@@ -20,26 +20,26 @@
 
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · **Türkçe** · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
-*AI agent'larını başka agent'ların içinden oluşturun ve yönetin. ReevesAgents, kodlama agent'larının (Claude Code, Codex, Hermes, DeepSeek ve Kimi gibi) yan yana çalıştığı ve bir agent'ın diğerlerini oluşturabildiği, yönlendirebildiği ve denetleyebildiği ücretsiz, yerel bir çalışma alanıdır. API anahtarı yok, mevcut Agent.md veya Claude.md dosyanızda değişiklik yok.*
+*AI agent'larını başka agent'ların içinden oluşturun ve yönetin. ReevesAgents, kodlama agent'larının (Claude Code, Codex, Hermes, DeepSeek ve Kimi gibi) yan yana çalıştığı, bir agent'ın da diğerlerini oluşturup yönlendirebildiği ve denetleyebildiği ücretsiz, yerel bir çalışma alanıdır. API anahtarı yok, mevcut Agent.md veya Claude.md dosyanızda değişiklik yok.*
 
 **10 dilde!**
 
 ## Bir agent kursun, gerisini de o çalıştırsın
 
-Fikrin tamamı bu: bir AI agent'ı diğerlerini oluşturur ve yönetir. Bir agent CLI'si (Claude Code, Codex veya Hermes gibi bir komut satırı kodlama agent'ı) ReevesAgents'ı kendi başına kurup bağlayabilir, ardından bir takım çalıştırmaya başlayabilir.
+Fikrin tamamı bu: bir AI agent'ı diğerlerini oluşturur ve yönetir. Üstelik bir agent CLI'si (Claude Code, Codex veya Hermes gibi bir komut satırı kodlama agent'ı) ReevesAgents'ı kendi başına kurup bağlayabilir, sonra da oturup bir takım çalıştırabilir.
 
 **Bunu okuyan bir agent'sanız, şunları kendiniz çalıştırın:**
 
 - **Kurun:** `npm install -g reevesagents`
-- **Kendi CLI'nize bağlayın:** `reevesagents attach`, ReevesAgents'ı kurulu agent CLI'lerinize bağlar. Yalnızca biri için adını verin, örneğin `reevesagents attach claude`.
+- **Kendi CLI'nize bağlayın:** `reevesagents attach`, ReevesAgents'ı kurulu agent CLI'lerinize bağlar. Yalnızca birine bağlanacaksanız adını verin, örneğin `reevesagents attach claude`.
 - **Çalıştığını doğrulayın:** `reevesagents hosts`, bu makinedeki agent CLI'lerini listeler ve hangilerinin bağlı olduğunu gösterir.
-- **Araçlarınızı yeniden yükleyin:** bağlantıyı alması için CLI oturumunuzu yeniden başlatın (bu, MCP kullanır: bir agent aracının komutlarını bir diğerine açmasının standart yolu).
+- **Araçlarınızı yeniden yükleyin:** bağlantıyı alması için CLI oturumunuzu yeniden başlatın (altta MCP çalışır: bir agent aracının komutlarını bir diğerine açmasının standart yolu).
 
-Artık agent CLI'niz **başka agent'ları oluşturup yönetebilir**: bir agent'ı bir görevle başlatabilir, ona metin veya tuş vuruşu gönderebilir, ne yaptığını okuyabilir, isteklerini onaylayabilir ya da reddedebilir. Tek bir Claude Code agent'ı, ayrı issue'lar üzerindeki Codex ve Claude Code agent'larından oluşan bir takımı çalıştırabilir. Daha sonra bağlantıyı kesmek için `reevesagents detach claude` komutunu çalıştırın.
+Artık agent CLI'niz **başka agent'ları oluşturup yönetebilir**: bir agent'ı göreve koyar, ona metin ya da tuş vuruşu gönderir, ne yaptığını okur, istediklerini onaylar ya da reddeder. Tek bir Claude Code agent'ı, ayrı issue'lara dağılmış Codex ve Claude Code agent'larından kurulu bir takımı çekip çevirebilir. Sonradan bağlantıyı kesmek isterseniz `reevesagents detach claude` yeterli.
 
-Bunun yerine işi komut satırından script'lemeyi mi tercih ediyorsunuz? [AGENTS.tr.md](../../AGENTS.tr.md), agent'lar için yazılmış operatör rehberi: sağlayıcı id'leri ve takma adları, `spawn` spec'i ve çalışan bir takımın nasıl izlenip yönlendirileceği.
+İşi komut satırından script'lemek size daha mı yakın? [AGENTS.tr.md](../../AGENTS.tr.md) tam bunun için var, agent'lar için yazılmış operatör rehberi: sağlayıcı id'lerini ve takma adlarını, `spawn` spec'ini ve çalışan bir takımı izleyip yönlendirmenin yolunu orada bulursunuz.
 
-Elle kurmayı mı tercih ediyorsunuz? TUI veya Web UI'daki **Agent Kontrol** ekranından açın; aşağıdaki [Agent Kontrol](#agent-kontrol) bölümüne bakın.
+Elle kurmak isteyenler için de yol açık: TUI veya Web UI'daki **Agent Kontrol** ekranından açın, ayrıntı aşağıdaki [Agent Kontrol](#agent-kontrol) bölümünde.
 
 Aynı run'ı yöneten TUI ve yerel Web UI:
 
@@ -63,18 +63,18 @@ ReevesAgents'a yeni misiniz? [Kullanıcı Rehberi](../GUIDE.tr.md) kurulumu, ilk
 | **Web UI** | Run'ların, agent'ların, canlı pane'lerin ve geçmişin tek görsel görünümü. |
 | **CLI** | Script'ler, hızlı spawn komutları, doctor kontrolleri ve tmux açma. |
 | **tmux** | Yerelde çalışmaya devam eden gerçek sağlayıcı CLI pencereleri. |
-| **Agent Kontrol** | Temel fikir: bir agent diğerlerini oluşturur ve yönetir. CLI başına açarsınız; sonra bir Claude Code agent'ı Codex, Hermes ve Claude Code agent'larını aynı anda çalıştırabilir. |
+| **Agent Kontrol** | Temel fikir: bir agent diğerlerini oluşturur ve yönetir. CLI başına açarsınız, sonrasında bir Claude Code agent'ı Codex, Hermes ve Claude Code agent'larını aynı anda çalıştırabilir. |
 
 ## Neden ReevesAgents
 
 - **Agent'ınız agent'ları yönetsin.** Lead CLI'niz (örneğin Claude Code), MCP üzerinden bir grup Claude, Codex, DeepSeek, Hermes, OpenCode veya başka agent'ı oluşturur ve yönlendirir.
 - **Çoklu görev, kesintisiz döngü.** Bir projenin farklı bölümlerinde paralel olarak birkaç agent çalıştırın, uzun süreli agent'ları çalışır tutun ve hepsini tek görünümden izleyin. İşi daha akıllı ya da daha küçük agent'lara yönlendirmesi için öne daha ucuz bir model koyun.
-- **Maliyeti makul tutun.** Rutin kodu ve testleri ucuz ya da ücretsiz modeller yazsın, plan ve tasarımı siz daha büyük bir modelle yapın; her şeyi tek bir pahalı varsayılandan geçirmeyin.
-- **Tek çalışma alanı, kopmayan bağlam.** Zaten Claude, Codex, DeepSeek, Hermes veya OpenCode arasında gidip geliyorsanız, ReevesAgents bu oturumları tek bir yerel yerde toplar; doğrudan yönetmek için herhangi bir agent'ı TUI'den veya Web UI'dan açın.
-- **Sağlayıcıya bağımlı kalmayın.** Sağlayıcı girişi her CLI'de kalır. ReevesAgents kimlik bilgisi saklamaz, model trafiğini de proxy'lemez; CLI'leri dilediğiniz gibi ekleyebilir, kaldırabilir ya da değiştirebilirsiniz.
-- **İşi bir bakışta görün.** Aktif run'lar, agent'lar, modeller, izin modları, durdurma ve silme eylemleri ve geçmiş tek bir Web UI görünümünde; tmux ise gerçek CLI'leri canlı tutar.
+- **Maliyeti makul tutun.** Rutin kodu ve testleri ucuz ya da ücretsiz modeller yazsın, plan ve tasarımı siz daha büyük bir modelle yapın. Her şeyi tek bir pahalı varsayılandan geçirmenize gerek yok.
+- **Tek çalışma alanı, kopmayan bağlam.** Zaten Claude, Codex, DeepSeek, Hermes veya OpenCode arasında gidip geliyorsanız, ReevesAgents bu oturumları tek bir yerel çatı altında toplar. Hangisinin başına geçmek isterseniz o agent'ı TUI'den ya da Web UI'dan açmanız yeter.
+- **Sağlayıcıya bağımlı kalmayın.** Sağlayıcı girişi her CLI'nin kendisinde kalır. ReevesAgents kimlik bilgisi saklamadığı ve model trafiğini proxy'lemediği için CLI'leri gönül rahatlığıyla ekler, kaldırır ya da değiştirirsiniz.
+- **İşi bir bakışta görün.** Aktif run'lar, agent'lar, modeller, izin modları, durdurma ve silme eylemleri ve geçmiş, tek bir Web UI görünümünde önünüzdedir. Gerçek CLI'leri canlı tutmak da tmux'un işi.
 
-Bu bir bulut agent platformu değil. Gerçek CLI'lerin etrafında küçük bir yerel katman: veritabanı yok, Docker yok, arka plan daemon'u yok, ReevesAgents'ta saklanan API anahtarı yok.
+Bu bir bulut agent platformu değil, gerçek CLI'lerin etrafına örülmüş küçük bir yerel katman. Ortada veritabanı da yok, Docker da, arka planda dönen bir daemon ya da ReevesAgents'ta saklanan bir API anahtarı da.
 
 ## Kurulum
 
@@ -182,7 +182,7 @@ reevesagents
 
 ## Ön Koşullar
 
-ReevesAgents yerel önceliklidir. tmux'un ve en az bir sağlayıcı CLI'sinin kurulu olduğu normal bir geliştirici makinesi bekler.
+ReevesAgents yerelde çalışmak üzere tasarlandı. Beklediği tek şey, tmux'un ve en az bir sağlayıcı CLI'sinin kurulu olduğu sıradan bir geliştirici makinesi.
 
 - macOS, Linux veya WSL. Yerel Windows hedef çalışma ortamı değildir; WSL kullanın.
 - Node.js `20.19+`.
@@ -190,7 +190,7 @@ ReevesAgents yerel önceliklidir. tmux'un ve en az bir sağlayıcı CLI'sinin ku
 - `PATH` üzerinde normal, etkileşimli bir kabuk.
 - `PATH` üzerinde desteklenen en az bir sağlayıcı CLI'si.
 
-ReevesAgents, makinenizde kurulu ve kimliği doğrulanmış olduklarında şu sağlayıcı CLI'lerini başlatabilir: Claude Code, Codex CLI, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen ve Aider. Sağlayıcı girişi, modeller, araçlar, kotalar ve izin istemleri her sağlayıcıda kalır. ReevesAgents sağlayıcı API anahtarlarını saklamaz ve model trafiğini proxy'lemez.
+ReevesAgents, makinenizde kurulu ve kimliği doğrulanmış olduklarında şu sağlayıcı CLI'lerini başlatabilir: Claude Code, Codex CLI, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen ve Aider. Her CLI kendi girişini, modellerini, kotalarını ve izin istemlerini, tıpkı onu kendiniz başlatmışsınız gibi aynen korur. ReevesAgents'ın API anahtarı tutmaya ya da trafiğin arasına girmeye hiç ihtiyaç duymaması da zaten bundan.
 
 ## Hızlı Başlangıç
 
@@ -200,7 +200,7 @@ reevesagents web             # yerel Web UI'yi aç
 reevesagents doctor          # makineyi kontrol et
 ```
 
-CLI'den adlandırılmış bir run başlatın. İlk spec lead, geri kalanı worker'dır ve her spec `provider[:nickname[:model]]` biçimindedir:
+CLI'den adlandırılmış bir run başlatın. İlk spec lead olur, kalanlar worker olarak katılır ve her spec `provider[:nickname[:model]]` biçimindedir:
 
 ```sh
 reevesagents spawn deepseek:backend claude-code:product codex:system hermes:research \
@@ -254,23 +254,23 @@ Keşif, onaylar, agent kontrolü, yapılandırma ve temizlik:
 
 ## Agent Kontrol
 
-ReevesAgents, bir AI CLI'sinin başka AI CLI'lerini oluşturup yönetmesine izin veren opsiyonel bir MCP sunucusuyla gelir: agent başlatma, prompt yapıştırma, tuş gönderme, çıktı okuma ve onay isteklerini sonuçlandırma. Bu bir orkestrasyon politikası değil, düz bir mekanizmadır: rol yok, özerk döngü yok, koordinasyon protokolü yok.
+ReevesAgents, bir AI CLI'sinin başka AI CLI'lerini oluşturup yönetmesine izin veren opsiyonel bir MCP sunucusuyla gelir: bağlanan CLI agent başlatır, prompt yapıştırır, tuş gönderir, çıktı okur ve onay isteklerini sonuçlandırır. Bu bir orkestrasyon politikası değil, düz bir mekanizma: ne rol dağıtır, ne özerk döngüler kurar, ne de bir koordinasyon protokolü dayatır.
 
-Varsayılan olarak kapalıdır. ReevesAgents bunu asla kendiliğinden bir CLI'ye bağlamaz.
+Kapalı gelir, arkanızdan da açılmaz: ReevesAgents bunu kendiliğinden hiçbir CLI'ye bağlamaz.
 
-Bunu TUI veya Web UI'daki **Agent Kontrol** ekranından açarsınız. Bu ekran, bu makinede MCP sunucusu barındırabilen CLI'leri (claude, codex, kimi, qwen, opencode, hermes) listeler; bağlamanıza, ayırmanıza ya da tümünü birden bağlamanıza izin verir. Bağlama, o CLI'nin kendi `mcp add` komutunu çalıştırır (örneğin `claude mcp add reevesagents -- reevesagents mcp`); ayırma, eşleşen remove komutunu çalıştırır. ReevesAgents yalnızca her CLI'nin kendi komutunu çağırır, sağlayıcı yapılandırma dosyalarını asla elle düzenlemez. OpenCode istisnadır: `mcp add`'i etkileşimlidir ve remove'u yoktur, bu yüzden ekran onu elle bağlanacak şekilde işaretler.
+Bunu TUI veya Web UI'daki **Agent Kontrol** ekranından açarsınız. Ekran, bu makinede MCP sunucusu barındırabilen CLI'leri (claude, codex, kimi, qwen, opencode, hermes) listeler ve tek tek bağlamanıza, ayırmanıza ya da hepsini bir seferde bağlamanıza izin verir. Bağladığınızda o CLI'nin kendi `mcp add` komutu çalışır (örneğin `claude mcp add reevesagents -- reevesagents mcp`), ayırdığınızda da eşleşen remove komutu. ReevesAgents yalnızca her CLI'nin kendi komutunu çağırır ve sağlayıcı yapılandırma dosyalarına asla elle dokunmaz. Tek istisna OpenCode: `mcp add`'i etkileşimli olduğu ve remove'u bulunmadığı için ekran onu elle bağlanacak şekilde işaretler.
 
-Bir CLI bağlandıktan sonra, her başladığında Agent Kontrol araçlarına sahip olur. Kurmak sizin açık seçiminizdir ve onay da o seçimin kendisidir. Bir run, baş roldeki kontrol eden CLI ile onun oluşturduğu agent'lardan oluşur; grubun tamamı, diğer her run gibi TUI ve Web UI'da görünür.
+Bir CLI bir kez bağlandı mı, artık her açılışında Agent Kontrol araçları elinin altındadır. Bunu kuran sizsiniz ve onay dediğimiz şey de tam olarak bu seçimdir. Böyle bir run, başı çeken kontrol CLI'si ile onun oluşturduğu agent'lardan oluşur ve grubun tamamı TUI ile Web UI'da diğer her run gibi görünür.
 
-Oluşturulan worker'lar MCP'yi varsayılan olarak almaz; dolayısıyla başka agent oluşturamaz. Bir worker'ın kendi alt worker'larını yönetmesine izin vermek için MCP'yi aynı ekrandan o worker'ın CLI'sine de bağlayın. Koruma bariyerleri kaynak düzeyindedir: spawn aracı bir run'a ekleme yaptığında uygulanan run başına agent üst sınırı (`max_agents`) ve her agent'ın kendi tmux pane'inde gerçek bir CLI süreci olması.
+Oluşturulan worker'lar MCP'yi varsayılan olarak almadıkları için kendi başlarına yeni agent açamazlar. Bir worker'ın kendi alt worker'larını yönetmesini istiyorsanız MCP'yi aynı ekrandan o worker'ın CLI'sine de bağlamanız gerekir. Koruma bariyerleri kaynak düzeyinde durur: spawn aracı bir run'a agent eklerken run başına üst sınır (`max_agents`) uygulanır, ayrıca her agent zaten kendi tmux pane'inde çalışan gerçek bir CLI sürecidir.
 
-Bağlı bir CLI neyi başlatabileceğini de keşfedebilir: `list_providers` aracı ve `reevesagents://providers` kaynağı, bu makinedeki sağlayıcıları id'leri, kurulum durumları, takma adları ve bilinen modelleriyle döndürür; böylece bir agent, `spawn`'a tahmin yerine gerçek bir id geçirir.
+Bağlı bir CLI neyi başlatabileceğini de kendisi keşfeder: `list_providers` aracı ile `reevesagents://providers` kaynağı, bu makinedeki sağlayıcıları id'leri, kurulum durumları, takma adları ve bilinen modelleriyle döndürür. Agent da böylece `spawn`'a tahmin ettiği bir şeyi değil, gerçekten var olan bir id'yi geçirir.
 
 Tam tasarım ve araç listesi için [docs/mcp.md](../mcp.md) dosyasına bakın.
 
 ## Yapılandırma
 
-Durum ve yapılandırma yerel JSON'dır. Veritabanı yok, daemon yok.
+Durum da yapılandırma da diskinizde duran düz JSON dosyalarından ibaret. Bu yüzden yönetilecek bir şey olmadığı gibi, aracı kullanmadığınız sırada arkada çalışan bir şey de yok.
 
 Durum `~/.reeves` altında tutulur:
 
@@ -282,16 +282,16 @@ Durum `~/.reeves` altında tutulur:
   history/        arşivlenmiş, sonlanmış ve eskimiş run'lar (history/runs/<id>.json)
 ```
 
-İki ortam değişkeni varsayılanları geçersiz kılar; başlıca izole test veya çoklu profil kullanımı için:
+Varsayılanları geçersiz kılan iki ortam değişkeni var, ikisine de daha çok izole test ya da çoklu profil kurulumlarında ihtiyaç duyarsınız:
 
 - `REEVES_REGISTRY`: durum kökünü geçersiz kılar. `runs/`, `history/` ve `presets/` için dizin olarak `~/.reeves`'in yerini alır.
 - `REEVES_CONFIG`: yapılandırma dosyasının yolunu geçersiz kılar. `~/.reeves/config.json`'un yerini alır.
 
-Gizli bilgi tutabilecek metin alanları, duruma yazılmadan önce maskelenir.
+İçinde gizli bilgi olabilecek her şey, daha bir dosyaya ulaşmadan temizlenir.
 
 ## Örnekler
 
-Bir projeyi her işe uyan CLI'lere dağıtın:
+Bir projeyi, her işe uygun düşen CLI'lere dağıtın:
 
 ```sh
 reevesagents spawn deepseek:backend claude-code:product codex:review \
@@ -326,11 +326,11 @@ Web UI yereldir ve yalnızca loopback üzerinden çalışır.
 reevesagents web
 ```
 
-`127.0.0.1`'e bağlanır, ön planda çalışır ve siz durdurduğunuzda kapanır. Agent'lar sonrasında tmux'ta çalışmaya devam eder. Tarayıcıdan run oluşturabilir, agent ekleyebilir, sağlayıcı modellerini ve izin modlarını seçebilir, agent'ları durdurabilir, sonlanmış işleri silebilir ve gerçek CLI'ler çalışmaya devam ederken geçmişi inceleyebilirsiniz.
+Yalnızca `127.0.0.1` üzerinden yanıt verir ve siz durdurana kadar ön planda kalır. Durdurmanız agent'lar açısından hiçbir şeyi değiştirmez, çünkü onlar sayfada değil tmux'ta yaşar. Tarayıcıdan run oluşturur, seçtiğiniz model ve izin moduyla agent ekler, durması gerekeni durdurur, altta gerçek CLI'ler çalışmaya devam ederken de geçmişi eşelersiniz.
 
-Web UI iki opsiyonel çalışma zamanı modülü kullanır: `ws` ve `@lydell/node-pty`. npm bunları varsayılan olarak kurar. CLI ve TUI bunlar olmadan da çalışır; `web` komutu neyin eksik olduğunu söyler.
+Web UI iki opsiyonel çalışma zamanı modülüne yaslanır: `ws` ve `@lydell/node-pty`. npm bunları zaten varsayılan olarak kurar. Bunlar olmadan da CLI ve TUI çalışmaya devam eder, `web` komutu ise neyin eksik olduğunu açıkça söyler.
 
-Web UI'ye başka bir makineden ulaşmak için loopback portunu SSH üzerinden yönlendirin. Yerleşik bir tünel yoktur:
+Web UI'ye başka bir makineden ulaşmanız gerekiyorsa loopback portunu SSH üzerinden yönlendirin, çünkü yerleşik bir tünel yok:
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
@@ -339,9 +339,9 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## Sorun Giderme
 
-**tmux kurulu değil.** ReevesAgents, pencere tabanlı gezinme için tmux'a ihtiyaç duyar. Kurun (`brew install tmux` veya `apt install tmux`) ve `reevesagents doctor` çalıştırın. TUI kendini `reeves` adlı bir tmux oturumuna otomatik sarar; bu davranışı atlamak için `REEVES_NO_TMUX_WRAPPER=1` ayarlayın.
+**tmux kurulu değil.** ReevesAgents, pencere tabanlı gezinme için tmux'a ihtiyaç duyar. Kurun (`brew install tmux` veya `apt install tmux`) ve `reevesagents doctor` çalıştırın. TUI kendini `reeves` adlı bir tmux oturumuna otomatik olarak sarar. Bunu istemiyorsanız `REEVES_NO_TMUX_WRAPPER=1` ayarlayın.
 
-**Bir sağlayıcı CLI'si eksik veya Doctor hata bildiriyor.** ReevesAgents yalnızca `PATH`'inizde bulunan ve kimliği doğrulanmış sağlayıcı CLI'lerini başlatır. Hangi sağlayıcıların algılandığını ve neyin başarısız olduğunu görmek için `reevesagents doctor` çalıştırın; sonra ihtiyacınız olan sağlayıcı CLI'sini kurun veya giriş yapın.
+**Bir sağlayıcı CLI'si eksik veya Doctor hata bildiriyor.** ReevesAgents yalnızca `PATH`'inizde bulunan ve kimliği doğrulanmış sağlayıcı CLI'lerini başlatır. Hangi sağlayıcıların algılandığını ve neyin takıldığını `reevesagents doctor` söyler. Sonrası basit: ihtiyacınız olan sağlayıcı CLI'sini kurun ya da giriş yapın.
 
 **Web UI eksik paket bildiriyor.** Web UI'nin `ws` ve `@lydell/node-pty` paketlerine ihtiyacı vardır. Platformda önceden derlenmiş bir `@lydell/node-pty` ikili dosyası yoksa veya kurulum opsiyonel bağımlılıkları atladıysa bunlar eksik kalabilir. Opsiyonel bağımlılıklar etkin olacak şekilde yeniden kurun, sonra `reevesagents doctor` çalıştırın.
 
@@ -349,7 +349,7 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## Gerekli Değil
 
-Normal, stabil agent run'ları için ReevesAgents'ta saklanan API anahtarına, veritabanına, Docker'a, arka plan servisine veya MCP kurulumuna ihtiyacınız yok. Kurulum pasiftir: stabil paketin postinstall script'i yoktur ve sağlayıcı yapılandırmasını yeniden yazmaz. Agent Kontrol MCP'sini bağlamak, sağlayıcı yapılandırmasına dokunan tek açık, opt-in adımdır; o da yalnızca her CLI'nin kendi `mcp add` komutu üzerinden yapılır.
+Normal, stabil agent run'ları için ReevesAgents'ta saklanan bir API anahtarına, veritabanına, Docker'a, arka plan servisine ya da MCP kurulumuna ihtiyacınız yok. Kurulum da pasiftir: stabil paketin postinstall script'i yoktur ve sağlayıcı yapılandırmanızı yeniden yazmaz. Sağlayıcı yapılandırmasına dokunan tek adım, Agent Kontrol MCP'sini bağlamaktır. O da açıkça sizin verdiğiniz, opt-in bir karardır ve yalnızca her CLI'nin kendi `mcp add` komutu üzerinden gerçekleşir.
 
 ## Katkıda Bulunma
 

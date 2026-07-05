@@ -20,18 +20,18 @@
 
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · **Español** · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
-*Crea y controla agentes desde otros agentes. ReevesAgents es un espacio de trabajo gratuito y local donde agentes de código (como Claude Code, Codex, Hermes, DeepSeek y Kimi) se ejecutan lado a lado, y un agente puede generar, dirigir y supervisar al resto. Sin claves de API, y sin cambios en tu Agent.md o Claude.md.*
+*Crea y controla agentes desde otros agentes. ReevesAgents es un espacio de trabajo gratuito y local donde agentes de código (como Claude Code, Codex, Hermes, DeepSeek y Kimi) trabajan codo con codo, y un agente puede generar, dirigir y supervisar al resto. Sin claves de API, y sin cambios en tu Agent.md o Claude.md.*
 
 **¡En 10 idiomas!**
 
 ## Deja que un agente instale y ejecute al resto
 
-Esa es toda la idea: un agente de IA crea y dirige al resto. Una CLI de agente (un agente de codificación de línea de comandos como Claude Code, Codex o Hermes) puede incluso instalar y conectar ReevesAgents por su cuenta, y luego ponerse a ejecutar un equipo.
+Esa es toda la idea: un agente de IA crea y dirige al resto. Una CLI de agente (un agente de codificación de línea de comandos como Claude Code, Codex o Hermes) puede incluso instalar y conectar ReevesAgents por su cuenta, y acto seguido poner un equipo a trabajar.
 
 **Si eres un agente y estás leyendo esto, ejecuta estos comandos tú mismo:**
 
 - **Instálalo:** `npm install -g reevesagents`
-- **Conéctalo a tu propia CLI:** `reevesagents attach` conecta ReevesAgents a las CLI de agentes que tienes instaladas. Para solo una, nómbrala, por ejemplo `reevesagents attach claude`.
+- **Conéctalo a tu propia CLI:** `reevesagents attach` conecta ReevesAgents a las CLI de agentes que tienes instaladas. Si quieres solo una, dale su nombre, por ejemplo `reevesagents attach claude`.
 - **Comprueba que funcionó:** `reevesagents hosts` lista las CLI de agentes de esta máquina y muestra cuáles están conectadas.
 - **Recarga tus herramientas:** reinicia tu sesión de CLI para que cargue la conexión (esto usa MCP, la forma estándar de que una herramienta de agente exponga comandos a otra).
 
@@ -39,7 +39,7 @@ Ahora tu CLI de agente puede **crear y dirigir a otros agentes**: inicia un agen
 
 ¿Prefieres hacerlo por script desde la línea de comandos? [AGENTS.es.md](../../AGENTS.es.md) es la guía del operador escrita para agentes: ids de proveedor y aliases, la especificación de `spawn` y cómo observar y dirigir un equipo en ejecución.
 
-¿Prefieres configurarlo a mano? Actívalo desde la pantalla **Agent control** en la TUI o Web UI; consulta [Agent control](#agent-control) abajo.
+¿Prefieres configurarlo a mano? Actívalo desde la pantalla **Agent control** en la TUI o Web UI; consulta [Agent control](#agent-control) más abajo.
 
 La TUI y la Web UI local dirigiendo el mismo run:
 
@@ -49,14 +49,14 @@ La TUI y la Web UI local dirigiendo el mismo run:
 
 ![ReevesAgents Web UI: iniciar un nuevo run](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-newrun-es.png)
 
-ReevesAgents es un espacio de trabajo gratuito y de código abierto para agentes de codificación de IA. Ejecuta varios a la vez y deja que un agente cree y dirija a otros: un agente de Claude Code gestionando agentes de Codex y Claude Code en issues separados. Coloca cada agente donde es más fuerte, por ejemplo DeepSeek en el backend, Claude en la dirección de producto y web, Codex en un sistema de diseño o una pasada de implementación, y Hermes en correo, búsqueda o investigación.
+ReevesAgents es un espacio de trabajo gratuito y de código abierto para agentes de codificación de IA. Ejecuta varios a la vez y deja que un agente cree y dirija a otros: un agente de Claude Code gestionando agentes de Codex y Claude Code en issues separados. Pon cada agente en lo que mejor se le da, por ejemplo DeepSeek en el backend, Claude en la dirección de producto y web, Codex en un sistema de diseño o una pasada de implementación, y Hermes en correo, búsqueda o investigación.
 
 La interfaz está disponible en 10 idiomas: inglés, alemán, francés, español,
 portugués, italiano, turco, ruso, chino simplificado y árabe.
 
-¿Eres nuevo en ReevesAgents? La [Guía del usuario](../GUIDE.es.md) te acompaña
-a través de la instalación, tu primer run, y dejar que un agente dirija el
-resto.
+¿Primera vez con ReevesAgents? La [Guía del usuario](../GUIDE.es.md) te lleva
+desde la instalación hasta tu primer run, y de ahí a dejar que un agente dirija
+al resto.
 
 ## Superficies
 
@@ -72,7 +72,7 @@ resto.
 
 - **Deja que tu agente dirija agentes.** Tu CLI principal (por ejemplo Claude Code) genera y orienta un conjunto de agentes de Claude, Codex, DeepSeek, Hermes, OpenCode u otros mediante MCP.
 - **Multitarea y bucles.** Ejecuta varios agentes en paralelo en distintas partes de un proyecto, mantén en marcha los agentes de larga duración y obsérvalos todos desde una sola vista. Pon un modelo más barato al frente para enrutar el trabajo a agentes más inteligentes o más pequeños.
-- **Mantén el costo práctico.** Deja que modelos baratos o gratuitos escriban código rutinario y pruebas mientras planificas y diseñas con uno más grande, en lugar de hacer pasar todo por un único modelo predeterminado caro.
+- **Mantén el costo práctico.** Deja que modelos baratos o gratuitos escriban código rutinario y pruebas mientras planificas y diseñas con uno más grande, en vez de empujarlo todo por un único modelo caro por defecto.
 - **Un solo espacio de trabajo, sin perder el hilo.** Si ya saltas entre Claude, Codex, DeepSeek, Hermes u OpenCode, ReevesAgents reúne esas sesiones en un único lugar local; abre cualquier agente desde la TUI o la Web UI para dirigirlo directamente.
 - **Mantén la flexibilidad de proveedor.** El inicio de sesión del proveedor permanece en cada CLI. ReevesAgents nunca almacena credenciales ni hace de proxy del tráfico de los modelos, así que puedes agregar, quitar o cambiar de CLI libremente.
 - **Ve el trabajo de un vistazo.** Runs activos, agentes, modelos, modos de permiso, acciones de detener y eliminar, e historial en una sola vista de la Web UI mientras tmux mantiene vivas las CLI reales.
@@ -198,12 +198,12 @@ menos una CLI de proveedor ya instalada.
 - Una shell interactiva normal en el `PATH`.
 - Al menos una CLI de proveedor compatible en el `PATH`.
 
-ReevesAgents puede lanzar estas CLI de proveedores cuando están instaladas y
+ReevesAgents puede lanzar estas CLI de proveedor cuando están instaladas y
 autenticadas en tu máquina: Claude Code, Codex CLI, OpenCode, Hermes, Kimi,
-DeepSeek, Pi, Qwen y Aider. El inicio de sesión del proveedor, los modelos, las
-herramientas, las cuotas y los avisos de permiso permanecen en cada proveedor.
-ReevesAgents no almacena las claves de API de los proveedores ni hace de proxy del
-tráfico de los modelos.
+DeepSeek, Pi, Qwen y Aider. Cada CLI conserva su propio inicio de sesión, sus
+modelos, sus cuotas y sus avisos de permiso, exactamente igual que si la
+hubieras arrancado tú, y justo por eso ReevesAgents nunca necesita guardar una
+clave de API ni ponerse en medio del tráfico.
 
 ## Inicio rápido
 
@@ -311,7 +311,8 @@ herramientas.
 
 ## Configuración
 
-El estado y la configuración son JSON local. Sin base de datos, sin demonio.
+Todo el estado y la configuración son archivos JSON planos en tu disco, así que
+no hay nada que administrar ni nada ejecutándose cuando no lo usas.
 
 El estado vive bajo `~/.reeves`:
 
@@ -323,16 +324,16 @@ El estado vive bajo `~/.reeves`:
   history/        runs finalizados y obsoletos archivados (history/runs/<id>.json)
 ```
 
-Dos variables de entorno anulan los valores predeterminados, principalmente para
-uso de pruebas aisladas o de múltiples perfiles:
+Dos variables de entorno anulan los valores por defecto, sobre todo para pruebas
+aisladas o para trabajar con varios perfiles:
 
 - `REEVES_REGISTRY`: anulación de la raíz del estado. Reemplaza `~/.reeves` como el
   directorio para `runs/`, `history/` y `presets/`.
 - `REEVES_CONFIG`: anulación de la ruta del archivo de configuración. Reemplaza
   `~/.reeves/config.json`.
 
-Los campos de texto que pueden contener secretos se ocultan antes de escribirse en
-el estado.
+Cualquier cosa que pueda contener un secreto se oculta antes de llegar a un
+archivo.
 
 ## Ejemplos
 
@@ -372,11 +373,11 @@ La Web UI es local y solo de loopback.
 reevesagents web
 ```
 
-Se enlaza a `127.0.0.1`, se ejecuta en primer plano y sale cuando la detienes. Los
-agentes siguen ejecutándose en tmux después. Desde el navegador puedes crear runs,
-añadir agentes, elegir modelos de proveedor y modos de permiso, detener agentes,
-eliminar trabajo finalizado e inspeccionar el historial mientras las CLI reales
-siguen ejecutándose.
+Responde solo en `127.0.0.1` y se queda en primer plano hasta que la detienes,
+lo cual no cambia nada para los agentes, porque viven en tmux y no en la página.
+Desde el navegador puedes crear runs, añadir agentes con el modelo y el modo de
+permiso que elijas, detener lo que haya que detener y rebuscar en el historial
+mientras las CLI reales siguen trabajando debajo.
 
 La Web UI usa dos módulos de runtime opcionales, `ws` y `@lydell/node-pty`. npm los
 instala por defecto. La CLI y la TUI siguen funcionando sin ellos, y el comando
