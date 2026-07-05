@@ -42,7 +42,7 @@ reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \
 
 `spawn` 在启动任何东西之前，会检查每个点名的提供方 CLI 是否在 PATH 上，并列出缺失的那些，因此拼写错误或未安装的 CLI 会让它快速失败，而不是把运行启动到一半。成功时它会打印运行 id、每个智能体的 id，以及驱动它们用的确切 `peek`/`send`/`open` 命令。
 
-常用的 `spawn` 标志：`--name <run>`、`--cwd <dir>`（默认当前目录）、`--prompt <text>`（启动时粘贴进每个智能体）、`--skip`（跳过各智能体自己的权限提示；没有人在旁边批准时使用）、`--run <run-id>`（把智能体加进现有运行，而不是新建一个）、`--json`（以 JSON 而非文本打印运行和智能体 id）。
+常用的 `spawn` 标志：`--name <run>`、`--cwd <dir>`（默认当前目录）、`--prompt <text>`（启动时粘贴进每个智能体）、`--skip`（跳过各智能体自己的权限提示；没有人在旁边批准时使用）、`--run <run-id>`（把智能体加进现有运行，而不是新建一个）、`--extra-args <args>`（追加到每次智能体启动的标志，用于 ReevesAgents 未建模的提供方选项，例如 `--remote-control`）、`--json`（以 JSON 而非文本打印运行和智能体 id）。
 
 ## 提供方 id 和别名
 

@@ -20,10 +20,10 @@ Questa guida ti porta da un'installazione pulita fino al punto in cui è un agen
 
 ## Installa e verifica
 
-- Installalo globalmente: `npm install -g reevesagents`
+- Installalo con Homebrew: `brew install mertkayacs/reevesagents/reevesagents`, oppure globalmente con un gestore di pacchetti Node come pnpm: `pnpm add -g reevesagents`
 - Controlla la tua macchina: `reevesagents doctor` (verifica Node, tmux, la cartella dello stato e quali CLI di provider riesce a vedere).
 - Avvialo: `reevesagents`
-- Preferisci pnpm, Yarn, Bun, npx o Homebrew? Vedi [Installazione](i18n/README.it.md#installazione) nel README.
+- Preferisci npm, Yarn, Bun o npx? Vedi [Installazione](i18n/README.it.md#installazione) nel README.
 
 ## Il tuo primo run
 

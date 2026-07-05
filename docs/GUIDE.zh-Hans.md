@@ -20,10 +20,10 @@
 
 ## 安装和检查
 
-- 全局安装：`npm install -g reevesagents`
+- 用 Homebrew 安装：`brew install mertkayacs/reevesagents/reevesagents`，或者用 pnpm 这类 Node 包管理器全局安装：`pnpm add -g reevesagents`
 - 检查机器：`reevesagents doctor`（验证 Node、tmux、状态文件夹，以及它能看到哪些提供方 CLI）。
 - 启动：`reevesagents`
-- 更习惯 pnpm、Yarn、Bun、npx 或 Homebrew？见 README 中的[安装](i18n/README.zh-Hans.md#安装)。
+- 更习惯 npm、Yarn、Bun 或 npx？见 README 中的[安装](i18n/README.zh-Hans.md#安装)。
 
 ## 第一次运行
 

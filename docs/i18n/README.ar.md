@@ -85,17 +85,23 @@ ReevesAgents.
 
 ## التثبيت
 
-يُنشر ReevesAgents على npm باسم `reevesagents`. ثبّته تثبيتًا عامًا بمدير الحزم
-الذي تستخدمه أصلًا، ثم افحص الجهاز عبر `doctor`.
+ثبّت ReevesAgents عبر Homebrew، أو تثبيتًا عامًا بأي مدير حزم Node (pnpm أو npm أو Yarn أو Bun)، ثم افحص الجهاز عبر `doctor`.
 
 ```sh
-npm install -g reevesagents
+# Homebrew
+brew install mertkayacs/reevesagents/reevesagents
+
+# أو مدير حزم Node، pnpm معروض هنا
+pnpm add -g reevesagents
+```
+
+```sh
 reevesagents doctor
 reevesagents
 ```
 
 لتثبيت إصدار بعينه، أضف `@<version>` إلى اسم الحزمة، مثلًا
-`npm install -g reevesagents@1.3.1`.
+`pnpm add -g reevesagents@1.4.0`.
 
 <details>
 <summary><b>pnpm</b></summary>
@@ -110,6 +116,23 @@ reevesagents
 
 ```sh
 pnpm dlx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>npm</b></summary>
+
+```sh
+npm install -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+تشغيل لمرة واحدة بلا تثبيت عام:
+
+```sh
+npx reevesagents doctor
 ```
 
 </details>
@@ -146,15 +169,6 @@ reevesagents
 
 ```sh
 bunx reevesagents doctor
-```
-
-</details>
-
-<details>
-<summary><b>npx (بلا تثبيت)</b></summary>
-
-```sh
-npx reevesagents doctor
 ```
 
 </details>
@@ -232,7 +246,7 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 الواجهة اليومية:
 
 - `reevesagents`: إطلاق TUI (بلا أمر فرعي).
-- `spawn [spec...]`: بدء تشغيلة بوكيل واحد أو أكثر من المزوّدين. كل `spec` هو `provider[:nickname[:model]]`. أول مواصفة هي القائد، والبقية عاملون. وغياب المواصفة يجعل الافتراضي `codex`. الأعلام الأساسية: `--name <name>` (الافتراضي `run`), `--cwd <dir>` (الافتراضي الدليل الحالي), `--prompt <text>` (يُلصق في كل وكيل), `--skip` (تخطّي مطالبات الأذونات), `--run <run-id>` (إضافة وكلاء إلى تشغيلة موجودة), `--auth-mode <mode>`, `--effort <level>`, `--json`.
+- `spawn [spec...]`: بدء تشغيلة بوكيل واحد أو أكثر من المزوّدين. كل `spec` هو `provider[:nickname[:model]]`. أول مواصفة هي القائد، والبقية عاملون. وغياب المواصفة يجعل الافتراضي `codex`. الأعلام الأساسية: `--name <name>` (الافتراضي `run`), `--cwd <dir>` (الافتراضي الدليل الحالي), `--prompt <text>` (يُلصق في كل وكيل), `--skip` (تخطّي مطالبات الأذونات), `--run <run-id>` (إضافة وكلاء إلى تشغيلة موجودة), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (أعلام تُلحق بكل إطلاق وكيل، مثل `"--remote-control"`), `--json`.
 - `runs`: سرد التشغيلات النشطة، واحدة في كل سطر. الأعلام الأساسية: `--json` (سجلات التشغيلات الكاملة كمصفوفة JSON).
 - `agents [run-id]`: سرد الوكلاء عبر كل التشغيلات، أو وكلاء تشغيلة واحدة. الأعلام الأساسية: `--json`.
 - `open <id>`: تبديل tmux إلى نافذة Reeves الخاصة بتشغيلة أو إلى نافذة وكيل. داخل tmux يبدّل؛ وخارج tmux على TTY يتصل؛ وإلا فيطبع أمر tmux قابلًا للّصق. يقبل معرّف/اسم تشغيلة أو معرّف/كنية وكيل (يُسمح بمطابقة البادئة).

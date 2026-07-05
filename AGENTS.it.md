@@ -64,8 +64,10 @@ i comandi esatti `peek`/`send`/`open` per guidarli.
 Flag utili di `spawn`: `--name <run>`, `--cwd <dir>` (di default la cartella corrente),
 `--prompt <text>` (incollato in ogni agente all'avvio), `--skip` (avvia gli agenti senza i loro
 prompt di permesso; usalo quando non c'è un umano pronto ad approvare), `--run <run-id>`
-(aggiunge agenti a un run esistente invece di avviarne uno nuovo), `--json` (stampa gli id del
-run e degli agenti come JSON invece che come testo).
+(aggiunge agenti a un run esistente invece di avviarne uno nuovo), `--extra-args <args>`
+(flag aggiunti al lancio di ogni agente, per opzioni di provider che ReevesAgents non prevede,
+per esempio `--remote-control`), `--json` (stampa gli id del run e degli agenti come JSON invece
+che come testo).
 
 ## Id del provider e alias
 

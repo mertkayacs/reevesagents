@@ -78,15 +78,22 @@ ReevesAgents 是一个面向 AI 编码智能体的免费开源工作区。多个
 
 ## 安装
 
-ReevesAgents 以 `reevesagents` 的名字发布在 npm 上。用你现有的包管理器全局安装，然后用 `doctor` 检查机器。
+用 Homebrew 安装 ReevesAgents，或者用任意 Node 包管理器（pnpm、npm、Yarn 或 Bun）全局安装，然后用 `doctor` 检查机器。
 
 ```sh
-npm install -g reevesagents
+# Homebrew
+brew install mertkayacs/reevesagents/reevesagents
+
+# 或用 Node 包管理器，这里以 pnpm 为例
+pnpm add -g reevesagents
+```
+
+```sh
 reevesagents doctor
 reevesagents
 ```
 
-要固定版本，在包名后追加 `@<version>`，例如 `npm install -g reevesagents@1.3.1`。
+要固定版本，在包名后追加 `@<version>`，例如 `pnpm add -g reevesagents@1.4.0`。
 
 <details>
 <summary><b>pnpm</b></summary>
@@ -101,6 +108,23 @@ reevesagents
 
 ```sh
 pnpm dlx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>npm</b></summary>
+
+```sh
+npm install -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+一次性运行，不做全局安装：
+
+```sh
+npx reevesagents doctor
 ```
 
 </details>
@@ -137,15 +161,6 @@ reevesagents
 
 ```sh
 bunx reevesagents doctor
-```
-
-</details>
-
-<details>
-<summary><b>npx（免安装）</b></summary>
-
-```sh
-npx reevesagents doctor
 ```
 
 </details>
@@ -216,7 +231,7 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 日常常用命令：
 
 - `reevesagents`: 启动 TUI（无子命令）。
-- `spawn [spec...]`: 用一个或多个提供方智能体启动一个运行。每个 `spec` 的格式为 `provider[:nickname[:model]]`。第一个 spec 是主控，其余是工作者。不带 spec 时默认为 `codex`。关键标志: `--name <name>`（默认 `run`）、`--cwd <dir>`（默认当前目录）、`--prompt <text>`（粘贴到每个智能体中）、`--skip`（跳过权限提示）、`--run <run-id>`（把智能体加进现有运行）、`--auth-mode <mode>`、`--effort <level>`、`--json`。
+- `spawn [spec...]`: 用一个或多个提供方智能体启动一个运行。每个 `spec` 的格式为 `provider[:nickname[:model]]`。第一个 spec 是主控，其余是工作者。不带 spec 时默认为 `codex`。关键标志: `--name <name>`（默认 `run`）、`--cwd <dir>`（默认当前目录）、`--prompt <text>`（粘贴到每个智能体中）、`--skip`（跳过权限提示）、`--run <run-id>`（把智能体加进现有运行）、`--auth-mode <mode>`、`--effort <level>`、`--extra-args <args>`（追加到每次智能体启动的标志，例如 `"--remote-control"`）、`--json`。
 - `runs`: 列出活跃的运行，每行一个。关键标志: `--json`（以 JSON 数组形式返回完整运行记录）。
 - `agents [run-id]`: 列出所有运行中的智能体，或某一个运行中的智能体。关键标志: `--json`。
 - `open <id>`: 把 tmux 切换到某个运行的 Reeves 窗口或某个智能体窗口。在 tmux 内会切换；在 tmux 外的 TTY 上会附加；否则打印一条可粘贴的 tmux 命令。接受运行 id/名称或智能体 id/昵称（允许前缀匹配）。

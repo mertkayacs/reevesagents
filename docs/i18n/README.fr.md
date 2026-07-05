@@ -78,15 +78,22 @@ Pas de plateforme d'agents cloud ici. ReevesAgents n'est qu'une fine couche loca
 
 ## Installation
 
-ReevesAgents est publié sur npm sous le nom `reevesagents`. Installez-le globalement avec le gestionnaire de paquets que vous utilisez déjà, puis vérifiez la machine avec `doctor`.
+Installez ReevesAgents avec Homebrew, ou globalement avec n'importe quel gestionnaire de paquets Node (pnpm, npm, Yarn ou Bun), puis vérifiez la machine avec `doctor`.
 
 ```sh
-npm install -g reevesagents
+# Homebrew
+brew install mertkayacs/reevesagents/reevesagents
+
+# ou un gestionnaire de paquets Node, pnpm ici
+pnpm add -g reevesagents
+```
+
+```sh
 reevesagents doctor
 reevesagents
 ```
 
-Pour figer une version, ajoutez `@<version>` au nom du paquet, par exemple `npm install -g reevesagents@1.3.1`.
+Pour figer une version, ajoutez `@<version>` au nom du paquet, par exemple `pnpm add -g reevesagents@1.4.0`.
 
 <details>
 <summary><b>pnpm</b></summary>
@@ -101,6 +108,23 @@ En une seule fois, sans installation globale :
 
 ```sh
 pnpm dlx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>npm</b></summary>
+
+```sh
+npm install -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+En une seule fois, sans installation globale :
+
+```sh
+npx reevesagents doctor
 ```
 
 </details>
@@ -137,15 +161,6 @@ En une seule fois, sans installation globale :
 
 ```sh
 bunx reevesagents doctor
-```
-
-</details>
-
-<details>
-<summary><b>npx (sans installation)</b></summary>
-
-```sh
-npx reevesagents doctor
 ```
 
 </details>
@@ -216,7 +231,7 @@ Sans argument, la TUI se lance. Les sous-commandes sont la surface opérateur po
 La surface quotidienne :
 
 - `reevesagents`: Lance la TUI (sans sous-commande).
-- `spawn [spec...]`: Démarre un run avec un ou plusieurs agents de fournisseurs. Chaque `spec` est `provider[:nickname[:model]]`. Le premier spec est le lead, les autres sont des workers. Sans spec, la valeur par défaut est `codex`. Flags clés: `--name <name>` (par défaut `run`), `--cwd <dir>` (par défaut le répertoire courant), `--prompt <text>` (collé dans chaque agent), `--skip` (saute les demandes de permission), `--run <run-id>` (ajoute des agents à un run existant), `--auth-mode <mode>`, `--effort <level>`, `--json`.
+- `spawn [spec...]`: Démarre un run avec un ou plusieurs agents de fournisseurs. Chaque `spec` est `provider[:nickname[:model]]`. Le premier spec est le lead, les autres sont des workers. Sans spec, la valeur par défaut est `codex`. Flags clés: `--name <name>` (par défaut `run`), `--cwd <dir>` (par défaut le répertoire courant), `--prompt <text>` (collé dans chaque agent), `--skip` (saute les demandes de permission), `--run <run-id>` (ajoute des agents à un run existant), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (flags ajoutés à chaque lancement d'agent, par exemple `"--remote-control"`), `--json`.
 - `runs`: Liste les runs actifs, un par ligne. Flags clés: `--json` (enregistrements complets des runs sous forme de tableau JSON).
 - `agents [run-id]`: Liste les agents de tous les runs, ou ceux d'un run donné. Flags clés: `--json`.
 - `open <id>`: Bascule tmux vers la fenêtre Reeves d'un run ou vers une fenêtre d'agent. À l'intérieur de tmux, il bascule ; hors de tmux sur un TTY, il s'attache ; sinon, il affiche une commande tmux prête à coller. Accepte un id/nom de run ou un id/nickname d'agent (correspondance par préfixe autorisée).

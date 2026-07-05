@@ -42,7 +42,7 @@ reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \
 
 `spawn`, bir şey başlatmadan önce adı geçen her sağlayıcı CLI'nin PATH'te olduğunu doğrular ve eksik olanları söyler; böylece bir yazım hatası ya da kurulu olmayan bir CLI, run'ı yarım başlatmak yerine hemen başarısız olur. Başarı durumunda run id'sini, her agent'ın id'sini ve onları yönetmek için gereken `peek`/`send`/`open` komutlarını aynen yazdırır.
 
-İşe yarar `spawn` flag'leri: `--name <run>`, `--cwd <dir>` (varsayılanı geçerli dizin), `--prompt <text>` (başlangıçta her agent'a yapıştırılır), `--skip` (agent'ları kendi izin istemleri olmadan başlat; onaylayacak bir insan yokken kullan), `--run <run-id>` (yeni bir run başlatmak yerine agent'ları var olan bir run'a ekle), `--json` (run ve agent id'lerini metin yerine JSON olarak yazdır).
+İşe yarar `spawn` flag'leri: `--name <run>`, `--cwd <dir>` (varsayılanı geçerli dizin), `--prompt <text>` (başlangıçta her agent'a yapıştırılır), `--skip` (agent'ları kendi izin istemleri olmadan başlat; onaylayacak bir insan yokken kullan), `--run <run-id>` (yeni bir run başlatmak yerine agent'ları var olan bir run'a ekle), `--extra-args <args>` (her agent başlatmasına eklenen, ReevesAgents'ın modellemediği sağlayıcı seçenekleri için flag'ler, örneğin `--remote-control`), `--json` (run ve agent id'lerini metin yerine JSON olarak yazdır).
 
 ## Sağlayıcı id'leri ve takma adları
 

@@ -20,10 +20,10 @@ Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerin
 
 ## Kurulum ve kontrol
 
-- Global olarak kurun: `npm install -g reevesagents`
+- Homebrew ile kurun: `brew install mertkayacs/reevesagents/reevesagents`, ya da pnpm gibi bir Node paket yöneticisiyle global olarak: `pnpm add -g reevesagents`
 - Makinenizi kontrol edin: `reevesagents doctor` (Node'u, tmux'u, durum klasörünü ve hangi sağlayıcı CLI'lerini görebildiğini doğrular).
 - Başlatın: `reevesagents`
-- pnpm, Yarn, Bun, npx ya da Homebrew ile kurmak isterseniz README'deki [Kurulum](i18n/README.tr.md#kurulum) bölümüne bakın.
+- npm, Yarn, Bun ya da npx ile kurmak isterseniz README'deki [Kurulum](i18n/README.tr.md#kurulum) bölümüne bakın.
 
 ## İlk run'ınız
 

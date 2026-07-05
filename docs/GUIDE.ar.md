@@ -20,10 +20,10 @@
 
 ## التثبيت والتحقق
 
-- ثبّته تثبيتًا عامًا: `npm install -g reevesagents`
+- ثبّته عبر Homebrew: `brew install mertkayacs/reevesagents/reevesagents`، أو تثبيتًا عامًا بمدير حزم Node مثل pnpm: `pnpm add -g reevesagents`
 - افحص جهازك: `reevesagents doctor` (يتحقق من Node وtmux ومجلد الحالة وأدوات CLI للمزوّدين التي يراها).
 - شغّله: `reevesagents`
-- أتفضّل pnpm أو Yarn أو Bun أو npx أو Homebrew؟ انظر [التثبيت](i18n/README.ar.md#التثبيت) في README.
+- أتفضّل npm أو Yarn أو Bun أو npx؟ انظر [التثبيت](i18n/README.ar.md#التثبيت) في README.
 
 ## تشغيلتك الأولى
 

@@ -31,11 +31,12 @@ commande et chaque option, tout est recensé dans le [README](i18n/README.fr.md)
 
 ## Installation et vérification
 
-- Installez-le globalement : `npm install -g reevesagents`
+- Installez-le avec Homebrew : `brew install mertkayacs/reevesagents/reevesagents`,
+  ou globalement avec un gestionnaire de paquets Node comme pnpm : `pnpm add -g reevesagents`
 - Vérifiez votre machine : `reevesagents doctor` (contrôle Node, tmux, le dossier
   d'état et les CLI de fournisseurs qu'il détecte).
 - Lancez-le : `reevesagents`
-- Vous préférez pnpm, Yarn, Bun, npx ou Homebrew ? Consultez [Installation](i18n/README.fr.md#installation)
+- Vous préférez npm, Yarn, Bun ou npx ? Consultez [Installation](i18n/README.fr.md#installation)
   dans le README.
 
 ## Votre première exécution

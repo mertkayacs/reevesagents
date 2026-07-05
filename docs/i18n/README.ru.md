@@ -87,17 +87,24 @@ Codex на дизайн-систему или проход по реализац
 
 ## Установка
 
-ReevesAgents опубликован в npm как `reevesagents`. Установите его глобально
-привычным менеджером пакетов, затем проверьте машину командой `doctor`.
+Установите ReevesAgents через Homebrew или глобально любым менеджером пакетов
+Node (pnpm, npm, Yarn или Bun), затем проверьте машину командой `doctor`.
 
 ```sh
-npm install -g reevesagents
+# Homebrew
+brew install mertkayacs/reevesagents/reevesagents
+
+# или менеджер пакетов Node, здесь показан pnpm
+pnpm add -g reevesagents
+```
+
+```sh
 reevesagents doctor
 reevesagents
 ```
 
 Чтобы зафиксировать версию, добавьте `@<version>` к имени пакета, например
-`npm install -g reevesagents@1.3.1`.
+`pnpm add -g reevesagents@1.4.0`.
 
 <details>
 <summary><b>pnpm</b></summary>
@@ -112,6 +119,23 @@ reevesagents
 
 ```sh
 pnpm dlx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>npm</b></summary>
+
+```sh
+npm install -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+Разовый запуск, без глобальной установки:
+
+```sh
+npx reevesagents doctor
 ```
 
 </details>
@@ -148,15 +172,6 @@ reevesagents
 
 ```sh
 bunx reevesagents doctor
-```
-
-</details>
-
-<details>
-<summary><b>npx (без установки)</b></summary>
-
-```sh
-npx reevesagents doctor
 ```
 
 </details>
@@ -236,7 +251,7 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 Повседневный набор:
 
 - `reevesagents`: Запустить TUI (без подкоманды).
-- `spawn [spec...]`: Запустить run с одним или несколькими провайдерскими агентами. Каждая `spec` имеет вид `provider[:nickname[:model]]`. Первая спецификация задаёт ведущего, остальные становятся исполнителями. Без спецификации используется `codex`. Ключевые флаги: `--name <name>` (по умолчанию `run`), `--cwd <dir>` (по умолчанию текущий каталог), `--prompt <text>` (вставляется каждому агенту), `--skip` (пропустить запросы разрешений), `--run <run-id>` (добавить агентов в существующий run), `--auth-mode <mode>`, `--effort <level>`, `--json`.
+- `spawn [spec...]`: Запустить run с одним или несколькими провайдерскими агентами. Каждая `spec` имеет вид `provider[:nickname[:model]]`. Первая спецификация задаёт ведущего, остальные становятся исполнителями. Без спецификации используется `codex`. Ключевые флаги: `--name <name>` (по умолчанию `run`), `--cwd <dir>` (по умолчанию текущий каталог), `--prompt <text>` (вставляется каждому агенту), `--skip` (пропустить запросы разрешений), `--run <run-id>` (добавить агентов в существующий run), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (флаги, добавляемые к каждому запуску агента, например `"--remote-control"`), `--json`.
 - `runs`: Перечислить активные run'ы, по одному на строку. Ключевые флаги: `--json` (полные записи run'ов как JSON-массив).
 - `agents [run-id]`: Перечислить агентов по всем run'ам или агентов одного run'а. Ключевые флаги: `--json`.
 - `open <id>`: Переключить tmux на окно Reeves нужного run'а или на окно агента. Внутри tmux переключает; вне tmux на TTY подключается; иначе печатает готовую к вставке команду tmux. Принимает id/имя run'а или id/никнейм агента (допускается совпадение по префиксу).

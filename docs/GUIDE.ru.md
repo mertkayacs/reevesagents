@@ -31,11 +31,12 @@
 
 ## Установка и проверка
 
-- Установите глобально: `npm install -g reevesagents`
+- Установите через Homebrew: `brew install mertkayacs/reevesagents/reevesagents`
+  или глобально менеджером пакетов Node вроде pnpm: `pnpm add -g reevesagents`
 - Проверьте машину: `reevesagents doctor` (проверяет Node, tmux, папку состояния
   и то, какие провайдерские CLI ему видны).
 - Запустите: `reevesagents`
-- Предпочитаете pnpm, Yarn, Bun, npx или Homebrew? См. [Установка](i18n/README.ru.md#установка)
+- Предпочитаете npm, Yarn, Bun или npx? См. [Установка](i18n/README.ru.md#установка)
   в README.
 
 ## Первый запуск

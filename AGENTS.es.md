@@ -71,7 +71,9 @@ Flags útiles de `spawn`: `--name <run>`, `--cwd <dir>` (por defecto el director
 actual), `--prompt <text>` (pegado en cada agente al arrancar), `--skip` (lanza
 los agentes sin sus propios avisos de permiso; úsalo cuando nadie esté presente
 para aprobar), `--run <run-id>` (añade agentes a un run existente en lugar de
-iniciar uno nuevo), `--json` (imprime los ids del run y de los agentes como JSON
+iniciar uno nuevo), `--extra-args <args>` (flags añadidos a cada lanzamiento de
+agente, para opciones de proveedor que ReevesAgents no contempla, por ejemplo
+`--remote-control`), `--json` (imprime los ids del run y de los agentes como JSON
 en lugar de texto).
 
 ## IDs de proveedor y aliases

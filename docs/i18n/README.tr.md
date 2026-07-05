@@ -78,16 +78,23 @@ Bu bir bulut agent platformu değil, gerçek CLI'lerin etrafına örülmüş kü
 
 ## Kurulum
 
-ReevesAgents, npm'de `reevesagents` adıyla yayımlanır. Zaten kullandığınız paket yöneticisiyle global olarak kurun, ardından makineyi `doctor` ile doğrulayın.
+ReevesAgents'ı Homebrew ile ya da herhangi bir Node paket yöneticisiyle (pnpm, npm, Yarn veya Bun) global olarak kurun, ardından makineyi `doctor` ile doğrulayın.
 
 ```sh
-npm install -g reevesagents
+# Homebrew
+brew install mertkayacs/reevesagents/reevesagents
+
+# ya da bir Node paket yöneticisi, burada pnpm gösteriliyor
+pnpm add -g reevesagents
+```
+
+```sh
 reevesagents doctor
 reevesagents
 ```
 
 Bir sürümü sabitlemek için paket adının sonuna `@<version>` ekleyin, örneğin
-`npm install -g reevesagents@1.3.1`.
+`pnpm add -g reevesagents@1.4.0`.
 
 <details>
 <summary><b>pnpm</b></summary>
@@ -102,6 +109,23 @@ Tek seferlik, global kurulum olmadan:
 
 ```sh
 pnpm dlx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>npm</b></summary>
+
+```sh
+npm install -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+Tek seferlik, global kurulum olmadan:
+
+```sh
+npx reevesagents doctor
 ```
 
 </details>
@@ -138,15 +162,6 @@ Tek seferlik, global kurulum olmadan:
 
 ```sh
 bunx reevesagents doctor
-```
-
-</details>
-
-<details>
-<summary><b>npx (kurulum yok)</b></summary>
-
-```sh
-npx reevesagents doctor
 ```
 
 </details>
@@ -217,7 +232,7 @@ Argüman verilmeden çalıştırıldığında TUI açılır. Alt komutlar, insan
 Gündelik yüzey:
 
 - `reevesagents`: TUI'yi başlat (alt komut yok).
-- `spawn [spec...]`: Bir veya daha fazla sağlayıcı agent'ıyla bir run başlat. Her `spec`, `provider[:nickname[:model]]` biçimindedir. İlk spec lead, geri kalanı worker'dır. Spec verilmezse varsayılan `codex`'tir. Önemli flag'ler: `--name <name>` (varsayılan `run`), `--cwd <dir>` (varsayılan geçerli dizin), `--prompt <text>` (her agent'a yapıştırılır), `--skip` (izin istemlerini atla), `--run <run-id>` (agent'ları var olan bir run'a ekle), `--auth-mode <mode>`, `--effort <level>`, `--json`.
+- `spawn [spec...]`: Bir veya daha fazla sağlayıcı agent'ıyla bir run başlat. Her `spec`, `provider[:nickname[:model]]` biçimindedir. İlk spec lead, geri kalanı worker'dır. Spec verilmezse varsayılan `codex`'tir. Önemli flag'ler: `--name <name>` (varsayılan `run`), `--cwd <dir>` (varsayılan geçerli dizin), `--prompt <text>` (her agent'a yapıştırılır), `--skip` (izin istemlerini atla), `--run <run-id>` (agent'ları var olan bir run'a ekle), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (her agent başlatmasına eklenen flag'ler, örneğin `"--remote-control"`), `--json`.
 - `runs`: Aktif run'ları, her satıra bir tane olacak şekilde listele. Önemli flag'ler: `--json` (JSON dizisi olarak tam run kayıtları).
 - `agents [run-id]`: Tüm run'lardaki agent'ları ya da tek bir run'dakileri listele. Önemli flag'ler: `--json`.
 - `open <id>`: tmux'u bir run'ın Reeves penceresine veya bir agent penceresine geçir. tmux içindeyken pencere değiştirir; tmux dışında bir TTY'deyse attach eder; aksi halde yapıştırılabilir bir tmux komutu yazdırır. Run id'si/adı ya da agent id'si/takma adı kabul eder (önek eşleşmesine izin verilir).

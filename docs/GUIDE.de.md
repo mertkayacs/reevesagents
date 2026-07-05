@@ -30,11 +30,12 @@ Option brauchst: Das steht in der [README](i18n/README.de.md).
 
 ## Installation und Überprüfung
 
-- Installiere es global: `npm install -g reevesagents`
+- Installiere es mit Homebrew: `brew install mertkayacs/reevesagents/reevesagents`,
+  oder global mit einem Node-Paketmanager wie pnpm: `pnpm add -g reevesagents`
 - Prüfe deine Maschine: `reevesagents doctor` (prüft Node, tmux, den State-Ordner
   und welche Provider-CLIs sichtbar sind).
 - Starte es: `reevesagents`
-- Lieber pnpm, Yarn, Bun, npx oder Homebrew? Siehe [Installation](i18n/README.de.md#installation)
+- Lieber npm, Yarn, Bun oder npx? Siehe [Installation](i18n/README.de.md#installation)
   in der README.
 
 ## Dein erster Durchlauf
