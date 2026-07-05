@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+  <a href="https://reevesagents.mertkayacs.com">
+    <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+  </a>
 </p>
 
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
@@ -8,13 +10,19 @@
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
+<h3 align="center"><a href="https://reevesagents.mertkayacs.com">reevesagents.mertkayacs.com</a></h3>
+<p align="center">
+  <a href="https://reevesagents.mertkayacs.com/demo"><b>العرض الحي</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/docs"><b>التوثيق</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/faq"><b>الأسئلة الشائعة</b></a> ·
+  <a href="https://github.com/mertkayacs/reevesagents/issues"><b>المشكلات</b></a>
+</p>
+
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · **العربية**
 
 *دع وكيلًا واحدًا ينشئ وكلاء آخرين ويقودهم. ReevesAgents مساحة عمل محلية مجانية يعمل فيها وكلاء البرمجة (مثل Claude Code وCodex وHermes وDeepSeek وKimi) جنبًا إلى جنب، ويستطيع وكيل واحد أن ينشئ الباقي ويوجّهه ويشرف عليه. بلا مفاتيح API، وبلا تغييرات على Agent.md أو Claude.md الموجود لديك.*
 
 **بعشر لغات!**
-
-GitHub: https://github.com/mertkayacs/reevesagents
 
 ## دع وكيلًا واحدًا يثبّته ويشغّل الباقي
 
@@ -417,6 +425,7 @@ TUI نفسها تلقائيًا في جلسة tmux باسم `reeves`؛ اضبط 
 
 ## روابط
 
+- الموقع: https://reevesagents.mertkayacs.com
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Releases: https://github.com/mertkayacs/reevesagents/releases

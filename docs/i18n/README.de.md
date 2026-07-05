@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+  <a href="https://reevesagents.mertkayacs.com">
+    <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+  </a>
 </p>
 
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
@@ -8,13 +10,19 @@
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
+<h3 align="center"><a href="https://reevesagents.mertkayacs.com">reevesagents.mertkayacs.com</a></h3>
+<p align="center">
+  <a href="https://reevesagents.mertkayacs.com/demo"><b>Demo</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/docs"><b>Doku</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/faq"><b>FAQ</b></a> ·
+  <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
+</p>
+
 [English](../../README.md) · **Deutsch** · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
 *Lass einen Agenten andere Agenten erstellen und steuern. ReevesAgents ist ein kostenloser, lokaler Arbeitsbereich, in dem Coding-Agenten (etwa Claude Code, Codex, Hermes, DeepSeek und Kimi) nebeneinander laufen und ein Agent die übrigen spawnen, steuern und beaufsichtigen kann. Keine API-Schlüssel und keine Änderungen an deiner bestehenden Agent.md oder Claude.md.*
 
 **In 10 Sprachen!**
-
-GitHub: https://github.com/mertkayacs/reevesagents
 
 ## Lass einen Agenten die anderen installieren und ausführen
 
@@ -421,6 +429,7 @@ TypeScript, tsup, Vitest und ESLint aus dem Repository.
 
 ## Links
 
+- Website: https://reevesagents.mertkayacs.com
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Releases: https://github.com/mertkayacs/reevesagents/releases

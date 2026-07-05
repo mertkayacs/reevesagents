@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+  <a href="https://reevesagents.mertkayacs.com">
+    <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+  </a>
 </p>
 
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
@@ -8,13 +10,19 @@
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
+<h3 align="center"><a href="https://reevesagents.mertkayacs.com">reevesagents.mertkayacs.com</a></h3>
+<p align="center">
+  <a href="https://reevesagents.mertkayacs.com/demo"><b>演示</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/docs"><b>文档</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/faq"><b>常见问题</b></a> ·
+  <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
+</p>
+
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · **简体中文** · [العربية](README.ar.md)
 
 *让一个智能体创建并驱动其他智能体。ReevesAgents 是一个免费的本地工作区，编码智能体（如 Claude Code、Codex、Hermes、DeepSeek 和 Kimi）在这里并行运行，一个智能体可以生成、控制并监督其余智能体。无需 API 密钥，也不会改动你现有的 Agent.md 或 Claude.md。*
 
 **支持 10 种语言！**
-
-GitHub: https://github.com/mertkayacs/reevesagents
 
 ## 让一个智能体安装并运行其他智能体
 
@@ -354,6 +362,7 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## 链接
 
+- 网站: https://reevesagents.mertkayacs.com
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Releases: https://github.com/mertkayacs/reevesagents/releases

@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+  <a href="https://reevesagents.mertkayacs.com">
+    <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
+  </a>
 </p>
 
 [![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
@@ -8,13 +10,19 @@
 [![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
 
+<h3 align="center"><a href="https://reevesagents.mertkayacs.com">reevesagents.mertkayacs.com</a></h3>
+<p align="center">
+  <a href="https://reevesagents.mertkayacs.com/demo"><b>Demo</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/docs"><b>Dokümanlar</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/faq"><b>SSS</b></a> ·
+  <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issue'lar</b></a>
+</p>
+
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · **Türkçe** · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
 *AI agent'larını başka agent'ların içinden oluşturun ve yönetin. ReevesAgents, kodlama agent'larının (Claude Code, Codex, Hermes, DeepSeek ve Kimi gibi) yan yana çalıştığı ve bir agent'ın diğerlerini oluşturabildiği, yönlendirebildiği ve denetleyebildiği ücretsiz, yerel bir çalışma alanıdır. API anahtarı yok, mevcut Agent.md veya Claude.md dosyanızda değişiklik yok.*
 
 **10 dilde!**
-
-GitHub: https://github.com/mertkayacs/reevesagents
 
 ## Bir agent kursun, gerisini de o çalıştırsın
 
@@ -355,6 +363,7 @@ Son kullanıcıların geliştirme araç zincirine ihtiyacı yoktur. Katkıda bul
 
 ## Bağlantılar
 
+- Web sitesi: https://reevesagents.mertkayacs.com
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Releases: https://github.com/mertkayacs/reevesagents/releases
