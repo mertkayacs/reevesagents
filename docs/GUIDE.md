@@ -13,6 +13,9 @@ that lives in the [README](../README.md).
 - The part that makes it interesting: one agent can create and drive the
   others. Give a Claude Code session the reins and it will happily run a team
   of Codex and Claude Code agents on separate tasks.
+- You do not have to use that, though. The simplest way in is a workspace:
+  spawn the agents you want and keep adding more with `reevesagents add`. They
+  just sit side by side, and nobody controls anyone until you opt into the MCP.
 - It sits on top of the CLIs you already have, so every login stays where it
   always was. ReevesAgents never holds an API key and never touches your model
   traffic.
@@ -54,6 +57,15 @@ reevesagents spawn claude-code:lead codex:worker \
 
 Prefer a visual start? Run `reevesagents` for the TUI or `reevesagents web` for
 the local Web UI and create the run from there.
+
+Do not want to plan the whole team up front? Spawn one agent and grow the
+workspace as you go. `add` joins your most recent run, so there is no run id to
+copy around:
+
+```sh
+reevesagents spawn claude-code:lead
+reevesagents add codex:worker
+```
 
 ## The five ways to use it
 

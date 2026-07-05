@@ -67,6 +67,11 @@ their own permission prompts; use it when no human is there to approve), `--run 
 (flags appended to every agent launch, for provider options ReevesAgents does not model,
 e.g. `--remote-control`), `--json` (print the run and agent ids as JSON instead of text).
 
+To grow a workspace one agent at a time, `reevesagents add <spec...>` adds to the most
+recent active run without a run id (pass `--run <run-id>` to target another). It takes
+the same per-agent flags as `spawn`. Agents added this way run side by side and do not
+control each other; that only happens when the Agent control MCP is attached.
+
 ## Provider ids and aliases
 
 Run `reevesagents providers` (add `--json` for a machine list). Any alias works as the
