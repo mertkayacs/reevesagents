@@ -29,12 +29,12 @@ that lives in the [README](../README.md).
 
 ## Install and check
 
-- Install it globally: `npm install -g reevesagents`
+- Install it with Homebrew: `brew install mertkayacs/reevesagents/reevesagents`,
+  or globally with a Node package manager like pnpm: `pnpm add -g reevesagents`
 - Check your machine: `reevesagents doctor` (verifies Node, tmux, the state
   folder, and which provider CLIs it can see).
 - Launch it: `reevesagents`
-- Prefer pnpm, Yarn, Bun, npx, or Homebrew? See [Install](../README.md#install)
-  in the README.
+- Prefer npm, Yarn, Bun, or npx? See [Install](../README.md#install) in the README.
 
 ## Your first run
 

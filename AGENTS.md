@@ -63,8 +63,9 @@ half-starting a run. On success it prints the run id, each agent's id, and the e
 Useful `spawn` flags: `--name <run>`, `--cwd <dir>` (defaults to the current dir),
 `--prompt <text>` (pasted into every agent on startup), `--skip` (launch agents without
 their own permission prompts; use it when no human is there to approve), `--run <run-id>`
-(add agents to an existing run instead of starting a new one), `--json` (print the run
-and agent ids as JSON instead of text).
+(add agents to an existing run instead of starting a new one), `--extra-args <args>`
+(flags appended to every agent launch, for provider options ReevesAgents does not model,
+e.g. `--remote-control`), `--json` (print the run and agent ids as JSON instead of text).
 
 ## Provider ids and aliases
 

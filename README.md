@@ -85,17 +85,24 @@ This is not a cloud agent platform. It is a small local layer around real CLIs: 
 
 ## Install
 
-ReevesAgents is published on npm as `reevesagents`. Install it globally with the
-package manager you already use, then verify the machine with `doctor`.
+Install ReevesAgents with Homebrew, or globally with any Node package manager
+(pnpm, npm, Yarn, or Bun), then verify the machine with `doctor`.
 
 ```sh
-npm install -g reevesagents
+# Homebrew
+brew install mertkayacs/reevesagents/reevesagents
+
+# or a Node package manager, pnpm shown here
+pnpm add -g reevesagents
+```
+
+```sh
 reevesagents doctor
 reevesagents
 ```
 
 To pin a version, append `@<version>` to the package name, for example
-`npm install -g reevesagents@1.3.1`.
+`pnpm add -g reevesagents@1.4.0`.
 
 <details>
 <summary><b>pnpm</b></summary>
@@ -110,6 +117,23 @@ One-shot, no global install:
 
 ```sh
 pnpm dlx reevesagents doctor
+```
+
+</details>
+
+<details>
+<summary><b>npm</b></summary>
+
+```sh
+npm install -g reevesagents
+reevesagents doctor
+reevesagents
+```
+
+One-shot, no global install:
+
+```sh
+npx reevesagents doctor
 ```
 
 </details>
@@ -146,15 +170,6 @@ One-shot, no global install:
 
 ```sh
 bunx reevesagents doctor
-```
-
-</details>
-
-<details>
-<summary><b>npx (no install)</b></summary>
-
-```sh
-npx reevesagents doctor
 ```
 
 </details>
@@ -233,7 +248,7 @@ humans and scripts.
 The everyday surface:
 
 - `reevesagents`: Launch the TUI (no subcommand).
-- `spawn [spec...]`: Start a run with one or more provider agents. Each `spec` is `provider[:nickname[:model]]`. The first spec is the lead, the rest are workers. No spec defaults to `codex`. Key flags: `--name <name>` (default `run`), `--cwd <dir>` (default current dir), `--prompt <text>` (pasted into each agent), `--skip` (skip permission prompts), `--run <run-id>` (add agents to an existing run), `--auth-mode <mode>`, `--effort <level>`, `--json`.
+- `spawn [spec...]`: Start a run with one or more provider agents. Each `spec` is `provider[:nickname[:model]]`. The first spec is the lead, the rest are workers. No spec defaults to `codex`. Key flags: `--name <name>` (default `run`), `--cwd <dir>` (default current dir), `--prompt <text>` (pasted into each agent), `--skip` (skip permission prompts), `--run <run-id>` (add agents to an existing run), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (flags appended to every agent launch, e.g. `"--remote-control"`), `--json`.
 - `runs`: List active runs, one per line. Key flags: `--json` (full run records as a JSON array).
 - `agents [run-id]`: List agents across all runs, or the agents in one run. Key flags: `--json`.
 - `open <id>`: Switch tmux to a run's Reeves window or an agent window. Inside tmux it switches; outside tmux on a TTY it attaches; otherwise it prints a pasteable tmux command. Accepts a run id/name or an agent id/nickname (prefix match allowed).

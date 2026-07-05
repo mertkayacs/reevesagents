@@ -51,7 +51,8 @@ agent").
 
 - `spawn`: start a CLI agent (a new run, or add one to an existing run). Accepts
   `permissions` (`ask` or `skip`), `auth_mode`, and `effort` so a client can launch
-  an autonomous worker, not just an `ask` one
+  an autonomous worker, not just an `ask` one, plus `extra_args` (a string array)
+  for provider flags the MCP does not model, appended verbatim to the launch
 - `kill`: stop one agent
 - `stop`: stop a whole run
 - `send_text`: paste text into an agent's prompt (does not submit; follow with `send_key` enter)
