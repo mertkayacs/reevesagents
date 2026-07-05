@@ -215,43 +215,43 @@ Sans argument, la TUI se lance. Les sous-commandes sont la surface opérateur po
 
 La surface quotidienne :
 
-| Commande | Objet | Flags clés |
-| --- | --- | --- |
-| `reevesagents` | Lance la TUI (sans sous-commande). | aucun |
-| `spawn [spec...]` | Démarre un run avec un ou plusieurs agents de fournisseurs. Chaque `spec` est `provider[:nickname[:model]]`. Le premier spec est le lead, les autres sont des workers. Sans spec, la valeur par défaut est `codex`. | `--name <name>` (par défaut `run`), `--cwd <dir>` (par défaut le répertoire courant), `--prompt <text>` (collé dans chaque agent), `--skip` (saute les demandes de permission), `--run <run-id>` (ajoute des agents à un run existant), `--auth-mode <mode>`, `--effort <level>`, `--json` |
-| `runs` | Liste les runs actifs, un par ligne. | `--json` (enregistrements complets des runs sous forme de tableau JSON) |
-| `agents [run-id]` | Liste les agents de tous les runs, ou ceux d'un run donné. | `--json` |
-| `open <id>` | Bascule tmux vers la fenêtre Reeves d'un run ou vers une fenêtre d'agent. À l'intérieur de tmux, il bascule ; hors de tmux sur un TTY, il s'attache ; sinon, il affiche une commande tmux prête à coller. Accepte un id/nom de run ou un id/nickname d'agent (correspondance par préfixe autorisée). | aucun |
-| `peek <agent-id>` | Affiche la sortie récente d'un agent. | `-n, --lines <n>` (par défaut `20`), `--json` (lignes sous forme de tableau) |
-| `send <agent-id> <text...>` | Colle du texte au prompt d'un agent, sans le soumettre ; enchaînez avec `key <agent-id> enter`. | aucun |
-| `key <agent-id> <key>` | Envoie une seule touche : `enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`, `right` ou `ctrl-c`. | aucun |
-| `interrupt <agent-id>` | Envoie ctrl-c à un agent. | aucun |
-| `stop <run-id>` | Arrête un run. | `-y, --yes` (ou `ALLOW_DESTRUCTIVE=1`) |
-| `kill <agent-id>` | Arrête un agent. | `-y, --yes` (ou `ALLOW_DESTRUCTIVE=1`) |
-| `doctor` | Exécute des vérifications de santé de l'environnement (Node, tmux, chemin d'état, CLI de fournisseurs). Sort avec un code non nul en cas d'échec d'une vérification. | `--json` |
-| `web` | Démarre la Web UI à la demande, en loopback uniquement. S'exécute au premier plan ; les agents continuent de tourner après l'avoir arrêtée. | `--port <n>` (port préféré, bascule sur le port libre suivant), `--no-open` (n'ouvre pas le navigateur) |
+| Commande | Objet |
+| --- | --- |
+| `reevesagents` | Lance la TUI (sans sous-commande). |
+| `spawn [spec...]` | Démarre un run avec un ou plusieurs agents de fournisseurs. Chaque `spec` est `provider[:nickname[:model]]`. Le premier spec est le lead, les autres sont des workers. Sans spec, la valeur par défaut est `codex`. Flags clés: `--name <name>` (par défaut `run`), `--cwd <dir>` (par défaut le répertoire courant), `--prompt <text>` (collé dans chaque agent), `--skip` (saute les demandes de permission), `--run <run-id>` (ajoute des agents à un run existant), `--auth-mode <mode>`, `--effort <level>`, `--json`. |
+| `runs` | Liste les runs actifs, un par ligne. Flags clés: `--json` (enregistrements complets des runs sous forme de tableau JSON). |
+| `agents [run-id]` | Liste les agents de tous les runs, ou ceux d'un run donné. Flags clés: `--json`. |
+| `open <id>` | Bascule tmux vers la fenêtre Reeves d'un run ou vers une fenêtre d'agent. À l'intérieur de tmux, il bascule ; hors de tmux sur un TTY, il s'attache ; sinon, il affiche une commande tmux prête à coller. Accepte un id/nom de run ou un id/nickname d'agent (correspondance par préfixe autorisée). |
+| `peek <agent-id>` | Affiche la sortie récente d'un agent. Flags clés: `-n, --lines <n>` (par défaut `20`), `--json` (lignes sous forme de tableau). |
+| `send <agent-id> <text...>` | Colle du texte au prompt d'un agent, sans le soumettre ; enchaînez avec `key <agent-id> enter`. |
+| `key <agent-id> <key>` | Envoie une seule touche : `enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`, `right` ou `ctrl-c`. |
+| `interrupt <agent-id>` | Envoie ctrl-c à un agent. |
+| `stop <run-id>` | Arrête un run. Flags clés: `-y, --yes` (ou `ALLOW_DESTRUCTIVE=1`). |
+| `kill <agent-id>` | Arrête un agent. Flags clés: `-y, --yes` (ou `ALLOW_DESTRUCTIVE=1`). |
+| `doctor` | Exécute des vérifications de santé de l'environnement (Node, tmux, chemin d'état, CLI de fournisseurs). Sort avec un code non nul en cas d'échec d'une vérification. Flags clés: `--json`. |
+| `web` | Démarre la Web UI à la demande, en loopback uniquement. S'exécute au premier plan ; les agents continuent de tourner après l'avoir arrêtée. Flags clés: `--port <n>` (port préféré, bascule sur le port libre suivant), `--no-open` (n'ouvre pas le navigateur). |
 
 Découverte, approbations, contrôle d'agent, config et nettoyage :
 
-| Commande | Objet | Flags clés |
-| --- | --- | --- |
-| `providers` | Liste chaque fournisseur avec sa disponibilité, ses alias et ses modèles connus. | `--models`, `--json` |
-| `approvals` | Liste les demandes d'approbation en attente émises par les agents. | `--json` |
-| `approve <approval-id> [note]` | Résout une demande d'approbation en l'approuvant. | aucun |
-| `deny <approval-id> [note]` | Résout une demande d'approbation en la refusant. | aucun |
-| `hosts` | Liste les CLI d'agents de cette machine et indique lesquelles sont connectées à ReevesAgents. | aucun |
-| `attach [cli]` | Connecte ReevesAgents à une CLI d'agent, ou à toutes celles installées quand aucun nom n'est donné. Exécute la propre commande `mcp add` de cette CLI. | aucun |
-| `detach <cli>` | Déconnecte ReevesAgents d'une CLI d'agent. Exécute la propre commande `mcp remove` de cette CLI. | aucun |
-| `mcp` | Démarre le serveur MCP de Contrôle d'agent via stdio. Ne se lance pas à la main ; c'est la CLI à laquelle vous le connectez qui l'exécute. | aucun |
-| `config [key] [value]` | Affiche tous les paramètres modifiables, en lit un, ou en définit un. | `--json` |
-| `presets` | Liste les préréglages de runs enregistrés. | `--json` |
-| `save-preset <run-id> <name> [description...]` | Capture un run en cours comme préréglage réutilisable. | aucun |
-| `start-preset <name>` | Démarre un nouveau run depuis un préréglage. | `--name <run>`, `--cwd <dir>` |
-| `delete-preset <name>` | Supprime un préréglage. | `-y, --yes` |
-| `delete <agent-id>` | Supprime l'enregistrement d'un agent terminé. | `-y, --yes` |
-| `delete-run <run-id>` | Supprime un run terminé et l'archive dans l'historique. | `-y, --yes` |
-| `history` | Liste les runs terminés et obsolètes archivés. | `--json` |
-| `delete-history <id>` | Supprime un enregistrement archivé de l'historique. | `-y, --yes` |
+| Commande | Objet |
+| --- | --- |
+| `providers` | Liste chaque fournisseur avec sa disponibilité, ses alias et ses modèles connus. Flags clés: `--models`, `--json`. |
+| `approvals` | Liste les demandes d'approbation en attente émises par les agents. Flags clés: `--json`. |
+| `approve <approval-id> [note]` | Résout une demande d'approbation en l'approuvant. |
+| `deny <approval-id> [note]` | Résout une demande d'approbation en la refusant. |
+| `hosts` | Liste les CLI d'agents de cette machine et indique lesquelles sont connectées à ReevesAgents. |
+| `attach [cli]` | Connecte ReevesAgents à une CLI d'agent, ou à toutes celles installées quand aucun nom n'est donné. Exécute la propre commande `mcp add` de cette CLI. |
+| `detach <cli>` | Déconnecte ReevesAgents d'une CLI d'agent. Exécute la propre commande `mcp remove` de cette CLI. |
+| `mcp` | Démarre le serveur MCP de Contrôle d'agent via stdio. Ne se lance pas à la main ; c'est la CLI à laquelle vous le connectez qui l'exécute. |
+| `config [key] [value]` | Affiche tous les paramètres modifiables, en lit un, ou en définit un. Flags clés: `--json`. |
+| `presets` | Liste les préréglages de runs enregistrés. Flags clés: `--json`. |
+| `save-preset <run-id> <name> [description...]` | Capture un run en cours comme préréglage réutilisable. |
+| `start-preset <name>` | Démarre un nouveau run depuis un préréglage. Flags clés: `--name <run>`, `--cwd <dir>`. |
+| `delete-preset <name>` | Supprime un préréglage. Flags clés: `-y, --yes`. |
+| `delete <agent-id>` | Supprime l'enregistrement d'un agent terminé. Flags clés: `-y, --yes`. |
+| `delete-run <run-id>` | Supprime un run terminé et l'archive dans l'historique. Flags clés: `-y, --yes`. |
+| `history` | Liste les runs terminés et obsolètes archivés. Flags clés: `--json`. |
+| `delete-history <id>` | Supprime un enregistrement archivé de l'historique. Flags clés: `-y, --yes`. |
 
 `stop`, `kill` et les commandes `delete` sont destructives. Elles refusent de s'exécuter sans `--yes` ou `ALLOW_DESTRUCTIVE=1`.
 

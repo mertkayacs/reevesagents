@@ -231,43 +231,43 @@ Menschen und Skripte.
 
 Die Befehle für den Alltag:
 
-| Befehl | Zweck | Wichtige Flags |
-| --- | --- | --- |
-| `reevesagents` | Die TUI starten (kein Subcommand). | keine |
-| `spawn [spec...]` | Einen Run mit einem oder mehreren Provider-Agenten starten. Jede `spec` lautet `provider[:nickname[:model]]`. Die erste Spec ist der Lead, der Rest sind Worker. Ohne Spec ist `codex` der Standard. | `--name <name>` (Standard `run`), `--cwd <dir>` (Standard: aktuelles Verzeichnis), `--prompt <text>` (wird in jeden Agenten eingefügt), `--skip` (Berechtigungsabfragen überspringen), `--run <run-id>` (Agenten einem bestehenden Run hinzufügen), `--auth-mode <mode>`, `--effort <level>`, `--json` |
-| `runs` | Aktive Runs auflisten, einen pro Zeile. | `--json` (vollständige Run-Datensätze als JSON-Array) |
-| `agents [run-id]` | Agenten über alle Runs hinweg auflisten, oder nur die eines Runs. | `--json` |
-| `open <id>` | tmux zum Reeves-Fenster eines Runs oder zu einem Agentenfenster wechseln. Innerhalb von tmux wird gewechselt; außerhalb von tmux auf einem TTY wird verbunden; ansonsten wird ein einfügbarer tmux-Befehl ausgegeben. Akzeptiert eine Run-id/-name oder eine Agenten-id/-nickname (Präfix-Übereinstimmung erlaubt). | keine |
-| `peek <agent-id>` | Die jüngste Ausgabe eines Agenten anzeigen. | `-n, --lines <n>` (Standard `20`), `--json` (Zeilen als Array) |
-| `send <agent-id> <text...>` | Text am Prompt eines Agenten einfügen. Schickt nicht ab; sende danach `key <agent-id> enter`. | keine |
-| `key <agent-id> <key>` | Eine einzelne Taste senden: `enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`, `right` oder `ctrl-c`. | keine |
-| `interrupt <agent-id>` | ctrl-c an einen Agenten senden. | keine |
-| `stop <run-id>` | Einen Run stoppen. | `-y, --yes` (oder `ALLOW_DESTRUCTIVE=1`) |
-| `kill <agent-id>` | Einen Agenten stoppen. | `-y, --yes` (oder `ALLOW_DESTRUCTIVE=1`) |
-| `doctor` | Health-Checks der Umgebung ausführen (Node, tmux, State-Pfad, Provider-CLIs). Beendet sich bei jeder fehlgeschlagenen Prüfung mit Exit-Code ungleich null. | `--json` |
-| `web` | Die lokale, nur an Loopback gebundene Web UI bei Bedarf starten. Läuft im Vordergrund; nach dem Beenden laufen die Agenten weiter. | `--port <n>` (bevorzugter Port, weicht auf den nächsten freien aus), `--no-open` (den Browser nicht öffnen) |
+| Befehl | Zweck |
+| --- | --- |
+| `reevesagents` | Die TUI starten (kein Subcommand). |
+| `spawn [spec...]` | Einen Run mit einem oder mehreren Provider-Agenten starten. Jede `spec` lautet `provider[:nickname[:model]]`. Die erste Spec ist der Lead, der Rest sind Worker. Ohne Spec ist `codex` der Standard. Wichtige Flags: `--name <name>` (Standard `run`), `--cwd <dir>` (Standard: aktuelles Verzeichnis), `--prompt <text>` (wird in jeden Agenten eingefügt), `--skip` (Berechtigungsabfragen überspringen), `--run <run-id>` (Agenten einem bestehenden Run hinzufügen), `--auth-mode <mode>`, `--effort <level>`, `--json`. |
+| `runs` | Aktive Runs auflisten, einen pro Zeile. Wichtige Flags: `--json` (vollständige Run-Datensätze als JSON-Array). |
+| `agents [run-id]` | Agenten über alle Runs hinweg auflisten, oder nur die eines Runs. Wichtige Flags: `--json`. |
+| `open <id>` | tmux zum Reeves-Fenster eines Runs oder zu einem Agentenfenster wechseln. Innerhalb von tmux wird gewechselt; außerhalb von tmux auf einem TTY wird verbunden; ansonsten wird ein einfügbarer tmux-Befehl ausgegeben. Akzeptiert eine Run-id/-name oder eine Agenten-id/-nickname (Präfix-Übereinstimmung erlaubt). |
+| `peek <agent-id>` | Die jüngste Ausgabe eines Agenten anzeigen. Wichtige Flags: `-n, --lines <n>` (Standard `20`), `--json` (Zeilen als Array). |
+| `send <agent-id> <text...>` | Text am Prompt eines Agenten einfügen. Schickt nicht ab; sende danach `key <agent-id> enter`. |
+| `key <agent-id> <key>` | Eine einzelne Taste senden: `enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`, `right` oder `ctrl-c`. |
+| `interrupt <agent-id>` | ctrl-c an einen Agenten senden. |
+| `stop <run-id>` | Einen Run stoppen. Wichtige Flags: `-y, --yes` (oder `ALLOW_DESTRUCTIVE=1`). |
+| `kill <agent-id>` | Einen Agenten stoppen. Wichtige Flags: `-y, --yes` (oder `ALLOW_DESTRUCTIVE=1`). |
+| `doctor` | Health-Checks der Umgebung ausführen (Node, tmux, State-Pfad, Provider-CLIs). Beendet sich bei jeder fehlgeschlagenen Prüfung mit Exit-Code ungleich null. Wichtige Flags: `--json`. |
+| `web` | Die lokale, nur an Loopback gebundene Web UI bei Bedarf starten. Läuft im Vordergrund; nach dem Beenden laufen die Agenten weiter. Wichtige Flags: `--port <n>` (bevorzugter Port, weicht auf den nächsten freien aus), `--no-open` (den Browser nicht öffnen). |
 
 Erkennung, Freigaben, Agent-Control, Konfiguration und Aufräumen:
 
-| Befehl | Zweck | Wichtige Flags |
-| --- | --- | --- |
-| `providers` | Jeden Provider mit Verfügbarkeit, Aliassen und bekannten Modellen auflisten. | `--models`, `--json` |
-| `approvals` | Offene Freigabeanfragen von Agenten auflisten. | `--json` |
-| `approve <approval-id> [note]` | Eine Freigabeanfrage freigeben. | keine |
-| `deny <approval-id> [note]` | Eine Freigabeanfrage ablehnen. | keine |
-| `hosts` | Die Agent-CLIs auf dieser Maschine auflisten und zeigen, mit welchen ReevesAgents verbunden ist. | keine |
-| `attach [cli]` | ReevesAgents mit einer Agent-CLI verbinden, oder mit allen installierten, wenn kein Name angegeben ist. Führt das eigene `mcp add` dieser CLI aus. | keine |
-| `detach <cli>` | ReevesAgents von einer Agent-CLI trennen. Führt das eigene `mcp remove` dieser CLI aus. | keine |
-| `mcp` | Den Agent-Control-MCP-Server über stdio starten. Nicht von Hand auszuführen; die CLI, an die du ihn anhängst, führt ihn aus. | keine |
-| `config [key] [value]` | Alle editierbaren Einstellungen anzeigen, eine einzelne lesen oder setzen. | `--json` |
-| `presets` | Gespeicherte Run-Vorlagen (Presets) auflisten. | `--json` |
-| `save-preset <run-id> <name> [description...]` | Einen laufenden Run als wiederverwendbare Vorlage speichern. | keine |
-| `start-preset <name>` | Einen neuen Run aus einer Vorlage starten. | `--name <run>`, `--cwd <dir>` |
-| `delete-preset <name>` | Eine Vorlage löschen. | `-y, --yes` |
-| `delete <agent-id>` | Den Datensatz eines beendeten Agenten löschen. | `-y, --yes` |
-| `delete-run <run-id>` | Einen beendeten Run löschen und in den Verlauf archivieren. | `-y, --yes` |
-| `history` | Archivierte beendete und veraltete Runs auflisten. | `--json` |
-| `delete-history <id>` | Einen archivierten Verlaufseintrag löschen. | `-y, --yes` |
+| Befehl | Zweck |
+| --- | --- |
+| `providers` | Jeden Provider mit Verfügbarkeit, Aliassen und bekannten Modellen auflisten. Wichtige Flags: `--models`, `--json`. |
+| `approvals` | Offene Freigabeanfragen von Agenten auflisten. Wichtige Flags: `--json`. |
+| `approve <approval-id> [note]` | Eine Freigabeanfrage freigeben. |
+| `deny <approval-id> [note]` | Eine Freigabeanfrage ablehnen. |
+| `hosts` | Die Agent-CLIs auf dieser Maschine auflisten und zeigen, mit welchen ReevesAgents verbunden ist. |
+| `attach [cli]` | ReevesAgents mit einer Agent-CLI verbinden, oder mit allen installierten, wenn kein Name angegeben ist. Führt das eigene `mcp add` dieser CLI aus. |
+| `detach <cli>` | ReevesAgents von einer Agent-CLI trennen. Führt das eigene `mcp remove` dieser CLI aus. |
+| `mcp` | Den Agent-Control-MCP-Server über stdio starten. Nicht von Hand auszuführen; die CLI, an die du ihn anhängst, führt ihn aus. |
+| `config [key] [value]` | Alle editierbaren Einstellungen anzeigen, eine einzelne lesen oder setzen. Wichtige Flags: `--json`. |
+| `presets` | Gespeicherte Run-Vorlagen (Presets) auflisten. Wichtige Flags: `--json`. |
+| `save-preset <run-id> <name> [description...]` | Einen laufenden Run als wiederverwendbare Vorlage speichern. |
+| `start-preset <name>` | Einen neuen Run aus einer Vorlage starten. Wichtige Flags: `--name <run>`, `--cwd <dir>`. |
+| `delete-preset <name>` | Eine Vorlage löschen. Wichtige Flags: `-y, --yes`. |
+| `delete <agent-id>` | Den Datensatz eines beendeten Agenten löschen. Wichtige Flags: `-y, --yes`. |
+| `delete-run <run-id>` | Einen beendeten Run löschen und in den Verlauf archivieren. Wichtige Flags: `-y, --yes`. |
+| `history` | Archivierte beendete und veraltete Runs auflisten. Wichtige Flags: `--json`. |
+| `delete-history <id>` | Einen archivierten Verlaufseintrag löschen. Wichtige Flags: `-y, --yes`. |
 
 `stop`, `kill` und die `delete`-Befehle sind destruktiv. Ohne `--yes` oder
 `ALLOW_DESTRUCTIVE=1` verweigern sie die Ausführung.

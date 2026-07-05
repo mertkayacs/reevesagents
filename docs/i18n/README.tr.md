@@ -216,43 +216,43 @@ Argüman verilmeden çalıştırıldığında TUI açılır. Alt komutlar, insan
 
 Gündelik yüzey:
 
-| Komut | Amaç | Önemli flag'ler |
-| --- | --- | --- |
-| `reevesagents` | TUI'yi başlat (alt komut yok). | yok |
-| `spawn [spec...]` | Bir veya daha fazla sağlayıcı agent'ıyla bir run başlat. Her `spec`, `provider[:nickname[:model]]` biçimindedir. İlk spec lead, geri kalanı worker'dır. Spec verilmezse varsayılan `codex`'tir. | `--name <name>` (varsayılan `run`), `--cwd <dir>` (varsayılan geçerli dizin), `--prompt <text>` (her agent'a yapıştırılır), `--skip` (izin istemlerini atla), `--run <run-id>` (agent'ları var olan bir run'a ekle), `--auth-mode <mode>`, `--effort <level>`, `--json` |
-| `runs` | Aktif run'ları, her satıra bir tane olacak şekilde listele. | `--json` (JSON dizisi olarak tam run kayıtları) |
-| `agents [run-id]` | Tüm run'lardaki agent'ları ya da tek bir run'dakileri listele. | `--json` |
-| `open <id>` | tmux'u bir run'ın Reeves penceresine veya bir agent penceresine geçir. tmux içindeyken pencere değiştirir; tmux dışında bir TTY'deyse attach eder; aksi halde yapıştırılabilir bir tmux komutu yazdırır. Run id'si/adı ya da agent id'si/takma adı kabul eder (önek eşleşmesine izin verilir). | yok |
-| `peek <agent-id>` | Bir agent'ın son çıktısını yazdır. | `-n, --lines <n>` (varsayılan `20`), `--json` (satırlar bir dizi olarak) |
-| `send <agent-id> <text...>` | Bir agent'ın prompt'una metin yapıştır. Kendisi göndermez; peşinden `key <agent-id> enter` gerekir. | yok |
-| `key <agent-id> <key>` | Tek bir tuş gönder: `enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`, `right` veya `ctrl-c`. | yok |
-| `interrupt <agent-id>` | Bir agent'a ctrl-c gönder. | yok |
-| `stop <run-id>` | Bir run'ı durdur. | `-y, --yes` (veya `ALLOW_DESTRUCTIVE=1`) |
-| `kill <agent-id>` | Bir agent'ı durdur. | `-y, --yes` (veya `ALLOW_DESTRUCTIVE=1`) |
-| `doctor` | Ortam sağlık kontrollerini çalıştır (Node, tmux, durum yolu, sağlayıcı CLI'leri). Herhangi bir kontrol başarısız olursa sıfır dışı çıkış koduyla biter. | `--json` |
-| `web` | İstek üzerine çalışan, yalnızca loopback Web UI'yi başlat. Ön planda çalışır; siz durdurduktan sonra agent'lar çalışmaya devam eder. | `--port <n>` (tercih edilen port; doluysa sıradaki boş porta geçer), `--no-open` (tarayıcıyı açma) |
+| Komut | Amaç |
+| --- | --- |
+| `reevesagents` | TUI'yi başlat (alt komut yok). |
+| `spawn [spec...]` | Bir veya daha fazla sağlayıcı agent'ıyla bir run başlat. Her `spec`, `provider[:nickname[:model]]` biçimindedir. İlk spec lead, geri kalanı worker'dır. Spec verilmezse varsayılan `codex`'tir. Önemli flag'ler: `--name <name>` (varsayılan `run`), `--cwd <dir>` (varsayılan geçerli dizin), `--prompt <text>` (her agent'a yapıştırılır), `--skip` (izin istemlerini atla), `--run <run-id>` (agent'ları var olan bir run'a ekle), `--auth-mode <mode>`, `--effort <level>`, `--json`. |
+| `runs` | Aktif run'ları, her satıra bir tane olacak şekilde listele. Önemli flag'ler: `--json` (JSON dizisi olarak tam run kayıtları). |
+| `agents [run-id]` | Tüm run'lardaki agent'ları ya da tek bir run'dakileri listele. Önemli flag'ler: `--json`. |
+| `open <id>` | tmux'u bir run'ın Reeves penceresine veya bir agent penceresine geçir. tmux içindeyken pencere değiştirir; tmux dışında bir TTY'deyse attach eder; aksi halde yapıştırılabilir bir tmux komutu yazdırır. Run id'si/adı ya da agent id'si/takma adı kabul eder (önek eşleşmesine izin verilir). |
+| `peek <agent-id>` | Bir agent'ın son çıktısını yazdır. Önemli flag'ler: `-n, --lines <n>` (varsayılan `20`), `--json` (satırlar bir dizi olarak). |
+| `send <agent-id> <text...>` | Bir agent'ın prompt'una metin yapıştır. Kendisi göndermez; peşinden `key <agent-id> enter` gerekir. |
+| `key <agent-id> <key>` | Tek bir tuş gönder: `enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`, `right` veya `ctrl-c`. |
+| `interrupt <agent-id>` | Bir agent'a ctrl-c gönder. |
+| `stop <run-id>` | Bir run'ı durdur. Önemli flag'ler: `-y, --yes` (veya `ALLOW_DESTRUCTIVE=1`). |
+| `kill <agent-id>` | Bir agent'ı durdur. Önemli flag'ler: `-y, --yes` (veya `ALLOW_DESTRUCTIVE=1`). |
+| `doctor` | Ortam sağlık kontrollerini çalıştır (Node, tmux, durum yolu, sağlayıcı CLI'leri). Herhangi bir kontrol başarısız olursa sıfır dışı çıkış koduyla biter. Önemli flag'ler: `--json`. |
+| `web` | İstek üzerine çalışan, yalnızca loopback Web UI'yi başlat. Ön planda çalışır; siz durdurduktan sonra agent'lar çalışmaya devam eder. Önemli flag'ler: `--port <n>` (tercih edilen port; doluysa sıradaki boş porta geçer), `--no-open` (tarayıcıyı açma). |
 
 Keşif, onaylar, agent kontrolü, yapılandırma ve temizlik:
 
-| Komut | Amaç | Önemli flag'ler |
-| --- | --- | --- |
-| `providers` | Her sağlayıcıyı kullanılabilirliği, takma adları ve bilinen modelleriyle listele. | `--models`, `--json` |
-| `approvals` | Agent'lardan gelen bekleyen onay isteklerini listele. | `--json` |
-| `approve <approval-id> [note]` | Bir onay isteğini onaylayarak sonuçlandır. | yok |
-| `deny <approval-id> [note]` | Bir onay isteğini reddederek sonuçlandır. | yok |
-| `hosts` | Bu makinedeki agent CLI'lerini listele ve ReevesAgents'ın hangilerine bağlı olduğunu göster. | yok |
-| `attach [cli]` | ReevesAgents'ı bir agent CLI'sine bağla; ad verilmezse kurulu her CLI'ye bağlanır. O CLI'nin kendi `mcp add` komutunu çalıştırır. | yok |
-| `detach <cli>` | ReevesAgents'ı bir agent CLI'sinden ayır. O CLI'nin kendi `mcp remove` komutunu çalıştırır. | yok |
-| `mcp` | Agent Kontrol MCP sunucusunu stdio üzerinden başlat. Elle çalıştırılmaz; bağladığınız CLI çalıştırır. | yok |
-| `config [key] [value]` | Düzenlenebilir tüm ayarları göster, birini oku veya birini ayarla. | `--json` |
-| `presets` | Kayıtlı run preset'lerini listele. | `--json` |
-| `save-preset <run-id> <name> [description...]` | Canlı bir run'ı yeniden kullanılabilir bir preset olarak kaydet. | yok |
-| `start-preset <name>` | Bir preset'ten yeni bir run başlat. | `--name <run>`, `--cwd <dir>` |
-| `delete-preset <name>` | Bir preset'i sil. | `-y, --yes` |
-| `delete <agent-id>` | Sonlanmış bir agent'ın kaydını sil. | `-y, --yes` |
-| `delete-run <run-id>` | Sonlanmış bir run'ı sil ve geçmişe arşivle. | `-y, --yes` |
-| `history` | Arşivlenmiş (sonlanmış ve eskimiş) run'ları listele. | `--json` |
-| `delete-history <id>` | Arşivlenmiş bir geçmiş kaydını sil. | `-y, --yes` |
+| Komut | Amaç |
+| --- | --- |
+| `providers` | Her sağlayıcıyı kullanılabilirliği, takma adları ve bilinen modelleriyle listele. Önemli flag'ler: `--models`, `--json`. |
+| `approvals` | Agent'lardan gelen bekleyen onay isteklerini listele. Önemli flag'ler: `--json`. |
+| `approve <approval-id> [note]` | Bir onay isteğini onaylayarak sonuçlandır. |
+| `deny <approval-id> [note]` | Bir onay isteğini reddederek sonuçlandır. |
+| `hosts` | Bu makinedeki agent CLI'lerini listele ve ReevesAgents'ın hangilerine bağlı olduğunu göster. |
+| `attach [cli]` | ReevesAgents'ı bir agent CLI'sine bağla; ad verilmezse kurulu her CLI'ye bağlanır. O CLI'nin kendi `mcp add` komutunu çalıştırır. |
+| `detach <cli>` | ReevesAgents'ı bir agent CLI'sinden ayır. O CLI'nin kendi `mcp remove` komutunu çalıştırır. |
+| `mcp` | Agent Kontrol MCP sunucusunu stdio üzerinden başlat. Elle çalıştırılmaz; bağladığınız CLI çalıştırır. |
+| `config [key] [value]` | Düzenlenebilir tüm ayarları göster, birini oku veya birini ayarla. Önemli flag'ler: `--json`. |
+| `presets` | Kayıtlı run preset'lerini listele. Önemli flag'ler: `--json`. |
+| `save-preset <run-id> <name> [description...]` | Canlı bir run'ı yeniden kullanılabilir bir preset olarak kaydet. |
+| `start-preset <name>` | Bir preset'ten yeni bir run başlat. Önemli flag'ler: `--name <run>`, `--cwd <dir>`. |
+| `delete-preset <name>` | Bir preset'i sil. Önemli flag'ler: `-y, --yes`. |
+| `delete <agent-id>` | Sonlanmış bir agent'ın kaydını sil. Önemli flag'ler: `-y, --yes`. |
+| `delete-run <run-id>` | Sonlanmış bir run'ı sil ve geçmişe arşivle. Önemli flag'ler: `-y, --yes`. |
+| `history` | Arşivlenmiş (sonlanmış ve eskimiş) run'ları listele. Önemli flag'ler: `--json`. |
+| `delete-history <id>` | Arşivlenmiş bir geçmiş kaydını sil. Önemli flag'ler: `-y, --yes`. |
 
 `stop`, `kill` ve `delete` komutları yıkıcıdır. `--yes` veya `ALLOW_DESTRUCTIVE=1` olmadan çalışmayı reddederler.
 
