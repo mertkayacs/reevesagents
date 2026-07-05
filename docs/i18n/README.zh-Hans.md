@@ -215,43 +215,39 @@ reevesagents spawn deepseek:backend claude-code:product codex:system hermes:rese
 
 日常常用命令：
 
-| 命令 | 用途 |
-| --- | --- |
-| `reevesagents` | 启动 TUI（无子命令）。 |
-| `spawn [spec...]` | 用一个或多个提供方智能体启动一个运行。每个 `spec` 的格式为 `provider[:nickname[:model]]`。第一个 spec 是主控，其余是工作者。不带 spec 时默认为 `codex`。关键标志: `--name <name>`（默认 `run`）、`--cwd <dir>`（默认当前目录）、`--prompt <text>`（粘贴到每个智能体中）、`--skip`（跳过权限提示）、`--run <run-id>`（把智能体加进现有运行）、`--auth-mode <mode>`、`--effort <level>`、`--json`。 |
-| `runs` | 列出活跃的运行，每行一个。关键标志: `--json`（以 JSON 数组形式返回完整运行记录）。 |
-| `agents [run-id]` | 列出所有运行中的智能体，或某一个运行中的智能体。关键标志: `--json`。 |
-| `open <id>` | 把 tmux 切换到某个运行的 Reeves 窗口或某个智能体窗口。在 tmux 内会切换；在 tmux 外的 TTY 上会附加；否则打印一条可粘贴的 tmux 命令。接受运行 id/名称或智能体 id/昵称（允许前缀匹配）。 |
-| `peek <agent-id>` | 打印某个智能体最近的输出。关键标志: `-n, --lines <n>`（默认 `20`）、`--json`（以数组形式返回各行）。 |
-| `send <agent-id> <text...>` | 在智能体的提示符处粘贴文本。它不会提交；随后用 `key <agent-id> enter`。 |
-| `key <agent-id> <key>` | 发送一个按键：`enter`、`escape`、`backspace`、`tab`、`space`、`up`、`down`、`left`、`right` 或 `ctrl-c`。 |
-| `interrupt <agent-id>` | 向一个智能体发送 ctrl-c。 |
-| `stop <run-id>` | 停止一个运行。关键标志: `-y, --yes`（或 `ALLOW_DESTRUCTIVE=1`）。 |
-| `kill <agent-id>` | 停止一个智能体。关键标志: `-y, --yes`（或 `ALLOW_DESTRUCTIVE=1`）。 |
-| `doctor` | 运行环境健康检查（Node、tmux、状态路径、提供方 CLI）。任一检查失败时以非零状态退出。关键标志: `--json`。 |
-| `web` | 启动按需、仅回环的 Web UI。在前台运行；停止后智能体继续运行。关键标志: `--port <n>`（首选端口，被占用时退到下一个空闲端口）、`--no-open`（不打开浏览器）。 |
+- `reevesagents`: 启动 TUI（无子命令）。
+- `spawn [spec...]`: 用一个或多个提供方智能体启动一个运行。每个 `spec` 的格式为 `provider[:nickname[:model]]`。第一个 spec 是主控，其余是工作者。不带 spec 时默认为 `codex`。关键标志: `--name <name>`（默认 `run`）、`--cwd <dir>`（默认当前目录）、`--prompt <text>`（粘贴到每个智能体中）、`--skip`（跳过权限提示）、`--run <run-id>`（把智能体加进现有运行）、`--auth-mode <mode>`、`--effort <level>`、`--json`。
+- `runs`: 列出活跃的运行，每行一个。关键标志: `--json`（以 JSON 数组形式返回完整运行记录）。
+- `agents [run-id]`: 列出所有运行中的智能体，或某一个运行中的智能体。关键标志: `--json`。
+- `open <id>`: 把 tmux 切换到某个运行的 Reeves 窗口或某个智能体窗口。在 tmux 内会切换；在 tmux 外的 TTY 上会附加；否则打印一条可粘贴的 tmux 命令。接受运行 id/名称或智能体 id/昵称（允许前缀匹配）。
+- `peek <agent-id>`: 打印某个智能体最近的输出。关键标志: `-n, --lines <n>`（默认 `20`）、`--json`（以数组形式返回各行）。
+- `send <agent-id> <text...>`: 在智能体的提示符处粘贴文本。它不会提交；随后用 `key <agent-id> enter`。
+- `key <agent-id> <key>`: 发送一个按键：`enter`、`escape`、`backspace`、`tab`、`space`、`up`、`down`、`left`、`right` 或 `ctrl-c`。
+- `interrupt <agent-id>`: 向一个智能体发送 ctrl-c。
+- `stop <run-id>`: 停止一个运行。关键标志: `-y, --yes`（或 `ALLOW_DESTRUCTIVE=1`）。
+- `kill <agent-id>`: 停止一个智能体。关键标志: `-y, --yes`（或 `ALLOW_DESTRUCTIVE=1`）。
+- `doctor`: 运行环境健康检查（Node、tmux、状态路径、提供方 CLI）。任一检查失败时以非零状态退出。关键标志: `--json`。
+- `web`: 启动按需、仅回环的 Web UI。在前台运行；停止后智能体继续运行。关键标志: `--port <n>`（首选端口，被占用时退到下一个空闲端口）、`--no-open`（不打开浏览器）。
 
 发现、审批、智能体控制、配置与清理：
 
-| 命令 | 用途 |
-| --- | --- |
-| `providers` | 列出每个提供方及其可用性、别名和已知模型。关键标志: `--models`、`--json`。 |
-| `approvals` | 列出来自智能体的待处理审批请求。关键标志: `--json`。 |
-| `approve <approval-id> [note]` | 把一个审批请求处理为批准。 |
-| `deny <approval-id> [note]` | 把一个审批请求处理为拒绝。 |
-| `hosts` | 列出本机上的代理 CLI 并显示 ReevesAgents 已连接到哪些。 |
-| `attach [cli]` | 把 ReevesAgents 连接到一个代理 CLI，不指定名称时连接到每个已安装的 CLI。运行该 CLI 自己的 `mcp add`。 |
-| `detach <cli>` | 从一个代理 CLI 断开 ReevesAgents。运行该 CLI 自己的 `mcp remove`。 |
-| `mcp` | 通过 stdio 启动智能体控制 MCP 服务器。无需手动运行；由你把它连接到的 CLI 来运行。 |
-| `config [key] [value]` | 显示所有可编辑设置、读取一项或设置一项。关键标志: `--json`。 |
-| `presets` | 列出已保存的运行预设。关键标志: `--json`。 |
-| `save-preset <run-id> <name> [description...]` | 把一个存活的运行保存为可复用的预设。 |
-| `start-preset <name>` | 从预设启动一个新运行。关键标志: `--name <run>`、`--cwd <dir>`。 |
-| `delete-preset <name>` | 删除一个预设。关键标志: `-y, --yes`。 |
-| `delete <agent-id>` | 删除一个已结束智能体的记录。关键标志: `-y, --yes`。 |
-| `delete-run <run-id>` | 删除一个已结束的运行并归档到历史。关键标志: `-y, --yes`。 |
-| `history` | 列出已归档的已结束和陈旧运行。关键标志: `--json`。 |
-| `delete-history <id>` | 删除一条已归档的历史记录。关键标志: `-y, --yes`。 |
+- `providers`: 列出每个提供方及其可用性、别名和已知模型。关键标志: `--models`、`--json`。
+- `approvals`: 列出来自智能体的待处理审批请求。关键标志: `--json`。
+- `approve <approval-id> [note]`: 把一个审批请求处理为批准。
+- `deny <approval-id> [note]`: 把一个审批请求处理为拒绝。
+- `hosts`: 列出本机上的代理 CLI 并显示 ReevesAgents 已连接到哪些。
+- `attach [cli]`: 把 ReevesAgents 连接到一个代理 CLI，不指定名称时连接到每个已安装的 CLI。运行该 CLI 自己的 `mcp add`。
+- `detach <cli>`: 从一个代理 CLI 断开 ReevesAgents。运行该 CLI 自己的 `mcp remove`。
+- `mcp`: 通过 stdio 启动智能体控制 MCP 服务器。无需手动运行；由你把它连接到的 CLI 来运行。
+- `config [key] [value]`: 显示所有可编辑设置、读取一项或设置一项。关键标志: `--json`。
+- `presets`: 列出已保存的运行预设。关键标志: `--json`。
+- `save-preset <run-id> <name> [description...]`: 把一个存活的运行保存为可复用的预设。
+- `start-preset <name>`: 从预设启动一个新运行。关键标志: `--name <run>`、`--cwd <dir>`。
+- `delete-preset <name>`: 删除一个预设。关键标志: `-y, --yes`。
+- `delete <agent-id>`: 删除一个已结束智能体的记录。关键标志: `-y, --yes`。
+- `delete-run <run-id>`: 删除一个已结束的运行并归档到历史。关键标志: `-y, --yes`。
+- `history`: 列出已归档的已结束和陈旧运行。关键标志: `--json`。
+- `delete-history <id>`: 删除一条已归档的历史记录。关键标志: `-y, --yes`。
 
 `stop`、`kill` 和各个 `delete` 命令是破坏性操作。没有 `--yes` 或 `ALLOW_DESTRUCTIVE=1` 时，它们会拒绝执行。
 
