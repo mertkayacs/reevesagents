@@ -180,6 +180,7 @@ export const pt = {
     'web.deleteHistoryConfirm': 'Eliminar a execução arquivada "{{name}}"? Só a entrada do histórico será removida.',
     'web.deleteHistoryError': 'Não foi possível eliminar a execução arquivada: {{message}}',
     'web.deleteHistoryTitle': 'eliminar execução arquivada {{name}}',
+    'web.deletePresetConfirm': 'Eliminar a predefinição "{{name}}"?',
     'web.deleteRunConfirm': 'Eliminar a execução parada "{{name}}"? Um histórico simples será mantido.',
     'web.deleteRunError': 'Não foi possível eliminar a execução parada: {{message}}',
     'web.deleteRunTitle': 'eliminar execução parada {{name}}',

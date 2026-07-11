@@ -175,6 +175,7 @@ export const fr = {
     'web.deleteHistoryConfirm': 'Supprimer le run archivé "{{name}}" ? Seule l’entrée d’historique sera retirée.',
     'web.deleteHistoryError': 'Impossible de supprimer le run archivé : {{message}}',
     'web.deleteHistoryTitle': 'supprimer le run archivé {{name}}',
+    'web.deletePresetConfirm': 'Supprimer le préréglage "{{name}}" ?',
     'web.deleteRunConfirm': 'Supprimer le run arrêté "{{name}}" ? Un historique simple sera conservé.',
     'web.deleteRunError': 'Impossible de supprimer le run arrêté : {{message}}',
     'web.deleteRunTitle': 'supprimer le run arrêté {{name}}',

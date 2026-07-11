@@ -180,6 +180,7 @@ export const en = {
   'web.deleteHistoryConfirm': 'Delete archived run "{{name}}"? This only removes the saved history record.',
   'web.deleteHistoryError': 'Could not delete archived run: {{message}}',
   'web.deleteHistoryTitle': 'delete archived run {{name}}',
+  'web.deletePresetConfirm': 'Delete preset "{{name}}"?',
   'web.deleteRunConfirm': 'Delete stopped run "{{name}}"? A simple history record will be kept.',
   'web.deleteRunError': 'Could not delete stopped run: {{message}}',
   'web.deleteRunTitle': 'delete stopped run {{name}}',

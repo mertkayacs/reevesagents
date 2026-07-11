@@ -181,6 +181,7 @@ export const zhHans = {
     'web.deleteHistoryConfirm': '删除已归档运行“{{name}}”？只会移除历史记录。',
     'web.deleteHistoryError': '无法删除已归档运行：{{message}}',
     'web.deleteHistoryTitle': '删除已归档运行 {{name}}',
+    'web.deletePresetConfirm': '删除预设“{{name}}”？',
     'web.deleteRunConfirm': '删除已停止运行“{{name}}”？会保留简单历史记录。',
     'web.deleteRunError': '无法删除已停止运行：{{message}}',
     'web.deleteRunTitle': '删除已停止运行 {{name}}',

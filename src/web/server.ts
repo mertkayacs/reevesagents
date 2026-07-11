@@ -40,6 +40,7 @@ import {
   attach as attachMcpHost,
   detach as detachMcpHost,
   attachAll as attachAllMcpHosts,
+  verifyServerLaunch,
 } from '../mcp/installer.js'
 
 const HOST = '127.0.0.1'
@@ -315,8 +316,13 @@ function detachMcpHostAction(body: Record<string, unknown>): unknown {
   return { result, hosts: mcpHostStatus() }
 }
 
-function attachAllMcpHostsAction(): unknown {
-  return { results: attachAllMcpHosts(), hosts: mcpHostStatus() }
+// Mirror the CLI: after writing the config, actually launch the server once so the
+// response tells the client whether an attached host can start it, not just that the
+// entry was written. The verify field is additive; the client still reads results.
+async function attachAllMcpHostsAction(): Promise<unknown> {
+  const results = attachAllMcpHosts()
+  const verify = await verifyServerLaunch()
+  return { results, hosts: mcpHostStatus(), verify }
 }
 
 // Editable global settings. The config panel reads the field specs plus current
@@ -514,7 +520,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
   }
   if (method === 'POST' && path === '/api/mcp-hosts/attach-all') {
     try {
-      sendJson(res, 200, attachAllMcpHostsAction())
+      sendJson(res, 200, await attachAllMcpHostsAction())
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }

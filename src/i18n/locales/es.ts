@@ -179,6 +179,7 @@ export const es = {
     'web.deleteHistoryConfirm': '¿Eliminar el run archivado "{{name}}"? Solo se quitará la entrada del historial.',
     'web.deleteHistoryError': 'No se pudo eliminar el run archivado: {{message}}',
     'web.deleteHistoryTitle': 'eliminar run archivado {{name}}',
+    'web.deletePresetConfirm': '¿Eliminar el preajuste "{{name}}"?',
     'web.deleteRunConfirm': '¿Eliminar el run detenido "{{name}}"? Se conservará un historial simple.',
     'web.deleteRunError': 'No se pudo eliminar el run detenido: {{message}}',
     'web.deleteRunTitle': 'eliminar run detenido {{name}}',

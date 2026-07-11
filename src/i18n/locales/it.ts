@@ -178,6 +178,7 @@ export const it = {
     'web.deleteHistoryConfirm': 'Eliminare il run archiviato "{{name}}"? Verrà rimossa solo la voce di cronologia.',
     'web.deleteHistoryError': 'Impossibile eliminare il run archiviato: {{message}}',
     'web.deleteHistoryTitle': 'elimina run archiviato {{name}}',
+    'web.deletePresetConfirm': 'Eliminare il preset "{{name}}"?',
     'web.deleteRunConfirm': 'Eliminare il run fermo "{{name}}"? Verrà mantenuta una cronologia semplice.',
     'web.deleteRunError': 'Impossibile eliminare il run fermo: {{message}}',
     'web.deleteRunTitle': 'elimina run fermo {{name}}',

@@ -105,6 +105,7 @@
     'web.stopAgentError': 'Could not stop agent: {{message}}',
     'web.stopRunConfirm': 'Stop run "{{name}}"? Every agent in it will be stopped.',
     'web.stopRunError': 'Could not stop run: {{message}}',
+    'web.deletePresetConfirm': 'Delete preset "{{name}}"?',
     'web.deleteRunConfirm': 'Delete stopped run "{{name}}"? A simple history record will be kept.',
     'web.deleteRunError': 'Could not delete stopped run: {{message}}',
     'web.deleteAgentConfirm': 'Delete stopped agent "{{name}}"? This removes the saved agent record.',
@@ -2015,7 +2016,7 @@
   }
 
   async function deletePreset(name) {
-    if (!confirm(`Delete preset "${name}"?`)) return
+    if (!confirm(t('web.deletePresetConfirm', { name }))) return
     el.presetsError.hidden = true
     try {
       await api('POST', `/api/presets/${encodeURIComponent(name)}/delete`, { confirm: true })

@@ -54,14 +54,14 @@ export function Settings() {
   // action at once; use it only when the body is tall enough to hold them all,
   // otherwise it overflows and Ink corrupts the rows. Below that, the compact
   // scrolling list handles any height.
-  const nonCompactRows = PROVIDERS.length + LANGUAGE_OPTIONS.length + 3 + 4 + 8
+  const nonCompactRows = PROVIDERS.length + LANGUAGE_OPTIONS.length + 3 + 5 + 8
   const compactBody = bodyRows < nonCompactRows
   const showCompactStatePaths = compactBody && bodyRows >= 10
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const available = useMemo(() => detectAvailable(), [refreshKey])
-  const actionLabelWidth = Math.max(t('settings.recheck').length, t('settings.showConfig').length, t('settings.editConfig').length, t('common.back').length)
+  const actionLabelWidth = Math.max(t('welcome.setup').length, t('settings.recheck').length, t('settings.showConfig').length, t('settings.editConfig').length, t('common.back').length)
 
   const rows: SettingsRow[] = [
     ...PROVIDERS.map(p => ({ type: 'provider' as const, id: p, provider: p, selectable: true })),
@@ -69,6 +69,7 @@ export function Settings() {
     { type: 'statePath' as const, id: 'state', selectable: false },
     { type: 'statePath' as const, id: 'runs', selectable: false },
     { type: 'statePath' as const, id: 'presets', selectable: false },
+    { type: 'action' as const, id: 'setup', selectable: true },
     { type: 'action' as const, id: 'recheck', selectable: true },
     { type: 'action' as const, id: 'showConfig', selectable: true },
     { type: 'action' as const, id: 'editConfig', selectable: true },
@@ -95,6 +96,10 @@ export function Settings() {
     const row = selectableRows[currentIdx]
     if (!row) return
 
+    if (row.id === 'setup') {
+      push('Setup')
+      return
+    }
     if (row.id === 'recheck') {
       setRefreshKey(k => k + 1)
       return
@@ -187,6 +192,7 @@ export function Settings() {
               )
             }
             const actionLabels: Record<string, { primary: string; hint: string }> = {
+              setup: { primary: t('welcome.setup'), hint: t('welcome.setupHint') },
               recheck: { primary: t('settings.recheck'), hint: t('settings.recheckHint') },
               showConfig: { primary: t('settings.showConfig'), hint: t('settings.showConfigHint') },
               editConfig: { primary: t('settings.editConfig'), hint: t('settings.editConfigHint') },
@@ -280,6 +286,12 @@ export function Settings() {
           <SectionEnd />
 
           <Section label={t('common.actions')} />
+          <Row
+            selected={selectedIdx === rows.findIndex(r => r.id === 'setup')}
+            primary={t('welcome.setup')}
+            primaryWidth={actionLabelWidth}
+            hint={t('welcome.setupHint')}
+          />
           <Row
             selected={selectedIdx === rows.findIndex(r => r.id === 'recheck')}
             primary={t('settings.recheck')}

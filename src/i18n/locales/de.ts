@@ -174,6 +174,7 @@ export const de = {
     'web.deleteHistoryConfirm': 'Archivierten Run "{{name}}" löschen? Es wird nur der Verlaufseintrag entfernt.',
     'web.deleteHistoryError': 'Archivierter Run konnte nicht gelöscht werden: {{message}}',
     'web.deleteHistoryTitle': 'archivierten Run {{name}} löschen',
+    'web.deletePresetConfirm': 'Vorlage "{{name}}" löschen?',
     'web.deleteRunConfirm': 'Gestoppten Run "{{name}}" löschen? Ein einfacher Verlaufseintrag bleibt erhalten.',
     'web.deleteRunError': 'Gestoppter Run konnte nicht gelöscht werden: {{message}}',
     'web.deleteRunTitle': 'gestoppten Run {{name}} löschen',

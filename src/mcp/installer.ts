@@ -14,6 +14,9 @@ const SERVER_NAME = 'reevesagents'
 const SERVER_BIN = 'reevesagents'
 const SERVER_ARG = 'mcp'
 const MGMT_TIMEOUT_MS = 15_000
+// Shorter cap for the read-only `mcp list` status probe so hosts/setup do not hang
+// for the full management timeout per slow host.
+const STATUS_TIMEOUT_MS = 5_000
 const VERIFY_TIMEOUT_MS = 20_000
 
 // The absolute command a host CLI runs to launch our MCP server over stdio.
@@ -130,6 +133,7 @@ export interface AttachResult {
 
 function isInstalled(bin: string): boolean {
   try {
+    // Assumes `which` is on PATH (holds on a normal dev/user machine).
     execFileSync('which', [bin], { stdio: 'pipe' })
     return true
   } catch {
@@ -139,9 +143,11 @@ function isInstalled(bin: string): boolean {
 
 function isAttached(host: HostCli): boolean {
   try {
+    // Status probe only: cap it at STATUS_TIMEOUT_MS so a slow host does not stall
+    // hosts/setup for the full management timeout.
     const out = execFileSync(hostBin(host), host.list, {
       encoding: 'utf8',
-      timeout: MGMT_TIMEOUT_MS,
+      timeout: STATUS_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     // Match the reevesagents name as a whole token, so a differently-named

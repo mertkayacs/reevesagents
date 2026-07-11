@@ -178,6 +178,7 @@ export const tr = {
     'web.deleteHistoryConfirm': 'Arşivlenmiş run "{{name}}" silinsin mi? Sadece geçmiş kaydı kaldırılır.',
     'web.deleteHistoryError': 'Arşivlenmiş run silinemedi: {{message}}',
     'web.deleteHistoryTitle': 'arşivlenmiş run\'ı sil {{name}}',
+    'web.deletePresetConfirm': '"{{name}}" hazır ayarı silinsin mi?',
     'web.deleteRunConfirm': 'Durdurulmuş run "{{name}}" silinsin mi? Basit geçmiş kaydı korunur.',
     'web.deleteRunError': 'Durdurulmuş run silinemedi: {{message}}',
     'web.deleteRunTitle': 'durdurulmuş run\'ı sil {{name}}',

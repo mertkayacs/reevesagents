@@ -181,6 +181,7 @@ export const ar = {
     'web.deleteHistoryConfirm': 'حذف التشغيلة المؤرشفة "{{name}}"؟ سيتم حذف سجلها فقط.',
     'web.deleteHistoryError': 'تعذر حذف التشغيلة المؤرشفة: {{message}}',
     'web.deleteHistoryTitle': 'حذف تشغيلة مؤرشفة {{name}}',
+    'web.deletePresetConfirm': 'حذف الإعداد الجاهز "{{name}}"؟',
     'web.deleteRunConfirm': 'حذف التشغيلة المتوقفة "{{name}}"؟ سيتم الاحتفاظ بسجل بسيط.',
     'web.deleteRunError': 'تعذر حذف التشغيلة المتوقفة: {{message}}',
     'web.deleteRunTitle': 'حذف تشغيلة متوقفة {{name}}',

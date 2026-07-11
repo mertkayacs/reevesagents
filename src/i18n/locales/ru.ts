@@ -180,6 +180,7 @@ export const ru = {
     'web.deleteHistoryConfirm': 'Удалить архивный run "{{name}}"? Удаляется только запись истории.',
     'web.deleteHistoryError': 'Не удалось удалить архивный run: {{message}}',
     'web.deleteHistoryTitle': 'удалить архивный run {{name}}',
+    'web.deletePresetConfirm': 'Удалить пресет "{{name}}"?',
     'web.deleteRunConfirm': 'Удалить остановленный run "{{name}}"? Простая запись истории сохранится.',
     'web.deleteRunError': 'Не удалось удалить остановленный run: {{message}}',
     'web.deleteRunTitle': 'удалить остановленный run {{name}}',
