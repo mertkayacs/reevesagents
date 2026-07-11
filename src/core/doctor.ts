@@ -88,7 +88,7 @@ export function platformSupportCheck(
   }
 }
 
-function checkTmux(): CheckResult {
+export function checkTmux(): CheckResult {
   try {
     const versionStr = execFileSync('tmux', ['-V'], { encoding: 'utf8' }).trim()
     const match = versionStr.match(/tmux (\d+)\.(\d+)/)
