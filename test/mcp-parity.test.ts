@@ -293,6 +293,35 @@ describe('mcp parity tools', () => {
     })
   })
 
+  describe('resources and instructions', () => {
+    it('advertises the providers and guide resources', async () => {
+      const { listMcpResources } = await import('../src/mcp/server.js')
+      const uris = listMcpResources().map(r => r.uri)
+      expect(uris).toContain('reevesagents://providers')
+      expect(uris).toContain('reevesagents://guide')
+    })
+
+    it('reads the guide resource as markdown that names the drive loop', async () => {
+      const { readMcpResource } = await import('../src/mcp/server.js')
+      const guide = readMcpResource('reevesagents://guide')
+      expect(guide.mimeType).toBe('text/markdown')
+      expect(guide.text).toMatch(/list_providers/)
+      expect(guide.text).toMatch(/send_key/)
+    })
+
+    it('rejects an unknown resource uri', async () => {
+      const { readMcpResource } = await import('../src/mcp/server.js')
+      expect(() => readMcpResource('reevesagents://nope')).toThrow(/Unknown resource/)
+    })
+
+    it('the connect-time instructions name the drive-loop tools', async () => {
+      const { MCP_INSTRUCTIONS } = await import('../src/mcp/server.js')
+      for (const cmd of ['list_providers', 'spawn', 'send_text', 'send_key', 'read']) {
+        expect(MCP_INSTRUCTIONS).toContain(cmd)
+      }
+    })
+  })
+
   describe('doctor', () => {
     it('returns the environment checks', async () => {
       const checks = payload(await call('doctor', {}))
