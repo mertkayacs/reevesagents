@@ -88,6 +88,43 @@ importers:
         specifier: ^8.21.0
         version: 8.21.0
 
+  packages/reevesagents-win:
+    dependencies:
+      '@lydell/node-pty':
+        specifier: 1.2.0-beta.12
+        version: 1.2.0-beta.12
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
+      commander:
+        specifier: ^14.0.3
+        version: 14.0.3
+      strip-ansi:
+        specifier: ^7.1.0
+        version: 7.2.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^10.0.1
+        version: 10.0.1(eslint@10.3.0(jiti@2.7.0))
+      '@types/node':
+        specifier: ^25.7.0
+        version: 25.7.0
+      '@typescript-eslint/parser':
+        specifier: ^8.59.3
+        version: 8.59.3(eslint@10.3.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint:
+        specifier: 10.3.0
+        version: 10.3.0(jiti@2.7.0)
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.6(@types/node@25.7.0)(vite@8.1.0(@types/node@25.7.0)(esbuild@0.28.1)(jiti@2.7.0))
+
 packages:
 
   '@alcalzone/ansi-tokenize@0.3.0':
@@ -2942,7 +2979,6 @@ snapshots:
       '@lydell/node-pty-linux-x64': 1.2.0-beta.12
       '@lydell/node-pty-win32-arm64': 1.2.0-beta.12
       '@lydell/node-pty-win32-x64': 1.2.0-beta.12
-    optional: true
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
     dependencies:

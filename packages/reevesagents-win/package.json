@@ -1,0 +1,56 @@
+{
+  "name": "reevesagents-win",
+  "version": "1.5.0",
+  "description": "MCP-only, ConPTY-driven agent-control server for native Windows: spawn and drive AI CLIs without tmux or WSL",
+  "type": "module",
+  "packageManager": "pnpm@10.34.1",
+  "bin": {
+    "reevesagents-win": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test",
+    "sync:shared": "node scripts/sync-shared.mjs",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "1.2.0-beta.12",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^14.0.3",
+    "strip-ansi": "^7.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.7.0",
+    "@typescript-eslint/parser": "^8.59.3",
+    "eslint": "10.3.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mertkayacs/reevesagents"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "cli",
+    "mcp",
+    "windows",
+    "conpty",
+    "node-pty"
+  ]
+}
