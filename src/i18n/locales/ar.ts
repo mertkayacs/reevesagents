@@ -111,7 +111,7 @@ export const ar = {
     'setup.connectAll': 'إرفاق كل أدوات CLI المثبّتة',
     'setup.connectAllHint': 'أرفِق MCP ليقود CLI واحد البقية',
     'setup.connectedToast': 'تم إرفاق {{ok}} من {{total}} مضيف. أعد تشغيلها لتحميل الأدوات.',
-    'setup.done': 'المتابعة إلى القائمة',
+    'setup.done': 'متابعة إلى القائمة',
     'setup.doneHint': 'الذهاب إلى القائمة الرئيسية',
     'setup.environment': 'البيئة',
     'setup.intro': 'شغّل ووجّه وكلاء AI CLI آخرين من مكان واحد.',
