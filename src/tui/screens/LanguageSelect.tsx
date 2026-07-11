@@ -7,6 +7,7 @@ import { useRouter } from '../router.js'
 import { LANGUAGE_OPTIONS } from '../../i18n/languages.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
 import { colors } from '../../utils/tokens.js'
+import { configExists } from '../../core/config.js'
 
 const LABEL_WIDTH = Math.max(...LANGUAGE_OPTIONS.map(option => option.nativeName.length))
 
@@ -27,8 +28,11 @@ export function LanguageSelect() {
 
   function choose(): void {
     const option = LANGUAGE_OPTIONS[selectedIdx] ?? LANGUAGE_OPTIONS[0]!
+    // A first run (no config yet) lands on the setup wizard; a language change
+    // from Settings just returns to the menu.
+    const firstRun = !configExists()
     setLanguage(option.code)
-    replace('Welcome')
+    replace(firstRun ? 'Setup' : 'Welcome')
   }
 
   useInput((_input, key) => {

@@ -43,6 +43,7 @@ export type ScreenName =
   | 'AddWorker'
   | 'Settings'
   | 'AgentControl'
+  | 'Setup'
   | 'Reference'
   | 'Credits'
   | 'Doctor'
