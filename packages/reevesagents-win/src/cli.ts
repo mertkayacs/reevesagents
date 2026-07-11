@@ -34,12 +34,16 @@ program
   .option('--json', 'output raw JSON')
   .action((opts: { json?: boolean }) => {
     const result = runDoctor()
+    const anyFail = result.checks.some(check => check.status === 'fail')
     if (opts.json) {
-      console.log(JSON.stringify(result.checks, null, 2))
+      // Match the unix `doctor --json` shape ({ ok, checks }) so a script can read
+      // either package's output the same way.
+      console.log(JSON.stringify({ ok: !anyFail, checks: result.checks }, null, 2))
+      if (anyFail) process.exitCode = 1
       return
     }
     printChecks(result.checks)
-    if (result.checks.some(check => check.status === 'fail')) process.exitCode = 1
+    if (anyFail) process.exitCode = 1
   })
 
 program
@@ -103,6 +107,7 @@ program
     const verified = await verifyServerLaunch()
     console.log(verified.ok ? `  server launch verified: ${verified.detail}` : `  server launch FAILED: ${verified.detail}`)
     if (results.some(result => result.ok)) console.log('  restart the attached CLIs (start a new session) to load the tools')
+    if (!results.some(result => result.ok) || !verified.ok) process.exitCode = 1
   })
 
 program

@@ -395,8 +395,10 @@ export function readMcpResource(uri: string) {
 }
 
 export async function startWinMcpServer(): Promise<void> {
-  // Prior-session ptys are gone; archive their leftover runs before serving.
-  reconcileOnStart()
+  // Prior-session ptys are gone; archive their leftover runs before serving. Skip
+  // this when a launch verifier spawned us (REEVES_WIN_VERIFY): that throwaway
+  // handshake server must never archive another live session's runs.
+  if (process.env.REEVES_WIN_VERIFY !== '1') reconcileOnStart()
 
   const server = new Server(
     { name: 'reevesagents-win', version: REEVESAGENTS_WIN_VERSION },

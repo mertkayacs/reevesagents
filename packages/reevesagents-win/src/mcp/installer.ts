@@ -136,16 +136,18 @@ function isInstalled(bin: string): boolean {
 }
 
 // Run one of a host CLI's own mcp subcommands. On Windows the host bin is a .cmd
-// shim, so resolve it and launch through cmd.exe /d /s /c; execFileSync cannot run a
-// .cmd directly. The only non-constant arg is the resolved launcher path (baked into
-// the add argv), so injection risk is limited to that path. On non-Windows we invoke
-// the bin directly, which also keeps this testable off Windows.
+// shim, so resolve it and launch through cmd.exe /d /c; execFileSync cannot run a
+// .cmd directly. We do NOT pass /s (it strips the outer quotes of the whole /c
+// string, corrupting a resolved path that contains spaces). The only non-constant
+// arg is the resolved launcher path (baked into the add argv), so injection risk is
+// limited to that path. On non-Windows we invoke the bin directly, which also keeps
+// this testable off Windows.
 function runHostCommand(host: HostCli, args: string[]): string {
   const bin = hostBin(host)
   if (IS_WINDOWS) {
     const cmdPath = resolvePath(bin) ?? bin
     const comspec = process.env.ComSpec ?? 'cmd.exe'
-    return execFileSync(comspec, ['/d', '/s', '/c', cmdPath, ...args], {
+    return execFileSync(comspec, ['/d', '/c', cmdPath, ...args], {
       encoding: 'utf8',
       timeout: MGMT_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -263,7 +265,14 @@ export async function verifyServerLaunch(cmd: LaunchCmd = resolveLaunchCmd()): P
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
   const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js')
   const client = new Client({ name: 'reevesagents-win-verify', version: '1' }, { capabilities: {} })
-  const transport = new StdioClientTransport({ command: cmd.command, args: cmd.args, stderr: 'ignore' })
+  // Mark the spawned server as a throwaway handshake so it skips reconcile-on-start
+  // and cannot archive a live session's runs. Carry the real env (minus undefined) so
+  // the launcher resolves the same way a host CLI would.
+  const verifyEnv: Record<string, string> = { REEVES_WIN_VERIFY: '1' }
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) verifyEnv[key] = value
+  }
+  const transport = new StdioClientTransport({ command: cmd.command, args: cmd.args, stderr: 'ignore', env: verifyEnv })
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error('timed out starting the MCP server')), VERIFY_TIMEOUT_MS)

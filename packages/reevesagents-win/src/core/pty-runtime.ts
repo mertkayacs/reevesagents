@@ -73,9 +73,12 @@ const lastPasteAt = new Map<string, number>()
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
 // How to turn our argv into an OS process. On Windows, provider bins are .cmd shims
-// that Node cannot exec directly, so we launch through cmd.exe /d /s /c <cmdPath>.
-// On other platforms we run the resolved path directly, which keeps the runtime
-// exercisable off Windows. Injectable so tests point the spawn at a stub CLI.
+// that Node cannot exec directly, so we launch through cmd.exe /d /c <cmdPath>. We do
+// NOT pass /s: it strips the first and last quote of the whole string after /c, which
+// corrupts the command line when node-pty has already quoted a cmdPath containing
+// spaces (e.g. C:\Program Files\...). On other platforms we run the resolved path
+// directly, which keeps the runtime exercisable off Windows. Injectable so tests
+// point the spawn at a stub CLI.
 export interface SpawnPlan {
   file: string
   args: string[]
@@ -89,7 +92,7 @@ function defaultPlanSpawn(argv: string[]): SpawnPlan {
   const { cmdPath } = resolveBin(bin ?? '')
   if (process.platform === 'win32') {
     const comspec = process.env.ComSpec ?? 'cmd.exe'
-    return { file: comspec, args: ['/d', '/s', '/c', cmdPath, ...rest] }
+    return { file: comspec, args: ['/d', '/c', cmdPath, ...rest] }
   }
   return { file: cmdPath, args: rest }
 }
