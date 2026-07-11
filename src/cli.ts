@@ -27,7 +27,7 @@ import { listRunApprovals, resolveRunApproval } from './core/approvals.js'
 import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './core/config.js'
 import { listPresets, savePresetFromRun, deletePreset } from './core/store.js'
 import { MODEL_CATALOG } from './core/model-catalog.js'
-import { hostStatus, attach, attachAll, detach } from './mcp/installer.js'
+import { hostStatus, attach, attachAll, detach, verifyServerLaunch } from './mcp/installer.js'
 import { writeTuiOpenToken } from './core/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
 import { providerDisplayName, providerColor } from './utils/display.js'
@@ -697,7 +697,7 @@ program
 program
   .command('attach [cli]')
   .description('attach the reevesagents MCP to one CLI, or all installed when omitted')
-  .action((cli: string | undefined) => {
+  .action(async (cli: string | undefined) => {
     try {
       const results = cli ? [attach(cli)] : attachAll()
       if (results.length === 0) {
@@ -706,6 +706,17 @@ program
       }
       for (const result of results) {
         console.log(`${(result.ok ? 'ok' : '--').padEnd(3)} ${result.key.padEnd(10)} ${result.message}`)
+      }
+      const attached = results.filter(result => result.ok)
+      if (attached.length > 0) {
+        const verify = await verifyServerLaunch()
+        if (verify.ok) {
+          console.log(`\nverified: ${verify.detail}.`)
+          console.log(`restart ${attached.map(result => result.key).join(', ')} (start a new session) to load the tools.`)
+        } else {
+          console.log(`\nwarning: the entry was written, but the server did not start here: ${verify.detail}`)
+          console.log('a host CLI will hit the same error. check that reevesagents is installed and re-run attach.')
+        }
       }
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))

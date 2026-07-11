@@ -10,6 +10,7 @@ import { detectAvailable, inspectProviderCompatibility } from './providers.js'
 import { listRuns, runsDir, stateRoot } from './runs.js'
 import { WEB_EXTRA_MODULES } from '../web/extras.js'
 import { providerDisplayName } from '../utils/display.js'
+import { resolveLaunchCmd } from '../mcp/installer.js'
 
 export interface DoctorResult {
   checks: CheckResult[]
@@ -173,6 +174,30 @@ function checkRunsState(): CheckResult {
   }
 }
 
+// The command a host CLI runs to launch the agent-control MCP. Warn if it did
+// not resolve to an absolute, executable launcher, since that is the usual
+// cause of an "attached but never starts" MCP server on another machine.
+function checkMcpServerCommand(): CheckResult {
+  const cmd = resolveLaunchCmd()
+  if (cmd.command === 'reevesagents') {
+    return {
+      name: 'mcp server',
+      status: 'warn',
+      detail: 'no absolute launcher resolved; attached host CLIs will fall back to their own PATH',
+    }
+  }
+  try {
+    accessSync(cmd.command, constants.X_OK)
+    return { name: 'mcp server', status: 'ok', detail: `${cmd.command} ${cmd.args.join(' ')}` }
+  } catch {
+    return {
+      name: 'mcp server',
+      status: 'warn',
+      detail: `${cmd.command} is not executable; re-run reevesagents attach after reinstalling`,
+    }
+  }
+}
+
 export function runDoctor(): DoctorResult {
   return {
     checks: [
@@ -186,6 +211,7 @@ export function runDoctor(): DoctorResult {
       checkPathAccess('presets dir', join(stateRoot(), 'presets')),
       checkRunsState(),
       checkWebExtras(),
+      checkMcpServerCommand(),
     ],
   }
 }
