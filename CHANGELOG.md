@@ -1,5 +1,25 @@
 # Changelog
 
+# [1.5.0](https://github.com/mertkayacs/reevesagents/compare/v1.4.0...v1.5.0) (2026-07-11)
+
+
+### Bug Fixes
+
+* address remaining review notes across CLI, TUI, and web ([b7753c0](https://github.com/mertkayacs/reevesagents/commit/b7753c060e8ab05e6b50650d15a8a008f1c9b4f8)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+* **cli:** set failure exit codes and add attach --force ([a68c247](https://github.com/mertkayacs/reevesagents/commit/a68c24782f8fb2b1311fcbaf4a03cd4d9baf17c9)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+* **win:** guard .cmd launchers, add setup --json, shorten status probe ([6273ea7](https://github.com/mertkayacs/reevesagents/commit/6273ea7eae7d72916edf7a1b45cedcc5a4aedfee)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+* **win:** protect live runs in the verifier and fix cmd.exe quoting ([52dc275](https://github.com/mertkayacs/reevesagents/commit/52dc27536c8a1e6d92cf1275d3bf99356fbf6d9c)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+
+
+### Features
+
+* **cli:** add a setup command and shared onboarding core ([79dd470](https://github.com/mertkayacs/reevesagents/commit/79dd470bbaf0f4aa9598a889ecb8f7d5025b4d6b)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+* **mcp:** add connect-time instructions and a getting-started guide ([341c8e6](https://github.com/mertkayacs/reevesagents/commit/341c8e689b6a13057edcd8274e442bc1a71e6f5b)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+* **mcp:** resolve an absolute launcher and verify attach ([2315e8e](https://github.com/mertkayacs/reevesagents/commit/2315e8e494d61036f7659db82ac55d35d44fadde)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+* **tui:** add a first-run setup wizard ([1895611](https://github.com/mertkayacs/reevesagents/commit/18956117e6af36dbd1055ed984b3cbb589f5387b)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+* **web:** add a first-visit getting-started popup ([c3d909b](https://github.com/mertkayacs/reevesagents/commit/c3d909b4456052cc4398b82bf74213dc8b9af220)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+* **win:** add reevesagents-win, an MCP-only Windows-native package ([58dba05](https://github.com/mertkayacs/reevesagents/commit/58dba05fad8c23cf27a5ab77d97c8fd8f097468f)), closes [#8](https://github.com/mertkayacs/reevesagents/issues/8)
+
 # [1.4.0](https://github.com/mertkayacs/reevesagents/compare/v1.3.2...v1.4.0) (2026-07-05)
 
 
