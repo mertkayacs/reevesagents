@@ -735,6 +735,7 @@ program
         console.log(`\nwarning: the server did not start here: ${result.verify.detail}`)
         console.log('a host CLI will hit the same error. check that reevesagents is installed and re-run setup --attach.')
       }
+      if (!result.attached.some(attached => attached.ok) || result.verify?.ok === false) process.exitCode = 1
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)
@@ -760,9 +761,10 @@ program
 program
   .command('attach [cli]')
   .description('attach the reevesagents MCP to one CLI, or all installed when omitted')
-  .action(async (cli: string | undefined) => {
+  .option('--force', 'rewrite the registration even if already attached (upgrades an old launcher)')
+  .action(async (cli: string | undefined, opts: { force?: boolean }) => {
     try {
-      const results = cli ? [attach(cli)] : attachAll()
+      const results = cli ? [attach(cli, opts.force)] : attachAll(opts.force)
       if (results.length === 0) {
         console.log('no installed CLIs to attach')
         return
@@ -779,7 +781,10 @@ program
         } else {
           console.log(`\nwarning: the entry was written, but the server did not start here: ${verify.detail}`)
           console.log('a host CLI will hit the same error. check that reevesagents is installed and re-run attach.')
+          process.exitCode = 1
         }
+      } else {
+        process.exitCode = 1
       }
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
@@ -794,6 +799,7 @@ program
     try {
       const result = detach(cli)
       console.log(`${(result.ok ? 'ok' : '--').padEnd(3)} ${result.key.padEnd(10)} ${result.message}`)
+      if (!result.ok) process.exitCode = 1
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)

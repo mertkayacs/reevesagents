@@ -295,6 +295,27 @@ describe('mcp installer', () => {
     })
   })
 
+  describe('force re-attach', () => {
+    it('removes then adds when forced, even if already attached', async () => {
+      wireEnv({ installed: new Set(['claude']), listOutput: { claude: 'reevesagents: reevesagents mcp' } })
+      const { attach } = await loadInstaller()
+      expect(attach('cc', true).ok).toBe(true)
+      const subs = execFileSync.mock.calls.filter(c => c[0] === 'claude').map(c => c[1]?.[1])
+      expect(subs).toContain('remove')
+      expect(subs).toContain('add')
+      expect(subs.indexOf('remove')).toBeLessThan(subs.indexOf('add'))
+    })
+
+    it('attachAll(true) re-attaches an already-attached host instead of skipping', async () => {
+      wireEnv({ installed: new Set(['claude']), listOutput: { claude: 'reevesagents: reevesagents mcp' } })
+      const { attachAll } = await loadInstaller()
+      const cc = attachAll(true).find(r => r.key === 'cc')!
+      expect(cc.ok).toBe(true)
+      expect(cc.message).not.toBe('already attached')
+      expect(execFileSync.mock.calls.some(c => c[0] === 'claude' && c[1]?.[1] === 'add')).toBe(true)
+    })
+  })
+
   describe('resolveLaunchCmd', () => {
     it('resolves an absolute node + entry when the entry is a js file', async () => {
       const { resolveLaunchCmd } = await loadInstaller()

@@ -193,7 +193,7 @@ export function hostStatus(): HostStatus[] {
 }
 
 // Attach the reevesagents MCP server to one CLI by calling that CLI's own mcp add.
-export function attach(key: string): AttachResult {
+export function attach(key: string, force = false): AttachResult {
   const host = findHost(key)
   const label = hostLabel(host)
   if (!host.add) {
@@ -208,8 +208,14 @@ export function attach(key: string): AttachResult {
     return { key, label, ok: false, message: `${hostBin(host)} is not installed` }
   }
   try {
+    // force rewrites a stale registration (e.g. a pre-1.5.0 bare-name command that
+    // this machine's PATH no longer resolves): remove the old entry first so the
+    // CLI's own mcp add does not reject a duplicate name.
+    if (force && host.remove) {
+      try { runHostCommand(host, host.remove) } catch { /* nothing to remove; fine */ }
+    }
     runHostCommand(host, host.add(resolveLaunchCmd()))
-    return { key, label, ok: true, message: 'attached' }
+    return { key, label, ok: true, message: force ? 'reattached' : 'attached' }
   } catch (err) {
     return { key, label, ok: false, message: cliError(err) }
   }
@@ -237,14 +243,14 @@ export function detach(key: string): AttachResult {
 // already attached is left alone and counted as success, so running this twice
 // (or after a manual per-host attach) is safe and never surfaces a spurious
 // "already exists" failure from the CLI's own mcp add.
-export function attachAll(): AttachResult[] {
+export function attachAll(force = false): AttachResult[] {
   return HOSTS
     .filter(host => host.add && isInstalled(hostBin(host)))
     .map(host => {
-      if (isAttached(host)) {
+      if (!force && isAttached(host)) {
         return { key: host.provider, label: hostLabel(host), ok: true, message: 'already attached' }
       }
-      return attach(host.provider)
+      return attach(host.provider, force)
     })
 }
 
