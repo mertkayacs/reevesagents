@@ -52,3 +52,20 @@ jobs:
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # The native-Windows sibling ships from the same tag. It needs its own npm
+      # trusted publisher (or an NPM_TOKEN scoped to reevesagents-win); until that
+      # is set up, continue-on-error keeps a failure here from blocking the main
+      # package above. The version must match the tag, so bump both together.
+      - name: Publish reevesagents-win to npm
+        continue-on-error: true
+        run: |
+          WIN_VER="$(node -p "require('./packages/reevesagents-win/package.json').version")"
+          if [ "${GITHUB_REF_NAME#v}" != "$WIN_VER" ]; then
+            echo "tag $GITHUB_REF_NAME does not match reevesagents-win version $WIN_VER; skipping"
+            exit 1
+          fi
+          pnpm --filter reevesagents-win build
+          cd packages/reevesagents-win && npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

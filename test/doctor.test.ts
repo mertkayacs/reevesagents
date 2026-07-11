@@ -100,4 +100,11 @@ describe('doctor', () => {
     expect(check).toBeDefined()
     expect(['ok', 'warn']).toContain(check!.status)
   })
+
+  it('includes an mcp server check that never fails (optional hardening)', async () => {
+    const { runDoctor } = await import('../src/core/doctor.js')
+    const check = runDoctor().checks.find(c => c.name === 'mcp server')
+    expect(check).toBeDefined()
+    expect(['ok', 'warn']).toContain(check!.status)
+  })
 })

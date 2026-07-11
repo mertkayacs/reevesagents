@@ -444,8 +444,11 @@ describe('cli parity', () => {
 
       const { out } = await runCli(['attach', 'cc'])
       expect(out).toMatch(/ok\s+cc\s+attached/)
-      const addCall = execFileSync.mock.calls.find(c => c[0] === 'claude' && c[1]?.[1] === 'add')
-      expect(addCall?.[1]).toEqual(['mcp', 'add', 'reevesagents', '--', 'reevesagents', 'mcp'])
+      const argv = execFileSync.mock.calls.find(c => c[0] === 'claude' && c[1]?.[1] === 'add')?.[1] as string[]
+      expect(argv.slice(0, 3)).toEqual(['mcp', 'add', 'reevesagents'])
+      expect(argv[argv.indexOf('-s') + 1]).toBe('user')
+      expect(argv).toContain('--')
+      expect(argv[argv.length - 1]).toBe('mcp')
     })
 
     it('attach without a cli attaches all installed drivable hosts', async () => {

@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Drive the installer without ever touching a real CLI: every execFileSync call
 // (which / mcp list / mcp add / mcp remove) is routed through this single mock.
@@ -26,7 +29,8 @@ function wireEnv(env: FakeEnv): void {
   execFileSync.mockImplementation((file: string, args: string[]) => {
     if (file === 'which') {
       const bin = args[0]!
-      if (env.installed.has(bin)) return Buffer.from(`/usr/bin/${bin}\n`)
+      // Honor the { encoding: 'utf8' } callers use (resolveLaunchCmd trims this).
+      if (env.installed.has(bin)) return `/usr/bin/${bin}\n`
       throw new Error(`which: ${bin} not found`)
     }
     // From here `file` is a host bin and `args` is one of its mcp subcommands.
@@ -169,52 +173,59 @@ describe('mcp installer', () => {
   })
 
   describe('attach', () => {
-    it('builds the Claude Code argv with the -- separator and returns ok:true', async () => {
+    // The launcher is resolved at attach time to an absolute node + entry (or an
+    // absolute bin), so assert each host's argv SHAPE, not the exact paths.
+    function addArgv(bin: string): string[] {
+      return execFileSync.mock.calls.find(c => c[0] === bin && c[1]?.[1] === 'add')![1]
+    }
+
+    it('pins user scope and uses the -- separator for Claude Code', async () => {
       wireEnv({ installed: new Set(['claude']), listOutput: {} })
       const { attach } = await loadInstaller()
 
-      const result = attach('cc')
-      expect(result).toEqual({ key: 'cc', label: 'Claude Code', ok: true, message: 'attached' })
-
-      const addCall = execFileSync.mock.calls.find(c => c[0] === 'claude' && c[1]?.[1] === 'add')!
-      expect(addCall[0]).toBe('claude')
-      expect(addCall[1]).toEqual(['mcp', 'add', 'reevesagents', '--', 'reevesagents', 'mcp'])
+      expect(attach('cc')).toEqual({ key: 'cc', label: 'Claude Code', ok: true, message: 'attached' })
+      const argv = addArgv('claude')
+      expect(argv.slice(0, 3)).toEqual(['mcp', 'add', 'reevesagents'])
+      expect(argv[argv.indexOf('-s') + 1]).toBe('user')
+      expect(argv).toContain('--')
+      expect(argv[argv.length - 1]).toBe('mcp')
     })
 
-    it('builds the codex argv with the -- separator', async () => {
-      wireEnv({ installed: new Set(['codex']), listOutput: {} })
+    it('uses the -- separator and no scope flag for codex and kimi', async () => {
       const { attach } = await loadInstaller()
-
-      expect(attach('codex').ok).toBe(true)
-      const addCall = execFileSync.mock.calls.find(c => c[0] === 'codex' && c[1]?.[1] === 'add')!
-      expect(addCall[1]).toEqual(['mcp', 'add', 'reevesagents', '--', 'reevesagents', 'mcp'])
+      for (const bin of ['codex', 'kimi'] as const) {
+        execFileSync.mockReset()
+        wireEnv({ installed: new Set([bin]), listOutput: {} })
+        expect(attach(bin).ok).toBe(true)
+        const argv = addArgv(bin)
+        expect(argv.slice(0, 3)).toEqual(['mcp', 'add', 'reevesagents'])
+        expect(argv).toContain('--')
+        expect(argv).not.toContain('-s')
+        expect(argv[argv.length - 1]).toBe('mcp')
+      }
     })
 
-    it('builds the kimi argv with the -- separator', async () => {
-      wireEnv({ installed: new Set(['kimi']), listOutput: {} })
-      const { attach } = await loadInstaller()
-
-      expect(attach('kimi').ok).toBe(true)
-      const addCall = execFileSync.mock.calls.find(c => c[0] === 'kimi' && c[1]?.[1] === 'add')!
-      expect(addCall[1]).toEqual(['mcp', 'add', 'reevesagents', '--', 'reevesagents', 'mcp'])
-    })
-
-    it('builds the qwen argv with positional command (no -- separator)', async () => {
+    it('uses a positional command with no -- separator for qwen', async () => {
       wireEnv({ installed: new Set(['qwen']), listOutput: {} })
       const { attach } = await loadInstaller()
 
       expect(attach('qwen').ok).toBe(true)
-      const addCall = execFileSync.mock.calls.find(c => c[0] === 'qwen' && c[1]?.[1] === 'add')!
-      expect(addCall[1]).toEqual(['mcp', 'add', 'reevesagents', 'reevesagents', 'mcp'])
+      const argv = addArgv('qwen')
+      expect(argv.slice(0, 3)).toEqual(['mcp', 'add', 'reevesagents'])
+      expect(argv).not.toContain('--')
+      expect(argv[argv.length - 1]).toBe('mcp')
     })
 
-    it('builds the hermes argv with --command / --args flags', async () => {
+    it('uses --command / --args for hermes', async () => {
       wireEnv({ installed: new Set(['hermes']), listOutput: {} })
       const { attach } = await loadInstaller()
 
       expect(attach('hermes').ok).toBe(true)
-      const addCall = execFileSync.mock.calls.find(c => c[0] === 'hermes' && c[1]?.[1] === 'add')!
-      expect(addCall[1]).toEqual(['mcp', 'add', 'reevesagents', '--command', 'reevesagents', '--args', 'mcp'])
+      const argv = addArgv('hermes')
+      expect(argv.slice(0, 3)).toEqual(['mcp', 'add', 'reevesagents'])
+      expect(argv).toContain('--command')
+      expect(argv).toContain('--args')
+      expect(argv[argv.length - 1]).toBe('mcp')
     })
 
     it('returns ok:false with a manual message for opencode and runs no command', async () => {
@@ -281,6 +292,57 @@ describe('mcp installer', () => {
       const { attach } = await loadInstaller()
 
       expect(() => attach('nope')).toThrow(/Unknown CLI/)
+    })
+  })
+
+  describe('force re-attach', () => {
+    it('removes then adds when forced, even if already attached', async () => {
+      wireEnv({ installed: new Set(['claude']), listOutput: { claude: 'reevesagents: reevesagents mcp' } })
+      const { attach } = await loadInstaller()
+      expect(attach('cc', true).ok).toBe(true)
+      const subs = execFileSync.mock.calls.filter(c => c[0] === 'claude').map(c => c[1]?.[1])
+      expect(subs).toContain('remove')
+      expect(subs).toContain('add')
+      expect(subs.indexOf('remove')).toBeLessThan(subs.indexOf('add'))
+    })
+
+    it('attachAll(true) re-attaches an already-attached host instead of skipping', async () => {
+      wireEnv({ installed: new Set(['claude']), listOutput: { claude: 'reevesagents: reevesagents mcp' } })
+      const { attachAll } = await loadInstaller()
+      const cc = attachAll(true).find(r => r.key === 'cc')!
+      expect(cc.ok).toBe(true)
+      expect(cc.message).not.toBe('already attached')
+      expect(execFileSync.mock.calls.some(c => c[0] === 'claude' && c[1]?.[1] === 'add')).toBe(true)
+    })
+  })
+
+  describe('resolveLaunchCmd', () => {
+    it('resolves an absolute node + entry when the entry is a js file', async () => {
+      const { resolveLaunchCmd } = await loadInstaller()
+      const dir = mkdtempSync(join(tmpdir(), 'reeves-launch-'))
+      const js = join(dir, 'cli.js')
+      writeFileSync(js, '// entry')
+      try {
+        const cmd = resolveLaunchCmd(js)
+        expect(cmd.command).toBe(process.execPath)
+        expect(cmd.args).toEqual([realpathSync(js), 'mcp'])
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('falls back to the absolute bin on PATH when the entry is not a js file', async () => {
+      wireEnv({ installed: new Set(['reevesagents']), listOutput: {} })
+      const { resolveLaunchCmd } = await loadInstaller()
+      const cmd = resolveLaunchCmd('/no/such/reeves-entry')
+      expect(cmd).toEqual({ command: '/usr/bin/reevesagents', args: ['mcp'] })
+    })
+
+    it('falls back to the bare name when nothing resolves', async () => {
+      wireEnv({ installed: new Set(), listOutput: {} })
+      const { resolveLaunchCmd } = await loadInstaller()
+      const cmd = resolveLaunchCmd('/no/such/reeves-entry')
+      expect(cmd).toEqual({ command: 'reevesagents', args: ['mcp'] })
     })
   })
 

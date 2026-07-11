@@ -611,10 +611,77 @@ export function handleAgentMcpTool(name: string, a: Record<string, unknown>) {
   }
 }
 
+const GUIDE_URI = 'reevesagents://guide'
+
+// Surfaced to the host model on connect (the MCP `instructions` field). This is
+// how a freshly attached agent learns what reevesagents is and the exact drive
+// loop without having to call anything first.
+export const MCP_INSTRUCTIONS = `reevesagents lets you run and steer other AI CLI agents from this session: Claude Code, Codex, Kimi, Qwen, OpenCode, Hermes, and more, each in its own tmux window. Hand slices of work to other models, then read or redirect what they do.
+
+Drive loop:
+1. list_providers - which CLIs are installed here and their models.
+2. spawn { provider, task } - start an agent; returns agent_id and run_id. Omit run_id to keep adding agents to the same run.
+3. read { agent_id } - an agent's recent output.
+4. send_text { agent_id, text } then send_key { agent_id, key: "enter" } - type a message and submit it. send_text alone does NOT submit.
+5. kill { agent_id } or stop { run_id } when done.
+
+Every id comes from spawn or list. Read the reevesagents://guide resource for a worked example.`
+
+// A fuller, on-demand walkthrough served as a resource, so an agent can pull the
+// worked example when it needs more than the connect-time instructions.
+export const GUIDE_TEXT = `# reevesagents: drive a team of AI CLIs
+
+You can spawn and steer other coding CLIs from here. Each agent is a real CLI in its own tmux window on this machine. reevesagents never proxies model traffic or stores credentials; each CLI uses its own login.
+
+## Worked example: hand a task to Codex, then steer it
+1. list_providers                          confirm "codex" is available
+2. spawn { "provider": "codex", "task": "summarize README.md" }
+                                           returns { "agent_id": "ab12...", "run_id": "cd34..." }
+3. read { "agent_id": "ab12..." }          see what it produced
+4. send_text { "agent_id": "ab12...", "text": "now write tests for it" }
+   send_key  { "agent_id": "ab12...", "key": "enter" }
+5. kill { "agent_id": "ab12..." }          stop it when finished
+
+## Notes
+- send_text types but does not submit; always follow it with send_key enter.
+- Omit run_id on spawn to add agents to the run you started; pass run_id to target a specific run.
+- list shows every run and agent; read shows recent output (20 lines by default).
+- Spawned agents are plain CLIs and cannot spawn others unless you attach this MCP to them too.`
+
+// The advertised resource list and the uri -> content dispatch, exported so a
+// test can exercise them without standing up a stdio server (mirrors how
+// handleAgentMcpTool exposes the tool dispatch).
+export function listMcpResources() {
+  return [
+    {
+      uri: PROVIDER_CATALOG_URI,
+      name: 'Providers and models',
+      description: 'CLI providers this machine can launch and their known models.',
+      mimeType: 'application/json',
+    },
+    {
+      uri: GUIDE_URI,
+      name: 'Getting started',
+      description: 'What reevesagents is and a worked example of driving an agent.',
+      mimeType: 'text/markdown',
+    },
+  ]
+}
+
+export function readMcpResource(uri: string) {
+  if (uri === PROVIDER_CATALOG_URI) {
+    return { uri, mimeType: 'application/json', text: JSON.stringify(buildProviderCatalog()) }
+  }
+  if (uri === GUIDE_URI) {
+    return { uri, mimeType: 'text/markdown', text: GUIDE_TEXT }
+  }
+  throw new Error(`Unknown resource: ${uri}`)
+}
+
 export async function startAgentMcpServer(): Promise<void> {
   const server = new Server(
     { name: 'reevesagents', version: REEVESAGENTS_VERSION },
-    { capabilities: { tools: {}, resources: {} } },
+    { capabilities: { tools: {}, resources: {} }, instructions: MCP_INSTRUCTIONS },
   )
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }))
@@ -624,27 +691,13 @@ export async function startAgentMcpServer(): Promise<void> {
     return handleAgentMcpTool(name, args as Record<string, unknown>)
   })
 
-  // The provider/model catalog as a readable resource, mirroring the list_providers tool.
-  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: [
-      {
-        uri: PROVIDER_CATALOG_URI,
-        name: 'Providers and models',
-        description: 'CLI providers this machine can launch and their known models.',
-        mimeType: 'application/json',
-      },
-    ],
-  }))
+  // Two readable resources: the provider/model catalog (mirrors list_providers)
+  // and a getting-started guide with a worked example.
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: listMcpResources() }))
 
-  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const { uri } = request.params
-    if (uri !== PROVIDER_CATALOG_URI) throw new Error(`Unknown resource: ${uri}`)
-    return {
-      contents: [
-        { uri, mimeType: 'application/json', text: JSON.stringify(buildProviderCatalog()) },
-      ],
-    }
-  })
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => ({
+    contents: [readMcpResource(request.params.uri)],
+  }))
 
   const transport = new StdioServerTransport()
   await server.connect(transport)

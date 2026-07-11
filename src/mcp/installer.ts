@@ -1,11 +1,12 @@
 // Attach or detach the reevesagents MCP server to the local AI CLIs that can
 // host it. Each CLI keeps its own MCP config, so we only call that CLI's own
 // `mcp add` / `mcp remove` / `mcp list` and never edit the user's config files by
-// hand. The attached command is always `reevesagents mcp` with no env and no
-// per-CLI flags, so a host CLI gains the tools without learning anything about
-// reevesagents.
+// hand. The attached command is the reevesagents launcher resolved to an
+// absolute node + entry path, so a host CLI can start the server even when its
+// own launch environment does not carry the user's interactive PATH.
 
 import { execFileSync } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import { PROVIDER_REGISTRY } from '../core/provider-registry.js'
 import type { Provider } from '../core/types.js'
 
@@ -13,15 +14,50 @@ const SERVER_NAME = 'reevesagents'
 const SERVER_BIN = 'reevesagents'
 const SERVER_ARG = 'mcp'
 const MGMT_TIMEOUT_MS = 15_000
+// Shorter cap for the read-only `mcp list` status probe so hosts/setup do not hang
+// for the full management timeout per slow host.
+const STATUS_TIMEOUT_MS = 5_000
+const VERIFY_TIMEOUT_MS = 20_000
+
+// The absolute command a host CLI runs to launch our MCP server over stdio.
+export interface LaunchCmd {
+  command: string
+  args: string[]
+}
+
+// Resolve the MCP launcher to an absolute, PATH-independent command. The bare
+// `reevesagents` name only resolves when the host CLI's launch environment
+// happens to carry the user's PATH; a version-manager or GUI-launched host
+// often does not, which is the classic "attached but never starts" failure.
+// Preference: the exact node + entry currently running, then the absolute
+// reevesagents bin on PATH, then the bare name as a last resort.
+export function resolveLaunchCmd(entry: string | undefined = process.argv[1]): LaunchCmd {
+  if (entry) {
+    try {
+      const real = realpathSync(entry)
+      if (/\.[cm]?js$/.test(real)) return { command: process.execPath, args: [real, SERVER_ARG] }
+    } catch {
+      // fall through to PATH resolution
+    }
+  }
+  try {
+    const abs = execFileSync('which', [SERVER_BIN], { encoding: 'utf8' }).trim()
+    if (abs) return { command: abs, args: [SERVER_ARG] }
+  } catch {
+    // fall through to the bare name
+  }
+  return { command: SERVER_BIN, args: [SERVER_ARG] }
+}
 
 // A provider CLI that can host an MCP server. Its binary and display name come
 // from the provider registry (the single source of truth); only the per-CLI
-// `mcp add` / `mcp remove` / `mcp list` argument lists live here. `add` is
-// undefined for CLIs we cannot drive without an interactive prompt; those are
-// reported as manual.
+// `mcp add` argument shape and the `mcp remove` / `mcp list` lists live here.
+// `add` takes the resolved launcher so the absolute command is baked into that
+// CLI's own `mcp add` call. `add` is undefined for CLIs we cannot drive without
+// an interactive prompt; those are reported as manual.
 interface HostCli {
   provider: Provider
-  add?: string[]
+  add?: (_cmd: LaunchCmd) => string[]
   remove?: string[]
   list: string[]
 }
@@ -29,31 +65,37 @@ interface HostCli {
 const HOSTS: HostCli[] = [
   {
     provider: 'cc',
-    add: ['mcp', 'add', SERVER_NAME, '--', SERVER_BIN, SERVER_ARG],
+    // Claude Code defaults a new server to `local` (this directory only); pin
+    // `user` so one attach covers every project on the machine.
+    add: cmd => ['mcp', 'add', SERVER_NAME, '-s', 'user', '--', cmd.command, ...cmd.args],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
   {
     provider: 'codex',
-    add: ['mcp', 'add', SERVER_NAME, '--', SERVER_BIN, SERVER_ARG],
+    add: cmd => ['mcp', 'add', SERVER_NAME, '--', cmd.command, ...cmd.args],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
   {
     provider: 'kimi',
-    add: ['mcp', 'add', SERVER_NAME, '--', SERVER_BIN, SERVER_ARG],
+    add: cmd => ['mcp', 'add', SERVER_NAME, '--', cmd.command, ...cmd.args],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
   {
     provider: 'qwen',
-    add: ['mcp', 'add', SERVER_NAME, SERVER_BIN, SERVER_ARG],
+    // qwen (a gemini-cli fork) takes `<commandOrUrl> [args...]` with no `--`
+    // separator, and already defaults its scope to `user`.
+    add: cmd => ['mcp', 'add', SERVER_NAME, cmd.command, ...cmd.args],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
   {
     provider: 'hermes',
-    add: ['mcp', 'add', SERVER_NAME, '--command', SERVER_BIN, '--args', SERVER_ARG],
+    // hermes takes --command and a variadic --args, so the entry path and `mcp`
+    // both ride on one --args.
+    add: cmd => ['mcp', 'add', SERVER_NAME, '--command', cmd.command, '--args', ...cmd.args],
     remove: ['mcp', 'remove', SERVER_NAME],
     list: ['mcp', 'list'],
   },
@@ -91,6 +133,7 @@ export interface AttachResult {
 
 function isInstalled(bin: string): boolean {
   try {
+    // Assumes `which` is on PATH (holds on a normal dev/user machine).
     execFileSync('which', [bin], { stdio: 'pipe' })
     return true
   } catch {
@@ -100,9 +143,11 @@ function isInstalled(bin: string): boolean {
 
 function isAttached(host: HostCli): boolean {
   try {
+    // Status probe only: cap it at STATUS_TIMEOUT_MS so a slow host does not stall
+    // hosts/setup for the full management timeout.
     const out = execFileSync(hostBin(host), host.list, {
       encoding: 'utf8',
-      timeout: MGMT_TIMEOUT_MS,
+      timeout: STATUS_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     // Match the reevesagents name as a whole token, so a differently-named
@@ -154,18 +199,29 @@ export function hostStatus(): HostStatus[] {
 }
 
 // Attach the reevesagents MCP server to one CLI by calling that CLI's own mcp add.
-export function attach(key: string): AttachResult {
+export function attach(key: string, force = false): AttachResult {
   const host = findHost(key)
   const label = hostLabel(host)
   if (!host.add) {
-    return { key, label, ok: false, message: `${label} must be added manually` }
+    return {
+      key,
+      label,
+      ok: false,
+      message: `${label} must be added manually: in OpenCode, add a stdio MCP server named "${SERVER_NAME}" that runs reevesagents mcp`,
+    }
   }
   if (!isInstalled(hostBin(host))) {
     return { key, label, ok: false, message: `${hostBin(host)} is not installed` }
   }
   try {
-    runHostCommand(host, host.add)
-    return { key, label, ok: true, message: 'attached' }
+    // force rewrites a stale registration (e.g. a pre-1.5.0 bare-name command that
+    // this machine's PATH no longer resolves): remove the old entry first so the
+    // CLI's own mcp add does not reject a duplicate name.
+    if (force && host.remove) {
+      try { runHostCommand(host, host.remove) } catch { /* nothing to remove; fine */ }
+    }
+    runHostCommand(host, host.add(resolveLaunchCmd()))
+    return { key, label, ok: true, message: force ? 'reattached' : 'attached' }
   } catch (err) {
     return { key, label, ok: false, message: cliError(err) }
   }
@@ -193,13 +249,55 @@ export function detach(key: string): AttachResult {
 // already attached is left alone and counted as success, so running this twice
 // (or after a manual per-host attach) is safe and never surfaces a spurious
 // "already exists" failure from the CLI's own mcp add.
-export function attachAll(): AttachResult[] {
+export function attachAll(force = false): AttachResult[] {
   return HOSTS
     .filter(host => host.add && isInstalled(hostBin(host)))
     .map(host => {
-      if (isAttached(host)) {
+      if (!force && isAttached(host)) {
         return { key: host.provider, label: hostLabel(host), ok: true, message: 'already attached' }
       }
-      return attach(host.provider)
+      return attach(host.provider, force)
     })
+}
+
+export interface VerifyResult {
+  ok: boolean
+  detail: string
+  toolCount?: number
+}
+
+// Actually launch the resolved MCP command and complete an MCP handshake. This
+// proves a host CLI can start the server, not merely that a config entry was
+// written. Because the command is absolute, "starts here" predicts "starts when
+// the host launches it". Host-independent: the launched command is the same
+// whichever CLI attached it.
+export async function verifyServerLaunch(cmd: LaunchCmd = resolveLaunchCmd()): Promise<VerifyResult> {
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
+  const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js')
+  const client = new Client({ name: 'reevesagents-verify', version: '1' }, { capabilities: {} })
+  const transport = new StdioClientTransport({ command: cmd.command, args: cmd.args, stderr: 'ignore' })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timed out starting the MCP server')), VERIFY_TIMEOUT_MS)
+    timer.unref?.()
+  })
+  try {
+    await Promise.race([client.connect(transport), timeout])
+    const listed = await Promise.race([client.listTools(), timeout])
+    const toolCount = Array.isArray(listed.tools) ? listed.tools.length : 0
+    return { ok: true, detail: `server started, ${toolCount} tools`, toolCount }
+  } catch (err) {
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) }
+  } finally {
+    if (timer) clearTimeout(timer)
+    try { await client.close() } catch { /* child already gone */ }
+  }
+}
+
+// The host CLI reads its MCP config at startup, so newly attached tools only
+// appear after the user starts a fresh session.
+export function restartHint(key: string): string {
+  const host = HOSTS.find(item => item.provider === key)
+  const label = host ? hostLabel(host) : key
+  return `restart ${label} (start a new session) to load the reevesagents tools`
 }

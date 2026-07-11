@@ -27,7 +27,8 @@ import { listRunApprovals, resolveRunApproval } from './core/approvals.js'
 import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './core/config.js'
 import { listPresets, savePresetFromRun, deletePreset } from './core/store.js'
 import { MODEL_CATALOG } from './core/model-catalog.js'
-import { hostStatus, attach, attachAll, detach } from './mcp/installer.js'
+import { hostStatus, attach, attachAll, detach, verifyServerLaunch } from './mcp/installer.js'
+import { buildOnboardingState, runOnboarding } from './core/onboard.js'
 import { writeTuiOpenToken } from './core/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
 import { providerDisplayName, providerColor } from './utils/display.js'
@@ -679,6 +680,69 @@ program
   })
 
 program
+  .command('setup')
+  .description('check your setup and connect installed CLIs (the first-run wizard)')
+  .option('--attach', 'connect reevesagents to every installed host CLI (default only reports)')
+  .option('--json', 'print the onboarding state as JSON')
+  .action(async (opts: { attach?: boolean; json?: boolean }) => {
+    try {
+      const state = buildOnboardingState()
+      if (opts.json) {
+        console.log(JSON.stringify(state, null, 2))
+        return
+      }
+      console.log(`tmux       ${state.tmuxOk ? 'ok' : 'missing (required; install tmux 3.0+)'}`)
+      console.log(`node       ${state.nodeOk ? 'ok' : 'too old (need >=20.19)'}`)
+      console.log(`providers  ${state.installedProviders.length > 0 ? state.installedProviders.map(providerDisplayName).join(', ') : 'none installed'}`)
+
+      if (state.installedProviders.length === 0) {
+        console.log('\nInstall a provider CLI (for example Claude Code or Codex) and sign in, then run setup again.')
+        return
+      }
+
+      console.log('\nTwo ways to use reevesagents:')
+      console.log(`  1. Run agents yourself       reevesagents spawn ${state.installedProviders[0]}`)
+      console.log('  2. Let one CLI drive others  connect the Agent control MCP (below)')
+
+      const installedHosts = state.hosts.filter(host => host.installed)
+      if (installedHosts.length > 0) {
+        console.log('\nHost CLIs (can drive the others once connected):')
+        for (const host of installedHosts) {
+          const status = host.attached ? 'connected' : host.manual ? 'add manually' : 'not connected'
+          console.log(`  ${host.key.padEnd(10)} ${status}`)
+        }
+      }
+
+      if (!opts.attach) {
+        if (state.attachable.length > 0) {
+          console.log(`\nTo connect ${state.attachable.join(', ')}, run:  reevesagents setup --attach`)
+        } else if (state.attachedHosts.length > 0) {
+          console.log('\nAll installed host CLIs are already connected. Restart them to load the tools.')
+        }
+        return
+      }
+
+      console.log('\nConnecting...')
+      const result = await runOnboarding()
+      for (const attached of result.attached) {
+        console.log(`  ${(attached.ok ? 'ok' : '--').padEnd(3)} ${attached.key.padEnd(10)} ${attached.message}`)
+      }
+      if (result.verify?.ok) {
+        console.log(`\nverified: ${result.verify.detail}.`)
+        const keys = result.attached.filter(attached => attached.ok).map(attached => attached.key)
+        console.log(`Restart ${keys.join(', ')} (start a new session), then ask it: "use reevesagents to spawn a codex and summarize the README".`)
+      } else if (result.verify) {
+        console.log(`\nwarning: the server did not start here: ${result.verify.detail}`)
+        console.log('a host CLI will hit the same error. check that reevesagents is installed and re-run setup --attach.')
+      }
+      if (!result.attached.some(attached => attached.ok) || result.verify?.ok === false) process.exitCode = 1
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
   .command('hosts')
   .description('list MCP host CLIs and whether reevesagents is attached')
   .option('--json', 'output JSON array')
@@ -697,15 +761,30 @@ program
 program
   .command('attach [cli]')
   .description('attach the reevesagents MCP to one CLI, or all installed when omitted')
-  .action((cli: string | undefined) => {
+  .option('--force', 'rewrite the registration even if already attached (upgrades an old launcher)')
+  .action(async (cli: string | undefined, opts: { force?: boolean }) => {
     try {
-      const results = cli ? [attach(cli)] : attachAll()
+      const results = cli ? [attach(cli, opts.force)] : attachAll(opts.force)
       if (results.length === 0) {
         console.log('no installed CLIs to attach')
         return
       }
       for (const result of results) {
         console.log(`${(result.ok ? 'ok' : '--').padEnd(3)} ${result.key.padEnd(10)} ${result.message}`)
+      }
+      const attached = results.filter(result => result.ok)
+      if (attached.length > 0) {
+        const verify = await verifyServerLaunch()
+        if (verify.ok) {
+          console.log(`\nverified: ${verify.detail}.`)
+          console.log(`restart ${attached.map(result => result.key).join(', ')} (start a new session) to load the tools.`)
+        } else {
+          console.log(`\nwarning: the entry was written, but the server did not start here: ${verify.detail}`)
+          console.log('a host CLI will hit the same error. check that reevesagents is installed and re-run attach.')
+          process.exitCode = 1
+        }
+      } else {
+        process.exitCode = 1
       }
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
@@ -720,6 +799,7 @@ program
     try {
       const result = detach(cli)
       console.log(`${(result.ok ? 'ok' : '--').padEnd(3)} ${result.key.padEnd(10)} ${result.message}`)
+      if (!result.ok) process.exitCode = 1
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)
