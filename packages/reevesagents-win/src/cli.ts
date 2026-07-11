@@ -94,9 +94,20 @@ program
 program
   .command('setup')
   .description('attach every installed host CLI and verify the server launches')
-  .action(async () => {
-    printChecks(runDoctor().checks)
+  .option('--json', 'output raw JSON')
+  .action(async (opts: { json?: boolean }) => {
+    const checks = runDoctor().checks
     const results = attachAll()
+    if (opts.json) {
+      // Machine-readable parity with the unix `setup --json`: environment checks, host
+      // attach outcomes, and the launch verification in one object a script can read.
+      const verify = await verifyServerLaunch()
+      const ok = results.some(result => result.ok) && verify.ok
+      console.log(JSON.stringify({ ok, checks, hosts: hostStatus(), attached: results, verify }, null, 2))
+      if (!ok) process.exitCode = 1
+      return
+    }
+    printChecks(checks)
     if (results.length === 0) {
       console.log('no drivable host CLIs are installed; install one and re-run setup')
       return

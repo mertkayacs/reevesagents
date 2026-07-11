@@ -88,6 +88,11 @@ function checkMcpServerCommand(): CheckResult {
   if (cmd.command === 'reevesagents-win') {
     return { name: 'mcp server', status: 'warn', detail: 'no absolute launcher resolved; attached host CLIs will fall back to their own PATH' }
   }
+  // A .cmd shim is not startable by a host CLI that launches via execFile, so an ok
+  // here would be misleading even though the path is absolute.
+  if (/\.cmd$/i.test(cmd.command)) {
+    return { name: 'mcp server', status: 'warn', detail: `${cmd.command} is a .cmd shim; a host using execFile cannot start it` }
+  }
   return { name: 'mcp server', status: 'ok', detail: `${cmd.command} ${cmd.args.join(' ')}` }
 }
 

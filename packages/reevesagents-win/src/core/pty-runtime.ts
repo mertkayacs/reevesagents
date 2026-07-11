@@ -142,7 +142,10 @@ function normalizePaneOutput(output: string): string {
 }
 
 // Ported verbatim in spirit from src/core/runtime.ts paneLooksReady: the only
-// change is the buffer source (our ring buffer instead of tmux capture-pane).
+// change is the buffer source (our ring buffer instead of tmux capture-pane). The
+// ready markers are English-only (same as the unix runtime); a non-English CLI falls
+// through to the idle-output check and the startup timeout, which still delivers the
+// task, just after the full wait rather than on an early ready match.
 function paneLooksReady(output: string, previousOutput: string): boolean {
   const current = normalizePaneOutput(output)
   if (!current) return false

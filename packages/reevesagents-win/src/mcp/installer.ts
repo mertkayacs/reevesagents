@@ -20,6 +20,9 @@ const SERVER_NAME = 'reevesagents-win'
 const SERVER_BIN = 'reevesagents-win'
 const SERVER_ARG = 'mcp'
 const MGMT_TIMEOUT_MS = 15_000
+// Shorter cap for the read-only `mcp list` status probe so hosts/setup do not hang
+// for the full management timeout per slow host.
+const STATUS_TIMEOUT_MS = 5_000
 const VERIFY_TIMEOUT_MS = 20_000
 
 const IS_WINDOWS = process.platform === 'win32'
@@ -31,7 +34,8 @@ export interface LaunchCmd {
 }
 
 // Resolve a bin name to its absolute path via `where`/`which`, taking the first
-// match (where can print several lines).
+// match (where can print several lines). Assumes `where`/`which` is on PATH, which
+// holds on a normal dev/user machine (both ship with Windows and every unix).
 function resolvePath(bin: string): string | null {
   try {
     const out = execFileSync(LOOKUP, [bin], { encoding: 'utf8' }).trim()
@@ -45,7 +49,7 @@ function resolvePath(bin: string): string | null {
 // Resolve the MCP launcher to an absolute, PATH-independent command. This matters
 // even more on Windows: a host CLI that spawns the bare `reevesagents-win` name (a
 // .cmd shim) with execFile cannot start it, so prefer the exact node.exe + entry
-// (.js) currently running, then the absolute bin on PATH, then the bare name.
+// (.js) currently running, then a non-.cmd absolute bin on PATH, then the bare name.
 export function resolveLaunchCmd(entry: string | undefined = process.argv[1]): LaunchCmd {
   if (entry) {
     try {
@@ -55,8 +59,11 @@ export function resolveLaunchCmd(entry: string | undefined = process.argv[1]): L
       // fall through to PATH resolution
     }
   }
+  // On Windows `where reevesagents-win` resolves to the .cmd shim, which a host CLI
+  // launching via execFile cannot start, so skip a .cmd path and fall back to the
+  // bare name (a shell-based host can still resolve that).
   const abs = resolvePath(SERVER_BIN)
-  if (abs) return { command: abs, args: [SERVER_ARG] }
+  if (abs && !/\.cmd$/i.test(abs)) return { command: abs, args: [SERVER_ARG] }
   return { command: SERVER_BIN, args: [SERVER_ARG] }
 }
 
@@ -142,27 +149,29 @@ function isInstalled(bin: string): boolean {
 // arg is the resolved launcher path (baked into the add argv), so injection risk is
 // limited to that path. On non-Windows we invoke the bin directly, which also keeps
 // this testable off Windows.
-function runHostCommand(host: HostCli, args: string[]): string {
+function runHostCommand(host: HostCli, args: string[], timeout = MGMT_TIMEOUT_MS): string {
   const bin = hostBin(host)
   if (IS_WINDOWS) {
     const cmdPath = resolvePath(bin) ?? bin
     const comspec = process.env.ComSpec ?? 'cmd.exe'
     return execFileSync(comspec, ['/d', '/c', cmdPath, ...args], {
       encoding: 'utf8',
-      timeout: MGMT_TIMEOUT_MS,
+      timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
   }
   return execFileSync(bin, args, {
     encoding: 'utf8',
-    timeout: MGMT_TIMEOUT_MS,
+    timeout,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 }
 
 function isAttached(host: HostCli): boolean {
   try {
-    const out = runHostCommand(host, host.list)
+    // Status probe only: cap it at STATUS_TIMEOUT_MS so a slow host does not stall
+    // hosts/setup for the full management timeout.
+    const out = runHostCommand(host, host.list, STATUS_TIMEOUT_MS)
     // Match reevesagents-win as a whole token. The negative lookahead means the unix
     // reevesagents (which lacks the -win suffix) is never counted as attached here,
     // and the unix installer's own /reevesagents(?![-\w])/i rejects reevesagents-win.
