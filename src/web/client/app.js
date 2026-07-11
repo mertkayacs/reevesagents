@@ -256,6 +256,14 @@
     aboutDialog: document.getElementById('about-dialog'),
     aboutList: document.getElementById('about-list'),
     aboutClose: document.getElementById('about-close'),
+    welcomeDialog: document.getElementById('welcome-dialog'),
+    welcomeTitle: document.getElementById('welcome-title'),
+    welcomeSubtitle: document.getElementById('welcome-subtitle'),
+    welcomeIntro: document.getElementById('welcome-intro'),
+    welcomeDoorRun: document.getElementById('welcome-door-run'),
+    welcomeDoorConnect: document.getElementById('welcome-door-connect'),
+    welcomeConnect: document.getElementById('welcome-connect'),
+    welcomeClose: document.getElementById('welcome-close'),
     configBtn: document.getElementById('config-btn'),
     configDialog: document.getElementById('config-dialog'),
     configList: document.getElementById('config-list'),
@@ -279,6 +287,7 @@
   let language = 'en'
   let languages = []
   let messages = WEB_EN
+  let welcomeChecked = false
   let selectedId = null
   let session = null // { id, ws, term, fit, observer }
   let createContext = { kind: 'run', runId: '' }
@@ -330,6 +339,7 @@
     renderSidebar()
     reconcileCreateDialog()
     reconcileSelectedAgent()
+    if (!welcomeChecked) { welcomeChecked = true; maybeShowWelcome() }
   }
 
   function subscribe() {
@@ -403,6 +413,13 @@
     el.presetsBtn.textContent = t('web.presets')
     el.doctorBtn.textContent = t('web.doctor')
     el.aboutBtn.textContent = t('web.about')
+    el.welcomeTitle.textContent = t('setup.title')
+    el.welcomeSubtitle.textContent = t('setup.subtitle')
+    el.welcomeIntro.textContent = t('setup.intro')
+    el.welcomeDoorRun.textContent = `${t('setup.startRun')} (${t('setup.startRunHint')})`
+    el.welcomeDoorConnect.textContent = `${t('setup.connectAll')} (${t('setup.connectAllHint')})`
+    el.welcomeConnect.textContent = t('web.agentControl')
+    el.welcomeClose.textContent = t('setup.done')
     el.mcpDialogTitle.textContent = t('web.mcpTitle')
     el.mcpDialogSubtitle.textContent = t('web.mcpSubtitle')
     el.mcpEmpty.textContent = t('web.mcpEmpty')
@@ -1656,6 +1673,20 @@
     }
   }
 
+  // Show a one-time getting-started popup on a browser's first visit. The flag
+  // lives in localStorage, so it never nags after the first dismissal.
+  function maybeShowWelcome() {
+    let seen
+    try {
+      seen = window.localStorage.getItem('reeves.welcomed') === '1'
+    } catch {
+      return
+    }
+    if (seen) return
+    try { window.localStorage.setItem('reeves.welcomed', '1') } catch { /* private mode: skip persistence */ }
+    el.welcomeDialog.showModal()
+  }
+
   function openMcpDialog() {
     setMcpError(null)
     mcpHosts = []
@@ -2026,6 +2057,8 @@
   el.doctorClose.addEventListener('click', () => el.doctorDialog.close())
   el.aboutBtn.addEventListener('click', openAboutDialog)
   el.aboutClose.addEventListener('click', () => el.aboutDialog.close())
+  el.welcomeConnect.addEventListener('click', () => { el.welcomeDialog.close(); openMcpDialog() })
+  el.welcomeClose.addEventListener('click', () => el.welcomeDialog.close())
   el.configBtn.addEventListener('click', openConfigDialog)
   el.configSave.addEventListener('click', saveConfig)
   el.configClose.addEventListener('click', () => el.configDialog.close())
