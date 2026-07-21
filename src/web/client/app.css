@@ -1722,6 +1722,16 @@ button { letter-spacing: 0; }
   line-height: 1.4;
 }
 
+.dialog-notice {
+  border: 1px solid color-mix(in srgb, var(--ok) 42%, var(--border));
+  border-radius: var(--r-2);
+  padding: var(--s-2) var(--s-3);
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 11%, var(--panel));
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

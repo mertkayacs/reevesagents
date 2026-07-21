@@ -616,16 +616,16 @@ const GUIDE_URI = 'reevesagents://guide'
 // Surfaced to the host model on connect (the MCP `instructions` field). This is
 // how a freshly attached agent learns what reevesagents is and the exact drive
 // loop without having to call anything first.
-export const MCP_INSTRUCTIONS = `reevesagents lets you run and steer other AI CLI agents from this session: Claude Code, Codex, Kimi, Qwen, OpenCode, Hermes, and more, each in its own tmux window. Hand slices of work to other models, then read or redirect what they do.
+export const MCP_INSTRUCTIONS = `reevesagents lets you, from this session, run and steer other AI coding CLIs (Claude Code, Codex, Kimi, Qwen, OpenCode, Hermes, and more), each in its own tmux window. Delegate slices of work to other models, then poll or redirect them. reevesagents never proxies model traffic; each CLI uses its own login.
 
 Drive loop:
-1. list_providers - which CLIs are installed here and their models.
-2. spawn { provider, task } - start an agent; returns agent_id and run_id. Omit run_id to keep adding agents to the same run.
-3. read { agent_id } - an agent's recent output.
-4. send_text { agent_id, text } then send_key { agent_id, key: "enter" } - type a message and submit it. send_text alone does NOT submit.
+1. list_providers - the CLIs installed here and their models. Spawn only these.
+2. spawn { provider, task } - start an agent; returns agent_id and run_id. Omit run_id to keep agents in one run (a team); pass run_id to add to an existing run. Set permissions:"skip" for an autonomous worker when no human is there to approve its prompts.
+3. read { agent_id } - the agent's recent output. spawn is fire-and-forget: it returns ids, not answers, so poll read until the agent replies or its output settles. A freshly spawned agent may sit at a login or trust prompt; read first to check.
+4. send_text { agent_id, text } then send_key { agent_id, key: "enter" } - type a message, then submit it. send_text alone does NOT submit.
 5. kill { agent_id } or stop { run_id } when done.
 
-Every id comes from spawn or list. Read the reevesagents://guide resource for a worked example.`
+Team in one call sequence: spawn several providers with run_id omitted and one task each, then poll read on each agent_id. Every id comes from spawn or list. Full worked example: read the reevesagents://guide resource.`
 
 // A fuller, on-demand walkthrough served as a resource, so an agent can pull the
 // worked example when it needs more than the connect-time instructions.
@@ -634,17 +634,26 @@ export const GUIDE_TEXT = `# reevesagents: drive a team of AI CLIs
 You can spawn and steer other coding CLIs from here. Each agent is a real CLI in its own tmux window on this machine. reevesagents never proxies model traffic or stores credentials; each CLI uses its own login.
 
 ## Worked example: hand a task to Codex, then steer it
-1. list_providers                          confirm "codex" is available
+1. list_providers                          confirm "codex" is installed here
 2. spawn { "provider": "codex", "task": "summarize README.md" }
                                            returns { "agent_id": "ab12...", "run_id": "cd34..." }
-3. read { "agent_id": "ab12..." }          see what it produced
+3. read { "agent_id": "ab12..." }          poll until it answers (spawn is fire-and-forget)
 4. send_text { "agent_id": "ab12...", "text": "now write tests for it" }
-   send_key  { "agent_id": "ab12...", "key": "enter" }
+   send_key  { "agent_id": "ab12...", "key": "enter" }   send_text alone does NOT submit
 5. kill { "agent_id": "ab12..." }          stop it when finished
+
+## Spawn a team
+Spawn several agents with run_id omitted so they land in one run, then poll each:
+   spawn { "provider": "cc",    "task": "lead: coordinate the others", "permissions": "skip" }
+   spawn { "provider": "codex", "task": "worker: the API slice",       "permissions": "skip" }
+   spawn { "provider": "kimi",  "task": "worker: the docs" }
+Then read each agent_id, and send_text + send_key enter to redirect any of them.
 
 ## Notes
 - send_text types but does not submit; always follow it with send_key enter.
 - Omit run_id on spawn to add agents to the run you started; pass run_id to target a specific run.
+- permissions:"skip" runs a worker autonomously (no per-action approval); use it when no human will sit and approve.
+- A freshly spawned agent may sit at a login or trust screen; read its output before sending work.
 - list shows every run and agent; read shows recent output (20 lines by default).
 - Spawned agents are plain CLIs and cannot spawn others unless you attach this MCP to them too.`
 

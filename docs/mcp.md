@@ -109,7 +109,8 @@ hermes. For each one you can attach, detach, or attach all.
 
 Installing it is your explicit choice. That choice is the consent. After that,
 the CLI you attached has the reeves tools whenever it starts, and nothing else
-does.
+does. A host CLI reads its MCP config only at startup, so restart it (start a new
+session) after attaching for the reevesagents tools to load.
 
 Spawned workers do not receive the MCP by default, so they cannot spawn further
 agents. To let a worker orchestrate its own sub-workers, attach the MCP to that
