@@ -447,10 +447,11 @@ chosen URL. Pass `--port <n>` to pick a different starting port.
 ## Not Required
 
 You do not need ReevesAgents-stored API keys, a database, Docker, a background
-service, or MCP setup for normal stable agent runs. Install is passive: the
-stable package has no postinstall script and does not rewrite provider
-configuration. Attaching the Agent Control MCP is the one explicit, opt-in step
-that touches provider config, and only through each CLI's own `mcp add` command.
+service, or MCP setup for normal stable agent runs. Install never rewrites your
+provider configuration: the only thing a global install adds is a one-line hint
+pointing you at `reevesagents attach`. Attaching the Agent Control MCP is the one
+explicit, opt-in step that touches provider config, and only through each CLI's
+own `mcp add` command.
 
 ## Contributing
 

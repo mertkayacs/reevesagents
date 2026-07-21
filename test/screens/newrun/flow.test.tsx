@@ -107,8 +107,8 @@ describe('New Run keyboard flow', () => {
     await press(stdin, lastFrame, down) // Model
     await press(stdin, lastFrame, '\r') // open model options
     await waitForFrame(lastFrame, 'Model Options')
-    await press(stdin, lastFrame, down) // sonnet
-    await press(stdin, lastFrame, '\r') // select sonnet
+    await press(stdin, lastFrame, down) // fable (first curated cc model)
+    await press(stdin, lastFrame, '\r') // select fable
     await press(stdin, lastFrame, down) // Prompt
     await press(stdin, lastFrame, '\r') // edit root prompt
     await press(stdin, lastFrame, 'root smoke task')
@@ -160,7 +160,7 @@ describe('New Run keyboard flow', () => {
     expect(RuntimeModule.startRun).toHaveBeenCalledOnce()
     const request = vi.mocked(RuntimeModule.startRun).mock.calls[0]![0]
     expect(request.name).toBe('tui-run')
-    expect(request.root.model).toBe('sonnet')
+    expect(request.root.model).toBe('fable')
     expect(request.root.task).toBe('root smoke task\nsecond line')
     const workers = request.workers ?? []
     expect(workers).toHaveLength(1)

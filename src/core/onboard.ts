@@ -60,3 +60,11 @@ export async function runOnboarding(): Promise<OnboardingResult> {
   const verify = attached.some(result => result.ok) ? await verifyServerLaunch() : null
   return { attached, verify }
 }
+
+// A copy-paste instruction to try in a freshly connected host CLI, naming a provider
+// that is actually installed here so the suggestion never points at a CLI the user
+// does not have (falls back to codex only when nothing is detected).
+export function suggestedAgentPrompt(installedProviders: Provider[]): string {
+  const provider = installedProviders[0] ?? 'codex'
+  return `use reevesagents to spawn a ${provider} agent and summarize the README`
+}

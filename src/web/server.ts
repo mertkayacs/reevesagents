@@ -16,9 +16,8 @@ import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
 import { startRun, startRunFromPreset, spawnWorker, killAgent, stopRun } from '../core/runtime.js'
 import { normalizeProvider, coerceExtraArgs } from '../core/providers.js'
-import { modelValuesForProvider } from '../core/model-catalog.js'
 import { providerDisplayName } from '../utils/display.js'
-import type { AuthMode, Effort, Permissions, Provider } from '../core/types.js'
+import type { AuthMode, Effort, Permissions } from '../core/types.js'
 import { loadConfig, setConfigValues, CONFIG_FIELDS } from '../core/config.js'
 import { isLanguageCode, LANGUAGE_OPTIONS } from '../i18n/languages.js'
 import { localeCatalog, translatePhrase } from '../i18n/catalog.js'
@@ -220,12 +219,13 @@ function sanitizeRunName(raw: string): string {
   return raw.trim().replace(/[^\p{L}\p{N} _.-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim()
 }
 
-function normalizeModel(provider: Provider, raw: unknown): string {
-  const model = typeof raw === 'string' ? raw.trim() : ''
-  if (!modelValuesForProvider(provider).includes(model)) {
-    throw new Error('unknown model for provider')
-  }
-  return model
+// The curated catalog is a suggestion list for the picker, not a whitelist. Accept
+// any model the user typed so a brand-new provider model (not yet curated) still
+// works here like it already does on the CLI and MCP paths; a blank value falls back
+// to the provider default. The provider is validated in createTerminal, and the model
+// is passed as an argv value to the CLI (never shelled), so there is no injection risk.
+function normalizeModel(raw: unknown): string {
+  return typeof raw === 'string' ? raw.trim() : ''
 }
 
 function normalizePermissionsInput(raw: unknown): Permissions | undefined {
@@ -253,7 +253,7 @@ async function createTerminal(body: Record<string, unknown>): Promise<{ id: stri
   const provider = body.provider
   const normalizedProvider = normalizeProvider(provider)
   if (!normalizedProvider) throw new Error('unknown provider')
-  const model = normalizeModel(normalizedProvider, body.model)
+  const model = normalizeModel(body.model)
   const permissions = normalizePermissionsInput(body.permissions)
   const auth_mode = parseAuthModeInput(body.auth_mode)
   const effort = parseEffortInput(body.effort)

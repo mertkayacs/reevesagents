@@ -74,19 +74,23 @@ export function AgentControl() {
   function toggleHost(host: HostStatus): void {
     // Manual and not-installed hosts cannot be driven; leave them as a note.
     if (host.manual || !host.installed) return
-    const res = host.attached ? detach(host.key) : attach(host.key)
-    setResult(res)
+    const wasAttached = host.attached
+    const res = wasAttached ? detach(host.key) : attach(host.key)
+    // A newly attached host only exposes the tools after its next session, so
+    // remind the user to restart it (mirrors the CLI and web flows).
+    setResult(!wasAttached && res.ok ? { ...res, message: `${res.message} — ${t('agentControl.restartHint')}` } : res)
     setRefreshKey(k => k + 1)
   }
 
   function runAttachAll(): void {
     const results = attachAll()
     const ok = results.filter(r => r.ok).length
+    const toast = t('agentControl.attachAllToast', { ok, total: results.length })
     setResult({
       key: 'all',
       label: t('agentControl.attachAll'),
       ok: results.every(r => r.ok),
-      message: t('agentControl.attachAllToast', { ok, total: results.length }),
+      message: ok > 0 ? `${toast} — ${t('agentControl.restartHint')}` : toast,
     })
     setRefreshKey(k => k + 1)
   }

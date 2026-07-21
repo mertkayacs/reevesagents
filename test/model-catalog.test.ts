@@ -19,12 +19,12 @@ describe('model catalog', () => {
   })
 
   it('keeps provider-specific curated model IDs', () => {
-    expect(MODEL_CATALOG.cc.models).toEqual(['sonnet', 'opus', 'haiku'])
-    expect(MODEL_CATALOG.codex.models).toEqual(['gpt-5-codex', 'gpt-5'])
-    expect(MODEL_CATALOG.opencode.models).toContain('anthropic/claude-sonnet-4-5')
-    expect(MODEL_CATALOG.hermes.models).toContain('anthropic/claude-sonnet-4')
-    expect(MODEL_CATALOG.kimi.models).toEqual(['kimi-code/kimi-for-coding'])
-    expect(MODEL_CATALOG.deepseek.models).toContain('deepseek-coder:6.7b')
+    expect(MODEL_CATALOG.cc.models).toEqual(['fable', 'opus', 'sonnet', 'haiku'])
+    expect(MODEL_CATALOG.codex.models).toEqual(['gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4-mini'])
+    expect(MODEL_CATALOG.opencode.models).toContain('anthropic/claude-opus-4-8')
+    expect(MODEL_CATALOG.hermes.models).toContain('anthropic:claude-opus-4-8')
+    expect(MODEL_CATALOG.kimi.models).toEqual(['kimi-code/k3', 'kimi-code/kimi-for-coding', 'kimi-code/kimi-for-coding-highspeed'])
+    expect(MODEL_CATALOG.deepseek.models).toContain('deepseek-v4-pro')
     expect(MODEL_CATALOG.pi.models).toContain('sonnet')
     expect(MODEL_CATALOG.qwen.models).toContain('qwen3-coder-plus')
     expect(MODEL_CATALOG.aider.models).toContain('deepseek/deepseek-chat')
@@ -32,6 +32,6 @@ describe('model catalog', () => {
 
   it('renders an empty model as the provider default label', () => {
     expect(modelDisplayName('')).toBe(PROVIDER_DEFAULT_MODEL_LABEL)
-    expect(modelDisplayName('gpt-5-codex')).toBe('gpt-5-codex')
+    expect(modelDisplayName('gpt-5.5')).toBe('gpt-5.5')
   })
 })

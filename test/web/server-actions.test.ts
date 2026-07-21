@@ -300,15 +300,19 @@ describe('create terminal', () => {
     expect(JSON.parse(res.body).error).toMatch(/unknown provider/i)
   })
 
-  it('rejects unknown model and permission values', async () => {
+  it('accepts an uncatalogued model but rejects unknown permission values', async () => {
+    installFakeRuntimeBins()
     const handle = await start()
 
-    const badModel = await post(handle.port, '/api/terminals', {
+    // The curated catalog is a suggestion list, not a whitelist: a model that is
+    // not curated yet is accepted and reaches the agent record (mirrors CLI/MCP).
+    const customModel = await post(handle.port, '/api/terminals', {
       provider: 'codex',
-      model: 'not-a-codex-model',
+      model: 'gpt-6-codex-preview',
     })
-    expect(badModel.status).toBe(400)
-    expect(JSON.parse(badModel.body).error).toMatch(/unknown model/i)
+    expect(customModel.status).toBe(200)
+    const created = JSON.parse(customModel.body)
+    expect(readAgent(created.run_id, created.id).model).toBe('gpt-6-codex-preview')
 
     const badPermissions = await post(handle.port, '/api/terminals', {
       provider: 'codex',

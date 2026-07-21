@@ -28,7 +28,7 @@ import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './
 import { listPresets, savePresetFromRun, deletePreset } from './core/store.js'
 import { MODEL_CATALOG } from './core/model-catalog.js'
 import { hostStatus, attach, attachAll, detach, verifyServerLaunch } from './mcp/installer.js'
-import { buildOnboardingState, runOnboarding } from './core/onboard.js'
+import { buildOnboardingState, runOnboarding, suggestedAgentPrompt } from './core/onboard.js'
 import { writeTuiOpenToken } from './core/tui-open.js'
 import { REEVESAGENTS_VERSION } from './version.js'
 import { providerDisplayName, providerColor } from './utils/display.js'
@@ -231,6 +231,14 @@ function parseAgentSpec(spec: string): { provider: Provider; nickname?: string; 
   return { provider, nickname: nickname || undefined, model }
 }
 
+// The provider used when `spawn` is called with no agent spec. Prefer one that is
+// actually installed so a bare `spawn` on, say, a Claude-only machine does not
+// default to a codex the user does not have.
+function defaultSpawnProvider(): string {
+  const available = detectAvailable()
+  return PROVIDERS.find(provider => available[provider]) ?? 'codex'
+}
+
 const EFFORT_LEVELS: readonly Effort[] = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
 
 function parseAuthModeOpt(value?: string): AuthMode | undefined {
@@ -337,7 +345,7 @@ program
   .option('--json', 'output JSON: the run id and the spawned agent ids')
   .action((agentSpecs: string[], opts) => {
     try {
-      const specs = agentSpecs.length > 0 ? agentSpecs : ['codex']
+      const specs = agentSpecs.length > 0 ? agentSpecs : [defaultSpawnProvider()]
       const parsed = specs.map(parseAgentSpec)
       const available = preflightAvailability(parsed.map(spec => spec.provider))
       const permissions = opts.skip ? 'skip' as const : undefined
@@ -730,7 +738,7 @@ program
       if (result.verify?.ok) {
         console.log(`\nverified: ${result.verify.detail}.`)
         const keys = result.attached.filter(attached => attached.ok).map(attached => attached.key)
-        console.log(`Restart ${keys.join(', ')} (start a new session), then ask it: "use reevesagents to spawn a codex and summarize the README".`)
+        console.log(`Restart ${keys.join(', ')} (start a new session), then ask it: "${suggestedAgentPrompt(state.installedProviders)}".`)
       } else if (result.verify) {
         console.log(`\nwarning: the server did not start here: ${result.verify.detail}`)
         console.log('a host CLI will hit the same error. check that reevesagents is installed and re-run setup --attach.')
@@ -766,7 +774,9 @@ program
     try {
       const results = cli ? [attach(cli, opts.force)] : attachAll(opts.force)
       if (results.length === 0) {
-        console.log('no installed CLIs to attach')
+        console.log('no MCP-capable CLI is installed here.')
+        console.log('Install a host CLI (for example Claude Code or Codex) and sign in, then run "reevesagents attach" again.')
+        process.exitCode = 1
         return
       }
       for (const result of results) {
@@ -777,7 +787,9 @@ program
         const verify = await verifyServerLaunch()
         if (verify.ok) {
           console.log(`\nverified: ${verify.detail}.`)
-          console.log(`restart ${attached.map(result => result.key).join(', ')} (start a new session) to load the tools.`)
+          console.log(`restart ${attached.map(result => result.key).join(', ')} (start a new session) to load the tools,`)
+          const available = detectAvailable()
+          console.log(`then ask it: "${suggestedAgentPrompt(PROVIDERS.filter(provider => available[provider]))}".`)
         } else {
           console.log(`\nwarning: the entry was written, but the server did not start here: ${verify.detail}`)
           console.log('a host CLI will hit the same error. check that reevesagents is installed and re-run attach.')

@@ -113,10 +113,19 @@ export const PROVIDER_REGISTRY: Record<Provider, ProviderDef> = {
     modelSource: CODEX_MODEL_SOURCE,
     helpRequirements: [
       { feature: 'skip permissions', tokens: ['--dangerously-bypass-approvals-and-sandbox'] },
+      { feature: 'config override', tokens: ['--config'] },
     ],
-    buildArgs: ({ permissions, model }) => {
+    supportsEffort: true,
+    buildArgs: ({ permissions, model, effort }) => {
       const args: string[] = []
       if (permissions === 'skip') args.push('--dangerously-bypass-approvals-and-sandbox')
+      if (effort !== 'default') {
+        // Codex sets reasoning effort through a config override, not a flag. It
+        // accepts minimal|low|medium|high|xhigh; reeves 'max' has no codex level, so
+        // map it to the highest codex effort instead of failing the launch on it.
+        const codexEffort = effort === 'max' ? 'xhigh' : effort
+        args.push('-c', `model_reasoning_effort=${codexEffort}`)
+      }
       if (model) args.push('--model', model)
       return args
     },

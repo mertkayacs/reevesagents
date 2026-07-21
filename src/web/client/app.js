@@ -245,6 +245,7 @@
     mcpHostList: document.getElementById('mcp-host-list'),
     mcpEmpty: document.getElementById('mcp-empty'),
     mcpError: document.getElementById('mcp-error'),
+    mcpNotice: document.getElementById('mcp-notice'),
     mcpAttachAll: document.getElementById('mcp-attach-all'),
     mcpClose: document.getElementById('mcp-close'),
     doctorBtn: document.getElementById('doctor-btn'),
@@ -1690,6 +1691,7 @@
 
   function openMcpDialog() {
     setMcpError(null)
+    setMcpNotice(null)
     mcpHosts = []
     mcpLoading = true
     mcpLoadFailed = false
@@ -1805,6 +1807,12 @@
     el.mcpError.hidden = false
   }
 
+  function setMcpNotice(message) {
+    if (!message) { el.mcpNotice.hidden = true; el.mcpNotice.textContent = ''; return }
+    el.mcpNotice.textContent = message
+    el.mcpNotice.hidden = false
+  }
+
   function applyMcpResult(data) {
     if (data && Array.isArray(data.hosts)) {
       mcpLoadFailed = false
@@ -1817,12 +1825,15 @@
     if (mcpBusy || mcpLoading) return
     mcpBusy = true
     setMcpError(null)
+    setMcpNotice(null)
     renderMcpHosts()
     try {
       const data = await api('POST', '/api/mcp-hosts/attach', { key: host.key })
       applyMcpResult(data)
       if (data && data.result && data.result.ok === false) {
         setMcpError(t('web.mcpAttachError', { name: host.label, message: data.result.message }))
+      } else {
+        setMcpNotice(t('web.mcpRestartHint', { names: host.label }))
       }
     } catch (err) {
       setMcpError(t('web.mcpAttachError', { name: host.label, message: err.message }))
@@ -1855,12 +1866,21 @@
     if (mcpBusy || mcpLoading || mcpLoadFailed) return
     mcpBusy = true
     setMcpError(null)
+    setMcpNotice(null)
     renderMcpHosts()
     try {
       const data = await api('POST', '/api/mcp-hosts/attach-all', {})
       applyMcpResult(data)
-      const failed = ((data && data.results) || []).filter(r => !r.ok)
-      if (failed.length > 0) setMcpError(t('web.mcpAttachAllError', { message: failed.map(r => r.message).join('; ') }))
+      const results = (data && data.results) || []
+      const failed = results.filter(r => !r.ok)
+      const okNames = results.filter(r => r.ok).map(r => r.label || r.key)
+      if (data && data.verify && data.verify.ok === false) {
+        setMcpError(t('web.mcpVerifyFailed', { detail: data.verify.detail }))
+      } else if (failed.length > 0) {
+        setMcpError(t('web.mcpAttachAllError', { message: failed.map(r => r.message).join('; ') }))
+      } else if (okNames.length > 0) {
+        setMcpNotice(t('web.mcpRestartHint', { names: okNames.join(', ') }))
+      }
     } catch (err) {
       setMcpError(t('web.mcpAttachAllError', { message: err.message }))
     } finally {
