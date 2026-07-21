@@ -58,6 +58,18 @@ describe('providers', () => {
       expect(cmd).toContain('high')
     })
 
+    it('Codex with effort adds a model_reasoning_effort config override, not --effort', () => {
+      const cmd = buildCommand({ provider: 'codex', permissions: 'ask', model: '', effort: 'high' })
+      expect(cmd).toContain('-c')
+      expect(cmd).toContain('model_reasoning_effort=high')
+      expect(cmd).not.toContain('--effort')
+    })
+
+    it('Codex maps effort "max" to the highest codex level (xhigh)', () => {
+      const cmd = buildCommand({ provider: 'codex', permissions: 'ask', model: '', effort: 'max' })
+      expect(cmd).toContain('model_reasoning_effort=xhigh')
+    })
+
     it('appends extra_args verbatim after the flags it builds', () => {
       const opts: BuildCommandOptions = { provider: 'cc', permissions: 'skip', model: 'opus', extra_args: ['--remote-control'] }
       const cmd = buildCommand(opts)
