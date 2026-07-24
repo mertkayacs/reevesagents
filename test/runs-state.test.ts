@@ -357,4 +357,38 @@ describe('v1 run state', () => {
       expect(listRunHistory().map(record => record.id)).toEqual(['finished'])
     })
   })
+
+  it('throws "Run not found" when run.json is corrupt (not SyntaxError)', async () => {
+    const { writeRun, readRun, runPath } = await import('../src/core/runs.js')
+    const run = makeRun('corrupt-run')
+    writeRun(run)
+
+    const path = runPath('corrupt-run')
+    writeFileSync(path, '{ broken', 'utf-8')
+
+    expect(() => readRun('corrupt-run')).toThrow(/Run not found/)
+    expect(() => readRun('corrupt-run')).not.toThrow(SyntaxError)
+  })
+
+  it('throws "Agent not found" when agent.json is corrupt (not SyntaxError)', async () => {
+    const { writeRun, writeAgent, readAgent, agentPath } = await import('../src/core/runs.js')
+    const run = makeRun('agent-test')
+    const agent = makeAgent('corrupt-agent', 'agent-test')
+    writeRun(run)
+    writeAgent(agent)
+
+    const path = agentPath('agent-test', 'corrupt-agent')
+    writeFileSync(path, '{ broken', 'utf-8')
+
+    expect(() => readAgent('agent-test', 'corrupt-agent')).toThrow(/Agent not found/)
+    expect(() => readAgent('agent-test', 'corrupt-agent')).not.toThrow(SyntaxError)
+  })
+
+  it('throws "Agent not found" when agent.json is missing', async () => {
+    const { writeRun, readAgent } = await import('../src/core/runs.js')
+    const run = makeRun('agent-missing-test')
+    writeRun(run)
+
+    expect(() => readAgent('agent-missing-test', 'does-not-exist')).toThrow(/Agent not found/)
+  })
 })

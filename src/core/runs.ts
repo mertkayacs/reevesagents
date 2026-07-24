@@ -233,14 +233,13 @@ function writeRunUnlocked(run: RunRecord): string {
 }
 
 function readRunUnlocked(runId: string): RunRecord {
-  let raw: string
   try {
-    raw = readFileSync(runPath(runId), 'utf-8')
+    const raw = readFileSync(runPath(runId), 'utf-8')
+    // A missing or corrupt run reads as "not found", not a raw fs/parse error that leaks the path.
+    return normalizeRun(JSON.parse(raw) as Record<string, unknown>)
   } catch {
-    // A missing run reads as "not found", not a raw fs error that leaks the path.
     throw new Error(`Run not found: ${runId}`)
   }
-  return normalizeRun(JSON.parse(raw) as Record<string, unknown>)
 }
 
 function writeAgentUnlocked(agent: AgentRecord): string {
@@ -256,7 +255,11 @@ function writeRunHistoryUnlocked(record: RunHistoryRecord): string {
 }
 
 function readAgentUnlocked(runId: string, agentId: string): AgentRecord {
-  return normalizeAgent(JSON.parse(readFileSync(agentPath(runId, agentId), 'utf-8')) as Record<string, unknown>)
+  try {
+    return normalizeAgent(JSON.parse(readFileSync(agentPath(runId, agentId), 'utf-8')) as Record<string, unknown>)
+  } catch {
+    throw new Error(`Agent not found: ${agentId}`)
+  }
 }
 
 export function writeRun(run: RunRecord): string {
