@@ -209,4 +209,55 @@ describe('agent-run runtime', () => {
       { args: ['kill-session', '-t', result.run.tmux_session] },
     ]))
   })
+
+  it('uses colon-delimited target when creating reeves anchor window (regression for issue #11)', async () => {
+    class FakeDriverForcingAnchorFallback implements RuntimeDriver {
+      calls: Array<{ args: string[], input?: string }> = []
+      delays: number[] = []
+      nextWindow = 1
+      captureOutput = '[31mready[0m sk-ant-api03-abcdefghij1234567890abcdef'
+      displayMessageCalls = 0
+
+      tmux(args: string[], input?: string): string {
+        this.calls.push(input === undefined ? { args } : { args, input })
+        if (args[0] === 'display-message') {
+          this.displayMessageCalls++
+          if (this.displayMessageCalls === 1) return ''
+          return '@0 %0'
+        }
+        if (args[0] === 'new-window') {
+          const id = this.nextWindow++
+          return `@${id} %${id}`
+        }
+        if (args[0] === 'capture-pane') return this.captureOutput
+        return ''
+      }
+
+      delay(fn: () => void, ms: number): void {
+        this.delays.push(ms)
+        fn()
+      }
+    }
+
+    const driver = new FakeDriverForcingAnchorFallback()
+    const { startRun } = await import('../src/core/runtime.js')
+
+    startRun({
+      name: 'test-anchor-format',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'test', nickname: 'test' },
+    }, { driver, available })
+
+    const anchorWindowCalls = driver.calls.filter(call =>
+      call.args[0] === 'new-window' && !call.args.includes('-P')
+    )
+
+    expect(anchorWindowCalls.length).toBeGreaterThan(0)
+
+    const anchorCall = anchorWindowCalls[0]!
+    const targetIndex = anchorCall.args.indexOf('-t')
+    const targetValue = anchorCall.args[targetIndex + 1]
+
+    expect(targetValue).toBe('reeves:')
+  })
 })

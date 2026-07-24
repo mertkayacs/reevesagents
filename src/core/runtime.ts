@@ -206,7 +206,7 @@ function pickReevesAnchor(driver: RuntimeDriver): { sessionName: string; windowI
   } catch { /* session may already exist */ }
   let ids = readDisplayIds(driver, `${fallbackName}:reeves`)
   if (!ids) {
-    try { driver.tmux(['new-window', '-d', '-t', fallbackName, '-n', 'reeves']) } catch { /* anchor may already exist */ }
+    try { driver.tmux(['new-window', '-d', '-t', `${fallbackName}:`, '-n', 'reeves']) } catch { /* anchor may already exist */ }
     ids = readDisplayIds(driver, `${fallbackName}:reeves`)
   }
   return { sessionName: fallbackName, windowId: ids?.windowId ?? '', paneId: ids?.paneId ?? '' }

@@ -93,9 +93,17 @@ function tmuxAttachCommand(session: string, windowId: string): string {
   return `tmux select-window -t ${quoteShell(`${session}:${windowId}`)} && tmux attach -t ${quoteShell(session)}`
 }
 
+// tmux resolves a bare target against both session and window names, with prefix matching, so a
+// leftover "reeves-*" session or the equally-named TUI window hijacks it: the wrong session, or an
+// index-1 collision that fails "create window failed: index 1 in use". "=" forces an exact session
+// match; a trailing ":" makes new-window append at the next free index instead of a pinned one.
+function exactSession(session: string): string {
+  return `=${session}`
+}
+
 function tmuxSessionExists(session: string): boolean {
   try {
-    execFileSync('tmux', ['has-session', '-t', session], { stdio: 'ignore' })
+    execFileSync('tmux', ['has-session', '-t', exactSession(session)], { stdio: 'ignore' })
     return true
   } catch {
     return false
@@ -104,7 +112,7 @@ function tmuxSessionExists(session: string): boolean {
 
 function tmuxWindowIds(session: string): string[] {
   try {
-    return execFileSync('tmux', ['list-windows', '-t', session, '-F', '#{window_id}'], { encoding: 'utf8' })
+    return execFileSync('tmux', ['list-windows', '-t', exactSession(session), '-F', '#{window_id}'], { encoding: 'utf8' })
       .split('\n')
       .map(line => line.trim())
       .filter(Boolean)
@@ -120,7 +128,7 @@ interface TmuxWindowInfo {
 
 function tmuxWindowByName(session: string, name: string): TmuxWindowInfo | null {
   try {
-    const rows = execFileSync('tmux', ['list-windows', '-t', session, '-F', '#{window_id}\t#{window_name}\t#{pane_current_command}'], { encoding: 'utf8' })
+    const rows = execFileSync('tmux', ['list-windows', '-t', exactSession(session), '-F', '#{window_id}\t#{window_name}\t#{pane_current_command}'], { encoding: 'utf8' })
       .split('\n')
       .map(line => line.trim())
       .filter(Boolean)
@@ -149,19 +157,12 @@ function clearTuiSessionExcept(session: string, keepWindowId: string): void {
   }
 }
 
+export function tuiNewWindowArgs(session: string, window: string, command: string): string[] {
+  return ['new-window', '-d', '-P', '-F', '#{window_id}', '-t', `${exactSession(session)}:`, '-n', window, command]
+}
+
 function createTuiWindow(session: string, window: string, command: string): string {
-  return execFileSync('tmux', [
-    'new-window',
-    '-d',
-    '-P',
-    '-F',
-    '#{window_id}',
-    '-t',
-    session,
-    '-n',
-    window,
-    command,
-  ], { encoding: 'utf8' }).trim()
+  return execFileSync('tmux', tuiNewWindowArgs(session, window, command), { encoding: 'utf8' }).trim()
 }
 
 function openTuiSession(command: string): void {
@@ -182,7 +183,7 @@ function openTuiSession(command: string): void {
     : createTuiWindow(session, window, command)
   execFileSync('tmux', ['select-window', '-t', windowId], { stdio: 'ignore' })
   clearTuiSessionExcept(session, windowId)
-  execFileSync('tmux', ['attach', '-t', session], { stdio: 'inherit' })
+  execFileSync('tmux', ['attach', '-t', exactSession(session)], { stdio: 'inherit' })
 }
 
 function openTarget(id: string): void {
@@ -883,6 +884,10 @@ function runCli(): void {
         process.stderr.write(`tmux launch error: ${err instanceof Error ? err.message : String(err)}\n`)
         process.exit(1)
       }
+    }
+    if (!process.stdout.isTTY) {
+      process.stderr.write('reevesagents requires an interactive terminal. Run it in a terminal, or use a subcommand like "reevesagents doctor".\n')
+      process.exit(1)
     }
     process.on('SIGTERM', () => process.exit(0))
     if (process.stdout.isTTY) process.stdout.write('\x1b[2J\x1b[H')
