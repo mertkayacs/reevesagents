@@ -209,4 +209,32 @@ describe('agent-run runtime', () => {
       { args: ['kill-session', '-t', result.run.tmux_session] },
     ]))
   })
+
+  it('creates the reeves anchor window with an append target, not a bare name', async () => {
+    // When display-message is unparseable, readDisplayIds returns null and pickReevesAnchor creates
+    // the anchor window explicitly. That new-window must append (reeves:), not target a bare "reeves"
+    // that would collide with the same-named window and fail "index 1 in use".
+    class NoDisplayDriver extends FakeDriver {
+      tmux(args: string[], input?: string): string {
+        if (args[0] === 'display-message') { this.calls.push({ args }); return '' }
+        return super.tmux(args, input)
+      }
+    }
+    const driver = new NoDisplayDriver()
+    const { startRun } = await import('../src/core/runtime.js')
+    try {
+      startRun({
+        name: 'anchor',
+        working_dir: '/tmp',
+        root: { provider: 'codex', model: '', task: '', nickname: 'a' },
+      }, { driver, available })
+    } catch { /* the anchor new-window is recorded before any later failure */ }
+    const anchor = driver.calls.find(call =>
+      call.args[0] === 'new-window' && !call.args.includes('-P') &&
+      call.args[call.args.indexOf('-n') + 1] === 'reeves')
+    expect(anchor, 'anchor new-window call').toBeTruthy()
+    const target = anchor!.args[anchor!.args.indexOf('-t') + 1]
+    expect(target).toBe('reeves:')
+    expect(target).not.toBe('reeves')
+  })
 })

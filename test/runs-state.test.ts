@@ -357,4 +357,27 @@ describe('v1 run state', () => {
       expect(listRunHistory().map(record => record.id)).toEqual(['finished'])
     })
   })
+
+  describe('corrupt or missing registry files', () => {
+    it('readRun returns a not-found error, not a raw SyntaxError, on corrupt run.json', async () => {
+      const { writeRun, readRun, runPath } = await import('../src/core/runs.js')
+      writeRun(makeRun('corrupt-run'))
+      writeFileSync(runPath('corrupt-run'), '{ broken', 'utf-8')
+      expect(() => readRun('corrupt-run')).toThrow(/Run not found/)
+    })
+
+    it('readAgent returns a not-found error, not a raw SyntaxError, on corrupt agent json', async () => {
+      const { writeRun, writeAgent, readAgent, agentPath } = await import('../src/core/runs.js')
+      writeRun(makeRun('run-a'))
+      writeAgent(makeAgent('agent-a', 'run-a'))
+      writeFileSync(agentPath('run-a', 'agent-a'), '{ broken', 'utf-8')
+      expect(() => readAgent('run-a', 'agent-a')).toThrow(/Agent not found/)
+    })
+
+    it('readAgent returns a not-found error for a missing agent file', async () => {
+      const { writeRun, readAgent } = await import('../src/core/runs.js')
+      writeRun(makeRun('run-b'))
+      expect(() => readAgent('run-b', 'nope')).toThrow(/Agent not found/)
+    })
+  })
 })
