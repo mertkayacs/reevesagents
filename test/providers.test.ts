@@ -59,6 +59,24 @@ describe('providers', () => {
       expect(cmd).toEqual(['codex'])
     })
 
+    it('codex maps effort to a model_reasoning_effort config override (no --effort flag exists)', () => {
+      const cmd = buildCommand({ provider: 'codex', permissions: 'ask', model: '', effort: 'low' })
+      expect(cmd).not.toContain('--effort')
+      const i = cmd.indexOf('-c')
+      expect(i).toBeGreaterThanOrEqual(0)
+      expect(cmd[i + 1]).toBe('model_reasoning_effort="low"')
+    })
+
+    it('codex clamps effort "max" to codex xhigh', () => {
+      const cmd = buildCommand({ provider: 'codex', permissions: 'ask', model: '', effort: 'max' })
+      expect(cmd).toContain('model_reasoning_effort="xhigh"')
+    })
+
+    it('codex with default effort adds no reasoning override', () => {
+      const cmd = buildCommand({ provider: 'codex', permissions: 'ask', model: '', effort: 'default' })
+      expect(cmd).toEqual(['codex'])
+    })
+
     it('opencode with skip permissions does not add undocumented skip flags', () => {
       const opts: BuildCommandOptions = { provider: 'opencode', permissions: 'skip', model: '' }
       const cmd = buildCommand(opts)

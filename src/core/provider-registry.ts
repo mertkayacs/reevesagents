@@ -108,9 +108,14 @@ export const PROVIDER_REGISTRY: Record<Provider, ProviderDef> = {
     helpRequirements: [
       { feature: 'skip permissions', tokens: ['--dangerously-bypass-approvals-and-sandbox'] },
     ],
-    buildArgs: ({ permissions, model }) => {
+    buildArgs: ({ permissions, model, effort }) => {
       const args: string[] = []
       if (permissions === 'skip') args.push('--dangerously-bypass-approvals-and-sandbox')
+      // codex has no --effort flag; reasoning effort is a config value whose scale tops out at
+      // xhigh, so map reeves "max" down to xhigh.
+      if (effort && effort !== 'default') {
+        args.push('-c', `model_reasoning_effort="${effort === 'max' ? 'xhigh' : effort}"`)
+      }
       if (model) args.push('--model', model)
       return args
     },
