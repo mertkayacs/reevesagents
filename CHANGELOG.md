@@ -1,5 +1,21 @@
 # Changelog
 
+# [1.6.0](https://github.com/mertkayacs/reevesagents/compare/v1.5.0...v1.6.0) (2026-07-25)
+
+
+### Bug Fixes
+
+* **cli:** harden bare-launch tmux targeting and non-tty handling ([c7e0eef](https://github.com/mertkayacs/reevesagents/commit/c7e0eef65a8f91f474e6a75c69f2ec3df937f49f)), closes [#11](https://github.com/mertkayacs/reevesagents/issues/11)
+* **runs:** return not-found on corrupt or missing run and agent json ([f2ae30e](https://github.com/mertkayacs/reevesagents/commit/f2ae30e1bd493fda0d7927eacd16a7dcd17de1f6)), closes [#11](https://github.com/mertkayacs/reevesagents/issues/11)
+* **runtime:** use exact/append tmux targets for the reeves anchor ([41328bc](https://github.com/mertkayacs/reevesagents/commit/41328bc96390302a7dc22f932d2a64eb2c51d8de)), closes [#12](https://github.com/mertkayacs/reevesagents/issues/12)
+
+
+### Features
+
+* auto-reap zombie agents, raise agent cap to 100, and ship an installable skill ([c32edec](https://github.com/mertkayacs/reevesagents/commit/c32edec718c88ddb3cefcb08275429a4e21fe1ff))
+* **onboarding:** one connect flow, sharper MCP text, post-install nudge ([c83abc0](https://github.com/mertkayacs/reevesagents/commit/c83abc011f04f9cbbcff0006503776b5a284091b))
+* **providers:** refresh model catalogs for updated CLIs and add Codex effort ([7c1b4fa](https://github.com/mertkayacs/reevesagents/commit/7c1b4fa6ad28412d98f0c8a85f454a8404a62a1d))
+
 # [1.5.0](https://github.com/mertkayacs/reevesagents/compare/v1.4.0...v1.5.0) (2026-07-11)
 
 
