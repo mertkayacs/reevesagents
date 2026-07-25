@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/mertkayacs/reevesagents/compare/v1.6.1...v1.6.2) (2026-07-25)
+
+
+### Bug Fixes
+
+* **skills:** make SKILL.md frontmatter valid YAML ([3096541](https://github.com/mertkayacs/reevesagents/commit/309654120a5841077a68faef73ed0b7c54370185))
+
 ## [1.6.1](https://github.com/mertkayacs/reevesagents/compare/v1.6.0...v1.6.1) (2026-07-25)
 
 
