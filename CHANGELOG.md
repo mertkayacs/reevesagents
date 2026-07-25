@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/mertkayacs/reevesagents/compare/v1.6.0...v1.6.1) (2026-07-25)
+
+
+### Bug Fixes
+
+* republish as 1.6.1 and sync reevesagents-win ([8125062](https://github.com/mertkayacs/reevesagents/commit/81250624b155dad3a9f64eeab0978aff249ecaf1)), closes [11/#12](https://github.com/mertkayacs/reevesagents/issues/12)
+
 # [1.6.0](https://github.com/mertkayacs/reevesagents/compare/v1.5.0...v1.6.0) (2026-07-25)
 
 
