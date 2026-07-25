@@ -1,6 +1,6 @@
 ---
 name: reevesagents
-description: Drive a team of other AI coding CLIs from the current session through the reevesagents MCP server. Use when the user asks to delegate work to another model, run several agents in parallel, or orchestrate a multi-agent team: spawn Claude Code, Codex, Kimi, Qwen, OpenCode and other installed CLIs each in its own tmux window, send them prompts, read their output, and stop or reap them. Assumes the reevesagents MCP server is attached to this CLI (run: reevesagents attach).
+description: Drive a team of other AI coding CLIs from the current session through the reevesagents MCP server. Use when the user asks to delegate work to another model, run several agents in parallel, or orchestrate a multi-agent team. It can spawn Claude Code, Codex, Kimi, Qwen, OpenCode and other installed CLIs each in its own tmux window, send them prompts, read their output, and stop or reap them. Assumes the reevesagents MCP server is attached to this CLI (run reevesagents attach).
 ---
 
 # reevesagents: drive a team of AI CLIs

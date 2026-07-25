@@ -40,6 +40,19 @@ describe('reevesagents skill', () => {
     expect(description!.length).toBeLessThanOrEqual(1024)
   })
 
+  it('has YAML-safe frontmatter (no colon-space or hash that breaks a plain scalar)', () => {
+    // A ": " or " #" inside an unquoted YAML value makes the whole frontmatter fail
+    // to parse, so the host CLI loads the skill with empty metadata and it becomes
+    // undiscoverable. Guard the two breakers on every frontmatter line.
+    const frontmatter = REEVESAGENTS_SKILL.match(/^---\n([\s\S]*?)\n---/)![1]!
+    for (const line of frontmatter.split('\n')) {
+      if (!line.trim()) continue
+      const value = line.slice(line.indexOf(':') + 1)
+      expect(value).not.toMatch(/:\s/)
+      expect(value).not.toMatch(/\s#/)
+    }
+  })
+
   it('the committed skills/reevesagents/SKILL.md matches the shipped content', () => {
     const committed = readFileSync(join(process.cwd(), 'skills', 'reevesagents', 'SKILL.md'), 'utf-8')
     expect(committed).toBe(REEVESAGENTS_SKILL)
