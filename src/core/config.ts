@@ -13,8 +13,9 @@ const DEFAULT_GLOBAL: GlobalConfig = {
   peek_interval_ms: 5000,
   peek_lines: 10,
   max_depth: 5,
-  max_agents: 10,
+  max_agents: 100,
   ready_delay_ms: 5000,
+  max_lifetime_ms: 0,
   default_permissions: 'ask',
   language: DEFAULT_LANGUAGE,
 }
@@ -57,6 +58,7 @@ function mergeDefaults(raw: unknown): Config {
     if (typeof g.max_depth === 'number' && g.max_depth > 0) merged.global.max_depth = g.max_depth
     if (typeof g.max_agents === 'number' && g.max_agents > 0) merged.global.max_agents = g.max_agents
     if (typeof g.ready_delay_ms === 'number' && g.ready_delay_ms >= 0) merged.global.ready_delay_ms = g.ready_delay_ms
+    if (typeof g.max_lifetime_ms === 'number' && g.max_lifetime_ms >= 0) merged.global.max_lifetime_ms = g.max_lifetime_ms
     if (g.default_permissions === 'skip' || g.default_permissions === 'ask') merged.global.default_permissions = g.default_permissions as Permissions
     if (isLanguageCode(g.language)) merged.global.language = g.language
   }
@@ -106,6 +108,7 @@ export const CONFIG_FIELDS: readonly ConfigFieldSpec[] = [
   { key: 'max_depth', kind: 'posint', label: 'max depth' },
   { key: 'max_agents', kind: 'posint', label: 'max agents' },
   { key: 'ready_delay_ms', kind: 'nonneg-int', label: 'ready delay (ms)' },
+  { key: 'max_lifetime_ms', kind: 'nonneg-int', label: 'max agent lifetime (ms)' },
   { key: 'default_permissions', kind: 'permissions', label: 'default permissions' },
   { key: 'language', kind: 'language', label: 'language' },
 ]

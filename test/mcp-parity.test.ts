@@ -284,11 +284,30 @@ describe('mcp parity tools', () => {
       expect(props.effort.enum).toContain('high')
     })
 
-    it('advertises the config, preset, host, and doctor tools', async () => {
+    it('advertises the config, preset, host, doctor, reap, and skills tools', async () => {
       const { MCP_TOOLS } = await import('../src/mcp/server.js')
       const names = MCP_TOOLS.map(tool => tool.name)
-      for (const name of ['doctor', 'get_config', 'set_config', 'list_presets', 'save_preset', 'start_preset', 'delete_preset', 'list_hosts', 'attach_host', 'detach_host']) {
+      for (const name of ['doctor', 'get_config', 'set_config', 'list_presets', 'save_preset', 'start_preset', 'delete_preset', 'list_hosts', 'attach_host', 'detach_host', 'reap', 'install_skills']) {
         expect(names).toContain(name)
+      }
+    })
+
+    it('reap returns a reaped array (empty when tmux is unavailable)', async () => {
+      const result = payload(await call('reap', {}))
+      expect(Array.isArray(result.reaped)).toBe(true)
+      expect(result.reaped).toHaveLength(0)
+    })
+
+    it('install_skills writes the skill under the home dir and reports status', async () => {
+      process.env.REEVES_HOME = tmpDir
+      try {
+        const installed = payload(await call('install_skills', {}))
+        expect(Array.isArray(installed)).toBe(true)
+        expect(installed.every((r: any) => r.ok)).toBe(true)
+        const status = payload(await call('install_skills', { status: true }))
+        expect(status.every((r: any) => r.present && r.current)).toBe(true)
+      } finally {
+        delete process.env.REEVES_HOME
       }
     })
   })
@@ -333,7 +352,7 @@ describe('mcp parity tools', () => {
 
   describe('config', () => {
     it('get_config and set_config round-trip with validation', async () => {
-      expect(payload(await call('get_config', {})).max_agents).toBe(10)
+      expect(payload(await call('get_config', {})).max_agents).toBe(100)
 
       const after = payload(await call('set_config', { max_agents: 20, language: 'tr' }))
       expect(after.max_agents).toBe(20)

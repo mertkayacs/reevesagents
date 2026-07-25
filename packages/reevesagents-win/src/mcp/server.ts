@@ -41,7 +41,7 @@ import { REEVESAGENTS_WIN_VERSION } from '../version.js'
 
 // This MVP ships no config tools, so the per-run agent cap is a constant matching the
 // unix default (src/core/config.ts DEFAULT_GLOBAL.max_agents).
-const MAX_AGENTS = 10
+const MAX_AGENTS = 100
 
 // The single run this session drives when callers omit run_id. Set on the first spawn
 // and reused for every later run_id-less spawn. There is no host-as-head path yet:

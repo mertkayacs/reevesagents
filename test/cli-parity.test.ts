@@ -529,7 +529,7 @@ describe('cli parity', () => {
   describe('config', () => {
     it('shows, gets, and sets a config value', async () => {
       const { out: shown } = await runCli(['config'])
-      expect(shown).toMatch(/max_agents\s+10/)
+      expect(shown).toMatch(/max_agents\s+100/)
 
       const { out: set } = await runCli(['config', 'max_agents', '25'])
       expect(set).toMatch(/max_agents = 25/)
@@ -573,6 +573,33 @@ describe('cli parity', () => {
     it('rejects starting or deleting an unknown preset', async () => {
       await expect(runCli(['start-preset', 'ghost'])).rejects.toThrow(/process\.exit/)
       await expect(runCli(['delete-preset', 'ghost', '--yes'])).rejects.toThrow(/preset not found/)
+    })
+  })
+
+  describe('reap and skills', () => {
+    it('reap reports no zombies when nothing is running', async () => {
+      const { out } = await runCli(['reap'])
+      expect(out).toMatch(/no zombie agents/)
+    })
+
+    it('installs, lists, and removes the skill under REEVES_HOME', async () => {
+      process.env.REEVES_HOME = tmpDir
+      try {
+        const { out: installed } = await runCli(['skills', 'install'])
+        expect(installed).toMatch(/\.claude\/skills\/reevesagents\/SKILL\.md/)
+        expect(installed).toMatch(/\.agents\/skills\/reevesagents\/SKILL\.md/)
+
+        const { out: status } = await runCli(['skills'])
+        expect(status).toMatch(/installed/)
+
+        const { out: removed } = await runCli(['skills', 'remove'])
+        expect(removed).toMatch(/removed/)
+
+        const { out: after } = await runCli(['skills', 'status'])
+        expect(after).toMatch(/absent/)
+      } finally {
+        delete process.env.REEVES_HOME
+      }
     })
   })
 })

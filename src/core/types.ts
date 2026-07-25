@@ -169,8 +169,9 @@ export interface GlobalConfig {
   peek_interval_ms: number          // ms between peek polls; default 5000
   peek_lines: number                // capture-pane lines shown; default 10
   max_depth: number                 // spawn recursion cap; default 5
-  max_agents: number                // tree size cap; default 10
+  max_agents: number                // tree size cap; default 100
   ready_delay_ms: number            // ms to wait after session start before task injection; default 5000
+  max_lifetime_ms: number           // auto-reap agents older than this; 0 disables; default 0
   default_permissions: Permissions  // default 'ask'
   language: LanguageCode            // default 'en'
 }

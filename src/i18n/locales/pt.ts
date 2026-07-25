@@ -542,6 +542,7 @@ export const pt = {
     'provider setup, paths, health checks': 'configuração de fornecedores, caminhos, verificações de estado',
     'refresh': 'atualizar',
     'ready delay (ms)': 'Atraso de prontidão (ms)',
+    'max agent lifetime (ms)': 'Vida máx. do agente (ms)',
     'remove stopped run from active list': 'remover execução parada da lista ativa',
     'requests appear here': 'os pedidos aparecem aqui',
     'return': 'voltar',

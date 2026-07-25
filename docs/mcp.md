@@ -62,6 +62,7 @@ agent").
 - `read`: read an agent's recent output
 - `list`: list runs and agents with their status
 - `open`: switch the attached tmux client to a run or agent, so an agent can surface any run for the user (its own run or another)
+- `reap`: end zombie agents now (any whose tmux window died, plus any older than `max_lifetime_ms`); also runs on a background timer
 - `list_history`: list archived run history records (ended and stale runs)
 - `list_providers`: list the CLI providers this machine can launch, with their ids,
   install status, aliases, and known models (so an agent can discover what to spawn
@@ -80,6 +81,9 @@ agent").
   run shapes, capture a live run as a preset, and start a new run from one
 - `attach_host` and `detach_host`: attach or detach this MCP for a host CLI, the
   same engine behind the Agent control screen
+- `install_skills`: install the ReevesAgents skill (a `SKILL.md`) into the shared
+  `~/.claude/skills` and `~/.agents/skills` directories, so a skill-aware CLI
+  learns the drive loop; pass `{ "status": true }` to only report where it is
 
 No inbox, no task-status protocol, no role scoping here. The MCP stays a flat
 control surface by design. The delete tools mirror the Web UI delete actions and
@@ -128,8 +132,12 @@ uses.
 The control is intentionally full: any key, any text. So the guardrails sit at
 the resource level, not the control level.
 
-- A cap on how many agents a run may hold (`max_agents`), enforced when the
-  spawn tool adds to a run.
+- A cap on how many agents a run may hold (`max_agents`, default 100), enforced
+  when the spawn tool adds to a run.
+- A zombie reaper. On a background timer (and on the `reap` tool), any agent whose
+  tmux window has died is ended, and any agent older than `max_lifetime_ms` is
+  killed. The lifetime cap is off by default (`0`); set it to bound runaway agents
+  that never exit.
 - A cap on spawn recursion depth (A spawns B spawns C ...). Within one run the
   tree is flat (the head and its workers are all depth one), so a depth cap is
   trivially satisfied. Bounding cross-run recursion would require injecting the

@@ -536,6 +536,7 @@ export const tr = {
     'provider agent inside the run session': 'run oturumundaki sağlayıcı agent\'ı',
     'provider setup, paths, health checks': 'sağlayıcı kurulumu, yollar, sağlık kontrolleri',
     'ready delay (ms)': 'Hazır gecikmesi (ms)',
+    'max agent lifetime (ms)': 'Maks. agent ömrü (ms)',
     'refresh': 'yenile',
     'remove stopped run from active list': 'durdurulmuş run\'ı aktif listeden kaldır',
     'requests appear here': 'istekler burada görünür',

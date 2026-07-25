@@ -24,6 +24,8 @@ import {
   deleteRunHistory,
 } from './core/runs.js'
 import { listRunApprovals, resolveRunApproval } from './core/approvals.js'
+import { sweepAgents } from './core/reaper.js'
+import { installSkills, skillsStatus, removeSkills } from './core/skills.js'
 import { loadConfig, setConfigValues, parseConfigValue, CONFIG_FIELDS } from './core/config.js'
 import { listPresets, savePresetFromRun, deletePreset } from './core/store.js'
 import { MODEL_CATALOG } from './core/model-catalog.js'
@@ -468,6 +470,26 @@ program
   })
 
 program
+  .command('reap')
+  .description('reap zombie agents: end any whose tmux window is gone or that outlive max_lifetime_ms')
+  .option('--json', 'output JSON array of reaped agents')
+  .action((opts) => {
+    const { reaped } = sweepAgents()
+    if (opts.json) {
+      console.log(JSON.stringify(reaped, null, 2))
+      return
+    }
+    if (reaped.length === 0) {
+      console.log('no zombie agents')
+      return
+    }
+    for (const r of reaped) {
+      console.log(`${r.agent_id.slice(0, 8)}  ${r.run_id.slice(0, 8)}  ${r.reason.padEnd(17)}  ${String(Math.round(r.age_ms / 1000)).padStart(5)}s  ${r.nickname}`)
+    }
+    console.log(`reaped ${reaped.length} ${reaped.length === 1 ? 'agent' : 'agents'}`)
+  })
+
+program
   .command('open <id>')
   .description('open a run tmux tab set or an agent window')
   .action((id) => {
@@ -813,6 +835,45 @@ program
       const result = detach(cli)
       console.log(`${(result.ok ? 'ok' : '--').padEnd(3)} ${result.key.padEnd(10)} ${result.message}`)
       if (!result.ok) process.exitCode = 1
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+  })
+
+program
+  .command('skills [action]')
+  .description('install the reevesagents skill for skill-aware CLIs (action: status, install, remove)')
+  .option('--json', 'output JSON')
+  .action((action: string | undefined, opts: { json?: boolean }) => {
+    const verb = action ?? 'status'
+    try {
+      if (verb === 'install') {
+        const results = installSkills()
+        if (opts.json) { console.log(JSON.stringify(results, null, 2)); return }
+        for (const r of results) console.log(`${(r.ok ? 'ok' : '--').padEnd(3)} ${r.label.padEnd(24)} ${r.file}`)
+        console.log('\nrestart your CLIs to pick up the skill.')
+        if (results.some(r => !r.ok)) process.exitCode = 1
+        return
+      }
+      if (verb === 'remove') {
+        const results = removeSkills()
+        if (opts.json) { console.log(JSON.stringify(results, null, 2)); return }
+        for (const r of results) console.log(`${(r.ok ? 'ok' : '--').padEnd(3)} ${r.label.padEnd(24)} ${r.message}`)
+        if (results.some(r => !r.ok)) process.exitCode = 1
+        return
+      }
+      if (verb === 'status') {
+        const rows = skillsStatus()
+        if (opts.json) { console.log(JSON.stringify(rows, null, 2)); return }
+        for (const r of rows) {
+          const state = !r.present ? 'absent' : r.current ? 'installed' : 'outdated'
+          console.log(`${state.padEnd(10)} ${r.label.padEnd(24)} ${r.file}`)
+        }
+        console.log('\nrun "reevesagents skills install" to (re)install.')
+        return
+      }
+      throw new Error(`unknown action: ${verb} (use status, install, or remove)`)
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err))
       process.exit(1)

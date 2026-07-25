@@ -537,6 +537,7 @@ export const es = {
     'provider agent inside the run session': 'agente del proveedor dentro de la sesión del run',
     'provider setup, paths, health checks': 'configuración del proveedor, rutas, comprobaciones de estado',
     'ready delay (ms)': 'Retraso de preparación (ms)',
+    'max agent lifetime (ms)': 'Vida máx. del agente (ms)',
     'refresh': 'actualizar',
     'remove stopped run from active list': 'quitar run detenido de activos',
     'requests appear here': 'las solicitudes aparecen aquí',

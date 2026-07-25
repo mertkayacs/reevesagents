@@ -574,7 +574,7 @@ describe('config and presets web actions', () => {
     const read = await get(handle.port, '/api/config')
     expect(read.status).toBe(200)
     const readBody = JSON.parse(read.body) as { config: { max_agents: number }; fields: Array<{ key: string }> }
-    expect(readBody.config.max_agents).toBe(10)
+    expect(readBody.config.max_agents).toBe(100)
     expect(readBody.fields.map(f => f.key)).not.toContain('language')
 
     const updated = await post(handle.port, '/api/config', { max_agents: 25, default_permissions: 'skip' })

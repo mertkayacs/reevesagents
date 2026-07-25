@@ -494,7 +494,7 @@ export function readAgentInbox(runId: string, agentId: string): Message[] {
   })
 }
 
-function defaultTmuxSessionExists(session: string): boolean {
+export function defaultTmuxSessionExists(session: string): boolean {
   if (!session) return false
   try {
     const result = spawnSync('tmux', ['has-session', '-t', session], { stdio: 'ignore' })
@@ -504,7 +504,7 @@ function defaultTmuxSessionExists(session: string): boolean {
   }
 }
 
-function defaultTmuxAvailable(): boolean {
+export function defaultTmuxAvailable(): boolean {
   try {
     const result = spawnSync('tmux', ['-V'], { stdio: 'ignore' })
     return result.status === 0
@@ -513,7 +513,7 @@ function defaultTmuxAvailable(): boolean {
   }
 }
 
-function defaultTmuxTargetExists(target: string): boolean {
+export function defaultTmuxTargetExists(target: string): boolean {
   if (!target) return false
   try {
     const format = target.startsWith('%') ? '#{pane_id}' : '#{window_id}'

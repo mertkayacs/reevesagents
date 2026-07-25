@@ -546,6 +546,7 @@ export const ar = {
     'provider agent inside the run session': 'وكيل المزوّد داخل جلسة التشغيلة',
     'provider setup, paths, health checks': 'إعداد المزوّد والمسارات وفحوص الحالة',
     'ready delay (ms)': 'مهلة الجاهزية (ms)',
+    'max agent lifetime (ms)': 'أقصى عمر للوكيل (ms)',
     'refresh': 'تحديث',
     'remove stopped run from active list': 'إزالة التشغيلة المتوقفة من القائمة النشطة',
     'requests appear here': 'تظهر الطلبات هنا',

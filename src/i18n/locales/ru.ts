@@ -543,6 +543,7 @@ export const ru = {
     'provider agent inside the run session': 'агент провайдера внутри сессии run',
     'provider setup, paths, health checks': 'настройка провайдеров, пути, проверки состояния',
     'ready delay (ms)': 'Задержка готовности (мс)',
+    'max agent lifetime (ms)': 'Макс. время жизни агента (мс)',
     'refresh': 'обновить',
     'remove stopped run from active list': 'убрать остановленный run из активного списка',
     'requests appear here': 'запросы появляются здесь',

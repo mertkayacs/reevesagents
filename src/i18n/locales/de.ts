@@ -523,6 +523,7 @@ export const de = {
     'provider agent inside the run session': 'Provider-Agent in der Run-Session',
     'provider setup, paths, health checks': 'Provider-Einrichtung, Pfade, Zustandsprüfungen',
     'ready delay (ms)': 'Bereit-Verzögerung (ms)',
+    'max agent lifetime (ms)': 'Max. Agenten-Lebensdauer (ms)',
     'refresh': 'aktualisieren',
     'remove stopped run from active list': 'gestoppten Run aus aktiver Liste entfernen',
     'requests appear here': 'Anfragen erscheinen hier',

@@ -50,8 +50,10 @@ import {
 } from '../core/runs.js'
 import { detectAvailable, isProvider, coerceExtraArgs } from '../core/providers.js'
 import { PROVIDER_DEFS } from '../core/provider-registry.js'
+import { sweepAgents, sweepAgentsThrottled } from '../core/reaper.js'
 import { runDoctor } from '../core/doctor.js'
 import { hostStatus, attach, attachAll, detach } from './installer.js'
+import { installSkills, skillsStatus } from '../core/skills.js'
 import { listPresets, savePresetFromRun, deletePreset } from '../core/store.js'
 import { CONFIG_FIELDS, loadConfig, setConfigValues } from '../core/config.js'
 import {
@@ -326,7 +328,12 @@ const TOOLS: ToolDef[] = [
     name: 'list',
     description: 'List every live run and the agents in each, with their ids, status, provider, and tmux info. Start here to find a run_id or agent_id for the other tools. Ended runs are in list_history.',
     inputSchema: { type: 'object', properties: {} },
-    handler: () => ok(listRuns().map(run => ({ ...run, agents: listAgents(run.id) }))),
+    handler: () => {
+      // Opportunistically reap zombies before listing so a dead-window agent does
+      // not linger in the results. Throttled, so a chatty caller cannot spam sweeps.
+      sweepAgentsThrottled()
+      return ok(listRuns().map(run => ({ ...run, agents: listAgents(run.id) })))
+    },
   },
   {
     name: 'list_providers',
@@ -477,14 +484,20 @@ const TOOLS: ToolDef[] = [
     handler: () => ok(runDoctor().checks),
   },
   {
+    name: 'reap',
+    description: 'Sweep for zombie agents and end them: any whose tmux window has died, plus any older than max_lifetime_ms when that is set above 0 (see get_config). Returns each reaped agent with the reason (window-gone or lifetime-exceeded) and its age. This runs on its own in the background; call it to force an immediate sweep, e.g. after a crash or before relying on list.',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(sweepAgents()),
+  },
+  {
     name: 'get_config',
-    description: 'Read the global reevesagents settings: peek_interval_ms, peek_lines, max_depth, max_agents (the per-run agent cap), ready_delay_ms, default_permissions, and language. Check max_agents here when a spawn is rejected for hitting the cap.',
+    description: 'Read the global reevesagents settings: peek_interval_ms, peek_lines, max_depth, max_agents (the per-run agent cap), ready_delay_ms, max_lifetime_ms (auto-reap agents older than this; 0 disables), default_permissions, and language. Check max_agents here when a spawn is rejected for hitting the cap.',
     inputSchema: { type: 'object', properties: {} },
     handler: () => ok(loadConfig().global),
   },
   {
     name: 'set_config',
-    description: 'Change one or more global settings and save them. Pass only the fields to change. Counts must be positive integers (ready_delay_ms may be 0); default_permissions is ask or skip; language is a supported code such as en or tr. Example: raise the per-run agent cap with { "max_agents": 20 }. Returns the saved settings.',
+    description: 'Change one or more global settings and save them. Pass only the fields to change. Counts must be positive integers (ready_delay_ms and max_lifetime_ms may be 0); default_permissions is ask or skip; language is a supported code such as en or tr. Example: raise the per-run agent cap with { "max_agents": 20 }, or auto-kill agents running longer than an hour with { "max_lifetime_ms": 3600000 }. Returns the saved settings.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -493,6 +506,7 @@ const TOOLS: ToolDef[] = [
         max_depth: { type: 'number', description: 'Spawn recursion cap.' },
         max_agents: { type: 'number', description: 'Max agents per run.' },
         ready_delay_ms: { type: 'number', description: 'Delay before the startup prompt is injected.' },
+        max_lifetime_ms: { type: 'number', description: 'Auto-reap any agent older than this many ms on the next sweep. 0 disables lifetime reaping.' },
         default_permissions: { type: 'string', enum: ['ask', 'skip'], description: 'Permission mode used when a spawn omits one.' },
         language: { type: 'string', description: 'UI language code for the TUI and web UI, e.g. en, tr.' },
       },
@@ -591,6 +605,17 @@ const TOOLS: ToolDef[] = [
     },
     handler: (a) => ok(detach(asString(a.key))),
   },
+  {
+    name: 'install_skills',
+    description: 'Install the reevesagents Agent Skill so skill-aware CLIs (Claude Code, Codex, Kimi, OpenCode) learn to drive reevesagents on their own. Writes one SKILL.md to the two shared skill directories under the home dir. Pass no arguments; call with status omitted to install, or read the returned rows to see where it landed. The user must restart their CLIs to pick it up.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'boolean', description: 'When true, only report where the skill is installed without writing anything.' },
+      },
+    },
+    handler: (a) => ok(a.status === true ? skillsStatus() : installSkills()),
+  },
 ]
 
 // The advertised tool list (schema only) and the name -> handler dispatch, both
@@ -687,11 +712,22 @@ export function readMcpResource(uri: string) {
   throw new Error(`Unknown resource: ${uri}`)
 }
 
+// How often the long-lived MCP process sweeps for zombie agents on its own, so a
+// dead-window or over-lifetime agent gets reaped even if no tool is called.
+const BACKGROUND_REAP_INTERVAL_MS = 30_000
+
 export async function startAgentMcpServer(): Promise<void> {
   const server = new Server(
     { name: 'reevesagents', version: REEVESAGENTS_VERSION },
     { capabilities: { tools: {}, resources: {} }, instructions: MCP_INSTRUCTIONS },
   )
+
+  // Background zombie reaper. unref() so it never keeps the process alive on its own;
+  // it only fires while the server is already running for other reasons.
+  const reapTimer = setInterval(() => {
+    try { sweepAgents() } catch { /* best effort; next tick retries */ }
+  }, BACKGROUND_REAP_INTERVAL_MS)
+  reapTimer.unref()
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: MCP_TOOLS }))
 

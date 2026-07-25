@@ -22,7 +22,7 @@ describe('config editing', () => {
   it('CONFIG_FIELDS lists every editable global field in order', async () => {
     const { CONFIG_FIELDS } = await import('../src/core/config.js')
     expect(CONFIG_FIELDS.map(f => f.key)).toEqual([
-      'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms', 'default_permissions', 'language',
+      'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms', 'max_lifetime_ms', 'default_permissions', 'language',
     ])
   })
 
@@ -44,13 +44,25 @@ describe('config editing', () => {
     expect(() => setConfigValues({ default_permissions: 'maybe' })).toThrow(/ask or skip/)
     expect(() => setConfigValues({ language: 'xx' })).toThrow(/unknown language/)
     expect(() => setConfigValues({ nonsense: 1 } as never)).toThrow(/unknown config field/)
-    expect(loadConfig().global.max_agents).toBe(10)
+    expect(loadConfig().global.max_agents).toBe(100)
   })
 
   it('ready_delay_ms accepts zero', async () => {
     const { setConfigValues, loadConfig } = await import('../src/core/config.js')
     setConfigValues({ ready_delay_ms: 0 })
     expect(loadConfig().global.ready_delay_ms).toBe(0)
+  })
+
+  it('max_lifetime_ms accepts zero and positive, rejects negative and non-integer', async () => {
+    const { setConfigValues, loadConfig } = await import('../src/core/config.js')
+    setConfigValues({ max_lifetime_ms: 0 })
+    expect(loadConfig().global.max_lifetime_ms).toBe(0)
+    setConfigValues({ max_lifetime_ms: 3_600_000 })
+    expect(loadConfig().global.max_lifetime_ms).toBe(3_600_000)
+    expect(() => setConfigValues({ max_lifetime_ms: -1 })).toThrow(/zero or a positive/)
+    expect(() => setConfigValues({ max_lifetime_ms: 1.5 })).toThrow(/zero or a positive/)
+    // the rejected writes left the last good value in place
+    expect(loadConfig().global.max_lifetime_ms).toBe(3_600_000)
   })
 
   it('parseConfigValue coerces numeric strings and validates the key', async () => {

@@ -524,6 +524,7 @@ export const fr = {
     'provider agent inside the run session': 'agent fournisseur dans la session du run',
     'provider setup, paths, health checks': 'configuration des fournisseurs, chemins, contrôles d\'état',
     'ready delay (ms)': 'Délai avant prêt (ms)',
+    'max agent lifetime (ms)': 'Durée de vie max. agent (ms)',
     'refresh': 'actualiser',
     'remove stopped run from active list': 'retirer le run arrêté des actifs',
     'requests appear here': 'les demandes apparaissent ici',

@@ -293,6 +293,7 @@ Discovery, approvals, agent control, config, and cleanup:
 - `hosts`: List the agent CLIs on this machine and show which ones ReevesAgents is connected to.
 - `attach [cli]`: Connect ReevesAgents to one agent CLI, or to every installed one when no name is given. Runs that CLI's own `mcp add`.
 - `detach <cli>`: Disconnect ReevesAgents from one agent CLI. Runs that CLI's own `mcp remove`.
+- `skills [action]`: Install the ReevesAgents skill (a `SKILL.md`) so skill-aware CLIs (Claude Code, Codex, Kimi, OpenCode) learn to drive ReevesAgents on their own. Actions: `status` (default), `install`, `remove`. Key flags: `--json`.
 - `mcp`: Start the Agent control MCP server over stdio. Not run by hand; the CLI you connect it to runs it.
 - `config [key] [value]`: Show all editable settings, read one, or set one. Key flags: `--json`.
 - `presets`: List saved run presets. Key flags: `--json`.
@@ -303,6 +304,7 @@ Discovery, approvals, agent control, config, and cleanup:
 - `delete-run <run-id>`: Delete one ended run and archive it to history. Key flags: `-y, --yes`.
 - `history`: List archived ended and stale runs. Key flags: `--json`.
 - `delete-history <id>`: Delete one archived history record. Key flags: `-y, --yes`.
+- `reap`: End zombie agents: any whose tmux window is gone, plus any older than `max_lifetime_ms` (when set above 0). ReevesAgents also reaps on its own in the background; this forces an immediate sweep. Key flags: `--json`.
 
 `stop`, `kill`, and the `delete` commands are destructive. They refuse to run
 without `--yes` or `ALLOW_DESTRUCTIVE=1`.
@@ -333,13 +335,25 @@ group shows up in the TUI and Web UI like any other run.
 Spawned workers do not receive the MCP by default, so they cannot spawn further
 agents. To let a worker drive its own sub-workers, attach the MCP to that
 worker's CLI from the same screen. Guardrails sit at the resource level: a
-per-run agent cap (`max_agents`), enforced when the spawn tool adds to a run,
-and the fact that each agent is a real CLI process in its own tmux pane.
+per-run agent cap (`max_agents`, default 100), enforced when the spawn tool adds
+to a run, and the fact that each agent is a real CLI process in its own tmux pane.
+
+ReevesAgents also reaps zombie agents on its own. On a timer (and on the `reap`
+tool or CLI command), it ends any agent whose tmux window has died and any agent
+older than `max_lifetime_ms`. That lifetime cap is off by default (`0`); set it to
+auto-kill runaway agents that never exit, for example one hour with
+`config max_lifetime_ms 3600000`.
 
 An attached CLI can also discover what it can launch: the `list_providers` tool
 and the `reevesagents://providers` resource return the providers on this machine
 with their ids, install status, aliases, and known models, so an agent passes a
 real id to `spawn` instead of guessing.
+
+To help a CLI use these tools well, `reevesagents skills install` drops a
+ReevesAgents skill (a single `SKILL.md`) into the two shared skill directories,
+`~/.claude/skills` and `~/.agents/skills`, that Claude Code, Codex, Kimi, and
+OpenCode read. The skill teaches the drive loop; it does not attach the MCP, which
+stays the separate `attach` step.
 
 See [docs/mcp.md](docs/mcp.md) for the full design and tool list.
 

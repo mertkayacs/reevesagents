@@ -546,6 +546,7 @@ export const zhHans = {
     'provider agent inside the run session': '运行会话内的服务商智能体',
     'provider setup, paths, health checks': '服务商设置、路径、健康检查',
     'ready delay (ms)': '就绪延迟 (ms)',
+    'max agent lifetime (ms)': '智能体最长存活时间 (ms)',
     'refresh': '刷新',
     'remove stopped run from active list': '从活动列表中移除已停止的运行',
     'requests appear here': '请求会显示在这里',
