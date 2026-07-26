@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/mertkayacs/reevesagents/compare/v1.7.0...v1.7.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* **runtime:** verify tmux ids belong to their run session before targeting them ([#18](https://github.com/mertkayacs/reevesagents/issues/18)) ([c6e9e08](https://github.com/mertkayacs/reevesagents/commit/c6e9e089fdea40297870ee75165c58209423a09e)), closes [#17](https://github.com/mertkayacs/reevesagents/issues/17)
+
 # [1.7.0](https://github.com/mertkayacs/reevesagents/compare/v1.6.2...v1.7.0) (2026-07-26)
 
 
