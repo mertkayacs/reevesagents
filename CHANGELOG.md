@@ -1,5 +1,12 @@
 # Changelog
 
+# [1.7.0](https://github.com/mertkayacs/reevesagents/compare/v1.6.2...v1.7.0) (2026-07-26)
+
+
+### Features
+
+* **mcp:** one-command setup with OpenCode auto-attach and accurate status ([#16](https://github.com/mertkayacs/reevesagents/issues/16)) ([3998259](https://github.com/mertkayacs/reevesagents/commit/3998259178b9d5c837740da2c14e228aeddafdba)), closes [#15](https://github.com/mertkayacs/reevesagents/issues/15)
+
 ## [1.6.2](https://github.com/mertkayacs/reevesagents/compare/v1.6.1...v1.6.2) (2026-07-25)
 
 
