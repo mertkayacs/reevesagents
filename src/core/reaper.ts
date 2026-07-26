@@ -30,7 +30,7 @@ export interface ReapedAgent {
 
 export interface SweepOptions {
   driver?: RuntimeDriver
-  targetExists?: (_windowId: string) => boolean
+  targetExists?: (_windowId: string, _session: string) => boolean
   tmuxAvailable?: () => boolean
   now?: () => number
   maxLifetimeMs?: number
@@ -55,7 +55,7 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
     if (agent.ended_at || agent.headless) continue
     const ageMs = now() - new Date(agent.started_at).getTime()
     let reason: ReapReason | null = null
-    if (agent.tmux_window_id && !targetExists(agent.tmux_window_id)) {
+    if (agent.tmux_window_id && !targetExists(agent.tmux_window_id, agent.tmux_session)) {
       reason = 'window-gone'
     } else if (maxLifetimeMs > 0 && ageMs > maxLifetimeMs) {
       reason = 'lifetime-exceeded'

@@ -1,6 +1,10 @@
 // Tmux agent-run runtime: one run owns one tmux session with independent CLI agents.
 // Inputs: run/agent configs. Outputs: run and agent JSON records plus tmux side effects.
-// Invariant: stored tmux targets use stable window/pane ids, never mutable indexes.
+// Invariant: stored tmux targets use window/pane ids, never mutable indexes, and an id
+// is only trusted as the pair (session name, id). Ids are unique per tmux-server
+// lifetime only: after a server restart they are reassigned, so a bare "@N"/"%N" can
+// name an unrelated window. Every consumer verifies membership in the exact-matched
+// session before targeting (windowInSession/paneInSession below).
 
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -147,6 +151,35 @@ function pasteTextToPane(driver: RuntimeDriver, paneId: string, text: string): v
   }
 }
 
+const STALE_WINDOW_ERROR = 'agent window no longer exists (tmux server may have restarted)'
+
+// Membership probes for the (session name, id) identity pair. Qualified targets like
+// "=SESS:@N" are no substitute: when @N is absent from SESS, tmux silently resolves
+// to another window in SESS instead of failing (verified on tmux 3.4). Listing the
+// exact-matched session and checking membership is the only sound test. After a
+// positive check, bare-id targeting is unambiguous because tmux never reuses ids
+// within one server lifetime; the remaining race is a server restart between check
+// and use, which tmux offers no way to close.
+function windowInSession(driver: RuntimeDriver, session: string, windowId: string): boolean {
+  if (!session || !windowId) return false
+  try {
+    return driver.tmux(['list-windows', '-t', `=${session}`, '-F', '#{window_id}'])
+      .split('\n').some(line => line.trim() === windowId)
+  } catch {
+    return false
+  }
+}
+
+function paneInSession(driver: RuntimeDriver, session: string, paneId: string): boolean {
+  if (!session || !paneId) return false
+  try {
+    return driver.tmux(['list-panes', '-s', '-t', `=${session}`, '-F', '#{pane_id}'])
+      .split('\n').some(line => line.trim() === paneId)
+  } catch {
+    return false
+  }
+}
+
 function sanitizeName(raw: string): string {
   const cleaned = raw.trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').slice(0, 40)
   return cleaned || 'run'
@@ -264,6 +297,7 @@ function sendDelayedStartupInput(
 
   function waitForReadyThenSend(previousOutput = '', waitedMs = 0): void {
     try {
+      if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return
       const output = driver.tmux(['capture-pane', '-p', '-e', '-S', '-80', '-t', agent.tmux_pane_id])
       if (paneLooksReady(output, previousOutput) || waitedMs >= STARTUP_READY_TIMEOUT_MS) {
         sendStartupTask()
@@ -540,8 +574,11 @@ export function spawnWorker(request: SpawnWorkerRequest, options: RuntimeOptions
 export function openReeves(runId: string, options: RuntimeOptions = {}): void {
   const driver = options.driver ?? realDriver
   const run = readRun(runId)
-  if (!run.reeves_window_id) throw new Error('Reeves TUI window is unavailable for this run')
-  const target = `${run.reeves_session ?? run.tmux_session}:${run.reeves_window_id}`
+  const reevesSession = run.reeves_session ?? run.tmux_session
+  if (!run.reeves_window_id || !windowInSession(driver, reevesSession, run.reeves_window_id)) {
+    throw new Error('Reeves TUI window is unavailable for this run')
+  }
+  const target = `${reevesSession}:${run.reeves_window_id}`
   try { driver.tmux(['switch-client', '-t', target]) } catch { /* no attached client */ }
   driver.tmux(['select-window', '-t', target])
 }
@@ -558,6 +595,7 @@ export function openAgent(agentId: string, options: RuntimeOptions = {}): void {
   const driver = options.driver ?? realDriver
   const agent = findAgent(agentId)
   if (agent.headless || !agent.tmux_window_id) throw new Error('This agent is headless - no tmux window exists')
+  if (!windowInSession(driver, agent.tmux_session, agent.tmux_window_id)) throw new Error(STALE_WINDOW_ERROR)
   const target = `${agent.tmux_session}:${agent.tmux_window_id}`
   try { driver.tmux(['switch-client', '-t', target]) } catch { /* no attached client */ }
   driver.tmux(['select-window', '-t', target])
@@ -571,6 +609,7 @@ export function peekAgent(agentId: string, lines = 10, options: RuntimeOptions =
   try {
     const agent = findAgent(agentId)
     if (agent.headless || !agent.tmux_pane_id) return '(headless agent - no output)'
+    if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return ''
     let output = driver.tmux(['capture-pane', '-p', '-e', '-S', String(-n), '-t', agent.tmux_pane_id])
     if (!output.trim()) {
       try { output = driver.tmux(['capture-pane', '-p', '-e', '-a', '-S', String(-n), '-t', agent.tmux_pane_id]) } catch { /* no alternate screen */ }
@@ -585,6 +624,7 @@ export function sendText(agentId: string, text: string, options: RuntimeOptions 
   const driver = options.driver ?? realDriver
   const agent = findAgent(agentId)
   if (agent.headless || !agent.tmux_pane_id) throw new Error('This agent is headless - no tmux pane exists')
+  if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) throw new Error(STALE_WINDOW_ERROR)
   pasteTextToPane(driver, agent.tmux_pane_id, text)
   lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
   if (!agent.ended_at && agent.task_status === 'queued') updateAgent(agent.run_id, agent.id, { task_status: 'working' })
@@ -608,6 +648,7 @@ export function sendKey(agentId: string, key: AllowedKey, options: RuntimeOption
   const agent = findAgent(agentId)
   if (agent.headless || !agent.tmux_pane_id) throw new Error('This agent is headless - no tmux pane exists')
   if (!ALLOWED_KEYS.includes(key)) throw new Error(`Unsupported key: ${String(key)}`)
+  if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) throw new Error(STALE_WINDOW_ERROR)
   if (key === 'enter') {
     const lastPasteAt = lastPasteAtByPane.get(agent.tmux_pane_id) ?? 0
     const remaining = POST_PASTE_ENTER_DELAY_MS - (Date.now() - lastPasteAt)
@@ -628,20 +669,29 @@ export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentR
   const driver = options.driver ?? realDriver
   const agent = findAgent(agentId)
   const run = readRun(agent.run_id)
-  try {
-    driver.tmux(['kill-window', '-t', agent.tmux_window_id])
-  } catch {
-    // already gone
+  // Only kill the window when the stored id still belongs to this run's session; a
+  // stale id (server restart) would name an unrelated window. A failed check means
+  // the window is already gone, so the record teardown below proceeds either way.
+  if (windowInSession(driver, agent.tmux_session, agent.tmux_window_id)) {
+    try {
+      driver.tmux(['kill-window', '-t', agent.tmux_window_id])
+    } catch {
+      // already gone
+    }
   }
   const endedAt = nowIso()
   updateAgent(agent.run_id, agent.id, { ended_at: endedAt, task_status: 'done' })
   const updatedAgent = readAgent(agent.run_id, agent.id)
   const endedRun = endRunIfNoLiveAgents(agent.run_id, endedAt)
   if (endedRun.status === 'ended' || endedRun.ended_at !== null) {
-    try {
-      driver.tmux(['kill-session', '-t', run.tmux_session])
-    } catch {
-      // session may already be gone
+    // Same guard as stopRun: never kill a session the run shares with the reeves TUI.
+    const runOwnsSession = !!run.reeves_session && run.reeves_session !== run.tmux_session
+    if (runOwnsSession) {
+      try {
+        driver.tmux(['kill-session', '-t', `=${run.tmux_session}`])
+      } catch {
+        // session may already be gone
+      }
     }
     archiveAndRemoveRun(run.id, 'ended')
   }
@@ -656,14 +706,14 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
   const runOwnsSession = !!run.reeves_session && run.reeves_session !== run.tmux_session
   if (runOwnsSession) {
     try {
-      driver.tmux(['kill-session', '-t', run.tmux_session])
+      driver.tmux(['kill-session', '-t', `=${run.tmux_session}`])
     } catch {
       // session may already be gone
     }
   }
   for (const agent of listAgents(run.id)) {
     if (agent.ended_at) continue
-    if (!runOwnsSession && agent.tmux_window_id) {
+    if (!runOwnsSession && windowInSession(driver, agent.tmux_session, agent.tmux_window_id)) {
       try {
         driver.tmux(['kill-window', '-t', agent.tmux_window_id])
       } catch {
@@ -702,6 +752,7 @@ export function openTmuxTarget(id: string, options: RuntimeOptions = {}): { sess
     } catch {
       throw new Error(`no run or agent found: ${id}`)
     }
+    if (!windowInSession(driver, session, window)) throw new Error(STALE_WINDOW_ERROR)
   }
   const target = `${session}:${window}`
   try { driver.tmux(['switch-client', '-t', target]) } catch { /* no attached client to switch */ }

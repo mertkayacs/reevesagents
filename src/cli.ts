@@ -192,6 +192,15 @@ function openTuiSession(command: string): void {
 
 function openTarget(id: string): void {
   const target = resolveOpenTarget(id)
+  // Stored window ids are only valid inside their recorded session: after a tmux
+  // server restart the same "@N" can name an unrelated window, so verify
+  // membership before targeting anything.
+  if (!tmuxSessionExists(target.session)) {
+    throw new Error(`tmux session not found: ${target.session}`)
+  }
+  if (target.windowId.startsWith('@') && !tmuxWindowIds(target.session).includes(target.windowId)) {
+    throw new Error('agent window no longer exists (tmux server may have restarted)')
+  }
   const tmuxTarget = `${target.session}:${target.windowId}`
   if (process.env.TMUX) {
     execFileSync('tmux', ['switch-client', '-t', tmuxTarget], { stdio: 'ignore' })

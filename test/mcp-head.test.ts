@@ -26,6 +26,9 @@ class FakeDriver implements RuntimeDriver {
   calls: Array<{ args: string[], input?: string }> = []
   delays: number[] = []
   nextWindow = 1
+  // Windows/panes the fake server currently holds; membership probes list these.
+  windows = new Set<string>(['@0'])
+  panes = new Set<string>(['%0'])
   captureOutput = '\u001b[31mready\u001b[0m sk-ant-api03-abcdefghij1234567890abcdef'
 
   tmux(args: string[], input?: string): string {
@@ -33,8 +36,12 @@ class FakeDriver implements RuntimeDriver {
     if (args[0] === 'display-message') return '@0 %0'
     if (args[0] === 'new-window') {
       const id = this.nextWindow++
+      this.windows.add(`@${id}`)
+      this.panes.add(`%${id}`)
       return `@${id} %${id}`
     }
+    if (args[0] === 'list-windows') return [...this.windows].join('\n')
+    if (args[0] === 'list-panes') return [...this.panes].join('\n')
     if (args[0] === 'capture-pane') return this.captureOutput
     return ''
   }
@@ -164,7 +171,7 @@ describe('startRunWithHead', () => {
     expect(listRuns().map(run => run.id)).not.toContain(result.run.id)
     expect(listRunHistory().map(record => record.id)).toContain(result.run.id)
     expect(driver.calls).toEqual(expect.arrayContaining([
-      { args: ['kill-session', '-t', result.run.tmux_session] },
+      { args: ['kill-session', '-t', `=${result.run.tmux_session}`] },
     ]))
   })
 })

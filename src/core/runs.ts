@@ -497,7 +497,8 @@ export function readAgentInbox(runId: string, agentId: string): Message[] {
 export function defaultTmuxSessionExists(session: string): boolean {
   if (!session) return false
   try {
-    const result = spawnSync('tmux', ['has-session', '-t', session], { stdio: 'ignore' })
+    // "=" forces an exact session-name match; a bare name would prefix-match.
+    const result = spawnSync('tmux', ['has-session', '-t', `=${session}`], { stdio: 'ignore' })
     return result.status === 0
   } catch {
     return false
@@ -513,12 +514,20 @@ export function defaultTmuxAvailable(): boolean {
   }
 }
 
-export function defaultTmuxTargetExists(target: string): boolean {
-  if (!target) return false
+export function defaultTmuxTargetExists(target: string, session: string): boolean {
+  if (!target || !session) return false
   try {
-    const format = target.startsWith('%') ? '#{pane_id}' : '#{window_id}'
-    const result = spawnSync('tmux', ['display-message', '-p', '-t', target, format], { encoding: 'utf8' })
-    return result.status === 0 && result.stdout.trim() === target
+    // Window/pane ids are only unique per tmux-server lifetime; after a server
+    // restart they are reassigned, so a bare "-t @N" probe can match an unrelated
+    // window. Identity is the (session name, id) pair: run session names embed the
+    // run id, so they never collide across server generations. Membership in the
+    // exact-matched session is the only sound check; "=SESS:@N" targets are NOT
+    // (tmux silently falls back to another window when @N is absent from SESS).
+    const args = target.startsWith('%')
+      ? ['list-panes', '-s', '-t', `=${session}`, '-F', '#{pane_id}']
+      : ['list-windows', '-t', `=${session}`, '-F', '#{window_id}']
+    const result = spawnSync('tmux', args, { encoding: 'utf8' })
+    return result.status === 0 && result.stdout.split('\n').some(line => line.trim() === target)
   } catch {
     return false
   }
@@ -526,7 +535,7 @@ export function defaultTmuxTargetExists(target: string): boolean {
 
 export interface AutoCleanupOptions {
   sessionExists?: (_session: string) => boolean
-  targetExists?: (_target: string) => boolean
+  targetExists?: (_target: string, _session: string) => boolean
   tmuxAvailable?: () => boolean
   cleanStale?: boolean
 }
@@ -536,7 +545,7 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
   const sessionExists = options.sessionExists ?? defaultTmuxSessionExists
   const agents = listAgents(run.id).filter(agent => !agent.ended_at)
   const windowedAgents = agents.filter(agent => !agent.headless && agent.tmux_window_id)
-  if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id))
+  if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id, agent.tmux_session))
   return sessionExists(run.tmux_session)
 }
 
