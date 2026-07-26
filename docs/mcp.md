@@ -108,8 +108,12 @@ hermes. For each one you can attach, detach, or attach all.
   `--args` form for hermes. reeves only calls the CLI's own command and never
   edits provider config files by hand.
 - Detach runs the matching remove.
-- OpenCode is the exception: its `mcp add` is interactive and it has no remove
-  subcommand, so the screen marks it attach-by-hand rather than driving it.
+- OpenCode is the exception: it has no scriptable `mcp add` for a local server, so
+  reeves attaches it by writing the `reevesagents` entry into
+  `~/.config/opencode/opencode.json` directly, and detach removes only that entry.
+- Codex sandboxes MCP tool calls by default, which blocks reevesagents from
+  spawning agents in tmux; run Codex with `--sandbox danger-full-access` (or a
+  profile that sets it) when driving agents.
 
 Installing it is your explicit choice. That choice is the consent. After that,
 the CLI you attached has the reeves tools whenever it starts, and nothing else

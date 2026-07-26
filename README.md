@@ -291,7 +291,7 @@ Discovery, approvals, agent control, config, and cleanup:
 - `approve <approval-id> [note]`: Resolve an approval request as approved.
 - `deny <approval-id> [note]`: Resolve an approval request as denied.
 - `hosts`: List the agent CLIs on this machine and show which ones ReevesAgents is connected to.
-- `attach [cli]`: Connect ReevesAgents to one agent CLI, or to every installed one when no name is given. Runs that CLI's own `mcp add`.
+- `attach [cli]`: Connect ReevesAgents to one agent CLI, or to every installed one when no name is given. Runs that CLI's own `mcp add` (or edits `opencode.json` for OpenCode). For a one-shot "set everything up" (attach every host and install the skill), use `reevesagents setup --attach`.
 - `detach <cli>`: Disconnect ReevesAgents from one agent CLI. Runs that CLI's own `mcp remove`.
 - `skills [action]`: Install the ReevesAgents skill (a `SKILL.md`) so skill-aware CLIs (Claude Code, Codex, Kimi, OpenCode) learn to drive ReevesAgents on their own. Actions: `status` (default), `install`, `remove`. Key flags: `--json`.
 - `mcp`: Start the Agent control MCP server over stdio. Not run by hand; the CLI you connect it to runs it.
@@ -324,8 +324,15 @@ codex, kimi, qwen, opencode, hermes) and lets you attach, detach, or attach all.
 Attaching runs that CLI's own `mcp add` command (for example
 `claude mcp add reevesagents -- reevesagents mcp`); detaching runs the matching
 remove. ReevesAgents only calls each CLI's own command and never edits provider
-config files by hand. OpenCode is the exception: its `mcp add` is interactive
-and has no remove, so the screen marks it attach-by-hand.
+config files by hand. OpenCode is the exception: it has no scriptable `mcp add`
+for a local server, so ReevesAgents attaches it by writing the `reevesagents`
+entry into its `~/.config/opencode/opencode.json` directly (and removes just that
+entry on detach).
+
+Codex sandboxes MCP tool calls by default, which blocks reevesagents from
+launching agents in tmux. Run Codex with full access when driving agents, for
+example `codex --sandbox danger-full-access`, or add a profile that sets
+`sandbox_mode = "danger-full-access"` and run `codex --profile <name>`.
 
 Once a CLI is attached, it has the Agent Control tools whenever it starts.
 Installing it is your explicit choice, and that choice is the consent. One run

@@ -429,7 +429,7 @@ describe('agent control (mcp hosts)', () => {
     const cc = body.hosts.find(h => h.key === 'cc')!
     expect(cc).toMatchObject({ key: 'cc', bin: 'claude', installed: true, attached: false, manual: false })
     const opencode = body.hosts.find(h => h.key === 'opencode')!
-    expect(opencode.manual).toBe(true)
+    expect(opencode.manual).toBe(false)
   })
 
   it('attaches and detaches a drivable host', async () => {
@@ -456,8 +456,6 @@ describe('agent control (mcp hosts)', () => {
     const body = JSON.parse(res.body) as { results: Array<{ key: string; ok: boolean }>; hosts: unknown[] }
     expect(body.results.length).toBeGreaterThan(0)
     expect(body.results.every(r => r.ok)).toBe(true)
-    // opencode is manual, so attach-all never drives it.
-    expect(body.results.find(r => r.key === 'opencode')).toBeUndefined()
   })
 
   it('rejects an unknown host key', async () => {

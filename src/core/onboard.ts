@@ -14,6 +14,7 @@ import {
   type HostStatus,
   type VerifyResult,
 } from '../mcp/installer.js'
+import { installSkills, type SkillActionResult } from './skills.js'
 import type { Provider } from './types.js'
 
 export interface OnboardingState {
@@ -50,15 +51,18 @@ export function buildOnboardingState(): OnboardingState {
 export interface OnboardingResult {
   attached: AttachResult[]
   verify: VerifyResult | null
+  skills: SkillActionResult[]
 }
 
-// The consented setup action: connect every installed drivable host, then verify
-// the server launches. Idempotent, because attachAll skips already-attached
-// hosts, so re-running is safe.
+// The consented setup action: install the skill for skill-aware CLIs, connect
+// every installed drivable host over MCP, then verify the server launches. This is
+// the one-command "make it work everywhere" path. Idempotent: installSkills
+// overwrites and attachAll skips already-attached hosts, so re-running is safe.
 export async function runOnboarding(): Promise<OnboardingResult> {
+  const skills = installSkills()
   const attached = attachAll()
   const verify = attached.some(result => result.ok) ? await verifyServerLaunch() : null
-  return { attached, verify }
+  return { attached, verify, skills }
 }
 
 // A copy-paste instruction to try in a freshly connected host CLI, naming a provider

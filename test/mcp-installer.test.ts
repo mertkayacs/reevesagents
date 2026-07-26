@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -95,7 +95,7 @@ describe('mcp installer', () => {
       expect(cc.attached).toBe(false)
     })
 
-    it('marks opencode as manual because it has no add command', async () => {
+    it('marks opencode as drivable via its config file (not manual)', async () => {
       wireEnv({
         installed: new Set(['opencode']),
         listOutput: { opencode: 'reevesagents: reevesagents mcp' },
@@ -103,15 +103,15 @@ describe('mcp installer', () => {
       const { hostStatus } = await loadInstaller()
 
       const opencode = hostStatus().find(h => h.key === 'opencode')!
-      expect(opencode.manual).toBe(true)
+      expect(opencode.manual).toBe(false)
       expect(opencode.installed).toBe(true)
     })
 
-    it('marks every drivable host as manual:false', async () => {
+    it('marks every host as manual:false', async () => {
       wireEnv({ installed: new Set(), listOutput: {} })
       const { hostStatus } = await loadInstaller()
 
-      const drivable = hostStatus().filter(h => h.key !== 'opencode')
+      const drivable = hostStatus()
       expect(drivable.map(h => h.manual)).toEqual(drivable.map(() => false))
     })
 
@@ -228,15 +228,42 @@ describe('mcp installer', () => {
       expect(argv[argv.length - 1]).toBe('mcp')
     })
 
-    it('returns ok:false with a manual message for opencode and runs no command', async () => {
+    it('attaches opencode by writing its config file (no CLI add call)', async () => {
       wireEnv({ installed: new Set(['opencode']), listOutput: {} })
       const { attach } = await loadInstaller()
 
       const result = attach('opencode')
-      expect(result.ok).toBe(false)
-      expect(result.message).toMatch(/manual/i)
-      // Manual hosts short-circuit before any which / list / add call.
-      expect(execFileSync).not.toHaveBeenCalled()
+      expect(result.ok).toBe(true)
+      // File-based: the config now advertises the reevesagents MCP server, and
+      // no `opencode mcp add` command was ever shelled out.
+      const cfgPath = join(process.env.REEVES_HOME!, '.config', 'opencode', 'opencode.json')
+      const cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'))
+      expect(cfg.mcp.reevesagents.type).toBe('local')
+      expect(cfg.mcp.reevesagents.command.at(-1)).toBe('mcp')
+      expect(execFileSync).not.toHaveBeenCalledWith('opencode', expect.arrayContaining(['mcp', 'add']), expect.anything())
+    })
+
+    it('opencode attach preserves existing config and detach removes only its entry', async () => {
+      wireEnv({ installed: new Set(['opencode']), listOutput: {} })
+      const dir = join(process.env.REEVES_HOME!, '.config', 'opencode')
+      mkdirSync(dir, { recursive: true })
+      const cfgPath = join(dir, 'opencode.json')
+      writeFileSync(cfgPath, JSON.stringify({ theme: 'dark', mcp: { other: { type: 'local', command: ['x'] } } }), 'utf-8')
+      const { attach, detach, hostStatus } = await loadInstaller()
+
+      attach('opencode')
+      let cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'))
+      expect(cfg.theme).toBe('dark')                       // unrelated key preserved
+      expect(cfg.mcp.other).toBeTruthy()                   // other MCP server preserved
+      expect(cfg.mcp.reevesagents.enabled).toBe(true)
+      expect(hostStatus().find(h => h.key === 'opencode')!.attached).toBe(true)
+
+      detach('opencode')
+      cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'))
+      expect(cfg.mcp.reevesagents).toBeUndefined()         // only our entry removed
+      expect(cfg.mcp.other).toBeTruthy()
+      expect(cfg.theme).toBe('dark')
+      expect(hostStatus().find(h => h.key === 'opencode')!.attached).toBe(false)
     })
 
     it('returns ok:false when the drivable host is not installed', async () => {
@@ -347,8 +374,8 @@ describe('mcp installer', () => {
   })
 
   describe('attachAll', () => {
-    it('only attaches installed drivable hosts and skips manual and uninstalled ones', async () => {
-      // claude + qwen installed and drivable; opencode installed but manual;
+    it('attaches every installed drivable host, including file-based opencode', async () => {
+      // claude + qwen (CLI-based) and opencode (file-based) installed;
       // codex/kimi/hermes not installed.
       wireEnv({
         installed: new Set(['claude', 'qwen', 'opencode']),
@@ -358,18 +385,16 @@ describe('mcp installer', () => {
 
       const results = attachAll()
       const keys = results.map(r => r.key).sort()
-      expect(keys).toEqual(['cc', 'qwen'])
+      expect(keys).toEqual(['cc', 'opencode', 'qwen'])
       expect(results.every(r => r.ok)).toBe(true)
 
-      // opencode is manual, so it must never appear.
-      expect(results.find(r => r.key === 'opencode')).toBeUndefined()
       // No add was issued for an uninstalled host.
       const codexAdd = execFileSync.mock.calls.find(c => c[0] === 'codex' && c[1]?.[1] === 'add')
       expect(codexAdd).toBeUndefined()
     })
 
     it('returns an empty list when no drivable host is installed', async () => {
-      wireEnv({ installed: new Set(['opencode']), listOutput: {} })
+      wireEnv({ installed: new Set(), listOutput: {} })
       const { attachAll } = await loadInstaller()
 
       expect(attachAll()).toEqual([])
@@ -410,14 +435,13 @@ describe('mcp installer', () => {
       expect(removeCall[1]).toEqual(['mcp', 'remove', 'reevesagents'])
     })
 
-    it('returns ok:false with a manual message for opencode', async () => {
+    it('detaches opencode by editing its config file (no CLI remove call)', async () => {
       wireEnv({ installed: new Set(['opencode']), listOutput: {} })
       const { detach } = await loadInstaller()
 
       const result = detach('opencode')
-      expect(result.ok).toBe(false)
-      expect(result.message).toMatch(/manual/i)
-      expect(execFileSync).not.toHaveBeenCalled()
+      expect(result.ok).toBe(true)
+      expect(execFileSync).not.toHaveBeenCalledWith('opencode', expect.arrayContaining(['mcp', 'remove']), expect.anything())
     })
   })
 })

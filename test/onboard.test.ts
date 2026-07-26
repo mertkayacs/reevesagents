@@ -64,6 +64,22 @@ describe('onboarding state', () => {
     expect(state.ready).toBe(true)
   })
 
+  it('runOnboarding installs the skill (part of the one-command setup)', async () => {
+    // No host installed, so attachAll is empty and verify is skipped; this
+    // isolates the skill-install step of the combined setup.
+    wireEnv({ installed: new Set() })
+    const { runOnboarding } = await import('../src/core/onboard.js')
+    const result = await runOnboarding()
+
+    expect(result.attached).toEqual([])
+    expect(result.verify).toBeNull()
+    expect(result.skills.length).toBe(2)
+    expect(result.skills.every(skill => skill.ok)).toBe(true)
+
+    const { skillsStatus } = await import('../src/core/skills.js')
+    expect(skillsStatus().every(skill => skill.present && skill.current)).toBe(true)
+  })
+
   it('is not ready without a provider CLI', async () => {
     wireEnv({ installed: new Set() })
     const { buildOnboardingState } = await import('../src/core/onboard.js')
