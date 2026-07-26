@@ -6,7 +6,9 @@
 // own launch environment does not carry the user's interactive PATH.
 
 import { execFileSync } from 'node:child_process'
-import { realpathSync } from 'node:fs'
+import { realpathSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, dirname } from 'node:path'
 import { PROVIDER_REGISTRY } from '../core/provider-registry.js'
 import type { Provider } from '../core/types.js'
 
@@ -14,10 +16,72 @@ const SERVER_NAME = 'reevesagents'
 const SERVER_BIN = 'reevesagents'
 const SERVER_ARG = 'mcp'
 const MGMT_TIMEOUT_MS = 15_000
-// Shorter cap for the read-only `mcp list` status probe so hosts/setup do not hang
-// for the full management timeout per slow host.
-const STATUS_TIMEOUT_MS = 5_000
+// Cap for the read-only `mcp list` status probe. Kept generous because some hosts
+// (Claude Code) health-check every configured MCP server when listing, so with a
+// handful of slow remote servers the list can take well over 5s; too short a cap
+// made an attached reevesagents read as "detached".
+const STATUS_TIMEOUT_MS = 20_000
 const VERIFY_TIMEOUT_MS = 20_000
+
+// OpenCode has no scriptable `mcp add` for a local (stdio) server, so we attach it
+// by editing its global config JSON directly instead of shelling out to the CLI.
+function opencodeConfigPath(): string {
+  // REEVES_HOME overrides the real home for tests/sandboxes, matching the skills
+  // installer; unset in normal use so it resolves to ~/.config/opencode.
+  const base = process.env.REEVES_HOME || homedir()
+  const dir = join(base, '.config', 'opencode')
+  const jsonc = join(dir, 'opencode.jsonc')
+  const json = join(dir, 'opencode.json')
+  if (existsSync(json)) return json
+  if (existsSync(jsonc)) return jsonc
+  return json
+}
+
+// Read OpenCode's config as an object. Returns {} when the file is missing.
+// Throws (caught by callers) when the file exists but is not strict JSON, e.g. it
+// carries JSONC comments; we refuse to rewrite what we cannot parse safely.
+function readOpencodeConfig(path: string): Record<string, unknown> {
+  if (!existsSync(path)) return {}
+  const raw = readFileSync(path, 'utf-8').trim()
+  if (!raw) return {}
+  return JSON.parse(raw) as Record<string, unknown>
+}
+
+function opencodeMcpEntry(cmd: LaunchCmd): Record<string, unknown> {
+  return { type: 'local', command: [cmd.command, ...cmd.args], enabled: true }
+}
+
+function opencodeAttached(): boolean {
+  try {
+    const cfg = readOpencodeConfig(opencodeConfigPath())
+    const mcp = cfg.mcp as Record<string, unknown> | undefined
+    return !!mcp && typeof mcp === 'object' && SERVER_NAME in mcp
+  } catch {
+    return false
+  }
+}
+
+function opencodeAttach(cmd: LaunchCmd): void {
+  const path = opencodeConfigPath()
+  const cfg = readOpencodeConfig(path)
+  if (!cfg.$schema) cfg.$schema = 'https://opencode.ai/config.json'
+  const mcp = (typeof cfg.mcp === 'object' && cfg.mcp !== null ? cfg.mcp : {}) as Record<string, unknown>
+  mcp[SERVER_NAME] = opencodeMcpEntry(cmd)
+  cfg.mcp = mcp
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify(cfg, null, 2)}\n`, 'utf-8')
+}
+
+function opencodeDetach(): void {
+  const path = opencodeConfigPath()
+  if (!existsSync(path)) return
+  const cfg = readOpencodeConfig(path)
+  const mcp = cfg.mcp as Record<string, unknown> | undefined
+  if (mcp && SERVER_NAME in mcp) {
+    delete mcp[SERVER_NAME]
+    writeFileSync(path, `${JSON.stringify(cfg, null, 2)}\n`, 'utf-8')
+  }
+}
 
 // The absolute command a host CLI runs to launch our MCP server over stdio.
 export interface LaunchCmd {
@@ -60,6 +124,14 @@ interface HostCli {
   add?: (_cmd: LaunchCmd) => string[]
   remove?: string[]
   list: string[]
+  // File-based attach for a host with no scriptable `mcp add` (OpenCode). When
+  // set, attach/detach/status edit and read the host's config file directly
+  // instead of shelling out to the host CLI, so the host is no longer "manual".
+  file?: {
+    attach: (_cmd: LaunchCmd) => void
+    detach: () => void
+    attached: () => boolean
+  }
 }
 
 const HOSTS: HostCli[] = [
@@ -100,10 +172,11 @@ const HOSTS: HostCli[] = [
     list: ['mcp', 'list'],
   },
   {
-    // opencode's `mcp add` prompts interactively and has no remove subcommand,
-    // so we cannot attach or detach it without a prompt. Report it as manual.
+    // opencode's `mcp add` prompts interactively for a local server's command, so
+    // we attach it by writing its config JSON directly instead.
     provider: 'opencode',
     list: ['mcp', 'list'],
+    file: { attach: opencodeAttach, detach: opencodeDetach, attached: opencodeAttached },
   },
 ]
 
@@ -192,8 +265,8 @@ export function hostStatus(): HostStatus[] {
       bin: hostBin(host),
       label: hostLabel(host),
       installed,
-      attached: installed && isAttached(host),
-      manual: host.add === undefined,
+      attached: installed && (host.file ? host.file.attached() : isAttached(host)),
+      manual: host.add === undefined && host.file === undefined,
     }
   })
 }
@@ -202,16 +275,26 @@ export function hostStatus(): HostStatus[] {
 export function attach(key: string, force = false): AttachResult {
   const host = findHost(key)
   const label = hostLabel(host)
-  if (!host.add) {
+  if (!host.add && !host.file) {
     return {
       key,
       label,
       ok: false,
-      message: `${label} must be added manually: in OpenCode, add a stdio MCP server named "${SERVER_NAME}" that runs reevesagents mcp`,
+      message: `${label} must be added manually: add a stdio MCP server named "${SERVER_NAME}" that runs reevesagents mcp`,
     }
   }
   if (!isInstalled(hostBin(host))) {
     return { key, label, ok: false, message: `${hostBin(host)} is not installed` }
+  }
+  // File-based host (OpenCode): write its config directly. force is a no-op since
+  // writing already overwrites any existing entry.
+  if (host.file) {
+    try {
+      host.file.attach(resolveLaunchCmd())
+      return { key, label, ok: true, message: force ? 'reattached' : 'attached' }
+    } catch (err) {
+      return { key, label, ok: false, message: `could not edit config (add it manually): ${cliError(err)}` }
+    }
   }
   try {
     // force rewrites a stale registration (e.g. a pre-1.5.0 bare-name command that
@@ -220,7 +303,8 @@ export function attach(key: string, force = false): AttachResult {
     if (force && host.remove) {
       try { runHostCommand(host, host.remove) } catch { /* nothing to remove; fine */ }
     }
-    runHostCommand(host, host.add(resolveLaunchCmd()))
+    // Reached only for CLI-based hosts (the file branch returned above), so add is set.
+    runHostCommand(host, host.add!(resolveLaunchCmd()))
     return { key, label, ok: true, message: force ? 'reattached' : 'attached' }
   } catch (err) {
     return { key, label, ok: false, message: cliError(err) }
@@ -231,14 +315,22 @@ export function attach(key: string, force = false): AttachResult {
 export function detach(key: string): AttachResult {
   const host = findHost(key)
   const label = hostLabel(host)
-  if (!host.remove) {
+  if (!host.remove && !host.file) {
     return { key, label, ok: false, message: `${label} must be removed manually` }
   }
   if (!isInstalled(hostBin(host))) {
     return { key, label, ok: false, message: `${hostBin(host)} is not installed` }
   }
+  if (host.file) {
+    try {
+      host.file.detach()
+      return { key, label, ok: true, message: 'detached' }
+    } catch (err) {
+      return { key, label, ok: false, message: cliError(err) }
+    }
+  }
   try {
-    runHostCommand(host, host.remove)
+    runHostCommand(host, host.remove!)
     return { key, label, ok: true, message: 'detached' }
   } catch (err) {
     return { key, label, ok: false, message: cliError(err) }
@@ -251,9 +343,10 @@ export function detach(key: string): AttachResult {
 // "already exists" failure from the CLI's own mcp add.
 export function attachAll(force = false): AttachResult[] {
   return HOSTS
-    .filter(host => host.add && isInstalled(hostBin(host)))
+    .filter(host => (host.add || host.file) && isInstalled(hostBin(host)))
     .map(host => {
-      if (!force && isAttached(host)) {
+      const attached = host.file ? host.file.attached() : isAttached(host)
+      if (!force && attached) {
         return { key: host.provider, label: hostLabel(host), ok: true, message: 'already attached' }
       }
       return attach(host.provider, force)

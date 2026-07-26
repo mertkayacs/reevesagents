@@ -263,21 +263,19 @@ describe('mcp installer extra', () => {
     expect(removeCall[1]).toEqual(['mcp', 'remove', 'reevesagents'])
   })
 
-  it('attachAll returns results only for installed drivable hosts', async () => {
-    // claude + hermes installed and drivable; opencode installed but manual;
-    // codex/kimi/qwen not installed.
+  it('attachAll returns results for installed drivable hosts, including file-based opencode', async () => {
+    // claude + hermes (CLI) and opencode (file-based) installed; codex/kimi/qwen not.
     wireEnv({ installed: new Set(['claude', 'hermes', 'opencode']) })
     const { attachAll } = await loadInstaller()
 
     const results = attachAll()
-    expect(results.map(r => r.key).sort()).toEqual(['cc', 'hermes'])
+    expect(results.map(r => r.key).sort()).toEqual(['cc', 'hermes', 'opencode'])
     expect(results.every(r => r.ok)).toBe(true)
-    // opencode is manual and the rest are uninstalled, so none of them appear.
-    expect(results.find(r => r.key === 'opencode')).toBeUndefined()
+    // uninstalled hosts never appear.
     expect(results.find(r => r.key === 'codex')).toBeUndefined()
   })
 
-  it('hostStatus marks opencode manual and a which-throwing host not installed', async () => {
+  it('hostStatus marks opencode drivable and a which-throwing host not installed', async () => {
     // Only opencode resolves; claude's `which` throws, so it must read as not
     // installed (and therefore not attached).
     wireEnv({
@@ -288,7 +286,7 @@ describe('mcp installer extra', () => {
     const status = hostStatus()
 
     const opencode = status.find(h => h.key === 'opencode')!
-    expect(opencode.manual).toBe(true)
+    expect(opencode.manual).toBe(false)
     expect(opencode.installed).toBe(true)
 
     const cc = status.find(h => h.key === 'cc')!

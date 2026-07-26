@@ -753,8 +753,11 @@ program
         return
       }
 
-      console.log('\nConnecting...')
+      console.log('\nSetting up...')
       const result = await runOnboarding()
+      if (result.skills.some(skill => skill.ok)) {
+        console.log('  ok  skill      installed for skill-aware CLIs (Claude, Codex, Kimi, OpenCode)')
+      }
       for (const attached of result.attached) {
         console.log(`  ${(attached.ok ? 'ok' : '--').padEnd(3)} ${attached.key.padEnd(10)} ${attached.message}`)
       }
