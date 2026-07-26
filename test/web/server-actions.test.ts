@@ -122,6 +122,8 @@ function installFakeRuntimeBins(): void {
     '    done',
     '    exit 0 ;;',
     '  capture-pane) echo "ready"; exit 0 ;;',
+    '  list-windows) echo "@0"; echo "@1"; echo "@2"; echo "@3"; echo "@4"; exit 0 ;;',
+    '  list-panes) echo "%0"; echo "%1"; echo "%2"; echo "%3"; echo "%4"; exit 0 ;;',
     '  *) exit 0 ;;',
     'esac',
     '',

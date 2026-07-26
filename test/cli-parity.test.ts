@@ -114,13 +114,20 @@ function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = 
 // returns empty output, which is all the spawn/send/key paths need.
 function wireTmux(): void {
   let next = 1
+  // Membership probes list these; seeded records use @1/%1, the anchor is @0/%0.
+  const windows = new Set(['@0', '@1'])
+  const panes = new Set(['%0', '%1'])
   execFileSync.mockImplementation((file: string, args: string[]) => {
     if (file !== 'tmux') return Buffer.from('')
     if (args[0] === 'display-message') return '@0 %0'
     if (args[0] === 'new-window') {
       const id = next++
+      windows.add(`@${id}`)
+      panes.add(`%${id}`)
       return `@${id} %${id}`
     }
+    if (args[0] === 'list-windows') return [...windows].join('\n')
+    if (args[0] === 'list-panes') return [...panes].join('\n')
     if (args[0] === 'capture-pane') return 'ready'
     return ''
   })
@@ -130,6 +137,8 @@ function wireTmux(): void {
 // spawn preflight sees them as not installed.
 function wireTmuxWithMissing(missingBins: string[]): void {
   let next = 1
+  const windows = new Set(['@0', '@1'])
+  const panes = new Set(['%0', '%1'])
   execFileSync.mockImplementation((file: string, args: string[]) => {
     if (file === 'which') {
       if (missingBins.includes(args[0] as string)) throw new Error(`which: no ${args[0]}`)
@@ -139,8 +148,12 @@ function wireTmuxWithMissing(missingBins: string[]): void {
     if (args[0] === 'display-message') return '@0 %0'
     if (args[0] === 'new-window') {
       const id = next++
+      windows.add(`@${id}`)
+      panes.add(`%${id}`)
       return `@${id} %${id}`
     }
+    if (args[0] === 'list-windows') return [...windows].join('\n')
+    if (args[0] === 'list-panes') return [...panes].join('\n')
     if (args[0] === 'capture-pane') return 'ready'
     return ''
   })

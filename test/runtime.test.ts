@@ -33,6 +33,10 @@ class FakeDriver implements RuntimeDriver {
   calls: Array<{ args: string[], input?: string }> = []
   delays: number[] = []
   nextWindow = 1
+  // Windows/panes the fake server currently holds; membership probes list these.
+  // Tests simulate a tmux server restart by deleting an agent's ids from the sets.
+  windows = new Set<string>(['@0'])
+  panes = new Set<string>(['%0'])
   captureOutput = '\u001b[31mready\u001b[0m sk-ant-api03-abcdefghij1234567890abcdef'
 
   tmux(args: string[], input?: string): string {
@@ -40,7 +44,17 @@ class FakeDriver implements RuntimeDriver {
     if (args[0] === 'display-message') return '@0 %0'
     if (args[0] === 'new-window') {
       const id = this.nextWindow++
+      this.windows.add(`@${id}`)
+      this.panes.add(`%${id}`)
       return `@${id} %${id}`
+    }
+    if (args[0] === 'list-windows') return [...this.windows].join('\n')
+    if (args[0] === 'list-panes') return [...this.panes].join('\n')
+    if (args[0] === 'kill-window') {
+      const target = args[args.indexOf('-t') + 1] ?? ''
+      this.windows.delete(target)
+      this.panes.delete(`%${target.slice(1)}`)
+      return ''
     }
     if (args[0] === 'capture-pane') return this.captureOutput
     return ''
@@ -185,7 +199,7 @@ describe('agent-run runtime', () => {
       { args: ['send-keys', '-t', terminal.tmux_pane_id, 'Enter'] },
       { args: ['send-keys', '-t', terminal.tmux_pane_id, 'C-c'] },
       { args: ['kill-window', '-t', terminal.tmux_window_id] },
-      { args: ['kill-session', '-t', result.run.tmux_session] },
+      { args: ['kill-session', '-t', `=${result.run.tmux_session}`] },
     ]))
   })
 
@@ -206,8 +220,64 @@ describe('agent-run runtime', () => {
     expect(listRunHistory()).toHaveLength(1)
     expect(listRunHistory()[0]).toMatchObject({ id: result.run.id, status: 'ended' })
     expect(driver.calls).toEqual(expect.arrayContaining([
-      { args: ['kill-session', '-t', result.run.tmux_session] },
+      { args: ['kill-session', '-t', `=${result.run.tmux_session}`] },
     ]))
+  })
+
+  it('skips kill-window when the stored id no longer lives in the run session', async () => {
+    const driver = new FakeDriver()
+    const { startRun, killAgent } = await import('../src/core/runtime.js')
+    const { listRunHistory, readRun } = await import('../src/core/runs.js')
+
+    const result = startRun({
+      name: 'stale',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+    const agent = result.agents[0]!
+
+    // Simulate a tmux server restart: the recorded ids are no longer members of
+    // the run session. On a real restart the same "@N" can name an unrelated
+    // window, so killAgent must not emit kill-window for it.
+    driver.windows.delete(agent.tmux_window_id)
+    driver.panes.delete(agent.tmux_pane_id)
+    const before = driver.calls.length
+
+    expect(killAgent(agent.id, { driver }).ended_at).not.toBeNull()
+
+    const after = driver.calls.slice(before)
+    expect(after.some(call => call.args[0] === 'kill-window')).toBe(false)
+    expect(after).toEqual(expect.arrayContaining([
+      { args: ['kill-session', '-t', `=${result.run.tmux_session}`] },
+    ]))
+    expect(() => readRun(result.run.id)).toThrow(/Run not found/)
+    expect(listRunHistory().map(record => record.id)).toContain(result.run.id)
+  })
+
+  it('refuses reads and input to a stale pane instead of touching a reused id', async () => {
+    const driver = new FakeDriver()
+    const { startRun, peekAgent, sendText, sendKey, openAgent } = await import('../src/core/runtime.js')
+
+    const result = startRun({
+      name: 'stale-io',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+    const agent = result.agents[0]!
+
+    driver.windows.delete(agent.tmux_window_id)
+    driver.panes.delete(agent.tmux_pane_id)
+    const before = driver.calls.length
+
+    expect(peekAgent(agent.id, 5, { driver })).toBe('')
+    expect(() => sendText(agent.id, 'hello', { driver })).toThrow(/tmux server may have restarted/)
+    expect(() => sendKey(agent.id, 'enter', { driver })).toThrow(/tmux server may have restarted/)
+    expect(() => openAgent(agent.id, { driver })).toThrow(/tmux server may have restarted/)
+
+    const after = driver.calls.slice(before)
+    const touched = after.filter(call =>
+      ['capture-pane', 'load-buffer', 'paste-buffer', 'send-keys', 'select-window'].includes(call.args[0]!))
+    expect(touched).toEqual([])
   })
 
   it('creates the reeves anchor window with an append target, not a bare name', async () => {

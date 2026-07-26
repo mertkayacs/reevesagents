@@ -95,6 +95,30 @@ describe('zombie-agent reaper', () => {
     expect(agents.find(a => a.id === 'dead')!.ended_at).not.toBeNull()
   })
 
+  it('reaps a stale id as window-gone even when the same id is live in another session', () => {
+    writeRun(makeRun('r1'))
+    writeAgent(makeAgent('r1', 'stale', { tmux_window_id: '@3' }))
+
+    // After a tmux server restart "@3" can belong to an unrelated session. The
+    // probe must judge the (id, session) pair, never the id alone, or the zombie
+    // reads as alive and a later kill hits the stranger's window.
+    const probed: Array<[string, string]> = []
+    const { reaped } = sweepAgents({
+      driver: noopDriver,
+      targetExists: (id, session) => {
+        probed.push([id, session])
+        return id === '@3' && session === 'reeves-other'
+      },
+      maxLifetimeMs: 0,
+    })
+
+    expect(probed).toContainEqual(['@3', 'reeves-r1'])
+    expect(reaped).toHaveLength(1)
+    expect(reaped[0]).toMatchObject({ agent_id: 'stale', reason: 'window-gone' })
+    // Reaping the run's only agent tears the run down and archives it.
+    expect(listAgents('r1')).toHaveLength(0)
+  })
+
   it('reaps an agent older than max_lifetime_ms and spares a younger one', () => {
     const now = 10 * HOUR
     writeRun(makeRun('r1'))

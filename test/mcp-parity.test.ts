@@ -26,14 +26,21 @@ beforeEach(() => {
   execFileSync.mockReset()
   // The real tmux driver does execFileSync(...).trim(), so every return is a
   // string. `which` output is unused (the call only needs to not throw).
+  // Membership probes list these; tests seed records with ids up to @7.
+  const windows = new Set(['@0', '@1', '@7'])
+  const panes = new Set(['%0', '%1', '%7'])
   execFileSync.mockImplementation((file: string, args: string[]) => {
     if (file === 'which') return `/usr/bin/${args[0]}\n`
     if (file !== 'tmux') return ''
     if (args[0] === 'new-window') {
       windowSeq += 1
+      windows.add(`@${windowSeq}`)
+      panes.add(`%${windowSeq}`)
       return `@${windowSeq} %${windowSeq}\n`
     }
     if (args[0] === 'display-message') return '@0 %0\n'
+    if (args[0] === 'list-windows') return `${[...windows].join('\n')}\n`
+    if (args[0] === 'list-panes') return `${[...panes].join('\n')}\n`
     if (args[0] === 'capture-pane') return 'ready\n'
     return ''
   })

@@ -12,7 +12,7 @@ import type { Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket, type RawData } from 'ws'
 import pty from '@lydell/node-pty'
-import { findAgent, readRun } from '../core/runs.js'
+import { defaultTmuxTargetExists, findAgent, readRun } from '../core/runs.js'
 import { isAllowedHostHeader, isAllowedOrigin } from './guards.js'
 
 type Pty = ReturnType<typeof pty.spawn>
@@ -103,12 +103,21 @@ function openBridge(ws: WebSocket, id: string, bridges: Set<Bridge>): void {
     return
   }
 
+  // A stale window id (tmux server restarted, ids reassigned) would stream an
+  // unrelated window's terminal into the browser and accept keystrokes into it.
+  // Only bridge ids verified to still live inside the recorded session.
+  if (!defaultTmuxTargetExists(target.windowId, target.session)) {
+    send(ws, { t: 'e', m: 'agent window no longer exists (tmux server may have restarted)' })
+    ws.close()
+    return
+  }
+
   // Ephemeral viewer session grouped with the run session: it shares the run's
   // windows but keeps an independent current window, so each card views its own
   // terminal without disturbing the human's attached client.
   const viewer = `reevesweb_${randomBytes(4).toString('hex')}`
   try {
-    execFileSync('tmux', ['new-session', '-d', '-s', viewer, '-t', target.session], { stdio: 'ignore' })
+    execFileSync('tmux', ['new-session', '-d', '-s', viewer, '-t', `=${target.session}`], { stdio: 'ignore' })
     execFileSync('tmux', ['select-window', '-t', `${viewer}:${target.windowId}`], { stdio: 'ignore' })
   } catch {
     try { execFileSync('tmux', ['kill-session', '-t', viewer], { stdio: 'ignore' }) } catch { /* nothing to clean */ }
