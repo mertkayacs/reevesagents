@@ -1,6 +1,6 @@
 {
   "name": "reevesagents-win",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "MCP-only, ConPTY-driven agent-control server for native Windows: spawn and drive AI CLIs without tmux or WSL",
   "type": "module",
   "packageManager": "pnpm@10.34.1",
