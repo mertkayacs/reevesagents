@@ -6,7 +6,7 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
 import { LANGUAGE_OPTIONS } from '../../i18n/languages.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
-import { colors } from '../../utils/tokens.js'
+import { colors } from '../utils/tokens.js'
 import { configExists } from '../../core/config.js'
 
 const LABEL_WIDTH = Math.max(...LANGUAGE_OPTIONS.map(option => option.nativeName.length))

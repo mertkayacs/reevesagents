@@ -3,11 +3,11 @@
 
 import React from 'react'
 import { Box, Text } from 'ink'
-import { colors } from '../../utils/tokens.js'
+import { colors } from '../utils/tokens.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
-import { displayWidth } from '../../utils/width.js'
+import { displayWidth } from '../utils/width.js'
 
 interface Props {
   label: string

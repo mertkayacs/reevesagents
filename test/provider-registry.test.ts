@@ -3,7 +3,7 @@ import { PROVIDER_REGISTRY, PROVIDER_DEFS } from '../src/core/provider-registry.
 import { PROVIDERS, BIN, buildCommand, helpCommand, normalizeProvider, providerSupportsAuthMode, providerSupportsEffort } from '../src/core/providers.js'
 import { providerColor, providerDisplayName, PROVIDER_DISPLAY_NAMES } from '../src/utils/display.js'
 import { MODEL_CATALOG } from '../src/core/model-catalog.js'
-import { colors } from '../src/utils/tokens.js'
+import { colors } from '../src/tui/utils/tokens.js'
 
 describe('provider registry', () => {
   it('has a complete, self-consistent entry for every provider', () => {

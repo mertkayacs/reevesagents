@@ -54,7 +54,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-import { colors } from '../../utils/tokens.js'
+import { colors } from '../utils/tokens.js'
 
 export function severityColor(s: ToastSeverity): string {
   if (s === 'success') return colors.status.ok

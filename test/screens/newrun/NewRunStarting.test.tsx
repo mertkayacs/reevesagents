@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
-import { NewRunReview } from '../../../src/tui/screens/newrun/05Review.js'
+import { NewRunStarting } from '../../../src/tui/screens/newrun/NewRunStarting.js'
 import * as RouterModule from '../../../src/tui/router.js'
 import * as WizardModule from '../../../src/tui/contexts/WizardContext.js'
+import * as RuntimeModule from '../../../src/core/runtime.js'
 import { ToastProvider } from '../../../src/tui/contexts/ToastContext.js'
 import { WizardProvider } from '../../../src/tui/contexts/WizardContext.js'
 
@@ -15,15 +16,17 @@ vi.mock('../../../src/tui/contexts/WizardContext.js', async () => {
     useWizard: vi.fn(),
   }
 })
+vi.mock('../../../src/core/runtime.js')
 
-describe('NewRunReview', () => {
+describe('NewRunStarting', () => {
   beforeEach(() => {
     vi.spyOn(RouterModule, 'useRouter').mockReturnValue({
       push: vi.fn(),
       pop: vi.fn(),
       replace: vi.fn(),
       forward: vi.fn(),
-      screen: 'NewRunReview',
+      resetStack: vi.fn(),
+      screen: 'NewRunStarting',
       selectedRunId: null,
       setSelectedRunId: vi.fn(),
       selectedAgentId: null,
@@ -48,7 +51,6 @@ describe('NewRunReview', () => {
           permissions: 'ask',
           authMode: 'default',
           effort: 'default',
-          extraArgs: '',
         },
         workers: [],
       },
@@ -59,18 +61,23 @@ describe('NewRunReview', () => {
       removeWorker: vi.fn(),
       reset: vi.fn(),
     } as any)
+
+    vi.spyOn(RuntimeModule, 'startRun').mockReturnValue({
+      run: { id: 'test-run-1' } as any,
+      agents: [],
+    })
   })
 
   it('renders without crashing', () => {
     const { lastFrame } = render(
       <ToastProvider>
         <WizardProvider>
-          <NewRunReview />
+          <NewRunStarting />
         </WizardProvider>
       </ToastProvider>
     )
 
     const output = lastFrame()
-    expect(output).toContain('Review')
+    expect(output).toContain('Launching')
   })
 })

@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
-import { NewRunStarting } from '../../../src/tui/screens/newrun/05Starting.js'
+import { NewRunWorker } from '../../../src/tui/screens/newrun/NewRunWorker.js'
 import * as RouterModule from '../../../src/tui/router.js'
 import * as WizardModule from '../../../src/tui/contexts/WizardContext.js'
-import * as RuntimeModule from '../../../src/core/runtime.js'
 import { ToastProvider } from '../../../src/tui/contexts/ToastContext.js'
 import { WizardProvider } from '../../../src/tui/contexts/WizardContext.js'
 
@@ -16,22 +15,20 @@ vi.mock('../../../src/tui/contexts/WizardContext.js', async () => {
     useWizard: vi.fn(),
   }
 })
-vi.mock('../../../src/core/runtime.js')
 
-describe('NewRunStarting', () => {
+describe('NewRunWorker', () => {
   beforeEach(() => {
     vi.spyOn(RouterModule, 'useRouter').mockReturnValue({
       push: vi.fn(),
       pop: vi.fn(),
       replace: vi.fn(),
       forward: vi.fn(),
-      resetStack: vi.fn(),
-      screen: 'NewRunStarting',
+      screen: 'NewRunWorker',
       selectedRunId: null,
       setSelectedRunId: vi.fn(),
       selectedAgentId: null,
       setSelectedAgentId: vi.fn(),
-      selectedWorkerIdx: null,
+      selectedWorkerIdx: 0,
       setSelectedWorkerIdx: vi.fn(),
       canBack: false,
       canForward: false,
@@ -52,7 +49,65 @@ describe('NewRunStarting', () => {
           authMode: 'default',
           effort: 'default',
         },
-        workers: [],
+        workers: [
+          {
+            nickname: 'worker1',
+            provider: 'cc',
+            model: 'claude-3-5-sonnet',
+            prompt: 'worker task',
+            workingDir: '/tmp',
+            permissions: 'ask',
+            authMode: 'default',
+            effort: 'default',
+          },
+        ],
+      },
+      update: vi.fn(),
+      updateRoot: vi.fn(),
+      updateWorker: vi.fn(),
+      addWorker: vi.fn(() => 0),
+      removeWorker: vi.fn(),
+      reset: vi.fn(),
+    } as any)
+  })
+
+  it('renders without crashing', () => {
+    const { lastFrame } = render(
+      <ToastProvider>
+        <WizardProvider>
+          <NewRunWorker />
+        </WizardProvider>
+      </ToastProvider>
+    )
+
+    const output = lastFrame()
+    expect(output).toContain('Agent')
+  })
+
+  it('shows the Auth picker for a cc worker', () => {
+    const { lastFrame } = render(
+      <ToastProvider>
+        <WizardProvider>
+          <NewRunWorker />
+        </WizardProvider>
+      </ToastProvider>
+    )
+
+    const output = lastFrame()!
+    expect(output).toContain('Auth')
+    expect(output).toContain('Default login')
+  })
+
+  it('hides the Auth picker for a non-cc provider', () => {
+    vi.spyOn(WizardModule, 'useWizard').mockReturnValue({
+      state: {
+        name: 'test-run',
+        workingDir: '/tmp',
+        presetName: null,
+        root: { nickname: 'root', provider: 'cc', model: '', prompt: '', workingDir: '/tmp', permissions: 'ask', authMode: 'default', effort: 'default' },
+        workers: [
+          { nickname: 'worker1', provider: 'kimi', model: '', prompt: '', workingDir: '/tmp', permissions: 'ask', authMode: 'default', effort: 'default' },
+        ],
       },
       update: vi.fn(),
       updateRoot: vi.fn(),
@@ -62,22 +117,15 @@ describe('NewRunStarting', () => {
       reset: vi.fn(),
     } as any)
 
-    vi.spyOn(RuntimeModule, 'startRun').mockReturnValue({
-      run: { id: 'test-run-1' } as any,
-      agents: [],
-    })
-  })
-
-  it('renders without crashing', () => {
     const { lastFrame } = render(
       <ToastProvider>
         <WizardProvider>
-          <NewRunStarting />
+          <NewRunWorker />
         </WizardProvider>
       </ToastProvider>
     )
 
-    const output = lastFrame()
-    expect(output).toContain('Launching')
+    const output = lastFrame()!
+    expect(output).not.toContain('Auth')
   })
 })

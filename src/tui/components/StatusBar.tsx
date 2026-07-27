@@ -5,7 +5,7 @@
 
 import React from 'react'
 import { Box, Text } from 'ink'
-import { colors, sep } from '../../utils/tokens.js'
+import { colors, sep } from '../utils/tokens.js'
 import { useToast, severityColor } from '../contexts/ToastContext.js'
 
 export interface StatusBarProps {

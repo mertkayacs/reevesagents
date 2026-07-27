@@ -4,12 +4,12 @@
 
 import React, { useState, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { colors, sep, space } from '../../utils/tokens.js'
-import { glyphs } from '../../utils/glyphs.js'
+import { colors, sep, space } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
-import { displayWidth } from '../../utils/width.js'
+import { displayWidth } from '../utils/width.js'
 
 interface Props {
   label: string

@@ -3,9 +3,9 @@ import React from 'react'
 import { render } from 'ink-testing-library'
 import { Row } from '../../src/tui/components/Row.js'
 import { LayoutProvider } from '../../src/tui/components/LayoutContext.js'
-import { colors } from '../../src/utils/tokens.js'
-import { glyphs } from '../../src/utils/glyphs.js'
-import { providerColor } from '../../src/utils/display.js'
+import { colors } from '../../src/tui/utils/tokens.js'
+import { glyphs } from '../../src/tui/utils/glyphs.js'
+import { MODEL_COLORS, providerColor } from '../../src/utils/display.js'
 
 describe('Row', () => {
   it('renders focused cursor when selected', () => {
@@ -63,7 +63,7 @@ describe('Row', () => {
         primary="Test Item"
         badges={[
           { label: 'codex', color: providerColor('codex') },
-          { label: 'gpt-5', color: colors.model.openai },
+          { label: 'gpt-5', color: MODEL_COLORS.openai },
         ]}
       />
     )

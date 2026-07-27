@@ -9,8 +9,8 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { useRouter } from '../router.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
-import { colors } from '../../utils/tokens.js'
-import { glyphs } from '../../utils/glyphs.js'
+import { colors } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
 import { runDoctor } from '../../core/doctor.js'
 
 function statusGlyph(status: 'ok' | 'warn' | 'fail'): { char: string; color: string } {
