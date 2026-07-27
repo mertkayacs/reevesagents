@@ -111,6 +111,11 @@ hermes. For each one you can attach, detach, or attach all.
 - OpenCode is the exception: it has no scriptable `mcp add` for a local server, so
   reeves attaches it by writing the `reevesagents` entry into
   `~/.config/opencode/opencode.json` directly, and detach removes only that entry.
+- Kimi Code (the successor to the legacy Kimi CLI) also has no `kimi mcp add`; when
+  the `kimi` on PATH is Kimi Code, reeves reads its plugin/`~/.kimi-code/mcp.json`
+  state for status and attaches via that config file (skipping the write when the
+  reevesagents plugin already provides the server). The legacy Kimi CLI still uses
+  its `kimi mcp add`.
 - Codex sandboxes MCP tool calls by default, which blocks reevesagents from
   spawning agents in tmux; run Codex with `--sandbox danger-full-access` (or a
   profile that sets it) when driving agents.

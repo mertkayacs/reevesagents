@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -23,6 +23,9 @@ interface FakeEnv {
   listOutput: Record<string, string>
   // Bins whose add/remove should throw, with the error to throw.
   failAdd?: Record<string, unknown>
+  // When true, `kimi --version` reports Kimi Code (a bare semver) rather than the
+  // legacy Kimi CLI ("kimi, version X").
+  kimiCode?: boolean
 }
 
 function wireEnv(env: FakeEnv): void {
@@ -32,6 +35,11 @@ function wireEnv(env: FakeEnv): void {
       // Honor the { encoding: 'utf8' } callers use (resolveLaunchCmd trims this).
       if (env.installed.has(bin)) return `/usr/bin/${bin}\n`
       throw new Error(`which: ${bin} not found`)
+    }
+    // Version probe: only `kimi` is version-checked, to tell Kimi Code from legacy.
+    if (args[0] === '--version') {
+      if (file === 'kimi') return env.kimiCode ? '0.29.1\n' : 'kimi, version 1.49.0\n'
+      return ''
     }
     // From here `file` is a host bin and `args` is one of its mcp subcommands.
     const sub = args[1]
@@ -442,6 +450,69 @@ describe('mcp installer', () => {
       const result = detach('opencode')
       expect(result.ok).toBe(true)
       expect(execFileSync).not.toHaveBeenCalledWith('opencode', expect.arrayContaining(['mcp', 'remove']), expect.anything())
+    })
+  })
+
+  describe('kimi code host', () => {
+    const kimiHome = () => join(process.env.REEVES_HOME!, '.kimi-code')
+    // REEVES_HOME is shared across the suite, so reset the kimi-code home per test
+    // to keep plugin/mcp.json state from leaking between these cases.
+    beforeEach(() => rmSync(kimiHome(), { recursive: true, force: true }))
+    const writePlugin = (enabled: boolean) => {
+      mkdirSync(join(kimiHome(), 'plugins'), { recursive: true })
+      writeFileSync(join(kimiHome(), 'plugins', 'installed.json'), JSON.stringify({ plugins: [{ id: 'reevesagents', enabled }] }))
+    }
+
+    it('reports kimi attached via its plugin (not "detached") and never probes kimi mcp list', async () => {
+      writePlugin(true)
+      wireEnv({ installed: new Set(['kimi']), listOutput: {}, kimiCode: true })
+      const { hostStatus } = await loadInstaller()
+
+      const kimi = hostStatus().find(h => h.key === 'kimi')!
+      expect(kimi.installed).toBe(true)
+      expect(kimi.attached).toBe(true)
+      expect(execFileSync).not.toHaveBeenCalledWith('kimi', ['mcp', 'list'], expect.anything())
+    })
+
+    it('attaches kimi code by writing ~/.kimi-code/mcp.json (no CLI add)', async () => {
+      wireEnv({ installed: new Set(['kimi']), listOutput: {}, kimiCode: true })
+      const { attach } = await loadInstaller()
+
+      expect(attach('kimi').ok).toBe(true)
+      const cfg = JSON.parse(readFileSync(join(kimiHome(), 'mcp.json'), 'utf-8'))
+      expect(cfg.mcpServers.reevesagents.args.at(-1)).toBe('mcp')
+      expect(execFileSync).not.toHaveBeenCalledWith('kimi', expect.arrayContaining(['mcp', 'add']), expect.anything())
+    })
+
+    it('does not duplicate reevesagents in mcp.json when the plugin already provides it', async () => {
+      writePlugin(true)
+      wireEnv({ installed: new Set(['kimi']), listOutput: {}, kimiCode: true })
+      const { attach } = await loadInstaller()
+
+      expect(attach('kimi').ok).toBe(true)
+      expect(existsSync(join(kimiHome(), 'mcp.json'))).toBe(false)
+    })
+
+    it('detaches kimi code by removing only its mcp.json entry', async () => {
+      mkdirSync(kimiHome(), { recursive: true })
+      writeFileSync(join(kimiHome(), 'mcp.json'), JSON.stringify({ mcpServers: { other: { command: 'x' }, reevesagents: { command: 'n', args: ['mcp'] } } }))
+      wireEnv({ installed: new Set(['kimi']), listOutput: {}, kimiCode: true })
+      const { detach, hostStatus } = await loadInstaller()
+
+      expect(detach('kimi').ok).toBe(true)
+      const cfg = JSON.parse(readFileSync(join(kimiHome(), 'mcp.json'), 'utf-8'))
+      expect(cfg.mcpServers.reevesagents).toBeUndefined()
+      expect(cfg.mcpServers.other).toBeTruthy()
+      expect(hostStatus().find(h => h.key === 'kimi')!.attached).toBe(false)
+      expect(execFileSync).not.toHaveBeenCalledWith('kimi', expect.arrayContaining(['mcp', 'remove']), expect.anything())
+    })
+
+    it('still uses the legacy CLI path for the legacy Kimi CLI', async () => {
+      wireEnv({ installed: new Set(['kimi']), listOutput: {}, kimiCode: false })
+      const { attach } = await loadInstaller()
+
+      expect(attach('kimi').ok).toBe(true)
+      expect(execFileSync).toHaveBeenCalledWith('kimi', expect.arrayContaining(['mcp', 'add']), expect.anything())
     })
   })
 })

@@ -83,6 +83,90 @@ function opencodeDetach(): void {
   }
 }
 
+// File-based attach ops for a host with no scriptable `mcp add`.
+export interface HostFileOps {
+  attach: (_cmd: LaunchCmd) => void
+  detach: () => void
+  attached: () => boolean
+}
+
+// Kimi Code (the successor to the legacy Kimi CLI) has no `kimi mcp add` subcommand;
+// it reads MCP servers from ~/.kimi-code/mcp.json and from installed plugins. The
+// `kimi` binary can be either tool, so we detect Kimi Code at runtime and, for it,
+// attach via the config file (like OpenCode) instead of the legacy CLI commands.
+function kimiCodeHome(): string {
+  // REEVES_HOME is the sandbox override tests/sandboxes set; it wins so a test
+  // never reads the real ~/.kimi-code. Otherwise honor Kimi Code's own
+  // KIMI_CODE_HOME, then default to ~/.kimi-code.
+  if (process.env.REEVES_HOME) return join(process.env.REEVES_HOME, '.kimi-code')
+  return process.env.KIMI_CODE_HOME || join(homedir(), '.kimi-code')
+}
+
+// True when the `kimi` on PATH is Kimi Code, not the legacy Kimi CLI. Legacy prints
+// "kimi, version X"; Kimi Code prints a bare semver. Returns false (legacy path)
+// when the binary is missing or its version cannot be read.
+function isKimiCode(bin: string): boolean {
+  try {
+    const out = execFileSync(bin, ['--version'], {
+      encoding: 'utf8',
+      timeout: STATUS_TIMEOUT_MS,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
+    return out !== '' && !/^kimi,/i.test(out)
+  } catch {
+    return false
+  }
+}
+
+function kimiCodePluginAttached(): boolean {
+  try {
+    const installed = JSON.parse(readFileSync(join(kimiCodeHome(), 'plugins', 'installed.json'), 'utf-8')) as { plugins?: Array<{ id?: string; enabled?: boolean }> }
+    return Array.isArray(installed.plugins) && installed.plugins.some(p => p.id === SERVER_NAME && p.enabled !== false)
+  } catch {
+    return false
+  }
+}
+
+function kimiCodeMcpConfig(): Record<string, unknown> {
+  try {
+    const raw = readFileSync(join(kimiCodeHome(), 'mcp.json'), 'utf-8').trim()
+    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function kimiCodeMcpAttached(): boolean {
+  const servers = kimiCodeMcpConfig().mcpServers as Record<string, unknown> | undefined
+  return !!servers && typeof servers === 'object' && SERVER_NAME in servers
+}
+
+const KIMI_CODE_FILE_OPS: HostFileOps = {
+  attached: () => kimiCodePluginAttached() || kimiCodeMcpAttached(),
+  attach: cmd => {
+    // The reevesagents plugin already provides the server; do not also add it to
+    // mcp.json or Kimi Code would load two servers named reevesagents.
+    if (kimiCodePluginAttached()) return
+    const path = join(kimiCodeHome(), 'mcp.json')
+    const cfg = kimiCodeMcpConfig()
+    const servers = (typeof cfg.mcpServers === 'object' && cfg.mcpServers !== null ? cfg.mcpServers : {}) as Record<string, unknown>
+    servers[SERVER_NAME] = { command: cmd.command, args: cmd.args }
+    cfg.mcpServers = servers
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, `${JSON.stringify(cfg, null, 2)}\n`, 'utf-8')
+  },
+  detach: () => {
+    const path = join(kimiCodeHome(), 'mcp.json')
+    if (!existsSync(path)) return
+    const cfg = kimiCodeMcpConfig()
+    const servers = cfg.mcpServers as Record<string, unknown> | undefined
+    if (servers && SERVER_NAME in servers) {
+      delete servers[SERVER_NAME]
+      writeFileSync(path, `${JSON.stringify(cfg, null, 2)}\n`, 'utf-8')
+    }
+  },
+}
+
 // The absolute command a host CLI runs to launch our MCP server over stdio.
 export interface LaunchCmd {
   command: string
@@ -127,11 +211,7 @@ interface HostCli {
   // File-based attach for a host with no scriptable `mcp add` (OpenCode). When
   // set, attach/detach/status edit and read the host's config file directly
   // instead of shelling out to the host CLI, so the host is no longer "manual".
-  file?: {
-    attach: (_cmd: LaunchCmd) => void
-    detach: () => void
-    attached: () => boolean
-  }
+  file?: HostFileOps
 }
 
 const HOSTS: HostCli[] = [
@@ -186,6 +266,15 @@ function hostBin(host: HostCli): string {
 
 function hostLabel(host: HostCli): string {
   return PROVIDER_REGISTRY[host.provider].displayName
+}
+
+// The file-based attach ops for a host, if any: OpenCode's static ops, or Kimi
+// Code's when the `kimi` binary turns out to be Kimi Code (detected at runtime).
+// When this returns ops, attach/detach/status use them instead of the CLI path.
+function hostFileOps(host: HostCli): HostFileOps | undefined {
+  if (host.file) return host.file
+  if (host.provider === 'kimi' && isKimiCode(hostBin(host))) return KIMI_CODE_FILE_OPS
+  return undefined
 }
 
 export interface HostStatus {
@@ -260,12 +349,13 @@ function findHost(key: string): HostCli {
 export function hostStatus(): HostStatus[] {
   return HOSTS.map(host => {
     const installed = isInstalled(hostBin(host))
+    const file = installed ? hostFileOps(host) : undefined
     return {
       key: host.provider,
       bin: hostBin(host),
       label: hostLabel(host),
       installed,
-      attached: installed && (host.file ? host.file.attached() : isAttached(host)),
+      attached: installed && (file ? file.attached() : isAttached(host)),
       manual: host.add === undefined && host.file === undefined,
     }
   })
@@ -286,11 +376,12 @@ export function attach(key: string, force = false): AttachResult {
   if (!isInstalled(hostBin(host))) {
     return { key, label, ok: false, message: `${hostBin(host)} is not installed` }
   }
-  // File-based host (OpenCode): write its config directly. force is a no-op since
-  // writing already overwrites any existing entry.
-  if (host.file) {
+  // File-based host (OpenCode, or Kimi Code detected at runtime): write its config
+  // directly. force is a no-op since writing already overwrites any existing entry.
+  const file = hostFileOps(host)
+  if (file) {
     try {
-      host.file.attach(resolveLaunchCmd())
+      file.attach(resolveLaunchCmd())
       return { key, label, ok: true, message: force ? 'reattached' : 'attached' }
     } catch (err) {
       return { key, label, ok: false, message: `could not edit config (add it manually): ${cliError(err)}` }
@@ -321,9 +412,10 @@ export function detach(key: string): AttachResult {
   if (!isInstalled(hostBin(host))) {
     return { key, label, ok: false, message: `${hostBin(host)} is not installed` }
   }
-  if (host.file) {
+  const file = hostFileOps(host)
+  if (file) {
     try {
-      host.file.detach()
+      file.detach()
       return { key, label, ok: true, message: 'detached' }
     } catch (err) {
       return { key, label, ok: false, message: cliError(err) }
@@ -345,7 +437,8 @@ export function attachAll(force = false): AttachResult[] {
   return HOSTS
     .filter(host => (host.add || host.file) && isInstalled(hostBin(host)))
     .map(host => {
-      const attached = host.file ? host.file.attached() : isAttached(host)
+      const file = hostFileOps(host)
+      const attached = file ? file.attached() : isAttached(host)
       if (!force && attached) {
         return { key: host.provider, label: hostLabel(host), ok: true, message: 'already attached' }
       }
