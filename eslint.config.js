@@ -5,7 +5,7 @@ import tsParser from '@typescript-eslint/parser'
 export default [
   js.configs.recommended,
   {
-    files: ['src/**/*.{ts,tsx}', 'test/**/*.ts'],
+    files: ['src/**/*.{ts,tsx}', 'test/**/*.{ts,tsx}'],
     rules: {
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-console': 'off',

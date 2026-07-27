@@ -22,8 +22,8 @@ specs/
 assets/
 !docs/assets/
 !docs/assets/**
-!src/brand/assets/
-!src/brand/assets/duck.svg
+!src/tui/brand/assets/
+!src/tui/brand/assets/duck.svg
 .playwright-mcp/
 .aider*
 reevesagents-latestnotes.md

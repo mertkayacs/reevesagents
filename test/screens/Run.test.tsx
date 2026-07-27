@@ -224,7 +224,7 @@ describe('Run hub screen', () => {
       throw new Error('not found')
     })
 
-    const { lastFrame, unmount } = render(
+    const { unmount } = render(
       <Router initialScreen="Runs" />
     )
     unmount()

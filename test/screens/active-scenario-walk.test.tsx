@@ -219,7 +219,6 @@ describe('active scenario walk', () => {
         </Harness>
       )
       const frame = lastFrame() ?? '(empty frame)'
-      // eslint-disable-next-line no-console
       console.log(`\n========== ${scenario.name} ==========\n${frame}\n========================\n`)
       expect(frame.length).toBeGreaterThan(0)
       unmount()

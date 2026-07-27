@@ -2,7 +2,7 @@
 // Note: selectedAgentId routing requires full app context, so we test error handling.
 
 import React from 'react'
-import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
 import { Router } from '../../src/tui/router.js'
 import * as runsState from '../../src/core/runs.js'
