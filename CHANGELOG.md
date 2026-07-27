@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/mertkayacs/reevesagents/compare/v1.7.1...v1.7.2) (2026-07-27)
+
+
+### Bug Fixes
+
+* **mcp:** recognize Kimi Code as a host instead of reporting it detached ([#20](https://github.com/mertkayacs/reevesagents/issues/20)) ([d932fcb](https://github.com/mertkayacs/reevesagents/commit/d932fcbd8f1c6fab44b8e870f9f874a21721d192)), closes [#19](https://github.com/mertkayacs/reevesagents/issues/19)
+
 ## [1.7.1](https://github.com/mertkayacs/reevesagents/compare/v1.7.0...v1.7.1) (2026-07-26)
 
 
