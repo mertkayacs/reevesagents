@@ -4,8 +4,8 @@
 
 import React from 'react'
 import { Box, Text, useInput } from 'ink'
-import { colors, space } from '../../utils/tokens.js'
-import { glyphs } from '../../utils/glyphs.js'
+import { colors, space } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
 
 interface Props {
   page: number

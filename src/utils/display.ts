@@ -4,7 +4,20 @@
 
 import type { Provider } from '../core/types.js'
 import { PROVIDER_DEFS, PROVIDER_REGISTRY } from '../core/provider-registry.js'
-import { colors } from './tokens.js'
+
+// Model family colors. Kept distinct from the TUI selection cursor
+// (tokens.ts accent.bright) so a focused row does not collide visually
+// with the cursor; tokens.test.ts pins that invariant.
+export const MODEL_COLORS = {
+  default:  '#9b9488',  // CLI default or unset model
+  claude:   '#e0a06f',  // Claude family
+  openai:   '#72b7d6',  // OpenAI family
+  deepseek: '#7ac8bc',  // DeepSeek family
+  qwen:     '#d1a25d',  // Qwen family
+  kimi:     '#d0c268',  // Kimi family
+  local:    '#92b37a',  // local/open model family
+  other:    '#9ca8bd',  // known provider, unclassified model
+} as const
 
 // Derived from the provider registry, the single source of truth for provider identity.
 export const PROVIDER_DISPLAY_NAMES = Object.fromEntries(
@@ -21,12 +34,12 @@ export function providerColor(p: Provider): string {
 
 export function modelColor(model: string, provider?: Provider): string {
   const lower = model.trim().toLowerCase()
-  if (!lower) return colors.model.default
-  if (lower.includes('claude') || lower.includes('sonnet') || lower.includes('opus') || lower.includes('haiku')) return colors.model.claude
-  if (lower.includes('gpt') || lower.includes('codex') || /\bo[134]\b/.test(lower)) return colors.model.openai
-  if (lower.includes('deepseek')) return colors.model.deepseek
-  if (lower.includes('qwen')) return colors.model.qwen
-  if (lower.includes('kimi') || lower.includes('moonshot')) return colors.model.kimi
+  if (!lower) return MODEL_COLORS.default
+  if (lower.includes('claude') || lower.includes('sonnet') || lower.includes('opus') || lower.includes('haiku')) return MODEL_COLORS.claude
+  if (lower.includes('gpt') || lower.includes('codex') || /\bo[134]\b/.test(lower)) return MODEL_COLORS.openai
+  if (lower.includes('deepseek')) return MODEL_COLORS.deepseek
+  if (lower.includes('qwen')) return MODEL_COLORS.qwen
+  if (lower.includes('kimi') || lower.includes('moonshot')) return MODEL_COLORS.kimi
   if (
     lower.includes('llama') ||
     lower.includes('mistral') ||
@@ -34,14 +47,14 @@ export function modelColor(model: string, provider?: Provider): string {
     lower.includes('ollama') ||
     lower.includes('lmstudio') ||
     lower.includes('local')
-  ) return colors.model.local
+  ) return MODEL_COLORS.local
 
-  if (provider === 'cc') return colors.model.claude
-  if (provider === 'codex') return colors.model.openai
-  if (provider === 'deepseek') return colors.model.deepseek
-  if (provider === 'qwen') return colors.model.qwen
-  if (provider === 'kimi') return colors.model.kimi
-  return colors.model.other
+  if (provider === 'cc') return MODEL_COLORS.claude
+  if (provider === 'codex') return MODEL_COLORS.openai
+  if (provider === 'deepseek') return MODEL_COLORS.deepseek
+  if (provider === 'qwen') return MODEL_COLORS.qwen
+  if (provider === 'kimi') return MODEL_COLORS.kimi
+  return MODEL_COLORS.other
 }
 
 export function modelBadgeLabel(model: string): string {

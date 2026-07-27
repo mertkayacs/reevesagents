@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render } from 'ink-testing-library'
 import { Header } from '../../src/tui/components/Header.js'
-import { glyphs } from '../../src/utils/glyphs.js'
+import { glyphs } from '../../src/tui/utils/glyphs.js'
 
 describe('Header', () => {
   it('renders breadcrumb with current segment bold and primary color', () => {

@@ -3,7 +3,7 @@
 
 import React from 'react'
 import { Box, Text } from 'ink'
-import { colors } from '../../utils/tokens.js'
+import { colors } from '../utils/tokens.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
 

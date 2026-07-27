@@ -2,7 +2,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { stateRoot } from './runs.js'
+import { stateRoot } from '../core/runs.js'
 
 function tokenPath(): string {
   return join(stateRoot(), 'tui-open-token')

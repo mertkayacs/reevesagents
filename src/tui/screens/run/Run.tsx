@@ -3,15 +3,15 @@
 
 import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput, useWindowSize } from 'ink'
-import { Frame, frameBodyRows } from '../components/Frame.js'
-import { Row } from '../components/Row.js'
-import { Section, SectionEnd } from '../components/Section.js'
-import { useRouter } from '../router.js'
+import { Frame, frameBodyRows } from '../../components/Frame.js'
+import { Row } from '../../components/Row.js'
+import { Section, SectionEnd } from '../../components/Section.js'
+import { useRouter } from '../../router.js'
 import { colors } from '../../utils/tokens.js'
-import { listAgents, readRun } from '../../core/runs.js'
-import { useToast } from '../contexts/ToastContext.js'
-import { openRunTabs } from '../../core/runtime.js'
-import type { RunRecord } from '../../core/types.js'
+import { listAgents, readRun } from '../../../core/runs.js'
+import { useToast } from '../../contexts/ToastContext.js'
+import { openRunTabs } from '../../../core/runtime.js'
+import type { RunRecord } from '../../../core/types.js'
 
 const REFRESH_INTERVAL_MS = 5000
 

@@ -6,7 +6,7 @@
 
 import React from 'react'
 import { Box, Text } from 'ink'
-import { colors, space } from '../../utils/tokens.js'
+import { colors, space } from '../utils/tokens.js'
 
 export interface TaglineProps {
   text: string

@@ -1,19 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { colors, sep, space } from '../../src/utils/tokens.js'
-import { glyphs } from '../../src/utils/glyphs.js'
+import { colors, sep, space } from '../../src/tui/utils/tokens.js'
+import { glyphs } from '../../src/tui/utils/glyphs.js'
+import { MODEL_COLORS } from '../../src/utils/display.js'
 
 describe('tokens', () => {
   // Provider colors moved to the provider registry; their invariants live in
-  // test/provider-registry.test.ts.
+  // test/provider-registry.test.ts. Model colors live in utils/display.ts but
+  // must stay distinct from the tokens cursor color, so both are checked here.
   it('every model color is unique', () => {
-    const values = Object.values(colors.model)
+    const values = Object.values(MODEL_COLORS)
     expect(new Set(values).size).toBe(values.length)
   })
 
   it('every model color is distinct from accent.bright', () => {
     const cursor = colors.accent.bright
-    for (const model of Object.keys(colors.model) as Array<keyof typeof colors.model>) {
-      expect(colors.model[model]).not.toBe(cursor)
+    for (const model of Object.keys(MODEL_COLORS) as Array<keyof typeof MODEL_COLORS>) {
+      expect(MODEL_COLORS[model]).not.toBe(cursor)
     }
   })
 

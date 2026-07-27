@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
-import { colors, space } from '../../utils/tokens.js'
+import { colors, space } from '../utils/tokens.js'
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const
 const INTERVAL_MS = 80

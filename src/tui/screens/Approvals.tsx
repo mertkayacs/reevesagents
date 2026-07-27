@@ -11,8 +11,8 @@ import { useRouter } from '../router.js'
 import { useToast } from '../contexts/ToastContext.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
 import { listRunApprovals, resolveRunApproval, type RunApproval } from '../../core/approvals.js'
-import { colors } from '../../utils/tokens.js'
-import { glyphs } from '../../utils/glyphs.js'
+import { colors } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
 
 const ACTIONS = ['Approve', 'Deny', 'Back', 'Main Menu'] as const
 const ACTION_COPY: Record<typeof ACTIONS[number], { label: string; hint: string }> = {

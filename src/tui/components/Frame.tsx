@@ -11,7 +11,7 @@ import { Tagline } from './Tagline.js'
 import { Detail } from './Detail.js'
 import { StatusBar } from './StatusBar.js'
 import { LayoutProvider } from './LayoutContext.js'
-import { colors, space } from '../../utils/tokens.js'
+import { colors, space } from '../utils/tokens.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
 

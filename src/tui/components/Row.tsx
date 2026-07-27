@@ -4,12 +4,12 @@
 
 import React from 'react'
 import { Box, Text } from 'ink'
-import { colors, space } from '../../utils/tokens.js'
-import { glyphs } from '../../utils/glyphs.js'
+import { colors, space } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
 import { panelWidth, useLayoutColumns } from './LayoutContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
-import { displayWidth, padEndDisplay } from '../../utils/width.js'
+import { displayWidth, padEndDisplay } from '../utils/width.js'
 
 interface Badge {
   label: string

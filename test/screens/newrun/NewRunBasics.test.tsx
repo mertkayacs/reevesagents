@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
-import { NewRunBasics } from '../../../src/tui/screens/newrun/02Basics.js'
+import { NewRunBasics } from '../../../src/tui/screens/newrun/NewRunBasics.js'
 import * as RouterModule from '../../../src/tui/router.js'
 import { ToastProvider } from '../../../src/tui/contexts/ToastContext.js'
 import { WizardProvider } from '../../../src/tui/contexts/WizardContext.js'

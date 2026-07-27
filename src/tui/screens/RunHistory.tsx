@@ -12,8 +12,8 @@ import { useToast } from '../contexts/ToastContext.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
 import type { RunHistoryRecord } from '../../core/types.js'
-import { colors } from '../../utils/tokens.js'
-import { glyphs } from '../../utils/glyphs.js'
+import { colors } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
 import { providerColor, providerDisplayName } from '../../utils/display.js'
 
 const ACTIONS = ['DeleteSelected', 'Back', 'Main Menu'] as const

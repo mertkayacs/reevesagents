@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import React from 'react'
 import { render } from 'ink-testing-library'
 import { Badge } from '../../src/tui/components/Badge.js'
-import { colors } from '../../src/utils/tokens.js'
+import { colors } from '../../src/tui/utils/tokens.js'
 import { providerColor } from '../../src/utils/display.js'
 
 describe('Badge', () => {

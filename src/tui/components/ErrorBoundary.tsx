@@ -5,7 +5,7 @@
 import React, { Component } from 'react'
 import type { ReactNode } from 'react'
 import { Box, Text } from 'ink'
-import { colors } from '../../utils/tokens.js'
+import { colors } from '../utils/tokens.js'
 
 interface Props {
   children: ReactNode

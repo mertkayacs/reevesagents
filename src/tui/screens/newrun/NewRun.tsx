@@ -2,9 +2,9 @@
 
 import React, { useEffect } from 'react'
 import { Text } from 'ink'
-import { Frame } from '../components/Frame.js'
-import { WizardProvider } from '../contexts/WizardContext.js'
-import { useRouter } from '../router.js'
+import { Frame } from '../../components/Frame.js'
+import { WizardProvider } from '../../contexts/WizardContext.js'
+import { useRouter } from '../../router.js'
 
 function NewRunInner() {
   const { replace } = useRouter()

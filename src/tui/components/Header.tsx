@@ -8,9 +8,9 @@
 
 import React from 'react'
 import { Box, Text } from 'ink'
-import { colors, sep } from '../../utils/tokens.js'
-import { glyphs } from '../../utils/glyphs.js'
-import { displayWidth } from '../../utils/width.js'
+import { colors, sep } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
+import { displayWidth } from '../utils/width.js'
 
 export interface HeaderProps {
   breadcrumb: string[]

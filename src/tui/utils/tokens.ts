@@ -34,19 +34,8 @@ export const colors = {
     gradient: ['#a5cdf7', '#7eb8f5', '#5a96e0', '#3a7ad8', '#2457a7'],  // breath cycle
   },
   // Provider brand colors live with each provider in the registry
-  // (launcher/provider-registry.ts); read them through providerColor() in
-  // utils/display.ts. They are kept distinct from accent.bright so a focused
-  // provider row does not collide visually with the selection cursor.
-  model: {
-    default:  '#9b9488',  // CLI default or unset model
-    claude:   '#e0a06f',  // Claude family
-    openai:   '#72b7d6',  // OpenAI family
-    deepseek: '#7ac8bc',  // DeepSeek family
-    qwen:     '#d1a25d',  // Qwen family
-    kimi:     '#d0c268',  // Kimi family
-    local:    '#92b37a',  // local/open model family
-    other:    '#9ca8bd',  // known provider, unclassified model
-  },
+  // (provider-registry.ts) and model family colors in utils/display.ts
+  // (MODEL_COLORS); read them through providerColor()/modelColor().
 } as const
 
 export type ColorToken = string

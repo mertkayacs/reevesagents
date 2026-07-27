@@ -14,8 +14,8 @@ import { Pagination } from '../components/Pagination.js'
 import { useRouter } from '../router.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
 import { translatePhrase } from '../../i18n/catalog.js'
-import { colors } from '../../utils/tokens.js'
-import { glyphs } from '../../utils/glyphs.js'
+import { colors } from '../utils/tokens.js'
+import { glyphs } from '../utils/glyphs.js'
 import { runDoctor } from '../../core/doctor.js'
 
 const CHROME_ROWS = 17

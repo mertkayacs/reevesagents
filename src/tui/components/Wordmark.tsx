@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text } from 'ink'
 import { LOGO_LINES, FULL_LOGO_LINES, logoRows, logoRowsHalf, chunks } from '../brand/wordmark.js'
-import { colors } from '../../utils/tokens.js'
+import { colors } from '../utils/tokens.js'
 
 const BREATH_INTERVAL_MS = 1600
 

@@ -1,6 +1,6 @@
 // Localized "{n} agent(s)" label, shared across run screens.
 
-import type { TranslationKey } from '../i18n/catalog.js'
+import type { TranslationKey } from '../../i18n/catalog.js'
 
 type Translate = (_key: TranslationKey, _values?: Record<string, string | number>) => string
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { render } from 'ink-testing-library'
 import { Text } from 'ink'
 import { Detail } from '../../src/tui/components/Detail.js'
-import { colors } from '../../src/utils/tokens.js'
+import { colors } from '../../src/tui/utils/tokens.js'
 
 describe('Detail', () => {
   it('renders without title', () => {

@@ -8,7 +8,7 @@ import { Section, SectionEnd } from '../../components/Section.js'
 import { useRouter } from '../../router.js'
 import { translatePhrase } from '../../../i18n/catalog.js'
 import { useLanguage } from '../../contexts/LanguageContext.js'
-import { colors } from '../../../utils/tokens.js'
+import { colors } from '../../utils/tokens.js'
 import { findAgent, readRun } from '../../../core/runs.js'
 import type { AgentRecord } from '../../../core/types.js'
 
