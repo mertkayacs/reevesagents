@@ -7,10 +7,18 @@ on:
   pull_request:
     branches: [master, main, 'release/**']
 
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         node-version: [20, 22]
 
@@ -29,3 +37,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm verify
+
+      # The native-Windows sibling ships as its own npm package but never ran in
+      # CI. Run its full gate too so a broken win build is caught before release.
+      - run: pnpm --filter reevesagents-win verify
