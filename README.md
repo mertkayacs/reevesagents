@@ -327,7 +327,9 @@ remove. ReevesAgents only calls each CLI's own command and never edits provider
 config files by hand. OpenCode is the exception: it has no scriptable `mcp add`
 for a local server, so ReevesAgents attaches it by writing the `reevesagents`
 entry into its `~/.config/opencode/opencode.json` directly (and removes just that
-entry on detach).
+entry on detach). Kimi Code is handled the same way: when the `kimi` on PATH is
+Kimi Code rather than the legacy Kimi CLI, ReevesAgents reads its plugin and
+`~/.kimi-code/mcp.json` for status and attaches through that config file.
 
 Codex sandboxes MCP tool calls by default, which blocks reevesagents from
 launching agents in tmux. Run Codex with full access when driving agents, for
