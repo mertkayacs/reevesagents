@@ -10,13 +10,9 @@
 // autoCleanupRuns knows nothing about.
 
 import { loadConfig } from './config.js'
-import {
-  defaultTmuxAvailable,
-  defaultTmuxTargetExists,
-  listAgents,
-  nowMs,
-} from './runs.js'
-import { killAgent, type RuntimeDriver } from './runtime.js'
+import { listAgents, nowMs } from './runs.js'
+import { targetExists as tmuxTargetExists, tmuxAvailable, type RuntimeDriver } from './tmux.js'
+import { killAgent } from './runtime.js'
 
 export type ReapReason = 'window-gone' | 'lifetime-exceeded'
 
@@ -43,10 +39,10 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
   // An injected targetExists (tests) implies tmux is present; otherwise probe once.
   // Without tmux we cannot tell a dead window from a live one, so reap nothing
   // rather than nuke every record, mirroring autoCleanupRuns' missing-tmux guard.
-  const haveTmux = options.targetExists ? true : (options.tmuxAvailable ?? defaultTmuxAvailable)()
+  const haveTmux = options.targetExists ? true : (options.tmuxAvailable ?? tmuxAvailable)()
   if (!haveTmux) return { reaped: [] }
 
-  const targetExists = options.targetExists ?? defaultTmuxTargetExists
+  const targetExists = options.targetExists ?? tmuxTargetExists
   const now = options.now ?? nowMs
   const maxLifetimeMs = options.maxLifetimeMs ?? loadConfig().global.max_lifetime_ms
 

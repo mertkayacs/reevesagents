@@ -1,12 +1,9 @@
 // Tmux agent-run runtime: one run owns one tmux session with independent CLI agents.
 // Inputs: run/agent configs. Outputs: run and agent JSON records plus tmux side effects.
 // Invariant: stored tmux targets use window/pane ids, never mutable indexes, and an id
-// is only trusted as the pair (session name, id). Ids are unique per tmux-server
-// lifetime only: after a server restart they are reassigned, so a bare "@N"/"%N" can
-// name an unrelated window. Every consumer verifies membership in the exact-matched
-// session before targeting (windowInSession/paneInSession below).
+// is only trusted as the pair (session name, id); see core/tmux.ts for the identity
+// doctrine and the membership probes every consumer must use.
 
-import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import stripAnsi from 'strip-ansi'
 import type {
@@ -38,7 +35,10 @@ import { loadConfig } from './config.js'
 import { loadPreset } from './store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
+import { paneInSession, realDriver, STALE_WINDOW_ERROR, windowInSession, type RuntimeDriver } from './tmux.js'
 import { providerDisplayName, redactSecrets } from '../utils/display.js'
+
+export type { RuntimeDriver } from './tmux.js'
 
 export interface AgentLaunchConfig {
   nickname?: string
@@ -69,11 +69,6 @@ export interface SpawnWorkerRequest extends AgentLaunchConfig {
   ready_delay_ms?: number
 }
 
-export interface RuntimeDriver {
-  tmux(_args: string[], _input?: string): string
-  delay(_fn: () => void, _ms: number): void
-}
-
 export interface RuntimeOptions {
   driver?: RuntimeDriver
   available?: Record<Provider, boolean>
@@ -98,19 +93,6 @@ export const ALLOWED_KEYS = [
 ] as const
 
 export type AllowedKey = typeof ALLOWED_KEYS[number]
-
-const realDriver: RuntimeDriver = {
-  tmux(args, input) {
-    return execFileSync('tmux', args, {
-      encoding: 'utf8',
-      input,
-      stdio: input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
-    }).trim()
-  },
-  delay(fn, ms) {
-    setTimeout(fn, ms)
-  },
-}
 
 const POST_PASTE_ENTER_DELAY_MS = 1000
 const STARTUP_READY_POLL_MS = 1000
@@ -148,35 +130,6 @@ function pasteTextToPane(driver: RuntimeDriver, paneId: string, text: string): v
     driver.tmux(['paste-buffer', '-b', bufferName, '-t', paneId])
   } finally {
     try { driver.tmux(['delete-buffer', '-b', bufferName]) } catch { /* buffer already gone */ }
-  }
-}
-
-const STALE_WINDOW_ERROR = 'agent window no longer exists (tmux server may have restarted)'
-
-// Membership probes for the (session name, id) identity pair. Qualified targets like
-// "=SESS:@N" are no substitute: when @N is absent from SESS, tmux silently resolves
-// to another window in SESS instead of failing (verified on tmux 3.4). Listing the
-// exact-matched session and checking membership is the only sound test. After a
-// positive check, bare-id targeting is unambiguous because tmux never reuses ids
-// within one server lifetime; the remaining race is a server restart between check
-// and use, which tmux offers no way to close.
-function windowInSession(driver: RuntimeDriver, session: string, windowId: string): boolean {
-  if (!session || !windowId) return false
-  try {
-    return driver.tmux(['list-windows', '-t', `=${session}`, '-F', '#{window_id}'])
-      .split('\n').some(line => line.trim() === windowId)
-  } catch {
-    return false
-  }
-}
-
-function paneInSession(driver: RuntimeDriver, session: string, paneId: string): boolean {
-  if (!session || !paneId) return false
-  try {
-    return driver.tmux(['list-panes', '-s', '-t', `=${session}`, '-F', '#{pane_id}'])
-      .split('\n').some(line => line.trim() === paneId)
-  } catch {
-    return false
   }
 }
 

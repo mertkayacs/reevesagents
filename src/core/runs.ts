@@ -19,7 +19,6 @@ import {
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { spawnSync } from 'node:child_process'
 import type {
   AgentRecord,
   Message,
@@ -32,6 +31,7 @@ import type {
 } from './types.js'
 import { redactSecrets } from '../utils/display.js'
 import { isProvider } from './providers.js'
+import * as tmux from './tmux.js'
 
 export function stateRoot(): string {
   return process.env.REEVES_REGISTRY || join(homedir(), '.reeves')
@@ -494,45 +494,6 @@ export function readAgentInbox(runId: string, agentId: string): Message[] {
   })
 }
 
-export function defaultTmuxSessionExists(session: string): boolean {
-  if (!session) return false
-  try {
-    // "=" forces an exact session-name match; a bare name would prefix-match.
-    const result = spawnSync('tmux', ['has-session', '-t', `=${session}`], { stdio: 'ignore' })
-    return result.status === 0
-  } catch {
-    return false
-  }
-}
-
-export function defaultTmuxAvailable(): boolean {
-  try {
-    const result = spawnSync('tmux', ['-V'], { stdio: 'ignore' })
-    return result.status === 0
-  } catch {
-    return false
-  }
-}
-
-export function defaultTmuxTargetExists(target: string, session: string): boolean {
-  if (!target || !session) return false
-  try {
-    // Window/pane ids are only unique per tmux-server lifetime; after a server
-    // restart they are reassigned, so a bare "-t @N" probe can match an unrelated
-    // window. Identity is the (session name, id) pair: run session names embed the
-    // run id, so they never collide across server generations. Membership in the
-    // exact-matched session is the only sound check; "=SESS:@N" targets are NOT
-    // (tmux silently falls back to another window when @N is absent from SESS).
-    const args = target.startsWith('%')
-      ? ['list-panes', '-s', '-t', `=${session}`, '-F', '#{pane_id}']
-      : ['list-windows', '-t', `=${session}`, '-F', '#{window_id}']
-    const result = spawnSync('tmux', args, { encoding: 'utf8' })
-    return result.status === 0 && result.stdout.split('\n').some(line => line.trim() === target)
-  } catch {
-    return false
-  }
-}
-
 export interface AutoCleanupOptions {
   sessionExists?: (_session: string) => boolean
   targetExists?: (_target: string, _session: string) => boolean
@@ -541,8 +502,8 @@ export interface AutoCleanupOptions {
 }
 
 export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions = {}): boolean {
-  const targetExists = options.targetExists ?? defaultTmuxTargetExists
-  const sessionExists = options.sessionExists ?? defaultTmuxSessionExists
+  const targetExists = options.targetExists ?? tmux.targetExists
+  const sessionExists = options.sessionExists ?? tmux.sessionExists
   const agents = listAgents(run.id).filter(agent => !agent.ended_at)
   const windowedAgents = agents.filter(agent => !agent.headless && agent.tmux_window_id)
   if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id, agent.tmux_session))
@@ -555,12 +516,12 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
 // cleaned (the stale check is skipped) so a missing-tmux environment never
 // nukes the user's run records. Per-run failures are swallowed.
 export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: string[]; archived: string[] } {
-  const sessionExists = options.sessionExists ?? defaultTmuxSessionExists
-  const targetExists = options.targetExists ?? defaultTmuxTargetExists
+  const sessionExists = options.sessionExists ?? tmux.sessionExists
+  const targetExists = options.targetExists ?? tmux.targetExists
   // If the caller injected tmux checks (test drivers), treat tmux as available and skip the real probe.
   const tmuxAvailable = options.sessionExists || options.targetExists
     ? () => true
-    : options.tmuxAvailable ?? defaultTmuxAvailable
+    : options.tmuxAvailable ?? tmux.tmuxAvailable
   const haveTmux = options.cleanStale === false ? false : tmuxAvailable()
   const removed: string[] = []
   const archived: string[] = []

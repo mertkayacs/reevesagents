@@ -1,13 +1,13 @@
 // Setup and environment health checks for ReevesAgents v1.
 // Doctor does not clean runtime state or kill agents.
 
-import { execFileSync } from 'node:child_process'
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import type { CheckResult, Provider } from './types.js'
 import { detectAvailable, inspectProviderCompatibility } from './providers.js'
 import { listRuns, runsDir, stateRoot } from './runs.js'
+import { tmuxVersion } from './tmux.js'
 import { WEB_EXTRA_MODULES } from '../web/extras.js'
 import { providerDisplayName } from '../utils/display.js'
 import { resolveLaunchCmd } from '../mcp/installer.js'
@@ -89,17 +89,14 @@ export function platformSupportCheck(
 }
 
 export function checkTmux(): CheckResult {
-  try {
-    const versionStr = execFileSync('tmux', ['-V'], { encoding: 'utf8' }).trim()
-    const match = versionStr.match(/tmux (\d+)\.(\d+)/)
-    if (!match) return { name: 'tmux', status: 'warn', detail: `unexpected version format: ${versionStr}` }
-    const major = parseInt(match[1] ?? '0', 10)
-    const minor = parseInt(match[2] ?? '0', 10)
-    if (major < 3) return { name: 'tmux', status: 'warn', detail: `tmux ${major}.${minor}; upgrade to 3.0+ recommended` }
-    return { name: 'tmux', status: 'ok', detail: `tmux ${major}.${minor}` }
-  } catch {
-    return { name: 'tmux', status: 'fail', detail: 'not on PATH' }
-  }
+  const versionStr = tmuxVersion()
+  if (!versionStr) return { name: 'tmux', status: 'fail', detail: 'not on PATH' }
+  const match = versionStr.match(/tmux (\d+)\.(\d+)/)
+  if (!match) return { name: 'tmux', status: 'warn', detail: `unexpected version format: ${versionStr}` }
+  const major = parseInt(match[1] ?? '0', 10)
+  const minor = parseInt(match[2] ?? '0', 10)
+  if (major < 3) return { name: 'tmux', status: 'warn', detail: `tmux ${major}.${minor}; upgrade to 3.0+ recommended` }
+  return { name: 'tmux', status: 'ok', detail: `tmux ${major}.${minor}` }
 }
 
 function checkProviders(): CheckResult {
