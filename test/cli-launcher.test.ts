@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { tuiNewWindowArgs } from '../src/cli.js'
+import { tuiNewWindowArgs } from '../src/cli/tui-launcher.js'
 
 // Regression guard for the "index 1 in use" launch failure: the app names the TUI session AND its
 // window "reeves", and every leftover reeves-* session also has an index-1 window named "reeves".
