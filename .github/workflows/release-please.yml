@@ -1,0 +1,32 @@
+name: release-please
+
+on:
+  push:
+    branches: [master]
+
+permissions: {}
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      # Maintains a Release PR from conventional commits. Merging it bumps the
+      # root version and packages/reevesagents-win in lockstep (extra-files),
+      # writes CHANGELOG.md, creates the vX.Y.Z tag and the GitHub release, which
+      # then triggers publish.yml.
+      #
+      # token is a classic PAT (secrets.CI_PAT), not GITHUB_TOKEN: events created
+      # with GITHUB_TOKEN do not start new workflow runs, so the Release PR would
+      # get no CI and the tag would not trigger publish.yml. A PAT does both.
+      - uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ secrets.CI_PAT }}
+          target-branch: master

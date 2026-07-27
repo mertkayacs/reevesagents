@@ -53,19 +53,45 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # The native-Windows sibling ships from the same tag. It needs its own npm
-      # trusted publisher (or an NPM_TOKEN scoped to reevesagents-win); until that
-      # is set up, continue-on-error keeps a failure here from blocking the main
-      # package above. The version must match the tag, so bump both together.
+      # The native-Windows sibling ships from the same tag. release-please keeps
+      # its version in lockstep (extra-files in release-please-config.json), so a
+      # mismatch now means something is wrong: fail loudly instead of skipping.
+      # Needs its own npm trusted publisher (or an NPM_TOKEN scoped to it).
       - name: Publish reevesagents-win to npm
-        continue-on-error: true
         run: |
           WIN_VER="$(node -p "require('./packages/reevesagents-win/package.json').version")"
           if [ "${GITHUB_REF_NAME#v}" != "$WIN_VER" ]; then
-            echo "tag $GITHUB_REF_NAME does not match reevesagents-win version $WIN_VER; skipping"
+            echo "tag $GITHUB_REF_NAME does not match reevesagents-win version $WIN_VER"
             exit 1
           fi
           pnpm --filter reevesagents-win build
           cd packages/reevesagents-win && npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Bumps the Homebrew tap formula (url + sha256) to the just-published version.
+  # Runs after publish so the npm tarball exists for sha256 computation. Commits
+  # directly to the tap (create-pullrequest/create-branch false); drop those two
+  # lines to fall back to opening a PR on the tap instead. Reuses secrets.CI_PAT
+  # (the classic PAT has repo write to mertkayacs/homebrew-reevesagents).
+  homebrew:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: mislav/bump-homebrew-formula-action@v4
+        with:
+          formula-name: reevesagents
+          formula-path: Formula/reevesagents.rb
+          homebrew-tap: mertkayacs/homebrew-reevesagents
+          push-to: mertkayacs/homebrew-reevesagents
+          create-pullrequest: false
+          create-branch: false
+          tag-name: ${{ github.ref_name }}
+          download-url: https://registry.npmjs.org/reevesagents/-/reevesagents-${{ steps.ver.outputs.version }}.tgz
+        env:
+          COMMITTER_TOKEN: ${{ secrets.CI_PAT }}
