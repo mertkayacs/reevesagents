@@ -1,6 +1,7 @@
-// Secret redaction copied from the unix package's src/core/redact.ts so `read`
-// output is scrubbed identically on both packages. catalog-drift.test.ts asserts
-// these match the originals so the patterns cannot silently diverge.
+// Secret redaction for everything persisted or surfaced from agent output.
+// Invariant: all user/model text fields are redacted before writing (see runs.ts).
+// packages/reevesagents-win/src/shared/redact.ts carries a verbatim copy,
+// enforced by its catalog-drift test.
 
 // Ordered: longer prefix patterns must come before shorter ones (e.g. sk-ant before sk-)
 const SECRET_PATTERNS = [

@@ -1,5 +1,6 @@
-// Display utilities: provider/model colors, color capability checks, secret redaction.
+// Display utilities: provider/model colors and labels.
 // Invariant: providerColor and modelColor always return a valid hex string or named color.
+// Secret redaction lives in core/redact.ts.
 
 import type { Provider } from '../core/types.js'
 import { PROVIDER_DEFS, PROVIDER_REGISTRY } from '../core/provider-registry.js'
@@ -58,18 +59,4 @@ export function modelBadgeLabel(model: string): string {
 function truncateLabel(label: string, max: number): string {
   if (label.length <= max) return label
   return `${label.slice(0, Math.max(1, max - 3))}...`
-}
-
-// Ordered: longer prefix patterns must come before shorter ones (e.g. sk-ant before sk-)
-const SECRET_PATTERNS = [
-  /sk-ant-[A-Za-z0-9\-_]{20,}/g,
-  /sk-[A-Za-z0-9\-_]{20,}/g,
-  /AIza[A-Za-z0-9\-_]{35}/g,
-  /gsk_[A-Za-z0-9\-_]{20,}/g,
-]
-
-export function redactSecrets(text: string): string {
-  let result = text
-  for (const pattern of SECRET_PATTERNS) result = result.replace(pattern, '[REDACTED]')
-  return result
 }

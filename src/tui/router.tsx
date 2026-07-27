@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { useApp } from 'ink'
-import type { ScreenName, RouterContextValue } from '../core/types.js'
+import type { ScreenName, RouterContextValue } from './types.js'
 
 import { ToastProvider } from './contexts/ToastContext.js'
 import { WizardProvider } from './contexts/WizardContext.js'

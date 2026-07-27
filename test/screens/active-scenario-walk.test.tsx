@@ -31,12 +31,8 @@ import { Settings } from '../../src/tui/screens/Settings.js'
 import { Reference } from '../../src/tui/screens/Reference.js'
 import { Credits } from '../../src/tui/screens/Credits.js'
 import { writeAgent, writeRun } from '../../src/core/runs.js'
-import type {
-  AgentRecord,
-  RouterContextValue,
-  RunRecord,
-  ScreenName,
-} from '../../src/core/types.js'
+import type { AgentRecord, RunRecord } from '../../src/core/types.js'
+import type { RouterContextValue, ScreenName } from '../../src/tui/types.js'
 
 vi.mock('../../src/core/runs.js', async () => {
   const actual = await vi.importActual<typeof import('../../src/core/runs.js')>('../../src/core/runs.js')
