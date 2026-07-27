@@ -26,7 +26,6 @@ describe('screen walk', () => {
       const { lastFrame, unmount } = render(<Router initialScreen={screen} />)
       const frame = lastFrame() ?? '(empty frame)'
       // Output goes through vitest's stdout when reporter is verbose.
-      // eslint-disable-next-line no-console
       console.log(`\n========== ${screen} ==========\n${frame}\n========================\n`)
       expect(frame.length).toBeGreaterThan(0)
       unmount()

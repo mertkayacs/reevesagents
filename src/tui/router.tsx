@@ -1,5 +1,8 @@
 // Screen history router for the v1 visible-menu TUI.
 // Push/pop manage pages; selected run/agent ids live beside routing state.
+// Screen file convention: a screen file is named exactly after its export;
+// multi-screen route families (screens/run/, screens/newrun/) get a folder;
+// single-screen routes stay flat in screens/.
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { useApp } from 'ink'

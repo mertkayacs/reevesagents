@@ -279,7 +279,6 @@ describe('TextField', () => {
         onChange={onChange}
       />
     )
-    const frame = lastFrame()
     // Should not have unnecessary asterisks (may have spaces instead)
     const content = lastFrame()
     expect(content).toContain('Name')

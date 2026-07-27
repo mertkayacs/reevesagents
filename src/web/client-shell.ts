@@ -1,7 +1,7 @@
-// Inline placeholder page served by the web UI in the scaffold phase.
-// Input: none. Output: a self-contained HTML string (no external assets).
-// Invariant: this is a viewer over /api/state only. The interactive xterm.js
-// client replaces this page once the browser build lands; nothing here writes state.
+// Inline fallback page served when the built web client assets (dist/web) are
+// missing, e.g. a CLI/TUI-only install. Input: none. Output: a self-contained
+// HTML string (no external assets).
+// Invariant: this is a viewer over /api/state only; nothing here writes state.
 
 const PALETTE = {
   bg: '#15191f',
