@@ -5,14 +5,15 @@
 // client. Each connection gets an ephemeral grouped viewer session that is
 // disposed on disconnect; the provider's own window is never killed here.
 
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { URL } from 'node:url'
 import type { Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket, type RawData } from 'ws'
 import pty from '@lydell/node-pty'
-import { defaultTmuxTargetExists, findAgent, readRun } from '../core/runs.js'
+import { targetExists, tmuxAvailable } from '../core/tmux.js'
+import { findAgent, readRun } from '../core/runs.js'
 import { isAllowedHostHeader, isAllowedOrigin } from './guards.js'
 
 type Pty = ReturnType<typeof pty.spawn>
@@ -65,14 +66,6 @@ export function parseClientFrame(raw: RawData | string): ClientFrame | null {
   return null
 }
 
-function tmuxAvailable(): boolean {
-  try {
-    return spawnSync('tmux', ['-V'], { stdio: 'ignore' }).status === 0
-  } catch {
-    return false
-  }
-}
-
 function send(ws: WebSocket, frame: Record<string, unknown>): void {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame))
 }
@@ -106,7 +99,7 @@ function openBridge(ws: WebSocket, id: string, bridges: Set<Bridge>): void {
   // A stale window id (tmux server restarted, ids reassigned) would stream an
   // unrelated window's terminal into the browser and accept keystrokes into it.
   // Only bridge ids verified to still live inside the recorded session.
-  if (!defaultTmuxTargetExists(target.windowId, target.session)) {
+  if (!targetExists(target.windowId, target.session)) {
     send(ws, { t: 'e', m: 'agent window no longer exists (tmux server may have restarted)' })
     ws.close()
     return

@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { prepareTuiColorEnv } from './utils/color-env.js'
+import { exactSession, sessionExists, windowByName, windowIds } from './core/tmux.js'
 import { runDoctor } from './core/doctor.js'
 import { peekAgent, startRun, startRunFromPreset, spawnWorker, stopRun, killAgent, sendText, sendKey, interrupt, type AllowedKey, ALLOWED_KEYS } from './core/runtime.js'
 import { normalizeProvider, PROVIDERS, detectAvailable, coerceExtraArgs } from './core/providers.js'
@@ -97,61 +98,12 @@ function tmuxAttachCommand(session: string, windowId: string): string {
   return `tmux select-window -t ${quoteShell(`${session}:${windowId}`)} && tmux attach -t ${quoteShell(session)}`
 }
 
-// tmux resolves a bare target against both session and window names, with prefix matching, so a
-// leftover "reeves-*" session or the equally-named TUI window hijacks it: the wrong session, or an
-// index-1 collision that fails "create window failed: index 1 in use". "=" forces an exact session
-// match; a trailing ":" makes new-window append at the next free index instead of a pinned one.
-function exactSession(session: string): string {
-  return `=${session}`
-}
-
-function tmuxSessionExists(session: string): boolean {
-  try {
-    execFileSync('tmux', ['has-session', '-t', exactSession(session)], { stdio: 'ignore' })
-    return true
-  } catch {
-    return false
-  }
-}
-
-function tmuxWindowIds(session: string): string[] {
-  try {
-    return execFileSync('tmux', ['list-windows', '-t', exactSession(session), '-F', '#{window_id}'], { encoding: 'utf8' })
-      .split('\n')
-      .map(line => line.trim())
-      .filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
-interface TmuxWindowInfo {
-  id: string
-  command: string
-}
-
-function tmuxWindowByName(session: string, name: string): TmuxWindowInfo | null {
-  try {
-    const rows = execFileSync('tmux', ['list-windows', '-t', exactSession(session), '-F', '#{window_id}\t#{window_name}\t#{pane_current_command}'], { encoding: 'utf8' })
-      .split('\n')
-      .map(line => line.trim())
-      .filter(Boolean)
-    for (const row of rows) {
-      const [windowId, windowName, command = ''] = row.split('\t')
-      if (windowId && windowName === name) return { id: windowId, command }
-    }
-  } catch {
-    // Session may not exist yet.
-  }
-  return null
-}
-
 function isTuiCommand(command: string): boolean {
   return command === 'node' || command === 'reevesagents'
 }
 
 function clearTuiSessionExcept(session: string, keepWindowId: string): void {
-  for (const windowId of tmuxWindowIds(session)) {
+  for (const windowId of windowIds(session)) {
     if (windowId === keepWindowId) continue
     try {
       execFileSync('tmux', ['kill-window', '-t', windowId], { stdio: 'ignore' })
@@ -161,6 +113,8 @@ function clearTuiSessionExcept(session: string, keepWindowId: string): void {
   }
 }
 
+// The trailing ":" makes new-window append at the next free index instead of a
+// pinned one, avoiding "create window failed: index 1 in use".
 export function tuiNewWindowArgs(session: string, window: string, command: string): string[] {
   return ['new-window', '-d', '-P', '-F', '#{window_id}', '-t', `${exactSession(session)}:`, '-n', window, command]
 }
@@ -173,12 +127,12 @@ function openTuiSession(command: string): void {
   const session = 'reeves'
   const window = 'reeves'
 
-  if (!tmuxSessionExists(session)) {
+  if (!sessionExists(session)) {
     execFileSync('tmux', ['new-session', '-s', session, '-n', window, command], { stdio: 'inherit' })
     return
   }
 
-  const existing = tmuxWindowByName(session, window)
+  const existing = windowByName(session, window)
   if (existing && !isTuiCommand(existing.command)) {
     try { execFileSync('tmux', ['kill-window', '-t', existing.id], { stdio: 'ignore' }) } catch { /* already gone */ }
   }
@@ -195,10 +149,10 @@ function openTarget(id: string): void {
   // Stored window ids are only valid inside their recorded session: after a tmux
   // server restart the same "@N" can name an unrelated window, so verify
   // membership before targeting anything.
-  if (!tmuxSessionExists(target.session)) {
+  if (!sessionExists(target.session)) {
     throw new Error(`tmux session not found: ${target.session}`)
   }
-  if (target.windowId.startsWith('@') && !tmuxWindowIds(target.session).includes(target.windowId)) {
+  if (target.windowId.startsWith('@') && !windowIds(target.session).includes(target.windowId)) {
     throw new Error('agent window no longer exists (tmux server may have restarted)')
   }
   const tmuxTarget = `${target.session}:${target.windowId}`
