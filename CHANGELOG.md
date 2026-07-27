@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.3](https://github.com/mertkayacs/reevesagents/compare/v1.7.2...v1.7.3) (2026-07-27)
+
+
+### Miscellaneous Chores
+
+* cut 1.7.3 to validate the release pipeline ([dd77be2](https://github.com/mertkayacs/reevesagents/commit/dd77be2a53dd25e81f85f86b7a8e03154e9fc627))
+
 ## [1.7.2](https://github.com/mertkayacs/reevesagents/compare/v1.7.1...v1.7.2) (2026-07-27)
 
 
