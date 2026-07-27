@@ -16,7 +16,8 @@ import { RouterContext } from '../../src/tui/router.js'
 import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
 import { WizardProvider } from '../../src/tui/contexts/WizardContext.js'
 import { writeAgent, writeRun } from '../../src/core/runs.js'
-import type { AgentRecord, RouterContextValue, RunRecord } from '../../src/core/types.js'
+import type { AgentRecord, RunRecord } from '../../src/core/types.js'
+import type { RouterContextValue } from '../../src/tui/types.js'
 
 const viewport = vi.hoisted(() => ({
   current: { columns: 100, rows: 24 },

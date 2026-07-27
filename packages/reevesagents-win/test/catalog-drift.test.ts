@@ -67,8 +67,8 @@ describe('catalog drift', () => {
     }
   })
 
-  describe('secret redaction copied verbatim from display.ts', () => {
-    const original = () => read('../../../src/utils/display.ts')
+  describe('secret redaction copied verbatim from core/redact.ts', () => {
+    const original = () => read('../../../src/core/redact.ts')
     const copy = () => read('../src/shared/redact.ts')
 
     it('redact.ts contains redactSecrets verbatim', () => {

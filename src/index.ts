@@ -45,7 +45,6 @@ export type {
   AuthMode,
   Effort,
   TaskStatus,
-  ScreenName,
   Config,
   GlobalConfig,
   Message,
@@ -54,5 +53,6 @@ export type {
   RunHistoryStatus,
   AgentRecord,
   CheckResult,
-  RouterContextValue,
 } from './core/types.js'
+
+export type { ScreenName, RouterContextValue } from './tui/types.js'

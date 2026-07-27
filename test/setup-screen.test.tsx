@@ -4,7 +4,7 @@ import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { ScreenName } from '../src/core/types.js'
+import type { ScreenName } from '../src/tui/types.js'
 
 // Mock child_process so the setup screen's environment probe (which / tmux -V /
 // mcp list) is fast and deterministic and never runs a real CLI.

@@ -1,4 +1,5 @@
-// Core type definitions for agent-run state, presets, and TUI routing.
+// Core type definitions for agent-run state, presets, and config.
+// TUI routing types (ScreenName, RouterContextValue) live in tui/types.ts.
 
 export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes' | 'kimi' | 'deepseek' | 'pi' | 'qwen' | 'aider'
 
@@ -19,38 +20,6 @@ export type RunStatus = 'running' | 'ended'
 export type RunViewStatus = RunStatus | 'stale'
 
 export type RunHistoryStatus = 'ended' | 'stale'
-
-export type ScreenName =
-  | 'Welcome'
-  | 'LanguageSelect'
-  | 'Runs'
-  | 'RunHistory'
-  | 'Run'
-  | 'RunAgents'
-  | 'RunOutput'
-  | 'RunStop'
-  | 'AgentDetail'
-  | 'AgentOutput'
-  | 'AgentTask'
-  | 'AgentKill'
-  | 'NewRun'
-  | 'NewRunBasics'
-  | 'NewRunRoot'
-  | 'NewRunWorkers'
-  | 'NewRunWorker'
-  | 'NewRunReview'
-  | 'NewRunStarting'
-  | 'AddWorker'
-  | 'Settings'
-  | 'AgentControl'
-  | 'Setup'
-  | 'Reference'
-  | 'Credits'
-  | 'Doctor'
-  | 'DoctorCheck'
-  | 'Approvals'
-  | 'Config'
-  | 'Presets'
 
 export interface Message {
   id: string
@@ -142,26 +111,6 @@ export interface CheckResult {
   name: string
   status: 'ok' | 'warn' | 'fail'
   detail: string
-}
-
-// Router context — browser-like screen history via push/pop/forward/replace.
-export interface RouterContextValue {
-  screen: ScreenName
-  push: (_screen: ScreenName) => void
-  pop: () => void
-  forward: () => void
-  replace: (_screen: ScreenName) => void
-  resetStack: (_screen: ScreenName, _base?: ScreenName[]) => void
-  selectedRunId: string | null
-  setSelectedRunId: (_runId: string | null) => void
-  selectedAgentId: string | null
-  setSelectedAgentId: (_agentId: string | null) => void
-  selectedCheckName: string | null
-  setSelectedCheckName: (_name: string | null) => void
-  selectedWorkerIdx: number | null
-  setSelectedWorkerIdx: (_idx: number | null) => void
-  canBack: boolean
-  canForward: boolean
 }
 
 // Global preferences; no auth, no keys.

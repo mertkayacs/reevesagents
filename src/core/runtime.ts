@@ -36,7 +36,8 @@ import { loadPreset } from './store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { paneInSession, realDriver, STALE_WINDOW_ERROR, windowInSession, type RuntimeDriver } from './tmux.js'
-import { providerDisplayName, redactSecrets } from '../utils/display.js'
+import { redactSecrets } from './redact.js'
+import { providerDisplayName } from '../utils/display.js'
 
 export type { RuntimeDriver } from './tmux.js'
 

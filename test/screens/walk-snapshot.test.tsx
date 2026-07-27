@@ -5,7 +5,7 @@ import React from 'react'
 import { describe, expect, it } from 'vitest'
 import { render } from 'ink-testing-library'
 import { Router } from '../../src/tui/router.js'
-import type { ScreenName } from '../../src/core/types.js'
+import type { ScreenName } from '../../src/tui/types.js'
 
 const SCREENS: ScreenName[] = [
   'Welcome',

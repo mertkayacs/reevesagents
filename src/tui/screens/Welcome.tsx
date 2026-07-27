@@ -13,7 +13,7 @@ import { Section, SectionEnd } from '../components/Section.js'
 import { Row } from '../components/Row.js'
 import { LayoutProvider } from '../components/LayoutContext.js'
 import { startWebFromTui } from '../../web/tui-launch.js'
-import type { ScreenName } from '../../core/types.js'
+import type { ScreenName } from '../types.js'
 import { useLanguage } from '../contexts/LanguageContext.js'
 
 function pickMascotVariant(columns: number): MascotVariant {

@@ -29,7 +29,7 @@ import type {
   RunViewStatus,
   TaskStatus,
 } from './types.js'
-import { redactSecrets } from '../utils/display.js'
+import { redactSecrets } from './redact.js'
 import { isProvider } from './providers.js'
 import * as tmux from './tmux.js'
 

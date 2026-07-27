@@ -9,7 +9,8 @@ import { AgentKill } from '../../src/tui/screens/run/AgentKill.js'
 import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
 import * as runsState from '../../src/core/runs.js'
 import * as runtime from '../../src/core/runtime.js'
-import type { AgentRecord, RouterContextValue, RunRecord } from '../../src/core/types.js'
+import type { AgentRecord, RunRecord } from '../../src/core/types.js'
+import type { RouterContextValue } from '../../src/tui/types.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 75))
 

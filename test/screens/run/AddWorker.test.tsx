@@ -9,7 +9,8 @@ import { RouterContext } from '../../../src/tui/router.js'
 import { ToastProvider } from '../../../src/tui/contexts/ToastContext.js'
 import { WorkerDraftProvider } from '../../../src/tui/contexts/WorkerDraftContext.js'
 import { writeRun } from '../../../src/core/runs.js'
-import type { RouterContextValue, RunRecord } from '../../../src/core/types.js'
+import type { RunRecord } from '../../../src/core/types.js'
+import type { RouterContextValue } from '../../../src/tui/types.js'
 import * as RuntimeModule from '../../../src/core/runtime.js'
 
 vi.mock('../../../src/core/runtime.js', async () => {

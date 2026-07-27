@@ -19,7 +19,7 @@ import {
   runDir,
   withRunsLock,
 } from './runs.js'
-import { redactSecrets } from '../utils/display.js'
+import { redactSecrets } from './redact.js'
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired'
 export type ApprovalRisk = 'low' | 'medium' | 'high'
