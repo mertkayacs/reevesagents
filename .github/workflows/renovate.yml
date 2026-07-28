@@ -1,0 +1,31 @@
+name: renovate
+
+# Self-hosted Renovate. Runs the Renovate bot as an Actions job (no Mend GitHub
+# App needed) against this repo, reading renovate.json for the rules. Uses the
+# CI_PAT classic PAT so its update PRs get CI and can auto-merge; GITHUB_TOKEN
+# would not trigger downstream workflow runs.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1,3,5' # Mon/Wed/Fri 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: renovatebot/github-action@v46.1.21
+        with:
+          token: ${{ secrets.CI_PAT }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          LOG_LEVEL: info
