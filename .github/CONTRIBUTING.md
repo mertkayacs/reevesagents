@@ -45,11 +45,10 @@ pnpm check:install-matrix
 
 ## Releasing
 
-Releases are automated. You do not edit the version by hand. From a clean
-`master`, `pnpm verify` then `pnpm release` bumps the version from the
-Conventional Commit history, writes the changelog, tags, pushes, and the tag
-push publishes to npm through CI. The full process is in
-[docs/releasing.md](../docs/releasing.md).
+Releases are automated through Release Please. Merging a Release PR bumps the
+root package and `packages/reevesagents-win` together, writes the changelog,
+creates the tag and GitHub release, then the tag publishes npm and Homebrew
+through CI. The full process is in [docs/releasing.md](../docs/releasing.md).
 
 ## Package Boundaries
 
