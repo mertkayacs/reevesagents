@@ -11,13 +11,12 @@ opción, eso vive en el [README](i18n/README.es.md).
 - Un espacio de trabajo gratuito y local donde tus agentes de codificación de
   IA (Claude Code, Codex, Hermes, DeepSeek, Kimi y más) trabajan codo con codo
   en tu máquina.
-- La parte que lo hace interesante: un agente puede crear y dirigir a los
-  demás. Dale las riendas a una sesión de Claude Code y ejecutará encantada un
-  equipo de agentes de Codex y Claude Code en tareas separadas.
-- No tienes por qué usarlo, eso sí. La forma más sencilla de empezar es un
-  espacio de trabajo: genera los agentes que quieras y sigue añadiendo más con
-  `reevesagents add`. Simplemente están codo con codo, y nadie controla a nadie
-  hasta que optas por el MCP.
+- Un agente puede crear y dirigir a los demás por MCP. Por ejemplo, una sesión
+  de Claude Code puede ejecutar agentes de Codex y Claude Code en tareas
+  separadas.
+- También puedes usar ReevesAgents como un espacio de trabajo normal: genera los
+  agentes que quieras y sigue añadiendo más con `reevesagents add`. Están codo
+  con codo, y nadie controla a nadie hasta que optas por el MCP.
 - Se apoya en las CLI que ya tienes, así que cada inicio de sesión se queda
   donde siempre ha estado. ReevesAgents nunca guarda una clave de API y nunca
   toca el tráfico de tus modelos.

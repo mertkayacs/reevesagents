@@ -10,12 +10,11 @@ that lives in the [README](../README.md).
 
 - A free, local workspace where your AI coding agents (Claude Code, Codex,
   Hermes, DeepSeek, Kimi, and more) work side by side on your machine.
-- The part that makes it interesting: one agent can create and drive the
-  others. Give a Claude Code session the reins and it will happily run a team
-  of Codex and Claude Code agents on separate tasks.
-- You do not have to use that, though. The simplest way in is a workspace:
-  spawn the agents you want and keep adding more with `reevesagents add`. They
-  just sit side by side, and nobody controls anyone until you opt into the MCP.
+- One agent can create and drive the others through the MCP. For example, a
+  Claude Code session can run Codex and Claude Code agents on separate tasks.
+- You can also use ReevesAgents as a plain workspace: spawn the agents you want
+  and keep adding more with `reevesagents add`. They sit side by side, and
+  nobody controls anyone until you opt into the MCP.
 - It sits on top of the CLIs you already have, so every login stays where it
   always was. ReevesAgents never holds an API key and never touches your model
   traffic.
@@ -139,8 +138,8 @@ agent on another, then watch and steer both.
   logged in. ReevesAgents can only launch what is on your `PATH` and signed in.
 - **Web UI reports missing packages:** the optional `ws` and `@lydell/node-pty`
   modules were skipped at install time. Reinstalling normally brings them back.
-- **Port already in use:** nothing is wrong; `reevesagents web` just takes the
-  next free port and prints the URL. Pass `--port <n>` if you care which one.
+- **Port already in use:** nothing is wrong; `reevesagents web` uses the next
+  free port and prints the URL. Pass `--port <n>` if you care which one.
 - More detail in [Troubleshooting](../README.md#troubleshooting).
 
 ## Where to go next

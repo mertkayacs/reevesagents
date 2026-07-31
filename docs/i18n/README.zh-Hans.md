@@ -100,7 +100,7 @@ reevesagents doctor
 reevesagents
 ```
 
-要固定版本，在包名后追加 `@<version>`，例如 `pnpm add -g reevesagents@1.4.0`。
+要固定版本，在包名后追加 `@<version>`，例如 `pnpm add -g reevesagents@<version>`。
 
 <details>
 <summary><b>pnpm</b></summary>

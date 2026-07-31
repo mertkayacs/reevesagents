@@ -114,7 +114,7 @@ reevesagents
 ```
 
 Para fijar una versión, añade `@<version>` al nombre del paquete, por ejemplo
-`pnpm add -g reevesagents@1.4.0`.
+`pnpm add -g reevesagents@<version>`.
 
 <details>
 <summary><b>pnpm</b></summary>
