@@ -105,10 +105,10 @@ pnpm dlx reevesagents doctor
 npx reevesagents doctor
 ```
 
-Pin a version with `@<version>`, for example:
+Pin a version by replacing `<version>`:
 
 ```sh
-pnpm add -g reevesagents@1.7.2
+pnpm add -g reevesagents@<version>
 ```
 
 Source install:

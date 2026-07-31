@@ -2,127 +2,100 @@
 
 [Docs](README.md) / Releasing
 
-ReevesAgents uses convention-driven releases. You do not edit the version by
-hand. The version number, the changelog, the git tag, and the npm publish all
-follow from the commit history, so a release is one command.
+ReevesAgents releases are automated by Release Please and GitHub Actions. Do not
+edit versions by hand, do not run `npm publish` locally, and do not create normal
+release tags by hand.
 
-## How the version is chosen
+## How The Version Is Chosen
 
-Commits follow Conventional Commits, and the next version comes from the commits
-since the last `v*` tag:
+Release Please reads Conventional Commits since the last `v*` tag:
 
 - `feat: ...` gives a minor bump (`1.2.0` to `1.3.0`).
 - `fix: ...` gives a patch bump (`1.2.0` to `1.2.1`).
 - a commit with `BREAKING CHANGE:` in its body gives a major bump.
-- `docs:`, `test:`, `refactor:`, and `chore:` do not bump the version and are
-  kept out of the changelog.
+- `docs:`, `test:`, `refactor:`, and `chore:` do not bump the version.
 
-The tool that does this is `release-it` with the conventional-changelog plugin,
-configured in `.release-it.json`.
+The config is `release-please-config.json`. It treats the root package as the
+release package and keeps `packages/reevesagents-win/package.json` in lockstep
+through `extra-files`.
 
-## Cutting a release
+## Normal Flow
 
-From a clean `master` with everything pushed:
+1. Merge normal feature, fix, docs, or cleanup PRs into `master`.
+2. The `release-please` workflow runs on the push to `master`.
+3. If release-worthy commits exist, Release Please opens or updates a Release PR.
+4. CI must pass on the Release PR.
+5. Merge the Release PR.
+6. Release Please updates `package.json`, `packages/reevesagents-win/package.json`,
+   `.release-please-manifest.json`, and `CHANGELOG.md`, then creates the `vX.Y.Z`
+   tag and GitHub Release.
+7. The tag triggers `.github/workflows/publish.yml`.
 
-```sh
-pnpm verify     # typecheck, lint, test, build, smoke. Must pass first.
-pnpm release    # everything below, in one step.
-```
-
-For a release-surface change, run the install matrix before the release command:
-
-```sh
-pnpm verify
-pnpm check:install-matrix
-pnpm release
-```
-
-`pnpm release` runs `release-it`, which:
-
-1. Reads the commits since the last tag and picks the next version.
-2. Writes the new section into `CHANGELOG.md`.
-3. Commits `chore(release): vX.Y.Z` and creates the `vX.Y.Z` tag.
-4. Pushes the commit and the tag to `origin/master`.
-5. Creates the matching GitHub release.
-
-Pushing the `vX.Y.Z` tag is what publishes to npm. It triggers the `publish`
-workflow (`.github/workflows/publish.yml`), which checks that the tag matches
-`package.json`, runs `pnpm verify:release`, and then runs
-`npm publish --provenance --access public`. The npm publish happens in CI, not
-from your machine, and is signed with npm provenance.
-
-Preview a release without changing anything:
+For release-surface changes, run this before merge:
 
 ```sh
-pnpm release --dry-run
+pnpm verify:release
 ```
 
-## What you need
+That expands to the root verify plus the packed install matrix.
 
-- You are on `master`, the working tree is clean, and `origin/master` is up to
-  date.
-- Push access to the repository.
-- `GH_TOKEN` set in your shell. `release-it` uses it to create the GitHub
-  release (see `tokenRef` in `.release-it.json`).
-- npm publishing configured for the repository: either a trusted publisher set
-  up on npmjs.com (recommended, see below) or an `NPM_TOKEN` repository secret as
-  the fallback. The npm publish runs in CI, so you never need an npm token on
-  your machine.
+## Where It Publishes
 
-## Where it publishes
+A `vX.Y.Z` tag reaches these places:
 
-A release reaches these places:
+1. **GitHub Releases**: created by Release Please.
+2. **npm: `reevesagents`**: published by `publish.yml` with provenance.
+3. **npm: `reevesagents-win`**: built and published by the same workflow, with
+   the same version.
+4. **Homebrew tap `mertkayacs/homebrew-reevesagents`**: updated by the
+   `homebrew` job after npm publish succeeds. It points
+   `Formula/reevesagents.rb` at the npm tarball and commits the new sha256.
 
-1. **npm: `reevesagents`** (the stable package), from the `publish` workflow on a
-   `vX.Y.Z` tag, with provenance.
-2. **GitHub Releases**, created by `release-it` during `pnpm release`.
-3. **Homebrew tap `mertkayacs/homebrew-reevesagents`**: the tap updates itself. A
-   `bump formula` workflow in the tap repo runs daily (and can be run by hand from
-   its Actions tab) and points `Formula/reevesagents.rb` at the latest npm version
-   (url + sha256), so `brew upgrade reevesagents` tracks npm. It commits with the
-   tap's own `GITHUB_TOKEN`, so no cross-repo token is needed here. After a
-   release, trigger that workflow by hand for an immediate bump instead of waiting
-   for the daily run.
+The publish workflow checks that the tag matches `package.json` and that
+`packages/reevesagents-win/package.json` matches the same version before either
+npm package is published.
 
-Not used, on purpose: JSR is for packages you `import`, and reevesagents is a CLI
-(a `bin`), so it does not fit. GitHub Packages would only duplicate the public
-npm package.
+Not used, on purpose: JSR is for packages you import, and ReevesAgents is a CLI
+with a `bin`. GitHub Packages would duplicate the public npm package.
 
-## Trusted publishing (npm OIDC)
+## Required Repository Setup
 
-The publish workflows are set up for npm trusted publishing (OIDC), which is the
-current recommended method: GitHub authenticates to npm with a short-lived,
-workflow-scoped token, so no long-lived `NPM_TOKEN` is needed and provenance is
-automatic. This is a one-time setup on npmjs.com, per package:
+- `secrets.CI_PAT`: classic PAT used by Release Please and the Homebrew tap bump.
+  The workflow comments explain why `GITHUB_TOKEN` is not enough for this repo:
+  events created with `GITHUB_TOKEN` do not start the follow-up workflows needed
+  here.
+- npm trusted publishing for `reevesagents` and `reevesagents-win`, or
+  `secrets.NPM_TOKEN` as the fallback.
 
-1. On npmjs.com, open the package settings and add a trusted publisher:
-   GitHub Actions, repository `mertkayacs/reevesagents`, workflow
-   `publish.yml`.
-2. Recommended: set publishing access to "require two-factor authentication and
-   disallow tokens".
+The workflow requests `id-token: write` and runs `npm publish --provenance
+--access public`.
 
-Until a trusted publisher is configured, the workflows fall back to the
-`NPM_TOKEN` repository secret, so publishing keeps working either way. The
-workflows already request `id-token: write`, use `npm` 11.5.1+, and pass
-`--provenance`.
+## Manual Checks After A Release
 
-## If a release goes wrong
+After the publish workflow completes:
 
-If the publish workflow fails after the tag is pushed (for example a failing
-`verify:release`), first check whether the version reached npm:
+```sh
+npm view reevesagents version dist-tags --json
+npm view reevesagents-win version dist-tags --json
+gh release view vX.Y.Z --repo mertkayacs/reevesagents
+gh run list --repo mertkayacs/homebrew-reevesagents --limit 5
+```
+
+Confirm both npm packages report `X.Y.Z`, the GitHub release exists, and the tap
+workflow or commit updated the formula.
+
+## If A Release Goes Wrong
+
+First check whether either npm package reached the registry:
 
 ```sh
 npm view reevesagents@X.Y.Z version
+npm view reevesagents-win@X.Y.Z version
 ```
 
-If npm has that version, do not delete and recreate the tag. Fix the problem and
+If either package exists, do not delete and recreate the tag. Fix the problem and
 ship the next patch release.
 
-If npm does not have that version, fix the problem on `master`, remove the bad
-tag locally and on the remote, delete the GitHub release if one was created, then
-run `pnpm release` again:
-
-```sh
-git tag -d vX.Y.Z
-git push origin :refs/tags/vX.Y.Z
-```
+If neither package exists and the failure was transient, rerun the failed
+`publish` workflow for the existing tag. If the workflow needs a code fix, merge
+that fix and let Release Please cut the next patch.

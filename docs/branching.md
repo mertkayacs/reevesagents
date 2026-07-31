@@ -42,9 +42,11 @@ Open the pull request against `master`.
 
 ## Release Flow
 
-Normal releases are cut from a clean `master`; the full process is in
-[Releasing](releasing.md). A release branch exists to maintain a line that has
-already shipped. Start or update one from a verified development commit:
+Normal releases are cut by Release Please from `master`; the full process is in
+[Releasing](releasing.md). Do not tag normal releases by hand.
+
+A release branch exists to maintain a line that has already shipped. Start or
+update one from a verified development commit:
 
 ```sh
 git switch master
@@ -53,21 +55,8 @@ git switch -c release/v<minor>
 pnpm verify:release
 ```
 
-For a fix that is already reviewed on `master`, cherry-pick it:
-
-```sh
-git switch release/v<minor>
-git cherry-pick <commit>
-pnpm verify:release
-```
-
-After verification, tag the release commit:
-
-```sh
-git tag v<version>
-```
-
-Publish only from a verified tag. The publish workflow runs on `v*` tags.
+For a fix that is already reviewed on `master`, cherry-pick it onto the release
+branch and run `pnpm verify:release`. Publish only from a verified `v*` tag.
 
 ## Clean Package Surface
 
