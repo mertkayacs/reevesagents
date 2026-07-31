@@ -1,9 +1,8 @@
 // Tests for Run hub screen: metadata display, primary rows, navigation.
 
-import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/tui/router.js'
+import { Router } from '../../src/surfaces/tui/router.js'
 import * as runsState from '../../src/core/runs.js'
 import * as runtime from '../../src/core/runtime.js'
 import type { RunRecord, AgentRecord } from '../../src/core/types.js'

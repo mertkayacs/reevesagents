@@ -4,9 +4,9 @@ import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { nextHistoryOnPush, nextHistoryOnReset } from '../src/tui/router.js'
-import { Router } from '../src/tui/router.js'
-import type { ScreenName } from '../src/tui/types.js'
+import { nextHistoryOnPush, nextHistoryOnReset } from '../src/surfaces/tui/router.js'
+import { Router } from '../src/surfaces/tui/router.js'
+import type { ScreenName } from '../src/surfaces/tui/types.js'
 
 function state(entries: ScreenName[], index: number) {
   return { entries, index }

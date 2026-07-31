@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { colors, sep, space } from '../../src/tui/utils/tokens.js'
-import { glyphs } from '../../src/tui/utils/glyphs.js'
+import { colors, sep, space } from '../../src/surfaces/tui/utils/tokens.js'
+import { glyphs } from '../../src/surfaces/tui/utils/glyphs.js'
 import { MODEL_COLORS } from '../../src/utils/display.js'
 
 describe('tokens', () => {

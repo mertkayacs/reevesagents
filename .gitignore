@@ -17,18 +17,18 @@ coverage/
 *.tgz
 .superpowers/
 
-# private working notes, internal planning, debug artifacts — never public
+# Private working notes, planning, and debug artifacts never go public.
 specs/
 assets/
 !docs/assets/
 !docs/assets/**
-!src/tui/brand/assets/
-!src/tui/brand/assets/duck.svg
+!src/surfaces/tui/brand/assets/
+!src/surfaces/tui/brand/assets/duck.svg
 .playwright-mcp/
 .aider*
 reevesagents-latestnotes.md
 
-# internal working docs: kept local, never committed to the public repo
+# Private working docs kept local and never committed to the public repo.
 /LAUNCH.md
 /docs/agent-brief.md
 /docs/implementation-report.md

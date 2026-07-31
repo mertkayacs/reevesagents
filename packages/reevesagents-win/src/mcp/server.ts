@@ -1,9 +1,9 @@
 // Lean agent-control MCP server for native Windows. It lets one AI CLI run and drive
 // others: spawn a CLI agent in its own ConPTY, type into it, read its output, and
 // kill or stop it. The drive loop and tool schemas match the unix reevesagents
-// server (src/mcp/server.ts) so an agent that learned reevesagents on unix uses the
+// server (src/surfaces/mcp/server.ts) so an agent that learned reevesagents on unix uses the
 // same tool calls here; the config, preset, approval, history, and tmux `open` tools
-// are dropped for this MVP.
+// are not part of the native Windows package.
 //
 // Each tool is one entry in TOOLS, colocating its schema and handler so the
 // advertised list and the dispatch can never drift. Agents are children of this
@@ -39,14 +39,14 @@ import { ALLOWED_KEYS, type AllowedKey } from '../core/keys.js'
 import type { AuthMode, Effort, Permissions, Provider } from '../shared/types.js'
 import { REEVESAGENTS_WIN_VERSION } from '../version.js'
 
-// This MVP ships no config tools, so the per-run agent cap is a constant matching the
+// Native Windows ships no config tools, so the per-run agent cap is a constant matching the
 // unix default (src/core/config.ts DEFAULT_GLOBAL.max_agents).
 const MAX_AGENTS = 100
 
 // The single run this session drives when callers omit run_id. Set on the first spawn
 // and reused for every later run_id-less spawn. There is no host-as-head path yet:
-// mcp/host.ts detects no launching host on Windows (MVP), so every first spawn starts
-// a fresh run rather than making the host the run head.
+// native Windows does not detect the launching host CLI, so every first spawn starts
+// a fresh run.
 let sessionRunId: string | null = null
 
 function ok(data: unknown) {
@@ -103,7 +103,7 @@ function sessionRunIsLive(runId: string): boolean {
 const PROVIDER_CATALOG_URI = 'reevesagents://providers'
 const GUIDE_URI = 'reevesagents://guide'
 
-export function buildProviderCatalog() {
+function buildProviderCatalog() {
   const available = detectAvailable()
   return PROVIDER_DEFS.map(def => ({
     id: def.id,
@@ -316,13 +316,13 @@ const TOOLS: ToolDef[] = [
   },
 ]
 
-export const MCP_TOOLS = TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
+const MCP_TOOLS = TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
 
 const TOOL_BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]))
 
 // Dispatch a tool call to its handler. Any error a handler throws (a bad argument, an
 // agent this session does not own) is caught here and returned as a structured fail().
-export async function handleAgentMcpTool(name: string, a: Record<string, unknown>): Promise<ToolResult> {
+async function handleAgentMcpTool(name: string, a: Record<string, unknown>): Promise<ToolResult> {
   const tool = TOOL_BY_NAME.get(name)
   if (!tool) return fail(`Unknown tool: ${name}`)
   try {
@@ -334,7 +334,7 @@ export async function handleAgentMcpTool(name: string, a: Record<string, unknown
 
 // Surfaced to the host model on connect (the MCP `instructions` field). Same drive
 // loop as the unix server with the tmux wording removed.
-export const MCP_INSTRUCTIONS_WIN = `reevesagents-win lets you run and steer other AI CLI agents from this session on native Windows: Claude Code, Codex, Kimi, Qwen, OpenCode, Hermes, and more, each in its own ConPTY on this machine. Hand slices of work to other models, then read or redirect what they do. Agents live only as long as this MCP session.
+const MCP_INSTRUCTIONS_WIN = `reevesagents-win lets you run and steer other AI CLI agents from this session on native Windows: Claude Code, Codex, Kimi, Qwen, OpenCode, Hermes, and more, each in its own ConPTY on this machine. Hand slices of work to other models, then read or redirect what they do. Agents live only as long as this MCP session.
 
 Drive loop:
 1. list_providers - which CLIs are installed here and their models.
@@ -345,7 +345,7 @@ Drive loop:
 
 Every id comes from spawn or list. Read the reevesagents://guide resource for a worked example.`
 
-export const GUIDE_TEXT_WIN = `# reevesagents-win: drive a team of AI CLIs on native Windows
+const GUIDE_TEXT_WIN = `# reevesagents-win: drive a team of AI CLIs on native Windows
 
 You can spawn and steer other coding CLIs from here. Each agent is a real CLI in its own ConPTY on this machine, hosted as a child of this MCP server. reevesagents-win never proxies model traffic or stores credentials; each CLI uses its own login.
 
@@ -367,7 +367,7 @@ Agents are children of this MCP server process, not a detached daemon. They live
 - list shows every run and agent with a live flag; read shows recent output (20 lines by default).
 - read output is a best-effort tail of the raw ConPTY stream; a full-screen TUI may show repainted frames.`
 
-export function listMcpResources() {
+function listMcpResources() {
   return [
     {
       uri: PROVIDER_CATALOG_URI,
@@ -384,7 +384,7 @@ export function listMcpResources() {
   ]
 }
 
-export function readMcpResource(uri: string) {
+function readMcpResource(uri: string) {
   if (uri === PROVIDER_CATALOG_URI) {
     return { uri, mimeType: 'application/json', text: JSON.stringify(buildProviderCatalog()) }
   }

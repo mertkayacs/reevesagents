@@ -55,4 +55,4 @@ export type {
   CheckResult,
 } from './core/types.js'
 
-export type { ScreenName, RouterContextValue } from './tui/types.js'
+export type { ScreenName, RouterContextValue } from './surfaces/tui/types.js'

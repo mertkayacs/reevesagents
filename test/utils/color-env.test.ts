@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { prepareTuiColorEnv } from '../../src/cli/color-env.js'
+import { prepareTuiColorEnv } from '../../src/surfaces/cli/color-env.js'
 
 const originalEnv = {
   FORCE_COLOR: process.env.FORCE_COLOR,

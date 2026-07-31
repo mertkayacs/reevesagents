@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import React from 'react'
 import { render } from 'ink-testing-library'
-import { Pagination } from '../../src/tui/components/Pagination.js'
+import { Pagination } from '../../src/surfaces/tui/components/Pagination.js'
 
 describe('Pagination', () => {
   it('renders page number and total', () => {

@@ -56,7 +56,7 @@ interface LivePty {
   runId: string
 }
 
-// Config knobs are hardcoded (this MVP ships no config tools). They match the unix
+// Config knobs are hardcoded because native Windows ships no config tools. They match the unix
 // defaults (src/core/config.ts DEFAULT_GLOBAL).
 const DEFAULT_PERMISSIONS: Permissions = 'ask'
 const READY_DELAY_MS = 5000

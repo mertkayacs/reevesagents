@@ -4,13 +4,13 @@
 // tail. The interface is pluggable so a headless-terminal implementation can drop
 // in later without touching callers.
 //
-// Fidelity limitation (MVP, ring buffer): every target here is a full-screen TUI
+// Fidelity limitation: every target here is a full-screen TUI
 // (Ink, Textual). ConPTY repaints regions with cursor-motion escapes, so the raw
 // stream holds many overwrites of the same cells. Stripping ANSI color does not
 // collapse those cursor-motion repaints, so `read` can surface duplicated or
 // partial frames. It is enough to see what an agent is waiting on, but noisy for
 // structured output. A headless xterm grid (feed onData, serialize the last n rows)
-// would reproduce capture-pane fidelity; that is a deliberate follow-up, not MVP.
+// would reproduce capture-pane fidelity.
 
 export interface OutputBuffer {
   push(_data: string): void

@@ -534,7 +534,7 @@ export const pt = {
     'peek interval (ms)': 'Intervalo de espreitadela (ms)',
     'peek lines': 'Linhas de espreitadela',
     'pending': 'pendente',
-    'planned public install channels': 'canais de instalação pública previstos',
+    'public install channels': 'canais de instalação pública',
     'presets': 'predefinições',
     'press Esc to go back': 'prima esc para voltar',
     'provider': 'fornecedor',

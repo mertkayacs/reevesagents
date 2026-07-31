@@ -1,16 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import React from 'react'
 import { render } from 'ink-testing-library'
-import { NewRunStarting } from '../../../src/tui/screens/newrun/NewRunStarting.js'
-import * as RouterModule from '../../../src/tui/router.js'
-import * as WizardModule from '../../../src/tui/contexts/WizardContext.js'
+import { NewRunStarting } from '../../../src/surfaces/tui/screens/newrun/NewRunStarting.js'
+import * as RouterModule from '../../../src/surfaces/tui/router.js'
+import * as WizardModule from '../../../src/surfaces/tui/contexts/WizardContext.js'
 import * as RuntimeModule from '../../../src/core/runtime.js'
-import { ToastProvider } from '../../../src/tui/contexts/ToastContext.js'
-import { WizardProvider } from '../../../src/tui/contexts/WizardContext.js'
+import { ToastProvider } from '../../../src/surfaces/tui/contexts/ToastContext.js'
+import { WizardProvider } from '../../../src/surfaces/tui/contexts/WizardContext.js'
 
-vi.mock('../../../src/tui/router.js')
-vi.mock('../../../src/tui/contexts/WizardContext.js', async () => {
-  const actual = await vi.importActual('../../../src/tui/contexts/WizardContext.js')
+vi.mock('../../../src/surfaces/tui/router.js')
+vi.mock('../../../src/surfaces/tui/contexts/WizardContext.js', async () => {
+  const actual = await vi.importActual('../../../src/surfaces/tui/contexts/WizardContext.js')
   return {
     ...actual,
     useWizard: vi.fn(),

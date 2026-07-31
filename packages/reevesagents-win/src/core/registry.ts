@@ -66,16 +66,12 @@ export function nowIso(): string {
   return new Date().toISOString()
 }
 
-export function nowMs(): number {
-  return Date.now()
-}
-
 // block synchronously via Atomics.wait; the lock retry loop below is not async
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
-export function withRunsLock<T>(fn: () => T): T {
+function withRunsLock<T>(fn: () => T): T {
   mkdirSync(stateRoot(), { recursive: true })
   const lockPath = join(stateRoot(), '.runs.lock')
   const staleMs = 5000

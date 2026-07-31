@@ -1,9 +1,8 @@
 // Tests for Run › Agents list: real agent rows and navigation.
 
-import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/tui/router.js'
+import { Router } from '../../src/surfaces/tui/router.js'
 import type { RunRecord, AgentRecord } from '../../src/core/types.js'
 
 vi.mock('../../src/core/runs.js', async () => {

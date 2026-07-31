@@ -1,9 +1,8 @@
 // Tests for Runs screen: empty state, runs list, action rows, cleanup behavior.
 
-import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/tui/router.js'
+import { Router } from '../../src/surfaces/tui/router.js'
 import * as runsState from '../../src/core/runs.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))

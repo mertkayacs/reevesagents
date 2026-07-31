@@ -530,7 +530,7 @@ export const es = {
     'peek interval (ms)': 'Intervalo de ojeada (ms)',
     'peek lines': 'Líneas de ojeada',
     'pending': 'pendiente',
-    'planned public install channels': 'canales de instalación pública previstos',
+    'public install channels': 'canales de instalación pública',
     'presets': 'preajustes',
     'press Esc to go back': 'pulsa Esc para volver',
     'provider': 'proveedor',

@@ -1,0 +1,710 @@
+// On-demand loopback HTTP server for the web UI.
+// Input: optional port/open/webRoot preferences. Output: a server bound to 127.0.0.1
+// that serves the client, streams state over SSE, and runs create/kill/stop actions.
+// Invariant: foreground only (no daemon), loopback only, no user login. The SSE poller
+// lives only while a browser is connected. Stopping the server never touches a terminal.
+
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import type { Server } from 'node:http'
+import type { Socket } from 'node:net'
+import { readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './guards.js'
+import { buildWebState, listWebProviders } from './state.js'
+import { placeholderPage } from './client-shell.js'
+import { attachTerminalBridge } from './bridge.js'
+import { startRun, startRunFromPreset, spawnWorker, killAgent, stopRun } from '../../core/runtime.js'
+import { normalizeProvider, coerceExtraArgs } from '../../core/providers.js'
+import { providerDisplayName } from '../../utils/display.js'
+import type { AuthMode, Effort, Permissions } from '../../core/types.js'
+import { loadConfig, setConfigValues, CONFIG_FIELDS } from '../../core/config.js'
+import { isLanguageCode, LANGUAGE_OPTIONS } from '../../i18n/languages.js'
+import { localeCatalog, translatePhrase } from '../../i18n/catalog.js'
+import { listPresets, savePresetFromRun, deletePreset } from '../../core/store.js'
+import {
+  archiveAndRemoveRun,
+  autoCleanupRuns,
+  deleteAgent,
+  deleteRunHistory,
+  findAgent,
+  listRunHistory,
+  readRun,
+} from '../../core/runs.js'
+import { resolveRunApproval } from '../../core/approvals.js'
+import { runDoctor } from '../../core/doctor.js'
+import { REEVESAGENTS_VERSION } from '../../version.js'
+import {
+  hostStatus as mcpHostStatus,
+  attach as attachMcpHost,
+  detach as detachMcpHost,
+  attachAll as attachAllMcpHosts,
+  verifyServerLaunch,
+} from '../mcp/installer.js'
+
+const HOST = '127.0.0.1'
+const DEFAULT_PORT = 8080
+const DEFAULT_RANGE = 10
+const POLL_MS = 1500
+const MAX_BODY = 64 * 1024
+const DEFAULT_WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), 'web')
+
+// Fixed asset allowlist: route -> file under webRoot. Never joins a client-supplied
+// path, so there is no traversal surface.
+const STATIC_ROUTES: Record<string, { file: string; type: string }> = {
+  '/app.css': { file: 'app.css', type: 'text/css; charset=utf-8' },
+  '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
+  '/xterm.css': { file: 'xterm.css', type: 'text/css; charset=utf-8' },
+  '/xterm.js': { file: 'xterm.js', type: 'text/javascript; charset=utf-8' },
+  '/addon-fit.js': { file: 'addon-fit.js', type: 'text/javascript; charset=utf-8' },
+  '/brand-duck.json': { file: 'brand-duck.json', type: 'application/json; charset=utf-8' },
+}
+
+export interface WebServerOptions {
+  port?: number
+  range?: number
+  open?: boolean
+  webRoot?: string
+}
+
+export interface WebServerHandle {
+  url: string
+  port: number
+  close: () => Promise<void>
+}
+
+interface RequestContext {
+  port: () => number
+  webRoot: string
+  cache: Map<string, Buffer>
+  sse: SseHub
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+function send(res: ServerResponse, status: number, body: string | Buffer, contentType: string): void {
+  res.writeHead(status, {
+    'content-type': contentType,
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  })
+  res.end(body)
+}
+
+function sendJson(res: ServerResponse, status: number, obj: unknown): void {
+  send(res, status, JSON.stringify(obj), 'application/json; charset=utf-8')
+}
+
+function webLanguagePayload(): unknown {
+  const current = loadConfig().global.language
+  return {
+    current,
+    languages: LANGUAGE_OPTIONS,
+    translations: localeCatalog(current),
+  }
+}
+
+function serveAsset(res: ServerResponse, file: string, type: string, ctx: RequestContext): void {
+  let buf = ctx.cache.get(file)
+  if (!buf) {
+    try {
+      buf = readFileSync(join(ctx.webRoot, file))
+    } catch {
+      send(res, 404, 'asset missing; run the build', 'text/plain; charset=utf-8')
+      return
+    }
+    ctx.cache.set(file, buf)
+  }
+  send(res, 200, buf, type)
+}
+
+// Serves the built page, falling back to an embedded placeholder when the client
+// has not been built yet (also what unit tests hit, since they do not run the build).
+function serveIndex(res: ServerResponse, ctx: RequestContext): void {
+  let buf = ctx.cache.get('index.html')
+  if (!buf) {
+    try {
+      buf = readFileSync(join(ctx.webRoot, 'index.html'))
+      ctx.cache.set('index.html', buf)
+    } catch {
+      send(res, 200, placeholderPage(), 'text/html; charset=utf-8')
+      return
+    }
+  }
+  send(res, 200, buf, 'text/html; charset=utf-8')
+}
+
+interface SseHub {
+  add: (_res: ServerResponse) => void
+  close: () => void
+}
+
+// Pushes the run/terminal state to connected browsers. The poller starts when the
+// first client connects and stops when the last disconnects: connection-scoped, not
+// a daemon. fs.watch is avoided because recursive watch is unreliable across platforms.
+function createSseHub(): SseHub {
+  const clients = new Set<ServerResponse>()
+  let timer: ReturnType<typeof setInterval> | null = null
+  let last = ''
+
+  const snapshot = (): string => {
+    autoCleanupRuns({ cleanStale: false })
+    return JSON.stringify(buildWebState())
+  }
+  const write = (res: ServerResponse, payload: string): void => {
+    try { res.write(`data: ${payload}\n\n`) } catch { /* client gone; close handler will drop it */ }
+  }
+  const tick = (): void => {
+    const payload = snapshot()
+    if (payload === last) return
+    last = payload
+    for (const res of clients) write(res, payload)
+  }
+  const start = (): void => {
+    if (timer) return
+    last = snapshot()
+    timer = setInterval(tick, POLL_MS)
+    timer.unref()
+  }
+  const stop = (): void => {
+    if (timer) { clearInterval(timer); timer = null }
+  }
+
+  return {
+    add(res) {
+      res.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-store',
+        'connection': 'keep-alive',
+        'x-content-type-options': 'nosniff',
+      })
+      write(res, snapshot())
+      clients.add(res)
+      start()
+      res.on('close', () => {
+        clients.delete(res)
+        if (clients.size === 0) stop()
+      })
+    },
+    close() {
+      stop()
+      for (const res of clients) { try { res.end() } catch { /* already closed */ } }
+      clients.clear()
+    },
+  }
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of req) {
+    const buf = chunk as Buffer
+    size += buf.length
+    if (size > MAX_BODY) throw new Error('request body too large')
+    chunks.push(buf)
+  }
+  if (chunks.length === 0) return {}
+  const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  if (!parsed || typeof parsed !== 'object') throw new Error('expected a JSON object')
+  return parsed as Record<string, unknown>
+}
+
+function sanitizeNickname(raw: string): string {
+  return raw.trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').slice(0, 40)
+}
+
+function sanitizeRunName(raw: string): string {
+  return raw.trim().replace(/[^\p{L}\p{N} _.-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim()
+}
+
+// The curated catalog is a suggestion list for the picker, not a whitelist. Accept
+// any model the user typed so a brand-new provider model (not yet curated) still
+// works here like it already does on the CLI and MCP paths; a blank value falls back
+// to the provider default. The provider is validated in createTerminal, and the model
+// is passed as an argv value to the CLI (never shelled), so there is no injection risk.
+function normalizeModel(raw: unknown): string {
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
+function normalizePermissionsInput(raw: unknown): Permissions | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (raw === 'ask' || raw === 'skip') return raw
+  throw new Error('unknown permission mode')
+}
+
+function parseAuthModeInput(raw: unknown): AuthMode | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (raw === 'default' || raw === 'api-key') return raw
+  throw new Error('unknown auth mode')
+}
+
+function parseEffortInput(raw: unknown): Effort | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (raw === 'default' || raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh' || raw === 'max') return raw
+  throw new Error('unknown effort')
+}
+
+// Creates a terminal: a worker in an existing run, or a fresh single-terminal run.
+// Provider is validated against the known set (it maps to the launched binary);
+// nickname is sanitized; the prompt is typed into the pane by the runtime, not shelled.
+async function createTerminal(body: Record<string, unknown>): Promise<{ id: string; run_id: string }> {
+  const provider = body.provider
+  const normalizedProvider = normalizeProvider(provider)
+  if (!normalizedProvider) throw new Error('unknown provider')
+  const model = normalizeModel(body.model)
+  const permissions = normalizePermissionsInput(body.permissions)
+  const auth_mode = parseAuthModeInput(body.auth_mode)
+  const effort = parseEffortInput(body.effort)
+  const extra_args = coerceExtraArgs(body.extra_args)
+  const nickname = sanitizeNickname(typeof body.nickname === 'string' ? body.nickname : '')
+  const runName = sanitizeRunName(typeof body.run_name === 'string' ? body.run_name : '')
+  const prompt = typeof body.prompt === 'string' ? body.prompt : ''
+  const runId = typeof body.run_id === 'string' && body.run_id ? body.run_id : null
+
+  if (runId) {
+    readRun(runId)
+    const agent = spawnWorker({ run_id: runId, provider: normalizedProvider, nickname: nickname || undefined, model, permissions, auth_mode, effort, extra_args, task: prompt })
+    return { id: agent.id, run_id: agent.run_id }
+  }
+
+  const workingDir = typeof body.working_dir === 'string' && body.working_dir.trim()
+    ? body.working_dir.trim()
+    : process.cwd()
+  const result = startRun({
+    name: runName || nickname || providerDisplayName(normalizedProvider),
+    working_dir: workingDir,
+    root: { provider: normalizedProvider, nickname: nickname || undefined, model, permissions, auth_mode, effort, extra_args, task: prompt },
+  })
+  const root = result.agents[0]
+  if (!root) throw new Error('run created no agent')
+  return { id: root.id, run_id: result.run.id }
+}
+
+function requireConfirm(body: Record<string, unknown>): void {
+  if (body.confirm !== true) throw new Error('confirmation required')
+}
+
+function updateLanguage(body: Record<string, unknown>): unknown {
+  if (!isLanguageCode(body.language)) throw new Error('unknown language')
+  // Route through setConfigValues like every other config write, so validation
+  // and persistence can never drift from the CLI/MCP/TUI path.
+  setConfigValues({ language: body.language })
+  return webLanguagePayload()
+}
+
+// Agent control: list the MCP-capable host CLIs and attach/detach the
+// reevesagents MCP per host by calling that CLI's own mcp add/remove. This only
+// touches the host CLI's own config and is gated to loopback by the same origin
+// guard as every other state-changing route.
+function mcpHostsPayload(): unknown {
+  return { hosts: mcpHostStatus() }
+}
+
+function attachMcpHostAction(body: Record<string, unknown>): unknown {
+  const key = typeof body.key === 'string' ? body.key : ''
+  if (!key) throw new Error('host key is required')
+  const result = attachMcpHost(key)
+  return { result, hosts: mcpHostStatus() }
+}
+
+function detachMcpHostAction(body: Record<string, unknown>): unknown {
+  const key = typeof body.key === 'string' ? body.key : ''
+  if (!key) throw new Error('host key is required')
+  const result = detachMcpHost(key)
+  return { result, hosts: mcpHostStatus() }
+}
+
+// Mirror the CLI: after writing the config, actually launch the server once so the
+// response tells the client whether an attached host can start it, not just that the
+// entry was written. The verify field is additive; the client still reads results.
+async function attachAllMcpHostsAction(): Promise<unknown> {
+  const results = attachAllMcpHosts()
+  const verify = await verifyServerLaunch()
+  return { results, hosts: mcpHostStatus(), verify }
+}
+
+// Editable global settings. The config panel reads the field specs plus current
+// values, then posts a patch; setConfigValues validates each field the same way
+// the CLI, MCP, and TUI do. Language is handled by /api/language (it needs the
+// live language payload), so the panel edits only the numeric and permission fields.
+function configPayload(): unknown {
+  const config = loadConfig().global
+  // Localize the field labels with the saved language so the panel reads in the user's language.
+  return {
+    config,
+    fields: CONFIG_FIELDS.filter(field => field.kind !== 'language')
+      .map(field => ({ ...field, label: translatePhrase(config.language, field.label) })),
+  }
+}
+
+function updateConfigAction(body: Record<string, unknown>): unknown {
+  const patch: Record<string, unknown> = {}
+  // Language is intentionally excluded (handled by /api/language, which returns the
+  // live translation payload); mirror the GET filter so the panel cannot set it here.
+  for (const field of CONFIG_FIELDS.filter(field => field.kind !== 'language')) {
+    if (body[field.key] !== undefined) patch[field.key] = body[field.key]
+  }
+  if (Object.keys(patch).length === 0) throw new Error('no config fields to set')
+  return { config: setConfigValues(patch).global }
+}
+
+// Saved presets: reusable agent-team templates shared with the CLI, MCP, and TUI.
+function presetsPayload(): unknown {
+  return { presets: listPresets() }
+}
+
+function savePresetAction(body: Record<string, unknown>): unknown {
+  const runId = typeof body.run_id === 'string' ? body.run_id : ''
+  if (!runId) throw new Error('run_id is required')
+  const name = typeof body.name === 'string' ? body.name : ''
+  const description = typeof body.description === 'string' ? body.description : ''
+  return { preset: savePresetFromRun(runId, name, description), presets: listPresets() }
+}
+
+function startPresetAction(name: string): unknown {
+  if (!listPresets().some(preset => preset.name === name)) throw new Error('preset not found')
+  const result = startRunFromPreset(name)
+  return { run: result.run, agents: result.agents }
+}
+
+function deletePresetAction(name: string): void {
+  if (!listPresets().some(preset => preset.name === name)) throw new Error('preset not found')
+  deletePreset(name)
+}
+
+function killTerminal(id: string): void {
+  killAgent(id)
+}
+
+function deleteTerminal(id: string): void {
+  const agent = findAgent(id)
+  if (!agent.ended_at) throw new Error('Stop agent before deleting it')
+  deleteAgent(id)
+}
+
+function stopWebRun(id: string): void {
+  stopRun(id)
+}
+
+function deleteWebRun(id: string): void {
+  const run = readRun(id)
+  if (run.status !== 'ended' && run.ended_at === null) throw new Error('Stop run before deleting it')
+  archiveAndRemoveRun(id, 'ended')
+}
+
+function deleteHistoryRecord(id: string): void {
+  const history = listRunHistory()
+  if (!history.some(record => record.id === id)) throw new Error('history record not found')
+  deleteRunHistory(id)
+}
+
+// Resolve a pending approval (approve or deny). The decision is the confirmation,
+// so no separate confirm flag is required; the origin guard already blocks CSRF.
+function resolveApprovalAction(id: string, body: Record<string, unknown>): unknown {
+  const decision = body.decision === 'approved' ? 'approved' : body.decision === 'denied' ? 'denied' : null
+  if (!decision) throw new Error('decision must be approved or denied')
+  const note = typeof body.note === 'string' ? body.note : ''
+  return resolveRunApproval(id, decision, note)
+}
+
+async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
+  if (!isAllowedHostHeader(req.headers.host)) {
+    send(res, 403, 'forbidden host', 'text/plain; charset=utf-8')
+    return
+  }
+  if (isStateChangingMethod(req.method) && !isAllowedOrigin(req.headers.origin, ctx.port())) {
+    send(res, 403, 'forbidden origin', 'text/plain; charset=utf-8')
+    return
+  }
+
+  const path = (req.url ?? '/').split('?')[0]
+  const method = req.method ?? 'GET'
+
+  if (method === 'GET' && (path === '/' || path === '/index.html')) {
+    serveIndex(res, ctx)
+    return
+  }
+  const asset = STATIC_ROUTES[path]
+  if (method === 'GET' && asset) {
+    serveAsset(res, asset.file, asset.type, ctx)
+    return
+  }
+  if (method === 'GET' && path === '/api/state') {
+    autoCleanupRuns({ cleanStale: false })
+    sendJson(res, 200, {
+      ...buildWebState(),
+      providers: listWebProviders(),
+      language: webLanguagePayload(),
+      version: REEVESAGENTS_VERSION,
+    })
+    return
+  }
+  if (method === 'GET' && path === '/api/mcp-hosts') {
+    try {
+      sendJson(res, 200, mcpHostsPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/doctor') {
+    try {
+      sendJson(res, 200, runDoctor())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/config') {
+    try {
+      sendJson(res, 200, configPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/presets') {
+    try {
+      sendJson(res, 200, presetsPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/events') {
+    ctx.sse.add(res)
+    return
+  }
+  if (method === 'GET' && path === '/healthz') {
+    send(res, 200, 'ok', 'text/plain; charset=utf-8')
+    return
+  }
+
+  if (method === 'POST' && path === '/api/terminals') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, await createTerminal(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/language') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, updateLanguage(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/mcp-hosts/attach') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, attachMcpHostAction(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/mcp-hosts/detach') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, detachMcpHostAction(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/mcp-hosts/attach-all') {
+    try {
+      sendJson(res, 200, await attachAllMcpHostsAction())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/config') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, updateConfigAction(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/presets/save') {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, savePresetAction(body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const startPresetMatch = path.match(/^\/api\/presets\/([^/]+)\/start$/)
+  if (method === 'POST' && startPresetMatch) {
+    try {
+      sendJson(res, 200, startPresetAction(decodeURIComponent(startPresetMatch[1]!)))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deletePresetMatch = path.match(/^\/api\/presets\/([^/]+)\/delete$/)
+  if (method === 'POST' && deletePresetMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deletePresetAction(decodeURIComponent(deletePresetMatch[1]!))
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const killMatch = path.match(/^\/api\/terminals\/([^/]+)\/kill$/)
+  if (method === 'POST' && killMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      killTerminal(decodeURIComponent(killMatch[1]!))
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deleteTerminalMatch = path.match(/^\/api\/terminals\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteTerminalMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteTerminal(decodeURIComponent(deleteTerminalMatch[1]!))
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const stopMatch = path.match(/^\/api\/runs\/([^/]+)\/stop$/)
+  if (method === 'POST' && stopMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      stopWebRun(decodeURIComponent(stopMatch[1]!))
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deleteRunMatch = path.match(/^\/api\/runs\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteRunMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteWebRun(decodeURIComponent(deleteRunMatch[1]!))
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const deleteHistoryMatch = path.match(/^\/api\/history\/([^/]+)\/delete$/)
+  if (method === 'POST' && deleteHistoryMatch) {
+    try {
+      const body = await readJsonBody(req)
+      requireConfirm(body)
+      deleteHistoryRecord(decodeURIComponent(deleteHistoryMatch[1]!))
+      sendJson(res, 200, { ok: true })
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  const resolveApprovalMatch = path.match(/^\/api\/approvals\/([^/]+)\/resolve$/)
+  if (method === 'POST' && resolveApprovalMatch) {
+    try {
+      const body = await readJsonBody(req)
+      sendJson(res, 200, resolveApprovalAction(decodeURIComponent(resolveApprovalMatch[1]!), body))
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+
+  send(res, 404, 'not found', 'text/plain; charset=utf-8')
+}
+
+function listenWithFallback(server: Server, basePort: number, range: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    let port = basePort
+    const attempt = (): void => {
+      const onError = (err: Error & { code?: string }): void => {
+        if (err.code === 'EADDRINUSE' && port < basePort + range - 1) {
+          port += 1
+          setTimeout(attempt, 0)
+          return
+        }
+        reject(err)
+      }
+      server.once('error', onError)
+      server.listen(port, HOST, () => {
+        server.removeListener('error', onError)
+        resolve(port)
+      })
+    }
+    attempt()
+  })
+}
+
+export async function startWebServer(options: WebServerOptions = {}): Promise<WebServerHandle> {
+  const basePort = options.port && Number.isFinite(options.port) ? options.port : DEFAULT_PORT
+  const range = options.range && options.range > 0 ? options.range : DEFAULT_RANGE
+  const webRoot = options.webRoot ?? DEFAULT_WEB_ROOT
+  const cache = new Map<string, Buffer>()
+  const sse = createSseHub()
+
+  const sockets = new Set<Socket>()
+  let boundPort = basePort
+  const ctx: RequestContext = {
+    port: () => boundPort,
+    webRoot,
+    cache,
+    sse,
+  }
+  const server = createServer((req, res) => {
+    handleRequest(req, res, ctx).catch(() => {
+      try { send(res, 500, 'server error', 'text/plain; charset=utf-8') } catch { /* headers already sent */ }
+    })
+  })
+  server.on('connection', socket => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+  const bridge = attachTerminalBridge(server, () => boundPort)
+
+  boundPort = await listenWithFallback(server, basePort, range)
+  const url = `http://${HOST}:${boundPort}`
+
+  if (options.open !== false) {
+    const { openBrowser } = await import('./open-browser.js')
+    openBrowser(url)
+  }
+
+  return {
+    url,
+    port: boundPort,
+    close: async () => {
+      sse.close()
+      await bridge.close()
+      await new Promise<void>(resolve => {
+        for (const socket of sockets) socket.destroy()
+        server.close(() => resolve())
+      })
+    },
+  }
+}

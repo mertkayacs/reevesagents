@@ -379,11 +379,11 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## 无需准备的东西
 
-正常跑稳定版的智能体运行，不需要 ReevesAgents 替你保存 API 密钥，也用不上数据库、Docker、后台服务或任何 MCP 设置。安装是被动的：稳定版包没有 postinstall 脚本，也不会重写提供方配置。唯一会碰提供方配置的步骤是附加 Agent Control MCP，那一步要你明确启用，而且只通过每个 CLI 自带的 `mcp add` 命令进行。
+正常跑稳定版的智能体运行，不需要 ReevesAgents 替你保存 API 密钥，也用不上数据库、Docker、后台服务或任何 MCP 设置。安装是被动的：它不会重写提供方配置，全局安装只会显示一条简短提示。唯一会碰提供方配置的步骤是附加 Agent Control MCP，那一步要你明确启用，而且只通过每个 CLI 自带的 `mcp add` 命令进行。
 
 ## 参与贡献
 
-分支与拉取请求流程见 [CONTRIBUTING.md](../../.github/CONTRIBUTING.md)，漏洞报告见 [SECURITY.md](../../.github/SECURITY.md)，近期变更见 [CHANGELOG.md](../../CHANGELOG.md)。设计模型在 [REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md)，贡献者文档位于 [docs/](..) 下。
+分支与拉取请求流程见 [CONTRIBUTING.md](../../.github/CONTRIBUTING.md)，漏洞报告见 [SECURITY.md](../../.github/SECURITY.md)，近期变更见 [CHANGELOG.md](../../CHANGELOG.md)。贡献者文档位于 [docs/](..) 下。
 
 最终用户不需要开发工具链。贡献者使用仓库里的 pnpm、TypeScript、tsup、Vitest 和 ESLint。
 

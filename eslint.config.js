@@ -31,7 +31,7 @@ export default [
   {
     // Browser client: classic scripts that run in the page, not under Node.
     // xterm.js and addon-fit.js load first and expose Terminal / FitAddon as globals.
-    files: ['src/web/client/**/*.js'],
+    files: ['src/surfaces/webui/client/**/*.js'],
     rules: {
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-console': 'off',

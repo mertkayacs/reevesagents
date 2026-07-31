@@ -1,7 +1,6 @@
-import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/tui/router.js'
+import { Router } from '../../src/surfaces/tui/router.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 
@@ -12,7 +11,7 @@ const attach = vi.hoisted(() => vi.fn((key: string) => ({ key, label: key, ok: t
 const detach = vi.hoisted(() => vi.fn((key: string) => ({ key, label: key, ok: true, message: 'detached' })))
 const attachAll = vi.hoisted(() => vi.fn(() => [] as Array<{ key: string; label: string; ok: boolean; message: string }>))
 
-vi.mock('../../src/mcp/installer.js', () => ({ hostStatus, attach, detach, attachAll }))
+vi.mock('../../src/surfaces/mcp/installer.js', () => ({ hostStatus, attach, detach, attachAll }))
 
 const FIXTURE = [
   { key: 'cc', bin: 'claude', label: 'Claude Code', installed: true, attached: true, manual: false },

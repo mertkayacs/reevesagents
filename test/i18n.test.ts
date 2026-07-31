@@ -46,7 +46,7 @@ describe('i18n language catalog', () => {
   })
 
   it('defines every Web client label key in the English source', () => {
-    const clientSource = readFileSync(join(process.cwd(), 'src/web/client/app.js'), 'utf8')
+    const clientSource = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/app.js'), 'utf8')
     const keys = [...new Set(
       [...clientSource.matchAll(/'((?:web|common)\.[^']+)'\s*:/g)].map(match => match[1]!),
     )]

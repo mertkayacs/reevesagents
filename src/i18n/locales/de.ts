@@ -516,7 +516,7 @@ export const de = {
     'peek interval (ms)': 'Vorschau-Intervall (ms)',
     'peek lines': 'Vorschau-Zeilen',
     'pending': 'ausstehend',
-    'planned public install channels': 'Geplante öffentliche Installationskanäle',
+    'public install channels': 'Öffentliche Installationskanäle',
     'presets': 'Vorlagen',
     'press Esc to go back': 'Esc drücken, um zurückzugehen',
     'provider': 'Provider',

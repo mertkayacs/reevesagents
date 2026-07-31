@@ -10,7 +10,7 @@ Recommended branch names:
 
 - `fix/<short-name>` for bug fixes.
 - `feature/<short-name>` for stable root package work.
-- `web/<short-name>` for Web UI beta work.
+- `web/<short-name>` for Web UI work.
 - `docs/<short-name>` for contributor, release, or user docs.
 
 Long-lived branches:
@@ -53,7 +53,12 @@ push publishes to npm through CI. The full process is in
 
 ## Package Boundaries
 
-The package is the CLI, TUI, optional Web beta, and the opt-in agent-control MCP. The MCP stays a flat mechanism: no roles, autonomous loops, or coordination protocol.
+The source tree keeps user-facing surfaces under `src/surfaces`: CLI, TUI, Web
+UI, and the opt-in Agent Control MCP. Shared run state, provider detection,
+config, and runtime code stay in `src/core`.
+
+The MCP stays a flat mechanism: no roles, autonomous loops, or coordination
+protocol.
 
 Keep generated build output, private notes, local screenshots, and debugging artifacts out of pull requests.
 
@@ -63,4 +68,4 @@ Keep generated build output, private notes, local screenshots, and debugging art
 - Prefer existing project patterns over new abstractions.
 - Include tests for behavior changes.
 - Keep visible copy clear. Use "agent" for user-facing agent controls.
-- Do not include AI signatures, generated co-author trailers, or internal planning notes.
+- Do not include AI signatures, generated co-author trailers, or private planning notes.

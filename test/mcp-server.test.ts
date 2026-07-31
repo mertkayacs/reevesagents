@@ -45,7 +45,7 @@ function payload(result: ToolResult): any {
 
 // Call the handler and widen the success/failure union to the loose test shape.
 async function call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
-  const { handleAgentMcpTool } = await import('../src/mcp/server.js')
+  const { handleAgentMcpTool } = await import('../src/surfaces/mcp/server.js')
   return handleAgentMcpTool(name, args) as ToolResult
 }
 
@@ -123,12 +123,12 @@ describe('handleAgentMcpTool', () => {
     // archives and removes it), the no-run_id spawn must not reuse it and throw
     // "Run not found". sessionRunIsLive is the branch guard that drops it instead.
     it('treats a missing run as not live', async () => {
-      const { sessionRunIsLive } = await import('../src/mcp/server.js')
+      const { sessionRunIsLive } = await import('../src/surfaces/mcp/server.js')
       expect(sessionRunIsLive('never-existed')).toBe(false)
     })
 
     it('treats a live run as live and an ended run as not live', async () => {
-      const { sessionRunIsLive } = await import('../src/mcp/server.js')
+      const { sessionRunIsLive } = await import('../src/surfaces/mcp/server.js')
       const { writeRun, updateRun } = await import('../src/core/runs.js')
 
       writeRun(makeRun('session-run'))
@@ -263,7 +263,7 @@ describe('handleAgentMcpTool', () => {
 
   describe('tool registry', () => {
     it('advertises unique tool names that each resolve to a handler', async () => {
-      const { MCP_TOOLS } = await import('../src/mcp/server.js')
+      const { MCP_TOOLS } = await import('../src/surfaces/mcp/server.js')
       const names = MCP_TOOLS.map(tool => tool.name)
       expect(new Set(names).size).toBe(names.length)
       for (const name of names) {
@@ -277,7 +277,7 @@ describe('handleAgentMcpTool', () => {
 
   describe('discovery', () => {
     it('list_providers returns the full provider catalog from the registry', async () => {
-      const { MCP_TOOLS, buildProviderCatalog } = await import('../src/mcp/server.js')
+      const { MCP_TOOLS, buildProviderCatalog } = await import('../src/surfaces/mcp/server.js')
       const { PROVIDERS } = await import('../src/core/providers.js')
 
       // The tool is advertised in the tool list.

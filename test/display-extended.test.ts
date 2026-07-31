@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { PROVIDERS } from '../src/core/providers.js'
 
-describe('providerColor — extended providers', () => {
+describe('providerColor: extended providers', () => {
   it('hermes returns muted rose hex', async () => {
     const { providerColor } = await import('../src/utils/display.js')
     expect(providerColor('hermes')).toBe('#c97b9b')

@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import React from 'react'
 import { render } from 'ink-testing-library'
-import { NewRunBasics } from '../../../src/tui/screens/newrun/NewRunBasics.js'
-import * as RouterModule from '../../../src/tui/router.js'
-import { ToastProvider } from '../../../src/tui/contexts/ToastContext.js'
-import { WizardProvider } from '../../../src/tui/contexts/WizardContext.js'
+import { NewRunBasics } from '../../../src/surfaces/tui/screens/newrun/NewRunBasics.js'
+import * as RouterModule from '../../../src/surfaces/tui/router.js'
+import { ToastProvider } from '../../../src/surfaces/tui/contexts/ToastContext.js'
+import { WizardProvider } from '../../../src/surfaces/tui/contexts/WizardContext.js'
 
-vi.mock('../../../src/tui/router.js')
+vi.mock('../../../src/surfaces/tui/router.js')
 
 describe('NewRunBasics', () => {
   beforeEach(() => {

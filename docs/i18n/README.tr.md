@@ -380,11 +380,11 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## Gerekli Değil
 
-Normal, stabil agent run'ları için ReevesAgents'ta saklanan bir API anahtarına, veritabanına, Docker'a, arka plan servisine ya da MCP kurulumuna ihtiyacınız yok. Kurulum da pasiftir: stabil paketin postinstall script'i yoktur ve sağlayıcı yapılandırmanızı yeniden yazmaz. Sağlayıcı yapılandırmasına dokunan tek adım, Agent Kontrol MCP'sini bağlamaktır. O da açıkça sizin verdiğiniz, opt-in bir karardır ve yalnızca her CLI'nin kendi `mcp add` komutu üzerinden gerçekleşir.
+Normal, stabil agent run'ları için ReevesAgents'ta saklanan bir API anahtarına, veritabanına, Docker'a, arka plan servisine ya da MCP kurulumuna ihtiyacınız yok. Kurulum da pasiftir: sağlayıcı yapılandırmanızı yeniden yazmaz ve global kurulum yalnızca kısa bir ipucu gösterir. Sağlayıcı yapılandırmasına dokunan tek adım, Agent Kontrol MCP'sini bağlamaktır. O da açıkça sizin verdiğiniz, opt-in bir karardır ve yalnızca her CLI'nin kendi `mcp add` komutu üzerinden gerçekleşir.
 
 ## Katkıda Bulunma
 
-Branch'ler ve pull request akışı için [CONTRIBUTING.md](../../.github/CONTRIBUTING.md), güvenlik açığı bildirmek için [SECURITY.md](../../.github/SECURITY.md), son değişiklikler için [CHANGELOG.md](../../CHANGELOG.md) dosyalarına bakın. Tasarım modeli [REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) dosyasında, katkıcı dokümanları [docs/](..) altındadır.
+Branch'ler ve pull request akışı için [CONTRIBUTING.md](../../.github/CONTRIBUTING.md), güvenlik açığı bildirmek için [SECURITY.md](../../.github/SECURITY.md), son değişiklikler için [CHANGELOG.md](../../CHANGELOG.md) dosyalarına bakın. Katkıcı dokümanları [docs/](..) altındadır.
 
 Son kullanıcıların geliştirme araç zincirine ihtiyacı yoktur. Katkıda bulunanlar depodaki pnpm, TypeScript, tsup, Vitest ve ESLint kurulumunu kullanır.
 

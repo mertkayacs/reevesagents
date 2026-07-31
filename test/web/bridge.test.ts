@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { writeRun, writeAgent } from '../../src/core/runs.js'
-import { resolveTerminalTarget, parseClientFrame } from '../../src/web/bridge.js'
+import { resolveTerminalTarget, parseClientFrame } from '../../src/surfaces/webui/bridge.js'
 import type { AgentRecord, RunRecord } from '../../src/core/types.js'
 
 let tmpDir: string

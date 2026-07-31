@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { browserOpenCommand } from '../../src/web/open-browser.js'
+import { browserOpenCommand } from '../../src/surfaces/webui/open-browser.js'
 
 describe('browserOpenCommand', () => {
   it('uses open on macOS', () => {

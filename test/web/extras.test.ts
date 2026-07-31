@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkWebExtras, webExtrasMessage, WEB_EXTRA_MODULES } from '../../src/web/extras.js'
+import { checkWebExtras, webExtrasMessage, WEB_EXTRA_MODULES } from '../../src/surfaces/webui/extras.js'
 
 describe('checkWebExtras', () => {
   it('reports the extras as present in this workspace', async () => {

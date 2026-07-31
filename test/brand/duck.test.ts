@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DUCK_RENDERED } from '../../src/tui/brand/duck-rendered.js'
+import { DUCK_RENDERED } from '../../src/surfaces/tui/brand/duck-rendered.js'
 
 const ESC = String.fromCharCode(27)
 const CSI = `${ESC}[`

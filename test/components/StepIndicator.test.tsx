@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import React from 'react'
 import { render } from 'ink-testing-library'
-import { StepIndicator } from '../../src/tui/components/StepIndicator.js'
+import { StepIndicator } from '../../src/surfaces/tui/components/StepIndicator.js'
 
 describe('StepIndicator', () => {
   it('renders step number and total', () => {

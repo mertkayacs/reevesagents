@@ -458,8 +458,8 @@ de inicio diferente.
 
 No necesitas claves de API almacenadas por ReevesAgents, una base de datos, Docker,
 un servicio en segundo plano ni configuración de MCP para runs de agentes normales
-y estables. La instalación es pasiva: el paquete estable no tiene script de
-postinstall y no reescribe la configuración del proveedor. Adjuntar el MCP de Agent
+y estables. La instalación es pasiva: no reescribe la configuración del proveedor
+y una instalación global solo muestra un aviso breve. Adjuntar el MCP de Agent
 Control es el único paso explícito y opcional que toca la configuración del
 proveedor, y solo a través del propio comando `mcp add` de cada CLI.
 
@@ -467,8 +467,7 @@ proveedor, y solo a través del propio comando `mcp add` de cada CLI.
 
 Consulta [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) para las ramas y el flujo de
 pull requests, [SECURITY.md](../../.github/SECURITY.md) para reportar vulnerabilidades, y
-[CHANGELOG.md](../../CHANGELOG.md) para los cambios recientes. El modelo de diseño vive en
-[REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) y la documentación para
+[CHANGELOG.md](../../CHANGELOG.md) para los cambios recientes. La documentación para
 contribuyentes está bajo [docs/](..).
 
 Los usuarios finales no necesitan la cadena de herramientas de desarrollo. Los

@@ -2,7 +2,7 @@
 
 [Docs](README.md) / Testing
 
-This document covers the stable main package. The current release path is spawner-only.
+This document covers the stable main package.
 
 ## Isolation Rules
 
@@ -16,12 +16,12 @@ This document covers the stable main package. The current release path is spawne
 
 | Layer | Command | What it proves | Isolation |
 | --- | --- | --- | --- |
-| TypeScript | `CI=true pnpm typecheck` | Public types and internal imports compile. | No runtime state. |
+| TypeScript | `CI=true pnpm typecheck` | Public types and source imports compile. | No runtime state. |
 | Lint | `CI=true pnpm lint` | Source and unit tests match lint rules. | No runtime state. |
 | Unit | `CI=true pnpm test` | State normalization, provider command building, router behavior, spawner TUI flow, and runtime calls. | Temp registry plus fake drivers. |
-| Build | `CI=true pnpm build` | The package emits `dist/cli.js` and `dist/index.js`. | No user state. |
+| Build | `CI=true pnpm build` | The package emits the CLI, library entry, and Web UI assets under `dist/`. | No user state. |
 | CLI smoke | `pnpm smoke:cli` | Built CLI runs `runs` and `doctor` against fake providers. | Temp registry/config and fake `tmux`/provider bins. |
-| Package contents | `pnpm check:package` | Root npm tarball contains only the spawner package surface. | `npm pack --dry-run`, no install. |
+| Package contents | `pnpm check:package` | Root npm tarball contains only the published package surface. | `npm pack --dry-run`, no install. |
 | Install matrix | `pnpm check:install-matrix` | CLI/TUI-only install and Web install work from tarballs. | Temp npm projects, temp registry/config. |
 | Manual TUI smoke | `node dist/cli.js` with temp env | Welcome menu, Runs page, Main Menu return, narrow terminal behavior, and visible action flow. | Temp registry/config. |
 
@@ -64,18 +64,19 @@ pnpm check:install-matrix
 
 The matrix proves:
 
-- `npm install --omit=optional ./reevesagents-1.2.0.tgz` keeps CLI/TUI usable and disables Web cleanly.
-- `npm install ./reevesagents-1.2.0.tgz` starts the loopback Web UI.
+- installing the packed tarball with `--omit=optional` keeps CLI/TUI usable and disables Web cleanly.
+- installing the packed tarball with optional dependencies starts the loopback Web UI.
 
 Use this to verify the packed package installs in a clean project without touching the real home directory:
 
 ```sh
 pnpm pack --pack-destination /tmp
+pkg=$(find /tmp -maxdepth 1 -name 'reevesagents-*.tgz' | sort | tail -n 1)
 tmp=$(mktemp -d)
 mkdir -p "$tmp/home" "$tmp/registry"
 cd "$tmp"
 pnpm init
-HOME="$tmp/home" pnpm add /tmp/reevesagents-1.2.0.tgz
+HOME="$tmp/home" pnpm add "$pkg"
 ./node_modules/.bin/reevesagents --version
 REEVES_REGISTRY="$tmp/registry" REEVES_CONFIG="$tmp/config.json" ./node_modules/.bin/reevesagents doctor --json
 ```
@@ -85,18 +86,19 @@ Use this broader install-surface check before publishing:
 ```sh
 tmp=$(mktemp -d)
 pnpm pack --pack-destination "$tmp"
+pkg=$(find "$tmp" -maxdepth 1 -name 'reevesagents-*.tgz' | sort | tail -n 1)
 npm pack --dry-run
 mkdir -p "$tmp/npm-home" "$tmp/npm-registry" "$tmp/pnpm-home" "$tmp/pnpm-registry"
 cd "$tmp"
 mkdir npm-check pnpm-check
 cd npm-check
 npm init -y
-HOME="$tmp/npm-home" npm install "$tmp/reevesagents-1.2.0.tgz"
+HOME="$tmp/npm-home" npm install "$pkg"
 ./node_modules/.bin/reevesagents --version
 REEVES_REGISTRY="$tmp/npm-registry" REEVES_CONFIG="$tmp/npm-config.json" ./node_modules/.bin/reevesagents doctor --json
 cd ../pnpm-check
 pnpm init
-HOME="$tmp/pnpm-home" pnpm add "$tmp/reevesagents-1.2.0.tgz"
+HOME="$tmp/pnpm-home" pnpm add "$pkg"
 ./node_modules/.bin/reevesagents --version
 REEVES_REGISTRY="$tmp/pnpm-registry" REEVES_CONFIG="$tmp/pnpm-config.json" ./node_modules/.bin/reevesagents doctor --json
 ```
@@ -118,31 +120,3 @@ Automated tests cover the state, CLI, and tmux runtime boundaries. The TUI still
 9. Confirm Add Agent, Settings, and Doctor pages render without hidden slash commands.
 10. Run once in a narrow terminal, around 52 columns, and confirm the footer and Runs list remain readable.
 11. Exit the TUI and remove the temp registry directory.
-
-## Last Verified Locally
-
-The current spawner-only main package cleanup was checked locally on June 1, 2026 with:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm smoke:cli
-pnpm check:package
-pnpm pack --dry-run
-npm pack --dry-run
-```
-
-Observed results:
-
-- Frozen install passed with the workspace lockfile.
-- Typecheck passed.
-- Lint passed.
-- Root Vitest passed with 72 files and 537 tests.
-- Build passed.
-- CLI smoke passed against isolated fake setup.
-- Package content check passed with 43 files and only root package paths.
-- Root `pnpm pack --dry-run` and `npm pack --dry-run` contained only `dist`, README, changelog, license, and package metadata.
-- Clean install matrix checks returned version `1.2.0`, disabled Web cleanly without optional extras, and started the Web UI with optional extras.

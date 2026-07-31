@@ -2,10 +2,10 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import { render } from 'ink-testing-library'
 import React from 'react'
 import { Text } from 'ink'
-import { Frame, FLOOR_COLS, FLOOR_ROWS, DETAIL_BREAKPOINT } from '../../src/tui/components/Frame.js'
-import { Header } from '../../src/tui/components/Header.js'
-import { StatusBar } from '../../src/tui/components/StatusBar.js'
-import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
+import { Frame, FLOOR_COLS, FLOOR_ROWS, DETAIL_BREAKPOINT } from '../../src/surfaces/tui/components/Frame.js'
+import { Header } from '../../src/surfaces/tui/components/Header.js'
+import { StatusBar } from '../../src/surfaces/tui/components/StatusBar.js'
+import { ToastProvider } from '../../src/surfaces/tui/contexts/ToastContext.js'
 
 function wrap(children: React.ReactNode) {
   return <ToastProvider>{children}</ToastProvider>

@@ -1,8 +1,7 @@
-import React from 'react'
 import { describe, expect, it } from 'vitest'
 import { render } from 'ink-testing-library'
 import { Text } from 'ink'
-import { Detail } from '../../src/tui/components/Detail.js'
+import { Detail } from '../../src/surfaces/tui/components/Detail.js'
 
 describe('Detail', () => {
   it('renders without title', () => {

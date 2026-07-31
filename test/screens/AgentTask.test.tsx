@@ -1,10 +1,9 @@
 // Tests for AgentTask screen: status display, action availability.
 // Note: selectedAgentId routing requires full app context, so we test error handling.
 
-import React from 'react'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/tui/router.js'
+import { Router } from '../../src/surfaces/tui/router.js'
 import * as runsState from '../../src/core/runs.js'
 import type { AgentRecord, RunRecord } from '../../src/core/types.js'
 

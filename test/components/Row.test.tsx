@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import React from 'react'
 import { render } from 'ink-testing-library'
-import { Row } from '../../src/tui/components/Row.js'
-import { LayoutProvider } from '../../src/tui/components/LayoutContext.js'
-import { colors } from '../../src/tui/utils/tokens.js'
-import { glyphs } from '../../src/tui/utils/glyphs.js'
+import { Row } from '../../src/surfaces/tui/components/Row.js'
+import { LayoutProvider } from '../../src/surfaces/tui/components/LayoutContext.js'
+import { colors } from '../../src/surfaces/tui/utils/tokens.js'
+import { glyphs } from '../../src/surfaces/tui/utils/glyphs.js'
 import { MODEL_COLORS, providerColor } from '../../src/utils/display.js'
 
 describe('Row', () => {

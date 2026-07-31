@@ -529,7 +529,7 @@ export const tr = {
     'peek interval (ms)': 'Bakış aralığı (ms)',
     'peek lines': 'Bakış satırları',
     'pending': 'bekliyor',
-    'planned public install channels': 'planlanan herkese açık kurulum kanalları',
+    'public install channels': 'herkese açık kurulum kanalları',
     'presets': 'hazır ayarlar',
     'press Esc to go back': 'geri dönmek için Esc\'e basın',
     'provider': 'sağlayıcı',

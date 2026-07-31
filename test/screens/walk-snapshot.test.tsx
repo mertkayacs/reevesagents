@@ -1,11 +1,10 @@
 // Renders every screen via ink-testing-library and prints the output.
-// Not a snapshot match — just a visual walk. Run with --reporter=verbose to see.
+// Not a snapshot match: just a visual walk. Run with --reporter=verbose to see.
 
-import React from 'react'
 import { describe, expect, it } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/tui/router.js'
-import type { ScreenName } from '../../src/tui/types.js'
+import { Router } from '../../src/surfaces/tui/router.js'
+import type { ScreenName } from '../../src/surfaces/tui/types.js'
 
 const SCREENS: ScreenName[] = [
   'Welcome',
