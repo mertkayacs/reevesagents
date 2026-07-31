@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.4](https://github.com/mertkayacs/reevesagents/compare/v1.7.3...v1.7.4) (2026-07-31)
+
+
+### Bug Fixes
+
+* **release:** clear audit advisories before release ([691394a](https://github.com/mertkayacs/reevesagents/commit/691394a480485ce7470fdd56fdf990b51d2679e4)), closes [#40](https://github.com/mertkayacs/reevesagents/issues/40)
+
 ## [1.7.3](https://github.com/mertkayacs/reevesagents/compare/v1.7.2...v1.7.3) (2026-07-27)
 
 
