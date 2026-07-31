@@ -3,7 +3,7 @@ import { request } from 'node:http'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { startWebServer, type WebServerHandle } from '../../src/web/server.js'
+import { startWebServer, type WebServerHandle } from '../../src/surfaces/webui/server.js'
 import {
   listAgents,
   listRunHistory,

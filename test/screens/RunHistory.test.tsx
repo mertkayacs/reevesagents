@@ -1,10 +1,9 @@
-import React from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { Router } from '../../src/tui/router.js'
+import { Router } from '../../src/surfaces/tui/router.js'
 import { archiveAndRemoveRun, listRunHistory, writeAgent, writeRun } from '../../src/core/runs.js'
 import type { AgentRecord, RunRecord } from '../../src/core/types.js'
 

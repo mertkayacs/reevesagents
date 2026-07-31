@@ -1,8 +1,7 @@
-import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../src/tui/router.js'
-import { DoctorCheck } from '../../src/tui/screens/DoctorCheck.js'
+import { Router } from '../../src/surfaces/tui/router.js'
+import { DoctorCheck } from '../../src/surfaces/tui/screens/DoctorCheck.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 

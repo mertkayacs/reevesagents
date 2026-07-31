@@ -539,7 +539,7 @@ export const ar = {
     'peek interval (ms)': 'فترة الاطّلاع (ms)',
     'peek lines': 'أسطر الاطّلاع',
     'pending': 'معلّق',
-    'planned public install channels': 'قنوات التثبيت العامة المخطّطة',
+    'public install channels': 'قنوات التثبيت العامة',
     'presets': 'إعدادات جاهزة',
     'press Esc to go back': 'اضغط Esc للرجوع',
     'provider': 'المزوّد',

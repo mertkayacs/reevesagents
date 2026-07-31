@@ -31,7 +31,7 @@ function nodeMeetsMinimum(version: [number, number, number]): boolean {
   return true
 }
 
-export function nodeVersionCheck(rawVersion = process.version): CheckResult {
+function nodeVersionCheck(rawVersion = process.version): CheckResult {
   const version = rawVersion.startsWith('v') ? rawVersion.slice(1) : rawVersion
   const ok = nodeMeetsMinimum(parseNodeVersion(version))
   return { name: 'node', status: ok ? 'ok' : 'fail', detail: ok ? version : `${version} (need >=20.19.0)` }
@@ -40,7 +40,7 @@ export function nodeVersionCheck(rawVersion = process.version): CheckResult {
 // This package targets native Windows. It runs fine on Linux/macOS (real ptys), but
 // the tmux-based reevesagents package is the right tool there, so warn rather than
 // pretend those are the intended target.
-export function platformSupportCheck(platform = process.platform): CheckResult {
+function platformSupportCheck(platform = process.platform): CheckResult {
   if (platform === 'win32') return { name: 'platform', status: 'ok', detail: 'native Windows (ConPTY)' }
   return {
     name: 'platform',
@@ -51,7 +51,7 @@ export function platformSupportCheck(platform = process.platform): CheckResult {
 
 // The native ConPTY addon is a hard dependency here. If its prebuilt binary did not
 // install for this platform/arch, spawning any agent fails, so surface it plainly.
-export function nodePtyCheck(): CheckResult {
+function nodePtyCheck(): CheckResult {
   try {
     const requireFrom = createRequire(import.meta.url)
     const mod = requireFrom('@lydell/node-pty') as { spawn?: unknown }

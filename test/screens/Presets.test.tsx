@@ -1,16 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import React from 'react'
 import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { Presets } from '../../src/tui/screens/Presets.js'
-import * as RouterModule from '../../src/tui/router.js'
-import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
+import { Presets } from '../../src/surfaces/tui/screens/Presets.js'
+import * as RouterModule from '../../src/surfaces/tui/router.js'
+import { ToastProvider } from '../../src/surfaces/tui/contexts/ToastContext.js'
 import { savePreset } from '../../src/core/store.js'
 import type { PresetSlot } from '../../src/core/types.js'
 
-vi.mock('../../src/tui/router.js')
+vi.mock('../../src/surfaces/tui/router.js')
 
 let tmpDir: string
 

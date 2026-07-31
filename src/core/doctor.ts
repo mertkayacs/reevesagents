@@ -8,9 +8,9 @@ import type { CheckResult, Provider } from './types.js'
 import { detectAvailable, inspectProviderCompatibility } from './providers.js'
 import { listRuns, runsDir, stateRoot } from './runs.js'
 import { tmuxVersion } from './tmux.js'
-import { WEB_EXTRA_MODULES } from '../web/extras.js'
+import { WEB_EXTRA_MODULES } from '../surfaces/webui/extras.js'
 import { providerDisplayName } from '../utils/display.js'
-import { resolveLaunchCmd } from '../mcp/installer.js'
+import { resolveLaunchCmd } from '../surfaces/mcp/installer.js'
 
 export interface DoctorResult {
   checks: CheckResult[]

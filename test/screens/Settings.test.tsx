@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import React from 'react'
 import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { Router } from '../../src/tui/router.js'
+import { Router } from '../../src/surfaces/tui/router.js'
 import { loadConfig } from '../../src/core/config.js'
 
 // Pin a tall viewport so Settings renders its full layout (all languages visible)

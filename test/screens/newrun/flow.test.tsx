@@ -1,7 +1,6 @@
-import React from 'react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router } from '../../../src/tui/router.js'
+import { Router } from '../../../src/surfaces/tui/router.js'
 import * as StoreModule from '../../../src/core/store.js'
 import * as RunsModule from '../../../src/core/runs.js'
 import * as RuntimeModule from '../../../src/core/runtime.js'

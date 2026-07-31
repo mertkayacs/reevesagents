@@ -1,9 +1,8 @@
 // Tests for Dialog component: renders, focuses, keyboard navigation.
 
-import React from 'react'
 import { render } from 'ink-testing-library'
 import { expect, it, describe, vi } from 'vitest'
-import { Dialog } from '../../src/tui/components/Dialog.js'
+import { Dialog } from '../../src/surfaces/tui/components/Dialog.js'
 
 describe('Dialog', () => {
   it('renders title and body', () => {

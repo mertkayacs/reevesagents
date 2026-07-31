@@ -1,184 +1,95 @@
-# Agent Control MCP (design)
+# Agent Control MCP
 
 [Docs](README.md) / Agent Control MCP
 
-Status: implemented. The MCP server and its tools, the `reevesagents mcp`
-subcommand, the per-run agent cap, the installer engine, the run-head model, the
-Agent Control screen in both the TUI and the Web UI, and unit tests are all in
-place. The user-facing README is in place too; the steps at the end track each piece.
+The Agent Control MCP lets one AI CLI spawn and drive other local AI CLIs through
+ReevesAgents. It is off by default. Attach it to a host CLI only when you want
+that CLI to get ReevesAgents tools.
 
-## What this is
+## Enable It
 
-The main `reevesagents` package gains an optional MCP server that lets any AI
-CLI agent spawn and control other AI CLI agents: start one, type into it, send
-keys, read its output, and approve its requests.
+```sh
+reevesagents attach claude
+reevesagents hosts
+```
 
-It is a mechanism only. It stays deliberately flat: no root/child roles, no
-autonomous loops, no coordination protocol. The MCP is off by default. You turn
-it on from the TUI or the Web UI.
+Restart the attached CLI after `attach`; MCP tools load when the host CLI starts.
+Run `reevesagents attach` without a CLI name to attach every installed host that
+ReevesAgents can configure.
 
-## Mechanism, not policy
+To disconnect one host:
 
-The MCP gives the raw ability to spawn a CLI and drive it. It carries no policy:
-no roles, no rules about who may control whom, no autonomous loops. Those
-opinionated parts are deliberately left out, which keeps this surface small and
-predictable.
+```sh
+reevesagents detach claude
+```
 
-## The model: a run is a CLI plus what it spawned
+The TUI and Web UI expose the same attach, detach, and status actions from the
+Agent control screen.
 
-When an agent uses the MCP to spawn other agents, the spawning agent and the
-agents it spawned form one run.
+## How Runs Work
 
-- The spawning agent is the head of the run, shown first, at the top.
-- The agents it spawned follow, in order.
-- The whole run shows up in the TUI and Web UI like any other run.
+When a host CLI uses the MCP to spawn agents, ReevesAgents records one run:
 
-The spawning agent can be one of two things:
+- the host CLI appears as the run head when ReevesAgents can identify it
+- spawned agents follow as workers
+- windowed agents run in tmux windows
+- an external host CLI can be recorded as a headless head, since ReevesAgents
+  does not own its terminal
 
-- An agent reeves launched itself: a tmux pane reeves controls fully.
-- An external CLI the user started themselves, with the MCP attached: it is
-  recorded as a headless head. It is visible at the top of the run, but reeves
-  does not drive its pane (it is the user's own session). This reuses the
-  existing `headless` agent concept already in the code.
+Workers do not receive MCP tools automatically. Attach ReevesAgents to a worker's
+own CLI only if you explicitly want that worker to spawn more agents.
 
-Either way, the group is one run, head at the top.
+## Tools
 
-## The tool set (flat, mechanism only)
+- `list_providers`: list installed provider CLIs, aliases, model ids, and launch
+  capabilities.
+- `spawn`: start an agent, either in a new run or an existing run.
+- `read`: read recent output from one agent.
+- `send_text`: paste text into an agent. It does not submit.
+- `send_key`: send one key. Use `enter` after `send_text` to submit.
+- `interrupt`: send Ctrl-C.
+- `kill`: stop one agent.
+- `stop`: stop a run.
+- `list`: list live runs and agents.
+- `open`: switch tmux to a run or agent window when possible.
+- `reap`: end zombie agents whose tmux window is gone or whose lifetime cap is
+  exceeded.
+- `list_history`: list archived run history.
+- `delete`: delete an ended agent record.
+- `delete_run`: delete an ended run record and archive it.
+- `delete_history`: delete one archived history record.
+- `request_approval`: create an approval request for a proposed action.
+- `resolve_approval`: approve or deny a request.
+- `check_approval`: read one approval request.
+- `list_approvals`: list approval requests.
+- `get_config`: read global ReevesAgents settings.
+- `set_config`: update global ReevesAgents settings.
+- `list_presets`: list saved run presets.
+- `save_preset`: save a live run as a preset.
+- `start_preset`: launch a saved preset.
+- `delete_preset`: delete a saved preset.
+- `list_hosts`: list host CLIs that can load the MCP.
+- `attach_host`: attach ReevesAgents to a host CLI.
+- `detach_host`: detach ReevesAgents from a host CLI.
+- `install_skills`: install the ReevesAgents skill for skill-aware CLIs.
 
-Any agent that has the MCP can call any of these, on any run or agent. There are
-no roles at this layer; it is flat on purpose ("any agent can manage any
-agent").
+The provider catalog is also available as the `reevesagents://providers` MCP
+resource. The guide is available as `reevesagents://guide`.
 
-- `spawn`: start a CLI agent (a new run, or add one to an existing run). Accepts
-  `permissions` (`ask` or `skip`), `auth_mode`, and `effort` so a client can launch
-  an autonomous worker, not just an `ask` one, plus `extra_args` (a string array)
-  for provider flags the MCP does not model, appended verbatim to the launch
-- `kill`: stop one agent
-- `stop`: stop a whole run
-- `send_text`: paste text into an agent's prompt (does not submit; follow with `send_key` enter)
-- `send_key`: send one key (enter, escape, tab, space, up, down, left, right,
-  backspace, ctrl-c)
-- `interrupt`: send ctrl-c
-- `read`: read an agent's recent output
-- `list`: list runs and agents with their status
-- `open`: switch the attached tmux client to a run or agent, so an agent can surface any run for the user (its own run or another)
-- `reap`: end zombie agents now (any whose tmux window died, plus any older than `max_lifetime_ms`); also runs on a background timer
-- `list_history`: list archived run history records (ended and stale runs)
-- `list_providers`: list the CLI providers this machine can launch, with their ids,
-  install status, aliases, and known models (so an agent can discover what to spawn
-  instead of guessing provider ids)
-- `list_hosts`: list the CLIs that can host this MCP and whether each one is attached
-- `doctor`: run the environment health checks and return the results
-- `delete`: delete one ended agent's record (it must be stopped first)
-- `delete_run`: delete one ended run, archiving it to history (it must be stopped first)
-- `delete_history`: delete one archived run history record
-- `request_approval`: ask for approval before an action
-- `resolve_approval`: approve or deny a request
-- `check_approval` and `list_approvals`: read approval state
-- `get_config` and `set_config`: read and edit the same global settings the CLI,
-  TUI, and Web UI use
-- `list_presets`, `save_preset`, `start_preset`, and `delete_preset`: manage saved
-  run shapes, capture a live run as a preset, and start a new run from one
-- `attach_host` and `detach_host`: attach or detach this MCP for a host CLI, the
-  same engine behind the Agent control screen
-- `install_skills`: install the ReevesAgents skill (a `SKILL.md`) into the shared
-  `~/.claude/skills` and `~/.agents/skills` directories, so a skill-aware CLI
-  learns the drive loop; pass `{ "status": true }` to only report where it is
+## Safety Model
 
-No inbox, no task-status protocol, no role scoping here. The MCP stays a flat
-control surface by design. The delete tools mirror the Web UI delete actions and
-their ended-state guards, so anything removable in the UI is removable over MCP.
+The MCP is a direct local control surface. It can start CLIs, type into them, and
+stop them, so attach it only to CLIs you trust to drive local tools.
 
-The `list_providers` catalog is also published as an MCP resource at
-`reevesagents://providers`, so a client that prefers resources can read the same
-data without a tool call. Both are backed by the provider registry, so they never
-drift from what `spawn` accepts.
+ReevesAgents keeps the safety boundary simple:
 
-## Activation: off by default, installed from the UI
+- MCP attach is explicit and per host CLI.
+- Provider credentials stay inside provider CLIs.
+- ReevesAgents does not proxy model traffic.
+- Spawned workers do not get MCP tools by default.
+- `max_agents` caps how many agents a run can hold.
+- `max_lifetime_ms` can cap agent lifetime; `0` disables that cap.
+- `stop`, `kill`, and delete tools act only on ReevesAgents run records and tmux
+  targets tracked in local state.
 
-The main package never attaches the MCP to any CLI on its own.
-
-The TUI and Web UI gain an "Agent control" screen that lists the CLIs on this
-machine that can host an MCP server: claude, codex, kimi, qwen, opencode,
-hermes. For each one you can attach, detach, or attach all.
-
-- Attach runs that CLI's own command. The exact form varies per CLI, for example
-  `claude mcp add reevesagents -- reevesagents mcp` (claude, codex, kimi),
-  `qwen mcp add reevesagents reevesagents mcp` (qwen), and the `--command` /
-  `--args` form for hermes. reeves only calls the CLI's own command and never
-  edits provider config files by hand.
-- Detach runs the matching remove.
-- OpenCode is the exception: it has no scriptable `mcp add` for a local server, so
-  reeves attaches it by writing the `reevesagents` entry into
-  `~/.config/opencode/opencode.json` directly, and detach removes only that entry.
-- Kimi Code (the successor to the legacy Kimi CLI) also has no `kimi mcp add`; when
-  the `kimi` on PATH is Kimi Code, reeves reads its plugin/`~/.kimi-code/mcp.json`
-  state for status and attaches via that config file (skipping the write when the
-  reevesagents plugin already provides the server). The legacy Kimi CLI still uses
-  its `kimi mcp add`.
-- Codex sandboxes MCP tool calls by default, which blocks reevesagents from
-  spawning agents in tmux; run Codex with `--sandbox danger-full-access` (or a
-  profile that sets it) when driving agents.
-
-Installing it is your explicit choice. That choice is the consent. After that,
-the CLI you attached has the reeves tools whenever it starts, and nothing else
-does. A host CLI reads its MCP config only at startup, so restart it (start a new
-session) after attaching for the reevesagents tools to load.
-
-Spawned workers do not receive the MCP by default, so they cannot spawn further
-agents. To let a worker orchestrate its own sub-workers, attach the MCP to that
-worker's CLI from this same screen; it is the same explicit opt-in.
-
-## Packaging
-
-The lean MCP lives in the main package but is loaded lazily: it is only imported
-when you run `reevesagents mcp`, so the TUI and CLI bundle does not pull MCP code
-in by default. This is the same lazy-import pattern the `web` command already
-uses.
-
-## Safety
-
-The control is intentionally full: any key, any text. So the guardrails sit at
-the resource level, not the control level.
-
-- A cap on how many agents a run may hold (`max_agents`, default 100), enforced
-  when the spawn tool adds to a run.
-- A zombie reaper. On a background timer (and on the `reap` tool), any agent whose
-  tmux window has died is ended, and any agent older than `max_lifetime_ms` is
-  killed. The lifetime cap is off by default (`0`); set it to bound runaway agents
-  that never exit.
-- A cap on spawn recursion depth (A spawns B spawns C ...). Within one run the
-  tree is flat (the head and its workers are all depth one), so a depth cap is
-  trivially satisfied. Bounding cross-run recursion would require injecting the
-  parent depth into spawned workers, which this design deliberately avoids, so
-  recursion is instead bounded by `max_agents` per run plus the fact that spawned
-  workers are MCP-free by default (a worker can only recurse if the user globally
-  attached the MCP to that worker's CLI).
-
-OS isolation comes for free: each agent is a real CLI process in its own tmux
-pane. And off-by-default plus explicit install is the first guardrail.
-
-## Out of scope, on purpose
-
-- No change to the state model. The existing JSON registry and run/agent records
-  are reused. (The append-only event log from earlier research is a separate,
-  later improvement, not part of this.)
-- No roles and no autonomous loops here. The MCP is the control mechanism, and
-  nothing more.
-
-## Implementation steps
-
-Done:
-1. This design doc.
-2. Lean MCP server module: the tool handlers over the existing runtime.
-3. `reevesagents mcp` subcommand, lazily loaded.
-4. Run head model: a recognized host CLI becomes the headless head of one run.
-5. Agent Control TUI screen, using each CLI's own `mcp add` / `mcp remove`.
-6. The per-run agent cap (`max_agents`).
-7. Unit tests for the server, the installer, and the run-head model.
-8. Agent Control in the Web UI: an "Agent control" dialog over the same installer
-   engine (`GET /api/mcp-hosts` plus attach / detach / attach-all POSTs), gated to
-   loopback by the same origin guard as every other action.
-9. Provider/model discovery: the `list_providers` tool and the
-   `reevesagents://providers` resource, both built from the provider registry.
-10. The user-facing README entry (the Agent Control section).
+For the main user flow, see the [README Agent control section](../README.md#agent-control).

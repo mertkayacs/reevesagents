@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const clientRoot = join(process.cwd(), 'src/web/client')
+const clientRoot = join(process.cwd(), 'src/surfaces/webui/client')
 
 function readClientFile(name: string): string {
   return readFileSync(join(clientRoot, name), 'utf8')

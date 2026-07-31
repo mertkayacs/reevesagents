@@ -67,7 +67,7 @@ function payload(result: ToolResult): any {
 }
 
 async function call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
-  const { handleAgentMcpTool } = await import('../src/mcp/server.js')
+  const { handleAgentMcpTool } = await import('../src/surfaces/mcp/server.js')
   return handleAgentMcpTool(name, args) as ToolResult
 }
 
@@ -275,7 +275,7 @@ describe('mcp parity tools', () => {
 
   describe('tool registry', () => {
     it('advertises the new parity tools in tools/list', async () => {
-      const { MCP_TOOLS } = await import('../src/mcp/server.js')
+      const { MCP_TOOLS } = await import('../src/surfaces/mcp/server.js')
       const names = MCP_TOOLS.map(tool => tool.name)
       for (const name of ['delete', 'delete_run', 'delete_history', 'list_history', 'open']) {
         expect(names).toContain(name)
@@ -283,7 +283,7 @@ describe('mcp parity tools', () => {
     })
 
     it('advertises the spawn launch knobs in the spawn input schema', async () => {
-      const { MCP_TOOLS } = await import('../src/mcp/server.js')
+      const { MCP_TOOLS } = await import('../src/surfaces/mcp/server.js')
       const spawn = MCP_TOOLS.find(tool => tool.name === 'spawn')!
       const props = spawn.inputSchema.properties as Record<string, any>
       expect(props.permissions.enum).toEqual(['ask', 'skip'])
@@ -292,7 +292,7 @@ describe('mcp parity tools', () => {
     })
 
     it('advertises the config, preset, host, doctor, reap, and skills tools', async () => {
-      const { MCP_TOOLS } = await import('../src/mcp/server.js')
+      const { MCP_TOOLS } = await import('../src/surfaces/mcp/server.js')
       const names = MCP_TOOLS.map(tool => tool.name)
       for (const name of ['doctor', 'get_config', 'set_config', 'list_presets', 'save_preset', 'start_preset', 'delete_preset', 'list_hosts', 'attach_host', 'detach_host', 'reap', 'install_skills']) {
         expect(names).toContain(name)
@@ -321,14 +321,14 @@ describe('mcp parity tools', () => {
 
   describe('resources and instructions', () => {
     it('advertises the providers and guide resources', async () => {
-      const { listMcpResources } = await import('../src/mcp/server.js')
+      const { listMcpResources } = await import('../src/surfaces/mcp/server.js')
       const uris = listMcpResources().map(r => r.uri)
       expect(uris).toContain('reevesagents://providers')
       expect(uris).toContain('reevesagents://guide')
     })
 
     it('reads the guide resource as markdown that names the drive loop', async () => {
-      const { readMcpResource } = await import('../src/mcp/server.js')
+      const { readMcpResource } = await import('../src/surfaces/mcp/server.js')
       const guide = readMcpResource('reevesagents://guide')
       expect(guide.mimeType).toBe('text/markdown')
       expect(guide.text).toMatch(/list_providers/)
@@ -336,12 +336,12 @@ describe('mcp parity tools', () => {
     })
 
     it('rejects an unknown resource uri', async () => {
-      const { readMcpResource } = await import('../src/mcp/server.js')
+      const { readMcpResource } = await import('../src/surfaces/mcp/server.js')
       expect(() => readMcpResource('reevesagents://nope')).toThrow(/Unknown resource/)
     })
 
     it('the connect-time instructions name the drive-loop tools', async () => {
-      const { MCP_INSTRUCTIONS } = await import('../src/mcp/server.js')
+      const { MCP_INSTRUCTIONS } = await import('../src/surfaces/mcp/server.js')
       for (const cmd of ['list_providers', 'spawn', 'send_text', 'send_key', 'read']) {
         expect(MCP_INSTRUCTIONS).toContain(cmd)
       }

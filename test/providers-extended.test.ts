@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildCommand } from '../src/core/providers.js'
 
-describe('buildCommand — extended providers', () => {
+describe('buildCommand: extended providers', () => {
   describe('hermes', () => {
     it('binary is hermes', () => {
       expect(buildCommand({ provider: 'hermes', permissions: 'ask', model: '' })[0]).toBe('hermes')

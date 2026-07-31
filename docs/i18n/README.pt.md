@@ -461,9 +461,9 @@ uma porta de arranque diferente.
 
 Para execuções de agentes normais e estáveis não precisa de nada disto: chaves
 de API guardadas pelo ReevesAgents, base de dados, Docker, um serviço em
-segundo plano ou configuração de MCP. A instalação é passiva, porque o pacote
-estável não tem script de postinstall e não reescreve a configuração dos
-fornecedores. Associar o MCP de Agent Control é o único passo explícito e
+segundo plano ou configuração de MCP. A instalação é passiva: não reescreve a
+configuração dos fornecedores, e uma instalação global mostra apenas uma dica curta.
+Associar o MCP de Agent Control é o único passo explícito e
 opcional que toca na configuração do fornecedor, e mesmo esse passa apenas pelo
 próprio comando `mcp add` de cada CLI.
 
@@ -471,8 +471,7 @@ próprio comando `mcp add` de cada CLI.
 
 Consulte [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) para os ramos e o fluxo de
 pull requests, [SECURITY.md](../../.github/SECURITY.md) para reportar vulnerabilidades, e
-[CHANGELOG.md](../../CHANGELOG.md) para as alterações recentes. O modelo de design fica
-em [REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) e a documentação para
+[CHANGELOG.md](../../CHANGELOG.md) para as alterações recentes. A documentação para
 contribuidores está em [docs/](..).
 
 Os utilizadores finais não precisam da toolchain de desenvolvimento. Os

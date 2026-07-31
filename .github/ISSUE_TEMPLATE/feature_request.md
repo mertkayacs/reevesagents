@@ -15,7 +15,7 @@ assignees: ""
 ## Target Surface
 
 - [ ] Stable CLI/TUI
-- [ ] Web UI beta
+- [ ] Web UI
 - [ ] Docs or release packaging
 
 ## Constraints

@@ -1,5 +1,5 @@
 // Attach or detach the reevesagents-win MCP server to the local AI CLIs that can
-// host it. A Windows port of the unix src/mcp/installer.ts: same structure (HOSTS
+// host it. A Windows port of the unix src/surfaces/mcp/installer.ts: same structure (HOSTS
 // table, attach/detach/hostStatus/attachAll, resolveLaunchCmd, verifyServerLaunch),
 // with three Windows-specific changes:
 //   1. bin discovery uses `where` (which resolves the .cmd shim) instead of `which`;

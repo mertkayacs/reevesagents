@@ -1,4 +1,4 @@
-// Verifies the published root package stays spawner-only.
+// Verifies the published package contains only intended files.
 
 import { execFileSync } from 'node:child_process'
 
@@ -17,6 +17,7 @@ const required = new Set([
   'dist/web/xterm.js',
   'dist/web/xterm.css',
   'dist/web/addon-fit.js',
+  'dist/web/brand-duck.json',
 ])
 
 const forbiddenPrefixes = [
@@ -51,7 +52,7 @@ for (const path of files) {
     fail(`package includes forbidden path: ${path}`)
   }
   if (forbiddenSubstrings.some(value => path.includes(value))) {
-    fail(`package includes forbidden internal source path: ${path}`)
+    fail(`package includes forbidden source path: ${path}`)
   }
 }
 

@@ -4,7 +4,7 @@ import { render } from 'ink-testing-library'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { ScreenName } from '../src/tui/types.js'
+import type { ScreenName } from '../src/surfaces/tui/types.js'
 
 // Mock child_process so the setup screen's environment probe (which / tmux -V /
 // mcp list) is fast and deterministic and never runs a real CLI.
@@ -34,7 +34,7 @@ afterEach(() => {
 
 describe('Setup screen', () => {
   it('renders the wizard in English', async () => {
-    const { Router } = await import('../src/tui/router.js')
+    const { Router } = await import('../src/surfaces/tui/router.js')
     const Component = Router as React.ComponentType<{ initialScreen?: ScreenName }>
     const { lastFrame, unmount } = render(React.createElement(Component, { initialScreen: 'Setup' }))
     expect(lastFrame() ?? '').toContain('Get started')
@@ -43,7 +43,7 @@ describe('Setup screen', () => {
 
   it('localizes the wizard from the saved language', async () => {
     writeFileSync(join(tmp, 'config.json'), JSON.stringify({ version: 2, global: { language: 'tr' } }), 'utf8')
-    const { Router } = await import('../src/tui/router.js')
+    const { Router } = await import('../src/surfaces/tui/router.js')
     const Component = Router as React.ComponentType<{ initialScreen?: ScreenName }>
     const { lastFrame, unmount } = render(React.createElement(Component, { initialScreen: 'Setup' }))
     expect(lastFrame() ?? '').toContain('Başlarken')

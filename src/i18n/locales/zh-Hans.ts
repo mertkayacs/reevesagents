@@ -539,7 +539,7 @@ export const zhHans = {
     'peek interval (ms)': '查看间隔 (ms)',
     'peek lines': '查看行数',
     'pending': '待处理',
-    'planned public install channels': '计划中的公开安装渠道',
+    'public install channels': '公开安装渠道',
     'presets': '预设',
     'press Esc to go back': '按 esc 返回',
     'provider': '服务商',

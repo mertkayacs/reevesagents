@@ -38,7 +38,7 @@ afterEach(() => {
 // stub process.exit so action-level error exits surface as throws too.
 async function loadCli() {
   vi.resetModules()
-  const { program } = await import('../src/cli/index.js')
+  const { program } = await import('../src/surfaces/cli/index.js')
   program.exitOverride()
   return program
 }

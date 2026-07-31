@@ -1,15 +1,14 @@
 // Tests for AgentDetail screen: metadata display, sub-page links, actions.
 
-import React from 'react'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router, RouterContext } from '../../src/tui/router.js'
-import { AgentDetail } from '../../src/tui/screens/run/AgentDetail.js'
-import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
+import { Router, RouterContext } from '../../src/surfaces/tui/router.js'
+import { AgentDetail } from '../../src/surfaces/tui/screens/run/AgentDetail.js'
+import { ToastProvider } from '../../src/surfaces/tui/contexts/ToastContext.js'
 import * as runsState from '../../src/core/runs.js'
 import * as runtime from '../../src/core/runtime.js'
 import type { RunRecord, AgentRecord } from '../../src/core/types.js'
-import type { RouterContextValue } from '../../src/tui/types.js'
+import type { RouterContextValue } from '../../src/surfaces/tui/types.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 75))
 

@@ -29,6 +29,14 @@ pnpm verify     # typecheck, lint, test, build, smoke. Must pass first.
 pnpm release    # everything below, in one step.
 ```
 
+For a release-surface change, run the install matrix before the release command:
+
+```sh
+pnpm verify
+pnpm check:install-matrix
+pnpm release
+```
+
 `pnpm release` runs `release-it`, which:
 
 1. Reads the commits since the last tag and picks the next version.
@@ -73,8 +81,8 @@ A release reaches these places:
    its Actions tab) and points `Formula/reevesagents.rb` at the latest npm version
    (url + sha256), so `brew upgrade reevesagents` tracks npm. It commits with the
    tap's own `GITHUB_TOKEN`, so no cross-repo token is needed here. After a
-   release you can trigger it by hand for an immediate bump instead of waiting for
-   the daily run.
+   release, trigger that workflow by hand for an immediate bump instead of waiting
+   for the daily run.
 
 Not used, on purpose: JSR is for packages you `import`, and reevesagents is a CLI
 (a `bin`), so it does not fit. GitHub Packages would only duplicate the public
@@ -101,9 +109,18 @@ workflows already request `id-token: write`, use `npm` 11.5.1+, and pass
 ## If a release goes wrong
 
 If the publish workflow fails after the tag is pushed (for example a failing
-`verify:release`), npm is not published, so the npm registry is unaffected. Fix
-the problem on `master`, remove the bad tag locally and on the remote, delete the
-GitHub release if one was created, then run `pnpm release` again:
+`verify:release`), first check whether the version reached npm:
+
+```sh
+npm view reevesagents@X.Y.Z version
+```
+
+If npm has that version, do not delete and recreate the tag. Fix the problem and
+ship the next patch release.
+
+If npm does not have that version, fix the problem on `master`, remove the bad
+tag locally and on the remote, delete the GitHub release if one was created, then
+run `pnpm release` again:
 
 ```sh
 git tag -d vX.Y.Z

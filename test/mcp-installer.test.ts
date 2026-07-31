@@ -12,7 +12,7 @@ vi.mock('node:child_process', () => ({ execFileSync }))
 // Import the module under test fresh after the mock is in place. The installer
 // reads execFileSync lazily inside each function, so one import is enough.
 async function loadInstaller() {
-  return import('../src/mcp/installer.js')
+  return import('../src/surfaces/mcp/installer.js')
 }
 
 // A tiny fake host environment. `installed` lists the bins that `which` finds;
@@ -137,7 +137,7 @@ describe('mcp installer', () => {
     })
   })
 
-  describe('isAttached regex robustness', () => {
+  describe('isAttached regex coverage', () => {
     it('does NOT count a reevesagents-prefixed sibling as attached', async () => {
       // A differently-named sibling whose name only differs by a suffix (here
       // reevesagents-extras) must be rejected by the negative lookahead in the

@@ -517,7 +517,7 @@ export const fr = {
     'peek interval (ms)': 'Intervalle d\'aperçu (ms)',
     'peek lines': 'Lignes d\'aperçu',
     'pending': 'en attente',
-    'planned public install channels': 'canaux d\'installation publics prévus',
+    'public install channels': 'canaux d\'installation publics',
     'presets': 'préréglages',
     'press Esc to go back': 'appuyez sur Esc pour revenir',
     'provider': 'fournisseur',

@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes target the current `1.3.x` release line.
+Security fixes target the current `1.7.x` release line.
 
 ## Reporting A Vulnerability
 
@@ -26,4 +26,4 @@ ReevesAgents is a local tmux-first tool. The stable package should not:
 - Store provider credentials.
 - Start background services.
 - Bind Web UI outside loopback.
-- Write provider MCP config.
+- Write provider MCP config without an explicit `reevesagents attach` action.

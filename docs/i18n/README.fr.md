@@ -379,11 +379,11 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## Non requis
 
-Pour des runs d'agents normaux et stables, vous n'avez besoin ni de clés API stockées par ReevesAgents, ni de base de données, ni de Docker, pas plus que d'un service en arrière-plan ou d'une configuration MCP. L'installation est passive : le paquet stable n'a pas de script postinstall et ne réécrit pas la configuration des fournisseurs. Attacher le MCP Agent Control est la seule étape explicite et opt-in qui touche à la configuration des fournisseurs, et encore, uniquement via la propre commande `mcp add` de chaque CLI.
+Pour des runs d'agents normaux et stables, vous n'avez besoin ni de clés API stockées par ReevesAgents, ni de base de données, ni de Docker, pas plus que d'un service en arrière-plan ou d'une configuration MCP. L'installation est passive : elle ne réécrit pas la configuration des fournisseurs, et une installation globale n'affiche qu'un court rappel. Attacher le MCP Agent Control est la seule étape explicite et opt-in qui touche à la configuration des fournisseurs, et encore, uniquement via la propre commande `mcp add` de chaque CLI.
 
 ## Contribuer
 
-Voir [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) pour les branches et le flux des pull requests, [SECURITY.md](../../.github/SECURITY.md) pour signaler des vulnérabilités, et [CHANGELOG.md](../../CHANGELOG.md) pour les changements récents. Le modèle de conception se trouve dans [REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) et la documentation pour les contributeurs est sous [docs/](..).
+Voir [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) pour les branches et le flux des pull requests, [SECURITY.md](../../.github/SECURITY.md) pour signaler des vulnérabilités, et [CHANGELOG.md](../../CHANGELOG.md) pour les changements récents. La documentation pour les contributeurs est sous [docs/](..).
 
 Les utilisateurs finaux n'ont pas besoin de la chaîne d'outils de développement. Côté contributeurs, on travaille avec pnpm, TypeScript, tsup, Vitest et ESLint, directement depuis le dépôt.
 

@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import React from 'react'
 import { render } from 'ink-testing-library'
-import { Legend } from '../../src/tui/components/Legend.js'
-import { colors } from '../../src/tui/utils/tokens.js'
-import { glyphs } from '../../src/tui/utils/glyphs.js'
+import { Legend } from '../../src/surfaces/tui/components/Legend.js'
+import { colors } from '../../src/surfaces/tui/utils/tokens.js'
+import { glyphs } from '../../src/surfaces/tui/utils/glyphs.js'
 
 describe('Legend', () => {
   it('renders single item', () => {

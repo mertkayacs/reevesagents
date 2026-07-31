@@ -13,7 +13,7 @@ import {
   type AttachResult,
   type HostStatus,
   type VerifyResult,
-} from '../mcp/installer.js'
+} from '../surfaces/mcp/installer.js'
 import { installSkills, type SkillActionResult } from './skills.js'
 import type { Provider } from './types.js'
 

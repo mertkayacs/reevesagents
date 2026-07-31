@@ -438,8 +438,8 @@ l'URL che ha scelto. Con `--port <n>` decidi tu da dove partire.
 
 Per i normali run stabili di agenti non servono chiavi API custodite da ReevesAgents,
 né un database, né Docker, né un servizio in background, né alcuna configurazione MCP.
-L'installazione è passiva: il pacchetto stabile non ha script di postinstall e non
-riscrive la configurazione dei provider. Collegare l'MCP di Controllo agenti è l'unico
+L'installazione è passiva: non riscrive la configurazione dei provider e
+l'installazione globale mostra solo un breve suggerimento. Collegare l'MCP di Controllo agenti è l'unico
 passaggio esplicito e opt-in che tocca la configurazione dei provider, e passa solo dal
 comando `mcp add` di ciascuna CLI.
 
@@ -447,8 +447,7 @@ comando `mcp add` di ciascuna CLI.
 
 Vedi [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) per i branch e il flusso di pull request,
 [SECURITY.md](../../.github/SECURITY.md) per segnalare vulnerabilità e
-[CHANGELOG.md](../../CHANGELOG.md) per le modifiche recenti. Il modello di design si trova in
-[REEVESAGENTS_DESIGN.md](../REEVESAGENTS_DESIGN.md) e la documentazione per i contributori è
+[CHANGELOG.md](../../CHANGELOG.md) per le modifiche recenti. La documentazione per i contributori è
 sotto [docs/](..).
 
 Gli utenti finali non hanno bisogno della toolchain di sviluppo. I contributori usano pnpm,

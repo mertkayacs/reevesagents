@@ -70,7 +70,7 @@ function payload(result: ToolResult): any {
 }
 
 async function call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
-  const { handleAgentMcpTool } = await import('../src/mcp/server.js')
+  const { handleAgentMcpTool } = await import('../src/surfaces/mcp/server.js')
   return handleAgentMcpTool(name, args) as ToolResult
 }
 
@@ -249,7 +249,7 @@ describe('handleAgentMcpTool extra surfaces', () => {
 
 describe('mcp installer extra', () => {
   async function loadInstaller() {
-    return import('../src/mcp/installer.js')
+    return import('../src/surfaces/mcp/installer.js')
   }
 
   it('detaches a drivable host: runs mcp remove and returns ok:true', async () => {

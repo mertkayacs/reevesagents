@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hostOnly, isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from '../../src/web/guards.js'
+import { hostOnly, isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from '../../src/surfaces/webui/guards.js'
 
 describe('hostOnly', () => {
   it('strips the port from host:port', () => {

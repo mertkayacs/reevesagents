@@ -33,11 +33,10 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli && pnpm check:package",
     "verify:release": "pnpm verify && pnpm check:install-matrix",
     "release": "release-it",
-    "postinstall": "node -e \"try{process.env.npm_config_global==='true'&&process.stdout.isTTY&&!process.env.CI&&process.stdout.write('\\nReevesAgents installed. Run: reevesagents attach  to connect your AI CLIs, then restart them.\\n\\n')}catch(e){}\""
+    "postinstall": "node -e \"try{process.env.npm_config_global==='true'&&process.stdout.isTTY&&!process.env.CI&&process.stdout.write('\\nReevesAgents installed. Run: reevesagents attach to connect your AI CLIs, then restart them.\\n\\n')}catch(e){}\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "chalk": "^5.6.2",
     "commander": "^14.0.3",
     "ink": "^7.0.2",
     "react": "^19.2.6",

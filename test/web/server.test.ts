@@ -3,7 +3,7 @@ import { request } from 'node:http'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { startWebServer, type WebServerHandle } from '../../src/web/server.js'
+import { startWebServer, type WebServerHandle } from '../../src/surfaces/webui/server.js'
 import { PROVIDERS } from '../../src/core/providers.js'
 
 let tmpDir: string

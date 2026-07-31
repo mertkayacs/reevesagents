@@ -524,7 +524,7 @@ export const it = {
     'peek interval (ms)': 'Intervallo anteprima (ms)',
     'peek lines': 'Righe anteprima',
     'pending': 'in sospeso',
-    'planned public install channels': 'canali di installazione pubblici previsti',
+    'public install channels': 'canali di installazione pubblici',
     'presets': 'preset',
     'press Esc to go back': 'premi Esc per tornare indietro',
     'provider agent inside the run session': 'agente del provider nella sessione del run',

@@ -1,16 +1,15 @@
 // Tests for AgentKill screen: confirm dialog, root agent check.
 // Note: selectedAgentId routing requires full app context, so we test error handling.
 
-import React from 'react'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { render } from 'ink-testing-library'
-import { Router, RouterContext } from '../../src/tui/router.js'
-import { AgentKill } from '../../src/tui/screens/run/AgentKill.js'
-import { ToastProvider } from '../../src/tui/contexts/ToastContext.js'
+import { Router, RouterContext } from '../../src/surfaces/tui/router.js'
+import { AgentKill } from '../../src/surfaces/tui/screens/run/AgentKill.js'
+import { ToastProvider } from '../../src/surfaces/tui/contexts/ToastContext.js'
 import * as runsState from '../../src/core/runs.js'
 import * as runtime from '../../src/core/runtime.js'
 import type { AgentRecord, RunRecord } from '../../src/core/types.js'
-import type { RouterContextValue } from '../../src/tui/types.js'
+import type { RouterContextValue } from '../../src/surfaces/tui/types.js'
 
 const waitForInput = () => new Promise(resolve => setTimeout(resolve, 75))
 
