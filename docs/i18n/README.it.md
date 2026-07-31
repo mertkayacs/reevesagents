@@ -103,7 +103,7 @@ reevesagents
 ```
 
 Per bloccare una versione precisa, aggiungi `@<version>` al nome del pacchetto, per esempio
-`pnpm add -g reevesagents@1.4.0`.
+`pnpm add -g reevesagents@<version>`.
 
 <details>
 <summary><b>pnpm</b></summary>

@@ -7,8 +7,8 @@ Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerin
 ## ReevesAgents nedir
 
 - AI kodlama agent'larınızın (Claude Code, Codex, Hermes, DeepSeek, Kimi ve daha fazlası) makinenizde yan yana çalıştığı ücretsiz, yerel bir çalışma alanı.
-- İşi ilginç kılan taraf şu: bir agent diğerlerini oluşturup yönetebilir. Dizginleri bir Claude Code oturumuna bırakın, ayrı görevlere dağılmış Codex ve Claude Code agent'larından kurulu bir takımı seve seve koşturur.
-- Yine de bunu kullanmak zorunda değilsiniz. En basit giriş yolu bir çalışma alanı: istediğiniz agent'ları oluşturun ve `reevesagents add` ile eklemeye devam edin. Öylece yan yana dururlar; siz MCP'yi devreye alana kadar kimse kimseyi kontrol etmez.
+- Bir agent MCP üzerinden diğerlerini oluşturup yönetebilir. Örneğin bir Claude Code oturumu, ayrı görevlere atanmış Codex ve Claude Code agent'larını çalıştırabilir.
+- ReevesAgents'ı düz bir çalışma alanı olarak da kullanabilirsiniz: istediğiniz agent'ları oluşturun ve `reevesagents add` ile eklemeye devam edin. Yan yana dururlar; siz MCP'yi devreye alana kadar kimse kimseyi kontrol etmez.
 - Zaten elinizde olan CLI'lerin üstüne oturur, bu yüzden her giriş öteden beri durduğu yerde kalır. ReevesAgents hiçbir zaman API anahtarı tutmaz, model trafiğinize de elini sürmez.
 - Bütün durumu `~/.reeves` altındaki bir avuç JSON'dan ibaret. Ayakta tutulacak bir veritabanı, çekilecek bir Docker imajı, arka planda bekleyen bir süreç yok.
 

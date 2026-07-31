@@ -7,8 +7,8 @@
 ## ReevesAgents 是什么
 
 - 一个免费的本地工作区，你的 AI 编码智能体（Claude Code、Codex、Hermes、DeepSeek、Kimi 等）在你的机器上并肩干活。
-- 有意思的正是这一点：一个智能体可以创建并驱动其余的。把缰绳交给一个 Claude Code 会话，它就会很乐意带一队 Codex 和 Claude Code 智能体，分头处理各自的任务。
-- 不过，你并不是非得用它。最简单的上手方式就是把它当成一个工作区：生成你想要的智能体，再用 `reevesagents add` 不断往里加。它们只是并排待着，谁也不控制谁，直到你主动开启 MCP。
+- 一个智能体可以通过 MCP 创建并驱动其他智能体。例如，一个 Claude Code 会话可以让 Codex 和 Claude Code 智能体分别处理不同任务。
+- 你也可以把 ReevesAgents 当成普通工作区：生成你想要的智能体，再用 `reevesagents add` 不断往里加。它们并排运行，谁也不控制谁，直到你主动开启 MCP。
 - 它架在你已有的 CLI 之上，所以每一份登录信息都待在原来的地方。ReevesAgents 从不持有 API 密钥，也从不碰你的模型流量。
 - 它的全部状态就是 `~/.reeves` 下的一点 JSON。没有要跑的数据库，没有要拉的 Docker，后台也没有任何东西守着。
 

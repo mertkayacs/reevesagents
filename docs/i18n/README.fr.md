@@ -100,7 +100,7 @@ reevesagents doctor
 reevesagents
 ```
 
-Pour figer une version, ajoutez `@<version>` au nom du paquet, par exemple `pnpm add -g reevesagents@1.4.0`.
+Pour figer une version, ajoutez `@<version>` au nom du paquet, par exemple `pnpm add -g reevesagents@<version>`.
 
 <details>
 <summary><b>pnpm</b></summary>

@@ -40,9 +40,10 @@ jobs:
       - run: pnpm verify:release
 
       # npm 11.5.1+ is required for OIDC trusted publishing (and ships automatic
-      # provenance). setup-node's bundled npm is older.
-      - name: Use latest npm
-        run: npm install -g npm@latest
+      # provenance). Keep this pinned so a new npm major cannot change the Node
+      # engine requirement under the release workflow.
+      - name: Use npm 11 for publishing
+        run: npm install -g npm@11.5.1
 
       # Publishes the package built by verify:release. Uses npm OIDC trusted
       # publishing when a trusted publisher is configured for this package on

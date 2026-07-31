@@ -10,13 +10,13 @@ Option brauchst: Das steht in der [README](i18n/README.de.md).
 
 - Ein kostenloser, lokaler Arbeitsbereich, in dem deine KI-Coding-Agenten (Claude Code,
   Codex, Hermes, DeepSeek, Kimi und weitere) Seite an Seite auf deiner Maschine arbeiten.
-- Der Teil, der es interessant macht: Ein Agent kann die anderen erstellen und steuern.
-  Gib einer Claude-Code-Sitzung die Zügel, und sie betreibt dir bereitwillig ein Team
-  aus Codex- und Claude-Code-Agenten an getrennten Aufgaben.
-- Du musst das aber nicht nutzen. Der einfachste Einstieg ist ein Arbeitsbereich:
-  Spawne die gewünschten Agenten und füge mit `reevesagents add` immer weitere hinzu.
-  Sie sitzen einfach nebeneinander, und niemand steuert irgendwen, bis du dich für
-  den MCP entscheidest.
+- Ein Agent kann die anderen per MCP erstellen und steuern. Eine
+  Claude-Code-Sitzung kann zum Beispiel Codex- und Claude-Code-Agenten an
+  getrennten Aufgaben betreiben.
+- Du kannst ReevesAgents auch als normalen Arbeitsbereich nutzen: Spawne die
+  gewünschten Agenten und füge mit `reevesagents add` immer weitere hinzu. Sie
+  laufen nebeneinander, und niemand steuert irgendwen, bis du dich für den MCP
+  entscheidest.
 - Es setzt auf den CLIs auf, die du ohnehin hast, jedes Login bleibt also da, wo es
   immer war. ReevesAgents hält nie einen API-Schlüssel und rührt deinen Modell-Traffic
   nicht an.
