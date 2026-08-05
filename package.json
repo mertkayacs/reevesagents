@@ -3,7 +3,7 @@
   "version": "1.7.4",
   "description": "Local tmux-first workspace manager for AI CLI agents",
   "type": "module",
-  "packageManager": "pnpm@10.34.1",
+  "packageManager": "pnpm@10.34.5",
   "bin": {
     "reevesagents": "dist/cli.js"
   },
