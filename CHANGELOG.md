@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.5](https://github.com/mertkayacs/reevesagents/compare/v1.7.4...v1.7.5) (2026-08-06)
+
+
+### Bug Fixes
+
+* **core:** kill tmux sessions and pane processes before their records disappear ([6ec0460](https://github.com/mertkayacs/reevesagents/commit/6ec046004abc7dcb4730c3308f0d31a143e10a8a)), closes [#48](https://github.com/mertkayacs/reevesagents/issues/48) [#49](https://github.com/mertkayacs/reevesagents/issues/49) [#50](https://github.com/mertkayacs/reevesagents/issues/50) [#51](https://github.com/mertkayacs/reevesagents/issues/51) [#52](https://github.com/mertkayacs/reevesagents/issues/52)
+* **core:** stop leaking tmux sessions and agent processes across the run lifecycle ([cf185d8](https://github.com/mertkayacs/reevesagents/commit/cf185d884ea41f763536b49ecbac4f7c82e44bc1))
+* **win:** sync shared types with the unix catalog (pane_pid) ([1913273](https://github.com/mertkayacs/reevesagents/commit/19132738b93b5dc64e65b1ff5c732e3bc22dd318))
+
+
+### Performance Improvements
+
+* **core:** batch sweep probes into one server-wide tmux enumeration ([7d3f26a](https://github.com/mertkayacs/reevesagents/commit/7d3f26a0fa7bdb85ffcfa6680d47ec311e080eeb)), closes [#53](https://github.com/mertkayacs/reevesagents/issues/53)
+
 ## [1.7.4](https://github.com/mertkayacs/reevesagents/compare/v1.7.3...v1.7.4) (2026-07-31)
 
 
