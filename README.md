@@ -4,28 +4,18 @@
   </a>
 </p>
 
-[![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
-[![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
-[![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
-[![license](https://img.shields.io/npm/l/reevesagents.svg)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
-
-<h3 align="center"><a href="https://reevesagents.mertkayacs.com">reevesagents.mertkayacs.com</a></h3>
+<p align="center">
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/v/reevesagents.svg" alt="npm version" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/reevesagents.svg" alt="node" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/reevesagents.svg" alt="license" /></a>
+  <a href="https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI" alt="CI" /></a>
+</p>
 
 <p align="center">
   <a href="https://reevesagents.mertkayacs.com/demo"><b>Demo</b></a> ·
   <a href="https://reevesagents.mertkayacs.com/docs"><b>Docs</b></a> ·
   <a href="https://reevesagents.mertkayacs.com/faq"><b>FAQ</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
-</p>
-
-<p align="center">
-  <a href="#quick-start"><b>Quick Start</b></a> ·
-  <a href="#install"><b>Install</b></a> ·
-  <a href="#commands"><b>Commands</b></a> ·
-  <a href="#agent-control"><b>Agent Control</b></a> ·
-  <a href="#web-ui"><b>Web UI</b></a> ·
-  <a href="#configuration"><b>Config</b></a>
 </p>
 
 **English** · [Deutsch](docs/i18n/README.de.md) · [Français](docs/i18n/README.fr.md) · [Español](docs/i18n/README.es.md) · [Português](docs/i18n/README.pt.md) · [Italiano](docs/i18n/README.it.md) · [Türkçe](docs/i18n/README.tr.md) · [Русский](docs/i18n/README.ru.md) · [简体中文](docs/i18n/README.zh-Hans.md) · [العربية](docs/i18n/README.ar.md)
@@ -177,7 +167,7 @@ No arguments launches the TUI.
 | `delete-run` | Delete one ended run and archive it. Requires confirmation. |
 | `history` | List archived runs. |
 | `delete-history` | Delete one archived history record. Requires confirmation. |
-| `reap` | End zombie agents and agents past `max_lifetime_ms`. |
+| `reap` | End zombie agents and agents past `max_lifetime_ms`, and kill orphan tmux sessions no run record owns. |
 
 Common flags:
 
@@ -238,6 +228,10 @@ Two environment variables override the default paths:
 
 - `REEVES_REGISTRY`: state root override for `runs/`, `history/`, and `presets/`.
 - `REEVES_CONFIG`: config file path override.
+
+One registry per tmux server: the background orphan sweep judges session
+ownership against the current registry, so two registries must not share one
+tmux server.
 
 Anything that might contain a secret is scrubbed before it reaches a file.
 
@@ -335,7 +329,3 @@ TypeScript, tsup, Vitest, and ESLint from the repository.
 - Issues: https://github.com/mertkayacs/reevesagents/issues
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 - License: [Apache-2.0](LICENSE)
-
-## License
-
-Apache-2.0
