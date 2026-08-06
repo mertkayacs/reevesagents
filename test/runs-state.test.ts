@@ -129,16 +129,15 @@ describe('v1 run state', () => {
     expect(readAgent('headless', 'root').headless).toBe(true)
   })
 
-  it('updates and heartbeats agents', async () => {
-    const { writeRun, writeAgent, updateAgent, heartbeatAgent, readAgent } = await import('../src/core/runs.js')
+  it('updates agents', async () => {
+    const { writeRun, writeAgent, updateAgent, readAgent } = await import('../src/core/runs.js')
     writeRun(makeRun('r6'))
     writeAgent(makeAgent('a1', 'r6', { last_seen: 1 }))
     updateAgent('r6', 'a1', { task_status: 'working', task_note: 'running tests' })
-    heartbeatAgent('r6', 'a1')
     const agent = readAgent('r6', 'a1')
     expect(agent.task_status).toBe('working')
     expect(agent.task_note).toBe('running tests')
-    expect(agent.last_seen).toBeGreaterThan(1)
+    expect(agent.last_seen).toBe(1)
   })
 
   it('redacts agent task, note, and inbox message text before writing', async () => {
@@ -318,6 +317,78 @@ describe('v1 run state', () => {
 
       expect(result.removed).toContain('window-stale')
       expect(existsSync(join(tmpDir, 'runs', 'window-stale'))).toBe(false)
+    })
+
+    it('kills the pinned run session and its viewers before archiving a stale run', async () => {
+      const { writeRun, writeAgent, autoCleanupRuns, listRunHistory } = await import('../src/core/runs.js')
+      writeRun(makeRun('pinned', { root_agent_id: 'root' }))
+      writeAgent(makeAgent('root', 'pinned', { role: 'root', tmux_window_id: '@dead', tmux_pane_id: '%dead' }))
+
+      const calls: string[] = []
+      const result = autoCleanupRuns({
+        sessionExists: () => true,
+        targetExists: () => false,
+        killViewers: session => calls.push(`viewers:${session}`),
+        killSession: session => calls.push(`session:${session}`),
+      })
+
+      expect(result.removed).toContain('pinned')
+      expect(listRunHistory()[0]?.status).toBe('stale')
+      // Viewers die before the run session so neither keeps the other's windows alive.
+      expect(calls).toEqual([`viewers:${'reeves_pinned'}`, `session:${'reeves_pinned'}`])
+    })
+
+    it('does not kill sessions for ended runs (their teardown already ran)', async () => {
+      const { writeRun, autoCleanupRuns } = await import('../src/core/runs.js')
+      writeRun(makeRun('ended-run', { status: 'ended', ended_at: '2026-01-01T00:00:01.000Z' }))
+
+      const calls: string[] = []
+      const result = autoCleanupRuns({
+        sessionExists: () => true,
+        killViewers: session => calls.push(`viewers:${session}`),
+        killSession: session => calls.push(`session:${session}`),
+      })
+
+      expect(result.removed).toContain('ended-run')
+      expect(calls).toEqual([])
+    })
+
+    it('archives a stale run whose session is gone, still sweeping its viewers', async () => {
+      const { writeRun, autoCleanupRuns } = await import('../src/core/runs.js')
+      writeRun(makeRun('gone-run'))
+
+      const calls: string[] = []
+      const result = autoCleanupRuns({
+        sessionExists: () => false,
+        killViewers: session => calls.push(`viewers:${session}`),
+        killSession: session => calls.push(`session:${session}`),
+      })
+
+      expect(result.removed).toContain('gone-run')
+      // The run session is already dead, but grouped viewers can outlive it and
+      // stay identifiable by group name, so the viewer sweep runs regardless.
+      expect(calls).toEqual(['viewers:reeves_gone-run'])
+    })
+
+    it('escalates stubborn pane processes when archiving a stale run', async () => {
+      const { writeRun, writeAgent, autoCleanupRuns } = await import('../src/core/runs.js')
+      const { spawn } = await import('node:child_process')
+      writeRun(makeRun('stubborn-run', { root_agent_id: 'root' }))
+      // A SIGHUP/SIGTERM-ignoring CLI: only the SIGKILL escalation can end it.
+      const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.on("SIGHUP", () => {}); setInterval(() => {}, 1000)'])
+      const exited = new Promise<string>(resolve => child.once('exit', () => resolve('exited')))
+      writeAgent(makeAgent('root', 'stubborn-run', { role: 'root', tmux_window_id: '@dead', tmux_pane_id: '%dead', pane_pid: child.pid }))
+
+      const result = autoCleanupRuns({
+        sessionExists: () => true,
+        targetExists: () => false,
+        killViewers: () => {},
+        killSession: () => {},
+      })
+
+      expect(result.removed).toContain('stubborn-run')
+      const timeout = new Promise<string>(resolve => setTimeout(() => resolve('alive'), 3000))
+      expect(await Promise.race([exited, timeout])).toBe('exited')
     })
 
     it('cleans only dead and keeps live ones in a mixed registry', async () => {

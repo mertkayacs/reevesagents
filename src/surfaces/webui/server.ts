@@ -31,6 +31,7 @@ import {
   listRunHistory,
   readRun,
 } from '../../core/runs.js'
+import { sweepAgentsThrottled, sweepOrphanSessionsThrottled } from '../../core/reaper.js'
 import { resolveRunApproval } from '../../core/approvals.js'
 import { runDoctor } from '../../core/doctor.js'
 import { REEVESAGENTS_VERSION } from '../../version.js'
@@ -150,7 +151,11 @@ function createSseHub(): SseHub {
   let last = ''
 
   const snapshot = (): string => {
-    autoCleanupRuns({ cleanStale: false })
+    // Web-only users get the same zombie/orphan reaping and stale cleanup the TUI
+    // tick performs; both sweeps are throttled internally, so this stays cheap.
+    sweepAgentsThrottled()
+    sweepOrphanSessionsThrottled()
+    autoCleanupRuns()
     return JSON.stringify(buildWebState())
   }
   const write = (res: ServerResponse, payload: string): void => {
@@ -432,7 +437,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     return
   }
   if (method === 'GET' && path === '/api/state') {
-    autoCleanupRuns({ cleanStale: false })
+    sweepAgentsThrottled()
+    sweepOrphanSessionsThrottled()
+    autoCleanupRuns()
     sendJson(res, 200, {
       ...buildWebState(),
       providers: listWebProviders(),

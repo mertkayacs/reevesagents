@@ -73,6 +73,7 @@ export interface AgentRecord {
   tmux_session: string
   tmux_window_id: string
   tmux_pane_id: string
+  pane_pid?: number | null  // pane's foreground pid at spawn, for SIGTERM/SIGKILL escalation
   rc_enabled: boolean
   permissions: Permissions
   headless?: boolean        // true for add-on caller records with no tmux window

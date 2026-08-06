@@ -5,7 +5,13 @@ import { tmpdir } from 'node:os'
 import type { AgentRecord, RunRecord } from '../src/core/types.js'
 import type { RuntimeDriver } from '../src/core/runtime.js'
 import { writeRun, writeAgent, listAgents } from '../src/core/runs.js'
-import { sweepAgents, sweepAgentsThrottled, resetSweepThrottle } from '../src/core/reaper.js'
+import {
+  sweepAgents,
+  sweepAgentsThrottled,
+  sweepOrphanSessions,
+  resetSweepThrottle,
+} from '../src/core/reaper.js'
+import type { TmuxSessionInfo } from '../src/core/tmux.js'
 
 let tmpDir: string
 let savedTmux: string | undefined
@@ -181,5 +187,93 @@ describe('zombie-agent reaper', () => {
     expect(b.swept).toBe(false)
     const c = sweepAgentsThrottled(15_000, { ...opts, now: () => 20_000 })
     expect(c.swept).toBe(true)
+  })
+})
+
+describe('orphan session sweep', () => {
+  function session(name: string, overrides: Partial<TmuxSessionInfo> = {}): TmuxSessionInfo {
+    // createdSec 0 reads as "unknown age", which is always old enough to reap.
+    return { name, attached: false, group: '', groupList: [], createdSec: 0, ...overrides }
+  }
+
+  function runSweep(sessions: TmuxSessionInfo[], extra: { sessionAttached?: (_name: string) => boolean; now?: () => number } = {}): { killed: string[]; calls: string[] } {
+    const calls: string[] = []
+    const { killed } = sweepOrphanSessions({
+      listSessions: () => sessions,
+      killSession: name => calls.push(name),
+      sessionAttached: () => false,
+      ...extra,
+    })
+    return { killed, calls }
+  }
+
+  it('kills a run session no live record owns', () => {
+    const { killed, calls } = runSweep([session('reeves-crashed-a1b2c3d4')])
+    expect(killed).toEqual(['reeves-crashed-a1b2c3d4'])
+    expect(calls).toEqual(['reeves-crashed-a1b2c3d4'])
+  })
+
+  it('spares a run session with a live record', () => {
+    writeRun(makeRun('r1'))
+    // makeRun's tmux_session does not match the run-session pattern, so use a
+    // record whose session name does.
+    const run = makeRun('r2')
+    run.tmux_session = 'reeves-live-b2c3d4e5'
+    writeRun(run)
+
+    const { killed } = runSweep([
+      session('reeves-live-b2c3d4e5'),
+      session('reeves-crashed-a1b2c3d4'),
+    ])
+    expect(killed).toEqual(['reeves-crashed-a1b2c3d4'])
+  })
+
+  it('spares sessions a human is attached to', () => {
+    const { killed } = runSweep([session('reeves-watched-a1b2c3d4', { attached: true })])
+    expect(killed).toEqual([])
+  })
+
+  it('kills a viewer whose group holds no live run session, spares a backed one', () => {
+    const run = makeRun('r3')
+    run.tmux_session = 'reeves-backed-c3d4e5f6'
+    writeRun(run)
+
+    const { killed } = runSweep([
+      session('reevesweb_11111111', { group: 'reeves-backed-c3d4e5f6', groupList: ['reeves-backed-c3d4e5f6', 'reevesweb_11111111'] }),
+      session('reevesweb_22222222', { group: 'reeves-gone-d4e5f6a1', groupList: ['reeves-gone-d4e5f6a1', 'reevesweb_22222222'] }),
+      session('reevesweb_33333333'),
+    ])
+    expect(killed).toEqual(['reevesweb_22222222', 'reevesweb_33333333'])
+  })
+
+  it('ignores sessions outside the reeves naming patterns', () => {
+    const { killed } = runSweep([
+      session('reeves'),
+      session('reeves-not-a-run-id'),
+      session('other-session'),
+    ])
+    expect(killed).toEqual([])
+  })
+
+  it('kills nothing when tmux is unavailable', () => {
+    const { killed } = sweepOrphanSessions({ tmuxAvailable: () => false })
+    expect(killed).toEqual([])
+  })
+
+  it('spares sessions younger than the orphan grace period (a run still starting)', () => {
+    const nowMs = 1_000_000_000_000
+    const justBorn = Math.floor(nowMs / 1000) - 5
+    const { killed } = runSweep(
+      [session('reeves-starting-a1b2c3d4', { createdSec: justBorn }), session('reeves-old-b2c3d4e5', { createdSec: justBorn - 3600 })],
+      { now: () => nowMs },
+    )
+    expect(killed).toEqual(['reeves-old-b2c3d4e5'])
+  })
+
+  it('re-probes attached state right before killing', () => {
+    // Enumeration said unattached, but a human attached before the kill landed.
+    const { killed, calls } = runSweep([session('reeves-grabbed-a1b2c3d4')], { sessionAttached: () => true })
+    expect(killed).toEqual([])
+    expect(calls).toEqual([])
   })
 })

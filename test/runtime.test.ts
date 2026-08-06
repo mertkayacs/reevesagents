@@ -38,6 +38,8 @@ class FakeDriver implements RuntimeDriver {
   windows = new Set<string>(['@0'])
   panes = new Set<string>(['%0'])
   captureOutput = '\u001b[31mready\u001b[0m sk-ant-api03-abcdefghij1234567890abcdef'
+  // Rows returned for list-sessions (tab-separated name, group, group list).
+  sessionRows: string[] = []
 
   tmux(args: string[], input?: string): string {
     this.calls.push(input === undefined ? { args } : { args, input })
@@ -50,6 +52,7 @@ class FakeDriver implements RuntimeDriver {
     }
     if (args[0] === 'list-windows') return [...this.windows].join('\n')
     if (args[0] === 'list-panes') return [...this.panes].join('\n')
+    if (args[0] === 'list-sessions') return this.sessionRows.join('\n')
     if (args[0] === 'kill-window') {
       const target = args[args.indexOf('-t') + 1] ?? ''
       this.windows.delete(target)
@@ -69,7 +72,9 @@ class FakeDriver implements RuntimeDriver {
 describe('agent-run runtime', () => {
   it('parses stable tmux window and pane ids', async () => {
     const { parseTmuxIds } = await import('../src/core/runtime.js')
-    expect(parseTmuxIds('@12 %34')).toEqual({ windowId: '@12', paneId: '%34' })
+    expect(parseTmuxIds('@12 %34')).toEqual({ windowId: '@12', paneId: '%34', panePid: undefined })
+    expect(parseTmuxIds('@12 %34 567')).toEqual({ windowId: '@12', paneId: '%34', panePid: 567 })
+    expect(parseTmuxIds('@12 %34 notapid').panePid).toBeUndefined()
     expect(() => parseTmuxIds('0 1')).toThrow(/Could not parse/)
   })
 
@@ -306,5 +311,120 @@ describe('agent-run runtime', () => {
     const target = anchor!.args[anchor!.args.indexOf('-t') + 1]
     expect(target).toBe('reeves:')
     expect(target).not.toBe('reeves')
+  })
+
+  it('escalates to SIGKILL when the pane process ignores SIGHUP and SIGTERM', async () => {
+    const driver = new FakeDriver()
+    const { startRun, killAgent } = await import('../src/core/runtime.js')
+    const { updateAgent } = await import('../src/core/runs.js')
+    const { spawn } = await import('node:child_process')
+
+    const result = startRun({
+      name: 'stubborn',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+    const agent = result.agents[0]!
+
+    // Stand in for an agent CLI that traps every polite signal.
+    const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.on("SIGHUP", () => {}); setInterval(() => {}, 1000)'])
+    // A killed child stays visible to kill(pid, 0) as a zombie until its exit is
+    // consumed, so assert on the exit event, not on signal-0 liveness.
+    const exited = new Promise<void>(resolve => child.once('exit', () => resolve()))
+    updateAgent(result.run.id, agent.id, { pane_pid: child.pid })
+
+    killAgent(agent.id, { driver })
+
+    const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 3000))
+    expect(await Promise.race([exited.then(() => 'exited' as const), timeout])).toBe('exited')
+    expect(child.exitCode).toBeNull() // signal death, not a clean exit
+  })
+
+  it('leaves the pane process alone when it already exited with its window', async () => {
+    const driver = new FakeDriver()
+    const { startRun, killAgent } = await import('../src/core/runtime.js')
+    const { updateAgent } = await import('../src/core/runs.js')
+
+    const result = startRun({
+      name: 'gone',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+    const agent = result.agents[0]!
+    // A pid that does not exist: escalation must be a no-op, not an error.
+    updateAgent(result.run.id, agent.id, { pane_pid: 2_000_000_000 })
+    expect(killAgent(agent.id, { driver }).ended_at).not.toBeNull()
+  })
+
+  it('never signals the pane process when the stored window id is stale', async () => {
+    const driver = new FakeDriver()
+    const { startRun, killAgent } = await import('../src/core/runtime.js')
+    const { updateAgent } = await import('../src/core/runs.js')
+    const { spawn } = await import('node:child_process')
+
+    const result = startRun({
+      name: 'stale-pid',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+    const agent = result.agents[0]!
+
+    // After a tmux server restart the recorded ids are untrusted; the pane_pid
+    // may by now name a reused, unrelated process, which must survive killAgent.
+    driver.windows.delete(agent.tmux_window_id)
+    driver.panes.delete(agent.tmux_pane_id)
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'])
+    const exited = new Promise<string>(resolve => child.once('exit', () => resolve('exited')))
+    updateAgent(result.run.id, agent.id, { pane_pid: child.pid })
+
+    killAgent(agent.id, { driver })
+
+    const tick = new Promise<string>(resolve => setTimeout(() => resolve('alive'), 1200))
+    expect(await Promise.race([exited, tick])).toBe('alive')
+    child.kill('SIGKILL')
+  })
+
+  it('stopRun kills grouped web viewer sessions before the run session', async () => {
+    const driver = new FakeDriver()
+    const { startRun, stopRun } = await import('../src/core/runtime.js')
+
+    const result = startRun({
+      name: 'viewed',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+    const runSession = result.run.tmux_session
+    driver.sessionRows = [
+      `reevesweb_abcd1234\t${runSession}\t${runSession},reevesweb_abcd1234`,
+      'reevesweb_deadbeef\treeves-other-12345678\treeves-other-12345678,reevesweb_deadbeef',
+      'unrelated\t\t',
+    ]
+
+    stopRun(result.run.id, { driver })
+
+    const killSessions = driver.calls.filter(call => call.args[0] === 'kill-session').map(call => call.args.at(-1))
+    expect(killSessions).toContain('=reevesweb_abcd1234')
+    expect(killSessions).toContain(`=${runSession}`)
+    expect(killSessions).not.toContain('=reevesweb_deadbeef')
+    expect(killSessions.indexOf('=reevesweb_abcd1234')).toBeLessThan(killSessions.indexOf(`=${runSession}`))
+  })
+
+  it('killAgent kills grouped viewers when the last agent ends', async () => {
+    const driver = new FakeDriver()
+    const { startRun, killAgent } = await import('../src/core/runtime.js')
+
+    const result = startRun({
+      name: 'viewed-solo',
+      working_dir: '/tmp',
+      root: { provider: 'codex', model: '', task: 'lead', nickname: 'first' },
+    }, { driver, available })
+    const runSession = result.run.tmux_session
+    driver.sessionRows = [`reevesweb_0badf00d\t${runSession}\t${runSession},reevesweb_0badf00d`]
+
+    killAgent(result.agents[0]!.id, { driver })
+
+    const killSessions = driver.calls.filter(call => call.args[0] === 'kill-session').map(call => call.args.at(-1))
+    expect(killSessions).toContain('=reevesweb_0badf00d')
+    expect(killSessions).toContain(`=${runSession}`)
   })
 })

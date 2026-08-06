@@ -480,6 +480,9 @@ describe('approvals', () => {
   it('lists pending approvals in state and resolves one through HTTP', async () => {
     const { createRunApproval, listRunApprovals } = await import('../../src/core/approvals.js')
 
+    // /api/state now sweeps zombies and archives stale runs, so the run behind
+    // the approval must look alive: fake tmux reports its window ids as present.
+    installFakeRuntimeBins()
     writeRun(makeRun('appr-run'))
     writeAgent(makeAgent('appr-agent', 'appr-run', 'cc', 'root'))
     const approval = createRunApproval({

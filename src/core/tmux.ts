@@ -86,6 +86,92 @@ export function targetExists(target: string, session: string): boolean {
   }
 }
 
+export interface TmuxSessionInfo {
+  name: string
+  attached: boolean
+  group: string
+  groupList: string[]
+  createdSec: number
+}
+
+// One enumeration call for the orphan sweep; a missing tmux server yields [].
+export function listSessions(): TmuxSessionInfo[] {
+  try {
+    return execFileSync('tmux', ['list-sessions', '-F', '#{session_name}\t#{session_attached}\t#{session_group}\t#{session_group_list}\t#{session_created}'], { encoding: 'utf8' })
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(row => {
+        const [name = '', attached = '0', group = '', groupList = '', created = '0'] = row.split('\t')
+        return {
+          name,
+          attached: attached !== '0',
+          group,
+          groupList: groupList.split(',').filter(Boolean),
+          createdSec: Number.parseInt(created, 10) || 0,
+        }
+      })
+  } catch {
+    return []
+  }
+}
+
+// Fresh attached-state probe for one session; the orphan sweep re-checks right
+// before killing so a human who attached since the enumeration keeps the session.
+export function sessionAttached(session: string): boolean {
+  try {
+    const out = execFileSync('tmux', ['display-message', '-p', '-t', exactSession(session), '#{session_attached}'], { encoding: 'utf8' }).trim()
+    return out !== '0' && out !== ''
+  } catch {
+    return true // cannot probe: treat as attached, never kill blind
+  }
+}
+
+export function killSession(session: string): void {
+  try {
+    spawnSync('tmux', ['kill-session', '-t', exactSession(session)], { stdio: 'ignore' })
+  } catch {
+    // session already gone
+  }
+}
+
+// All window ids across the server in one call, keyed "session\0windowId", for
+// batch membership checks. Callers must confirm a miss with a fresh targetExists
+// probe before acting on it: a window born after the enumeration is invisible here.
+export function allWindowIds(): Set<string> {
+  try {
+    return new Set(
+      execFileSync('tmux', ['list-windows', '-a', '-F', '#{session_name}\t#{window_id}'], { encoding: 'utf8' })
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(row => {
+          const [session = '', id = ''] = row.split('\t')
+          return `${session}\0${id}`
+        }),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+export const RUN_SESSION_PATTERN = /^reeves-.+-[0-9a-f]{8}$/
+export const VIEWER_SESSION_PATTERN = /^reevesweb_[0-9a-f]{8}$/
+
+// Viewer sessions (reevesweb_*) are grouped with their run session; killing one
+// group member leaves the others alive, so run teardown must kill them too.
+export function sessionInGroup(info: { group: string; groupList: string[] }, runSession: string): boolean {
+  return info.group === runSession || info.groupList.includes(runSession)
+}
+
+export function killGroupedViewers(runSession: string): void {
+  for (const info of listSessions()) {
+    if (VIEWER_SESSION_PATTERN.test(info.name) && sessionInGroup(info, runSession)) {
+      killSession(info.name)
+    }
+  }
+}
+
 export function windowIds(session: string): string[] {
   try {
     return execFileSync('tmux', ['list-windows', '-t', exactSession(session), '-F', '#{window_id}'], { encoding: 'utf8' })

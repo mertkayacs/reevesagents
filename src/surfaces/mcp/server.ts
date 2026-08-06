@@ -50,7 +50,7 @@ import {
 } from '../../core/runs.js'
 import { detectAvailable, isProvider, coerceExtraArgs } from '../../core/providers.js'
 import { PROVIDER_DEFS } from '../../core/provider-registry.js'
-import { sweepAgents, sweepAgentsThrottled } from '../../core/reaper.js'
+import { sweepAgents, sweepAgentsThrottled, sweepOrphanSessions, sweepOrphanSessionsThrottled } from '../../core/reaper.js'
 import { runDoctor } from '../../core/doctor.js'
 import { hostStatus, attach, attachAll, detach } from './installer.js'
 import { installSkills, skillsStatus } from '../../core/skills.js'
@@ -332,6 +332,7 @@ const TOOLS: ToolDef[] = [
       // Opportunistically reap zombies before listing so a dead-window agent does
       // not linger in the results. Throttled, so a chatty caller cannot spam sweeps.
       sweepAgentsThrottled()
+      sweepOrphanSessionsThrottled()
       return ok(listRuns().map(run => ({ ...run, agents: listAgents(run.id) })))
     },
   },
@@ -485,9 +486,9 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'reap',
-    description: 'Sweep for zombie agents and end them: any whose tmux window has died, plus any older than max_lifetime_ms when that is set above 0 (see get_config). Returns each reaped agent with the reason (window-gone or lifetime-exceeded) and its age. This runs on its own in the background; call it to force an immediate sweep, e.g. after a crash or before relying on list.',
+    description: 'Sweep for zombie agents and orphan tmux sessions: ends any agent whose tmux window has died or that is older than max_lifetime_ms when that is set above 0 (see get_config), and kills reeves-*/reevesweb_* sessions no live record owns. Returns each reaped agent with the reason (window-gone or lifetime-exceeded) and its age, plus the killed orphan session names. This runs on its own in the background; call it to force an immediate sweep, e.g. after a crash or before relying on list.',
     inputSchema: { type: 'object', properties: {} },
-    handler: () => ok(sweepAgents()),
+    handler: () => ok({ ...sweepAgents(), killed_sessions: sweepOrphanSessions({ ignoreGrace: true }).killed }),
   },
   {
     name: 'get_config',
@@ -726,6 +727,7 @@ export async function startAgentMcpServer(): Promise<void> {
   // it only fires while the server is already running for other reasons.
   const reapTimer = setInterval(() => {
     try { sweepAgents() } catch { /* best effort; next tick retries */ }
+    try { sweepOrphanSessions() } catch { /* best effort; next tick retries */ }
   }, BACKGROUND_REAP_INTERVAL_MS)
   reapTimer.unref()
 

@@ -73,7 +73,7 @@ function send(ws: WebSocket, frame: Record<string, unknown>): void {
 function disposeBridge(bridge: Bridge): void {
   try { bridge.term.kill() } catch { /* already exited */ }
   try {
-    execFileSync('tmux', ['kill-session', '-t', bridge.viewer], { stdio: 'ignore' })
+    execFileSync('tmux', ['kill-session', '-t', `=${bridge.viewer}`], { stdio: 'ignore' })
   } catch {
     // viewer session already gone; the shared provider window is untouched
   }
@@ -113,7 +113,7 @@ function openBridge(ws: WebSocket, id: string, bridges: Set<Bridge>): void {
     execFileSync('tmux', ['new-session', '-d', '-s', viewer, '-t', `=${target.session}`], { stdio: 'ignore' })
     execFileSync('tmux', ['select-window', '-t', `${viewer}:${target.windowId}`], { stdio: 'ignore' })
   } catch {
-    try { execFileSync('tmux', ['kill-session', '-t', viewer], { stdio: 'ignore' }) } catch { /* nothing to clean */ }
+    try { execFileSync('tmux', ['kill-session', '-t', `=${viewer}`], { stdio: 'ignore' }) } catch { /* nothing to clean */ }
     send(ws, { t: 'e', m: 'could not open a tmux view for this agent' })
     ws.close()
     return
