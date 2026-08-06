@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.6](https://github.com/mertkayacs/reevesagents/compare/v1.7.5...v1.7.6) (2026-08-06)
+
+
+### Bug Fixes
+
+* **deps:** override ip-address to 10.4.0 for SSRF advisories ([57609ac](https://github.com/mertkayacs/reevesagents/commit/57609acf74884f635a8f6c767974e3356f88917a))
+* **deps:** patch ip-address SSRF alerts; docs(readme): lean header polish ([7eef1af](https://github.com/mertkayacs/reevesagents/commit/7eef1af1c0fdd8bac8164b1c207ff78f9588f34a))
+
 ## [1.7.5](https://github.com/mertkayacs/reevesagents/compare/v1.7.4...v1.7.5) (2026-08-06)
 
 
