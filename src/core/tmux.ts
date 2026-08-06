@@ -135,6 +135,26 @@ export function killSession(session: string): void {
   }
 }
 
+// All window ids across the server in one call, keyed "session\0windowId", for
+// batch membership checks. Callers must confirm a miss with a fresh targetExists
+// probe before acting on it: a window born after the enumeration is invisible here.
+export function allWindowIds(): Set<string> {
+  try {
+    return new Set(
+      execFileSync('tmux', ['list-windows', '-a', '-F', '#{session_name}\t#{window_id}'], { encoding: 'utf8' })
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(row => {
+          const [session = '', id = ''] = row.split('\t')
+          return `${session}\0${id}`
+        }),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
 export const RUN_SESSION_PATTERN = /^reeves-.+-[0-9a-f]{8}$/
 export const VIEWER_SESSION_PATTERN = /^reevesweb_[0-9a-f]{8}$/
 

@@ -12,6 +12,7 @@
 import { loadConfig } from './config.js'
 import { listAgents, listRuns, nowMs } from './runs.js'
 import {
+  allWindowIds as tmuxAllWindowIds,
   listSessions as tmuxListSessions,
   killSession as tmuxKillSession,
   sessionAttached as tmuxSessionAttached,
@@ -57,12 +58,23 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
   const now = options.now ?? nowMs
   const maxLifetimeMs = options.maxLifetimeMs ?? loadConfig().global.max_lifetime_ms
 
+  const candidates = listAgents().filter(agent => !agent.ended_at && !agent.headless)
+
+  // Batch path (no injected probe): one server-wide window enumeration instead
+  // of a tmux spawn per agent per sweep. A miss is confirmed with a fresh probe
+  // so a window born after the enumeration is never misjudged as gone.
+  const batchWindows = !options.targetExists && candidates.some(agent => agent.tmux_window_id)
+    ? tmuxAllWindowIds()
+    : null
+  const probe = batchWindows
+    ? (id: string, session: string): boolean => batchWindows.has(`${session}\0${id}`) || targetExists(id, session)
+    : targetExists
+
   const reaped: ReapedAgent[] = []
-  for (const agent of listAgents()) {
-    if (agent.ended_at || agent.headless) continue
+  for (const agent of candidates) {
     const ageMs = now() - new Date(agent.started_at).getTime()
     let reason: ReapReason | null = null
-    if (agent.tmux_window_id && !targetExists(agent.tmux_window_id, agent.tmux_session)) {
+    if (agent.tmux_window_id && !probe(agent.tmux_window_id, agent.tmux_session)) {
       reason = 'window-gone'
     } else if (maxLifetimeMs > 0 && ageMs > maxLifetimeMs) {
       reason = 'lifetime-exceeded'

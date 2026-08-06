@@ -532,9 +532,29 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
   const archived: string[] = []
   const runs = listRunsUnlocked(true)
 
+  // Batch path (no injected checks): one server-wide enumeration instead of a
+  // tmux spawn per run per tick. A stale verdict is always confirmed with fresh
+  // per-run probes, so a window born after the enumeration is never misjudged.
+  const useBatch = haveTmux && !options.sessionExists && !options.targetExists && runs.length > 0
+  const batchWindows = useBatch ? tmux.allWindowIds() : null
+  const batchSessions = useBatch ? new Set(tmux.listSessions().map(info => info.name)) : null
+  const batchTargetExists = batchWindows
+    ? (target: string, session: string): boolean => batchWindows.has(`${session}\0${target}`)
+    : undefined
+  const batchSessionExists = batchSessions
+    ? (session: string): boolean => batchSessions.has(session)
+    : undefined
+
   for (const run of runs) {
     const isEnded = isRunEnded(run)
-    const isStale = !isEnded && haveTmux && !runHasLiveTmuxTarget(run, { sessionExists, targetExists })
+    let isStale = false
+    if (!isEnded && haveTmux) {
+      const looksDead = batchTargetExists && batchSessionExists
+        ? !runHasLiveTmuxTarget(run, { sessionExists: batchSessionExists, targetExists: batchTargetExists })
+        : !runHasLiveTmuxTarget(run, { sessionExists, targetExists })
+      // Confirm with fresh probes before killing and archiving a live-looking miss.
+      isStale = looksDead && !runHasLiveTmuxTarget(run, batchTargetExists ? {} : { sessionExists, targetExists })
+    }
     if (!isEnded && !isStale) continue
     try {
       if (isStale) {
