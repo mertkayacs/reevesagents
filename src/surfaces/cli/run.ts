@@ -16,7 +16,7 @@ import {
   computeRunStatus,
   runHasLiveTmuxTarget,
 } from '../../core/runs.js'
-import { sweepAgents } from '../../core/reaper.js'
+import { sweepAgents, sweepOrphanSessions } from '../../core/reaper.js'
 import { providerDisplayName } from '../../utils/display.js'
 import { resolveRun, resolveAgent, requireDestructiveConfirmation } from './helpers.js'
 import type { AgentRecord, AuthMode, Effort, Provider, RunRecord } from '../../core/types.js'
@@ -335,22 +335,26 @@ export function registerRuns(program: Command): void {
 export function registerReap(program: Command): void {
   program
     .command('reap')
-    .description('reap zombie agents: end any whose tmux window is gone or that outlive max_lifetime_ms')
-    .option('--json', 'output JSON array of reaped agents')
+    .description('reap zombie agents and orphan tmux sessions no live record owns')
+    .option('--json', 'output JSON object: { reaped, killed_sessions }')
     .action((opts) => {
       const { reaped } = sweepAgents()
+      const { killed } = sweepOrphanSessions({ ignoreGrace: true })
       if (opts.json) {
-        console.log(JSON.stringify(reaped, null, 2))
-        return
-      }
-      if (reaped.length === 0) {
-        console.log('no zombie agents')
+        console.log(JSON.stringify({ reaped, killed_sessions: killed }, null, 2))
         return
       }
       for (const r of reaped) {
         console.log(`${r.agent_id.slice(0, 8)}  ${r.run_id.slice(0, 8)}  ${r.reason.padEnd(17)}  ${String(Math.round(r.age_ms / 1000)).padStart(5)}s  ${r.nickname}`)
       }
-      console.log(`reaped ${reaped.length} ${reaped.length === 1 ? 'agent' : 'agents'}`)
+      for (const name of killed) {
+        console.log(`killed orphan session ${name}`)
+      }
+      if (reaped.length === 0 && killed.length === 0) {
+        console.log('no zombie agents or orphan sessions')
+        return
+      }
+      console.log(`reaped ${reaped.length} ${reaped.length === 1 ? 'agent' : 'agents'}, killed ${killed.length} orphan ${killed.length === 1 ? 'session' : 'sessions'}`)
     })
 }
 

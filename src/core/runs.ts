@@ -31,6 +31,7 @@ import type {
 } from './types.js'
 import { redactSecrets } from './redact.js'
 import { isProvider } from './providers.js'
+import { reapPaneProcess } from './process.js'
 import * as tmux from './tmux.js'
 
 export function stateRoot(): string {
@@ -207,6 +208,7 @@ function normalizeAgent(raw: Record<string, unknown>): AgentRecord {
     tmux_session: asString(raw.tmux_session),
     tmux_window_id: asString(raw.tmux_window_id),
     tmux_pane_id: asString(raw.tmux_pane_id),
+    pane_pid: typeof raw.pane_pid === 'number' && raw.pane_pid > 0 ? raw.pane_pid : null,
     rc_enabled: typeof raw.rc_enabled === 'boolean' ? raw.rc_enabled : false,
     permissions: normalizePermissions(raw.permissions),
     headless: raw.headless === true,
@@ -472,10 +474,6 @@ export function findAgent(agentId: string): AgentRecord {
   throw new Error(`Agent not found: ${agentId}`)
 }
 
-export function heartbeatAgent(runId: string, agentId: string): void {
-  updateAgent(runId, agentId, { last_seen: nowMs() })
-}
-
 export function appendAgentInbox(runId: string, agentId: string, message: Message): void {
   withRunsLock(() => {
     const agent = readAgentUnlocked(runId, agentId)
@@ -497,6 +495,8 @@ export function readAgentInbox(runId: string, agentId: string): Message[] {
 export interface AutoCleanupOptions {
   sessionExists?: (_session: string) => boolean
   targetExists?: (_target: string, _session: string) => boolean
+  killSession?: (_session: string) => void
+  killViewers?: (_runSession: string) => void
   tmuxAvailable?: () => boolean
   cleanStale?: boolean
 }
@@ -515,9 +515,14 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
 // Runs refresh tick. If tmux is not installed at all, only ended runs are
 // cleaned (the stale check is skipped) so a missing-tmux environment never
 // nukes the user's run records. Per-run failures are swallowed.
+// A stale run's tmux session (pinned open by the linked reeves anchor window)
+// and its grouped web viewers are killed before archiving, so record removal
+// never leaves tmux state behind.
 export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: string[]; archived: string[] } {
   const sessionExists = options.sessionExists ?? tmux.sessionExists
   const targetExists = options.targetExists ?? tmux.targetExists
+  const killSession = options.killSession ?? tmux.killSession
+  const killViewers = options.killViewers ?? tmux.killGroupedViewers
   // If the caller injected tmux checks (test drivers), treat tmux as available and skip the real probe.
   const tmuxAvailable = options.sessionExists || options.targetExists
     ? () => true
@@ -526,11 +531,26 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
   const removed: string[] = []
   const archived: string[] = []
   const runs = listRunsUnlocked(true)
+
   for (const run of runs) {
     const isEnded = isRunEnded(run)
     const isStale = !isEnded && haveTmux && !runHasLiveTmuxTarget(run, { sessionExists, targetExists })
     if (!isEnded && !isStale) continue
     try {
+      if (isStale) {
+        // Viewers stay identifiable by group name even after the run session is
+        // gone, so kill them unconditionally; the session kill needs it to exist.
+        killViewers(run.tmux_session)
+        if (sessionExists(run.tmux_session)) {
+          killSession(run.tmux_session)
+          // The session was confirmed present seconds ago, so its recorded pane
+          // pids are safe to escalate on: SIGHUP-resistant CLIs must not outlive
+          // the archive that is about to delete their records.
+          for (const agent of listAgents(run.id)) {
+            if (!agent.ended_at && agent.pane_pid) reapPaneProcess(agent.pane_pid)
+          }
+        }
+      }
       const record = archiveAndRemoveRun(run.id, isStale ? 'stale' : 'ended')
       removed.push(run.id)
       archived.push(record.id)

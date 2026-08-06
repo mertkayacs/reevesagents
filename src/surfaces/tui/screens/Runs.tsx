@@ -16,7 +16,7 @@ import { colors } from '../utils/tokens.js'
 import { glyphs } from '../utils/glyphs.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import { autoCleanupRuns, computeRunStatus, listAgents, listRuns, runHasLiveTmuxTarget } from '../../../core/runs.js'
-import { sweepAgentsThrottled } from '../../../core/reaper.js'
+import { sweepAgentsThrottled, sweepOrphanSessionsThrottled } from '../../../core/reaper.js'
 import type { RunRecord } from '../../../core/types.js'
 
 const ACTIONS = ['NewRun', 'History', 'Main Menu', 'Quit'] as const
@@ -78,6 +78,7 @@ export function Runs() {
     // Reap zombie agents (dead window or past max_lifetime_ms) before archiving
     // stale runs. Throttled internally, so this fast tick stays cheap.
     sweepAgentsThrottled()
+    sweepOrphanSessionsThrottled()
     autoCleanupRuns()
     const next = listRuns()
     setRuns(prev => {

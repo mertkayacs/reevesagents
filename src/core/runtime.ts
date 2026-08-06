@@ -35,7 +35,8 @@ import { loadConfig } from './config.js'
 import { loadPreset } from './store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
-import { paneInSession, realDriver, STALE_WINDOW_ERROR, windowInSession, type RuntimeDriver } from './tmux.js'
+import { paneInSession, realDriver, sessionInGroup, STALE_WINDOW_ERROR, VIEWER_SESSION_PATTERN, windowInSession, type RuntimeDriver } from './tmux.js'
+import { reapPaneProcess } from './process.js'
 import { redactSecrets } from './redact.js'
 import { providerDisplayName } from '../utils/display.js'
 
@@ -78,6 +79,7 @@ export interface RuntimeOptions {
 export interface TmuxIds {
   windowId: string
   paneId: string
+  panePid?: number
 }
 
 export const ALLOWED_KEYS = [
@@ -104,6 +106,23 @@ function sleepSync(ms: number): void {
   const buffer = new SharedArrayBuffer(4)
   const view = new Int32Array(buffer)
   Atomics.wait(view, 0, 0, ms)
+}
+
+// Web viewer sessions (reevesweb_*) are grouped with the run session, so killing
+// the run session alone leaves them holding the run's windows and processes.
+function killViewerSessions(driver: RuntimeDriver, runSession: string): void {
+  let rows: string
+  try {
+    rows = driver.tmux(['list-sessions', '-F', '#{session_name}\t#{session_group}\t#{session_group_list}'])
+  } catch {
+    return
+  }
+  for (const row of rows.split('\n')) {
+    const [name = '', group = '', groupList = ''] = row.trim().split('\t')
+    if (!VIEWER_SESSION_PATTERN.test(name)) continue
+    if (!sessionInGroup({ group, groupList: groupList.split(',').filter(Boolean) }, runSession)) continue
+    try { driver.tmux(['kill-session', '-t', `=${name}`]) } catch { /* already gone */ }
+  }
 }
 
 function waitAfterPaste(driver: RuntimeDriver): void {
@@ -157,11 +176,12 @@ function childProcessOutput(err: unknown): string {
 }
 
 export function parseTmuxIds(output: string): TmuxIds {
-  const [windowId, paneId] = output.trim().split(/\s+/)
+  const [windowId, paneId, panePidRaw] = output.trim().split(/\s+/)
   if (!windowId?.startsWith('@') || !paneId?.startsWith('%')) {
     throw new Error(`Could not parse tmux ids from: ${output}`)
   }
-  return { windowId, paneId }
+  const panePid = panePidRaw === undefined ? undefined : Number.parseInt(panePidRaw, 10)
+  return { windowId, paneId, panePid: Number.isFinite(panePid) && panePid! > 0 ? panePid : undefined }
 }
 
 function readDisplayIds(driver: RuntimeDriver, target?: string): TmuxIds | null {
@@ -291,6 +311,7 @@ function newAgentRecord(
     tmux_session: tmuxSession,
     tmux_window_id: ids.windowId,
     tmux_pane_id: ids.paneId,
+    pane_pid: ids.panePid ?? null,
     rc_enabled: false,
     permissions,
     inbox: [],
@@ -320,7 +341,7 @@ function createAgentWindow(
     '-d',
     '-P',
     '-F',
-    '#{window_id} #{pane_id}',
+    '#{window_id} #{pane_id} #{pane_pid}',
     '-t',
     `${tmuxSession}:`,
     '-n',
@@ -626,13 +647,18 @@ export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentR
   // Only kill the window when the stored id still belongs to this run's session; a
   // stale id (server restart) would name an unrelated window. A failed check means
   // the window is already gone, so the record teardown below proceeds either way.
-  if (windowInSession(driver, agent.tmux_session, agent.tmux_window_id)) {
+  // Process escalation is gated on the same check: without a fresh confirmation
+  // the pane was really ours, a stale pane_pid could name a reused stranger pid.
+  const hadWindow = windowInSession(driver, agent.tmux_session, agent.tmux_window_id)
+  if (hadWindow) {
     try {
       driver.tmux(['kill-window', '-t', agent.tmux_window_id])
     } catch {
       // already gone
     }
+    reapPaneProcess(agent.pane_pid)
   }
+  lastPasteAtByPane.delete(agent.tmux_pane_id)
   const endedAt = nowIso()
   updateAgent(agent.run_id, agent.id, { ended_at: endedAt, task_status: 'done' })
   const updatedAgent = readAgent(agent.run_id, agent.id)
@@ -641,6 +667,7 @@ export function killAgent(agentId: string, options: RuntimeOptions = {}): AgentR
     // Same guard as stopRun: never kill a session the run shares with the reeves TUI.
     const runOwnsSession = !!run.reeves_session && run.reeves_session !== run.tmux_session
     if (runOwnsSession) {
+      killViewerSessions(driver, run.tmux_session)
       try {
         driver.tmux(['kill-session', '-t', `=${run.tmux_session}`])
       } catch {
@@ -658,9 +685,14 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
   const endedAt = nowIso()
   // Only kill the run's tmux session when it differs from the reeves TUI session; a shared one would close the TUI.
   const runOwnsSession = !!run.reeves_session && run.reeves_session !== run.tmux_session
+  // Escalation below is gated on a fresh kill succeeding; if the session/window
+  // was already gone the recorded pane_pid may name a reused stranger process.
+  let sessionKilled = false
   if (runOwnsSession) {
+    killViewerSessions(driver, run.tmux_session)
     try {
       driver.tmux(['kill-session', '-t', `=${run.tmux_session}`])
+      sessionKilled = true
     } catch {
       // session may already be gone
     }
@@ -673,7 +705,11 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
       } catch {
         // window may already be gone
       }
+      reapPaneProcess(agent.pane_pid)
+    } else if (sessionKilled) {
+      reapPaneProcess(agent.pane_pid)
     }
+    lastPasteAtByPane.delete(agent.tmux_pane_id)
     updateAgent(run.id, agent.id, { ended_at: endedAt })
   }
   const endedRun: RunRecord = { ...run, status: 'ended', ended_at: endedAt }
