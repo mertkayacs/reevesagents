@@ -43,7 +43,7 @@
     "strip-ansi": "^7.1.0"
   },
   "optionalDependencies": {
-    "@lydell/node-pty": "1.2.0-beta.14",
+    "@lydell/node-pty": "1.2.0-beta.15",
     "ws": "^8.21.0"
   },
   "pnpm": {
