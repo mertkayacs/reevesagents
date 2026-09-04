@@ -26,7 +26,7 @@ jobs:
       # token is a classic PAT (secrets.CI_PAT), not GITHUB_TOKEN: events created
       # with GITHUB_TOKEN do not start new workflow runs, so the Release PR would
       # get no CI and the tag would not trigger publish.yml. A PAT does both.
-      - uses: googleapis/release-please-action@v5
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
           token: ${{ secrets.CI_PAT }}
           target-branch: master

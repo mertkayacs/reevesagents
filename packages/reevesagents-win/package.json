@@ -28,13 +28,13 @@
     "strip-ansi": "^7.1.0"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@types/node": "^25.7.0",
-    "@typescript-eslint/parser": "^8.65.0",
+    "@eslint/js": "10.0.1",
+    "@types/node": "25.7.0",
+    "@typescript-eslint/parser": "8.65.0",
     "eslint": "10.9.1",
-    "tsup": "^8.5.1",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "tsup": "8.5.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.6"
   },
   "engines": {
     "node": ">=20.19"
