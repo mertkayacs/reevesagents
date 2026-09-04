@@ -37,43 +37,43 @@ importers:
         version: 7.2.0
     devDependencies:
       '@eslint/js':
-        specifier: ^10.0.1
+        specifier: 10.0.1
         version: 10.0.1(eslint@10.9.1(jiti@2.7.0))
       '@types/node':
-        specifier: ^25.7.0
+        specifier: 25.7.0
         version: 25.7.0
       '@types/react':
         specifier: 19.2.18
         version: 19.2.18
       '@types/ws':
-        specifier: ^8.18.1
+        specifier: 8.18.1
         version: 8.18.1
       '@typescript-eslint/parser':
-        specifier: ^8.65.0
+        specifier: 8.65.0
         version: 8.65.0(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)
       '@xterm/addon-fit':
-        specifier: ^0.11.0
+        specifier: 0.11.0
         version: 0.11.0
       '@xterm/xterm':
-        specifier: ^6.0.0
+        specifier: 6.0.0
         version: 6.0.0
       eslint:
         specifier: 10.9.1
         version: 10.9.1(jiti@2.7.0)
       ink-testing-library:
-        specifier: ^4.0.0
+        specifier: 4.0.0
         version: 4.0.0(@types/react@19.2.18)
       tsup:
-        specifier: ^8.5.1
+        specifier: 8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.26)(typescript@6.0.3)
       typescript:
-        specifier: ^6.0.3
+        specifier: 6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.2.1
+        specifier: 8.2.1
         version: 8.2.1(@types/node@25.7.0)(esbuild@0.28.2)(jiti@2.7.0)
       vitest:
-        specifier: ^4.1.6
+        specifier: 4.1.6
         version: 4.1.6(@types/node@25.7.0)(vite@8.2.1(@types/node@25.7.0)(esbuild@0.28.2)(jiti@2.7.0))
     optionalDependencies:
       '@lydell/node-pty':
@@ -99,25 +99,25 @@ importers:
         version: 7.2.0
     devDependencies:
       '@eslint/js':
-        specifier: ^10.0.1
+        specifier: 10.0.1
         version: 10.0.1(eslint@10.9.1(jiti@2.7.0))
       '@types/node':
-        specifier: ^25.7.0
+        specifier: 25.7.0
         version: 25.7.0
       '@typescript-eslint/parser':
-        specifier: ^8.65.0
+        specifier: 8.65.0
         version: 8.65.0(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)
       eslint:
         specifier: 10.9.1
         version: 10.9.1(jiti@2.7.0)
       tsup:
-        specifier: ^8.5.1
+        specifier: 8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.26)(typescript@6.0.3)
       typescript:
-        specifier: ^6.0.3
+        specifier: 6.0.3
         version: 6.0.3
       vitest:
-        specifier: ^4.1.6
+        specifier: 4.1.6
         version: 4.1.6(@types/node@25.7.0)(vite@8.2.1(@types/node@25.7.0)(esbuild@0.28.2)(jiti@2.7.0))
 
 packages:
@@ -1449,10 +1449,6 @@ packages:
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
-  picomatch@4.0.4:
-    resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
-    engines: {node: '>=12'}
-
   picomatch@4.0.5:
     resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
     engines: {node: '>=12'}
@@ -1669,10 +1665,6 @@ packages:
   tinyexec@1.1.2:
     resolution: {integrity: sha512-dAqSqE/RabpBKI8+h26GfLq6Vb3JVXs30XYQjdMjaj/c2tS8IYYMbIzP599KtRj7c57/wYApb3QjgRgXmrCukA==}
     engines: {node: '>=18'}
-
-  tinyglobby@0.2.16:
-    resolution: {integrity: sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==}
-    engines: {node: '>=12.0.0'}
 
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
@@ -2672,10 +2664,6 @@ snapshots:
 
   fast-uri@3.1.6: {}
 
-  fdir@6.5.0(picomatch@4.0.4):
-    optionalDependencies:
-      picomatch: 4.0.4
-
   fdir@6.5.0(picomatch@4.0.5):
     optionalDependencies:
       picomatch: 4.0.5
@@ -3015,8 +3003,6 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@4.0.4: {}
-
   picomatch@4.0.5: {}
 
   pirates@4.0.7: {}
@@ -3249,7 +3235,7 @@ snapshots:
       lines-and-columns: 1.2.4
       mz: 2.7.0
       pirates: 4.0.7
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       ts-interface-checker: 0.1.13
 
   tagged-tag@1.0.0: {}
@@ -3269,11 +3255,6 @@ snapshots:
   tinyexec@0.3.2: {}
 
   tinyexec@1.1.2: {}
-
-  tinyglobby@0.2.16:
-    dependencies:
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
 
   tinyglobby@0.2.17:
     dependencies:
@@ -3309,7 +3290,7 @@ snapshots:
       source-map: 0.7.6
       sucrase: 3.35.1
       tinyexec: 0.3.2
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       tree-kill: 1.2.2
     optionalDependencies:
       postcss: 8.5.26
@@ -3375,11 +3356,11 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.1
       pathe: 2.0.3
-      picomatch: 4.0.4
+      picomatch: 4.0.5
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.1.2
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
       vite: 8.2.1(@types/node@25.7.0)(esbuild@0.28.2)(jiti@2.7.0)
       why-is-node-running: 2.3.0
