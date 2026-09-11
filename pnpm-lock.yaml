@@ -37,40 +37,40 @@ importers:
         version: 7.2.0
     devDependencies:
       '@eslint/js':
-        specifier: ^10.0.1
+        specifier: 10.0.1
         version: 10.0.1(eslint@10.10.0(jiti@2.7.0))
       '@types/node':
-        specifier: ^25.7.0
+        specifier: 25.7.0
         version: 25.7.0
       '@types/react':
         specifier: 19.2.18
         version: 19.2.18
       '@types/ws':
-        specifier: ^8.18.1
+        specifier: 8.18.1
         version: 8.18.1
       '@typescript-eslint/parser':
-        specifier: ^8.65.0
+        specifier: 8.65.0
         version: 8.65.0(eslint@10.10.0(jiti@2.7.0))(typescript@6.0.3)
       '@xterm/addon-fit':
-        specifier: ^0.11.0
+        specifier: 0.11.0
         version: 0.11.0
       '@xterm/xterm':
-        specifier: ^6.0.0
+        specifier: 6.0.0
         version: 6.0.0
       eslint:
         specifier: 10.10.0
         version: 10.10.0(jiti@2.7.0)
       ink-testing-library:
-        specifier: ^4.0.0
+        specifier: 4.0.0
         version: 4.0.0(@types/react@19.2.18)
       tsup:
-        specifier: ^8.5.1
+        specifier: 8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.26)(typescript@6.0.3)
       typescript:
-        specifier: ^6.0.3
+        specifier: 6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.2.1
+        specifier: 8.2.1
         version: 8.2.1(@types/node@25.7.0)(esbuild@0.28.2)(jiti@2.7.0)
       vitest:
         specifier: ^4.1.6
@@ -99,22 +99,22 @@ importers:
         version: 7.2.0
     devDependencies:
       '@eslint/js':
-        specifier: ^10.0.1
+        specifier: 10.0.1
         version: 10.0.1(eslint@10.10.0(jiti@2.7.0))
       '@types/node':
-        specifier: ^25.7.0
+        specifier: 25.7.0
         version: 25.7.0
       '@typescript-eslint/parser':
-        specifier: ^8.65.0
+        specifier: 8.65.0
         version: 8.65.0(eslint@10.10.0(jiti@2.7.0))(typescript@6.0.3)
       eslint:
         specifier: 10.10.0
         version: 10.10.0(jiti@2.7.0)
       tsup:
-        specifier: ^8.5.1
+        specifier: 8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.26)(typescript@6.0.3)
       typescript:
-        specifier: ^6.0.3
+        specifier: 6.0.3
         version: 6.0.3
       vitest:
         specifier: ^4.1.6
@@ -3315,7 +3315,7 @@ snapshots:
       lines-and-columns: 1.2.4
       mz: 2.7.0
       pirates: 4.0.7
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       ts-interface-checker: 0.1.13
 
   tagged-tag@1.0.0: {}
@@ -3375,7 +3375,7 @@ snapshots:
       source-map: 0.7.6
       sucrase: 3.35.1
       tinyexec: 0.3.2
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       tree-kill: 1.2.2
     optionalDependencies:
       postcss: 8.5.26
