@@ -1,6 +1,6 @@
 {
   "name": "reevesagents",
-  "version": "1.7.6",
+  "version": "1.7.7",
   "description": "Local tmux-first workspace manager for AI CLI agents",
   "type": "module",
   "packageManager": "pnpm@10.34.5",
@@ -69,7 +69,7 @@
     "ink-testing-library": "^4.0.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vite": "^8.3.0",
+    "vite": "^8.2.1",
     "vitest": "^4.1.6"
   },
   "engines": {
