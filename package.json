@@ -53,7 +53,7 @@
       "brace-expansion": "5.0.12",
       "esbuild": "0.28.2",
       "fast-uri": "3.1.8",
-      "hono": "4.13.7",
+      "hono": "4.13.8",
       "ip-address": "10.7.0"
     }
   },
