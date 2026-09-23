@@ -25,8 +25,9 @@ Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider, and other provider
 CLIs side by side in tmux. You can use it as a normal CLI/TUI/Web UI, or attach
 its opt-in MCP so one agent can spawn, read, steer, and stop the rest.
 
-No ReevesAgents-stored API keys. No database. No Docker. No background daemon.
-Provider login stays inside each provider CLI.
+Provider logins stay inside each provider CLI. ReevesAgents keeps its own state
+as a few plain JSON files under `~/.reeves`, and it runs only while you or an
+attached CLI are using it.
 
 ## Quick Start
 
@@ -148,6 +149,7 @@ No arguments launches the TUI.
 | `interrupt <agent-id>` | Send Ctrl-C to one agent. |
 | `stop <run-id>` | Stop a run. Requires `--yes` or `ALLOW_DESTRUCTIVE=1`. |
 | `kill <agent-id>` | Stop one agent. Requires `--yes` or `ALLOW_DESTRUCTIVE=1`. |
+| `setup` | First-run check. `--attach` connects every installed host CLI. |
 | `doctor` | Check Node, tmux, state, and provider CLIs. |
 | `web` | Start the loopback-only Web UI. |
 | `providers` | List provider ids, aliases, models, and availability. |

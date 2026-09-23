@@ -52,6 +52,7 @@ own CLI only if you explicitly want that worker to spawn more agents.
 - `stop`: stop a run.
 - `list`: list live runs and agents.
 - `open`: switch tmux to a run or agent window when possible.
+- `doctor`: run the environment health checks.
 - `reap`: end zombie agents whose tmux window is gone or whose lifetime cap is
   exceeded.
 - `list_history`: list archived run history.
