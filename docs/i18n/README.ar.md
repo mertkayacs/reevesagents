@@ -4,13 +4,13 @@
   </a>
 </p>
 
-[![npm version](https://img.shields.io/npm/v/reevesagents.svg)](https://www.npmjs.com/package/reevesagents)
-[![visits](https://visitor-badge.laobi.icu/badge?page_id=mertkayacs.reevesagents&left_text=visits)](https://github.com/mertkayacs/reevesagents)
-[![node](https://img.shields.io/node/v/reevesagents.svg)](https://nodejs.org)
-[![license](https://img.shields.io/npm/l/reevesagents.svg)](../../LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI)](https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml)
+<p align="center">
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/v/reevesagents.svg" alt="npm version" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/reevesagents.svg" alt="node" /></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/npm/l/reevesagents.svg" alt="license" /></a>
+  <a href="https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI" alt="CI" /></a>
+</p>
 
-<h3 align="center"><a href="https://reevesagents.mertkayacs.com">reevesagents.mertkayacs.com</a></h3>
 <p align="center">
   <a href="https://reevesagents.mertkayacs.com/demo"><b>العرض الحي</b></a> ·
   <a href="https://reevesagents.mertkayacs.com/docs"><b>التوثيق</b></a> ·
@@ -20,183 +20,90 @@
 
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · **العربية**
 
-*دع وكيلًا واحدًا ينشئ وكلاء آخرين ويقودهم. ReevesAgents مساحة عمل محلية مجانية يعمل فيها وكلاء البرمجة (مثل Claude Code وCodex وHermes وDeepSeek وKimi) جنبًا إلى جنب، ويستطيع وكيل واحد أن ينشئ الباقي ويوجّهه ويشرف عليه. كل ذلك بلا مفاتيح API، وبلا أي تعديل في Agent.md أو Claude.md لديك.*
+ReevesAgents مساحة عمل محلية لأدوات CLI للبرمجة بالذكاء الاصطناعي. يشغّل Claude Code
+وCodex وOpenCode وHermes وKimi وDeepSeek وQwen وPi وAider وغيرها من أدوات CLI
+للمزوّدين جنبًا إلى جنب داخل tmux. تستطيع استخدامه أداة CLI/TUI/Web UI عادية، أو
+ربط خادم MCP الاختياري الخاص به حتى يتمكن وكيل واحد من إنشاء البقية وقراءة
+مخرجاتهم وتوجيههم وإيقافهم.
 
-**بعشر لغات!**
+يبقى تسجيل الدخول إلى كل مزوّد داخل أداة CLI الخاصة به. ويحفظ ReevesAgents حالته
+في بضعة ملفات JSON صِرفة تحت `~/.reeves`، ولا يعمل إلا حين تستخدمه أنت أو أداة CLI
+مربوطة به.
 
-## دع وكيلًا واحدًا يثبّته ويشغّل الباقي
+## البداية السريعة
 
-هذه هي الفكرة كلها: وكيل AI واحد ينشئ الآخرين ويقودهم. بل تستطيع أداة CLI لوكيل (أي وكيل برمجة يعمل من سطر الأوامر، مثل Claude Code أو Codex أو Hermes) أن تثبّت ReevesAgents وتوصله بنفسها، ثم تبدأ تشغيل فريق.
+```sh
+pnpm add -g reevesagents
+reevesagents doctor
+reevesagents
+```
 
-**إن كنت وكيلًا يقرأ هذا، فنفّذ هذه الأوامر بنفسك:**
+ابدأ تشغيلة من CLI:
 
-- **ثبّته:** `npm install -g reevesagents`
-- **وصّله بأداة CLI الخاصة بك:** يوصل `reevesagents attach` أداة ReevesAgents بما لديك من أدوات CLI للوكلاء. ولأداة واحدة بعينها، اذكر اسمها، مثلًا `reevesagents attach claude`.
-- **تحقّق من نجاح الخطوة:** يسرد `reevesagents hosts` أدوات CLI للوكلاء على هذا الجهاز ويبيّن أيّها متصل.
-- **أعد تحميل أدواتك:** أعد تشغيل جلسة CLI لديك حتى تلتقط الاتصال (يستخدم هذا بروتوكول MCP، وهو الطريقة القياسية التي تعرض بها أداةُ وكيلٍ أوامرَها لأداة أخرى).
+```sh
+reevesagents spawn claude-code:lead codex:tests hermes:research \
+  --name "release check" \
+  --prompt "Review the release path, test coverage, and docs."
+```
 
-الآن تستطيع أداة CLI لديك **إنشاء وكلاء آخرين وقيادتهم**: ابدأ وكيلًا على مهمة، وأرسل إليه نصًا أو ضغطات مفاتيح، واقرأ ما يفعله، ووافق على ما يطلبه أو ارفضه. ويستطيع وكيل Claude Code واحد تشغيل فريق من وكلاء Codex وClaude Code على مشكلات منفصلة. ولقطع الاتصال لاحقًا، شغّل `reevesagents detach claude`.
+افتح واجهة Web UI:
 
-أتفضّل التعامل معه ببرامج نصية من سطر الأوامر؟ [AGENTS.ar.md](../../AGENTS.ar.md) هو دليل المشغّل المكتوب للوكلاء: معرّفات المزوّدين وكناهم، ومواصفة `spawn`، وكيفية مراقبة فريق يعمل وتوجيهه.
+```sh
+reevesagents web
+```
 
-أتفضّل إعداده يدويًا؟ فعّله من شاشة **Agent control** في TUI أو Web UI؛ انظر [Agent control](#agent-control) أدناه.
+دع وكيلًا مربوطًا يقود البقية:
 
-واجهة TUI وواجهة Web UI المحلية تقودان التشغيلة نفسها:
+```sh
+reevesagents attach codex
+reevesagents hosts
+```
 
-![ReevesAgents TUI: منتقي اللغة وشاشة الترحيب وشاشة Doctor](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
+أعد تشغيل تلك الأداة بعد الربط حتى تحمّل أدوات MCP.
 
-![ReevesAgents Web UI: عمليات التشغيل ولوحات الوكلاء المباشرة](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web-ar.png)
-
-![ReevesAgents Web UI: بدء تشغيلة جديدة](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-newrun-ar.png)
-
-ReevesAgents مساحة عمل حرة ومفتوحة المصدر لوكلاء برمجة AI. شغّل عدة وكلاء في آن
-واحد، ودع وكيلًا واحدًا ينشئ الباقي ويقوده: وكيل Claude Code يدير وكلاء Codex
-وClaude Code على مشكلات منفصلة. ضع كل وكيل في موضع قوته، مثلًا DeepSeek على
-الواجهة الخلفية، وClaude على المنتج وتوجيه الويب، وCodex على نظام تصميم أو
-تمريرة تنفيذ، وHermes على البريد أو البحث أو الاستقصاء.
-
-تتوفر الواجهة بعشر لغات: الإنجليزية والألمانية والفرنسية والإسبانية والبرتغالية
-والإيطالية والتركية والروسية والصينية المبسطة والعربية.
-
-هل أنت جديد على ReevesAgents؟ يرشدك [دليل المستخدمين](../GUIDE.ar.md) عبر التثبيت وتشغيلتك الأولى وترك وكيل واحد يقود الباقي.
-
-## طريقتان لاستخدامه
-
-- **بوصفه مساحة عمل.** أنشئ الوكلاء الذين تريدهم وواصِل إضافة المزيد بـ `reevesagents add`، واحدًا تلو الآخر. يعملون جنبًا إلى جنب، كل واحد في نافذة tmux خاصة به، ولا يتحكم أحدهم في الآخر. هذه أبسط طريقة للبدء: أدوات CLI المختلفة لديك مجتمعة في مكان محلي واحد.
-- **بوصفه منسّقًا.** اربط Agent control MCP الاختياري بأداة CLI واحدة، فيكتسب ذلك الوكيل أدوات إنشاء الباقي وقيادته. هذه هي الميزة الأساسية، وتبقى معطّلة حتى تفعّلها.
-
-كلتا الطريقتين تستعمل التشغيلات نفسها والواجهات نفسها، فتستطيع أن تبدأ
-بمساحة عمل بسيطة وتلجأ إلى التنسيق لاحقًا، أو لا تلجأ إليه أبدًا.
-
-## الواجهات
+## ما الذي يقدّمه
 
 | الواجهة | ما تصلح له |
 | --- | --- |
-| **TUI** | تحكّم سريع يعتمد لوحة المفاتيح أولًا داخل الطرفية. |
-| **Web UI** | عرض مرئي موحّد للتشغيلات والوكلاء واللوحات الحية والسجل. |
-| **CLI** | البرامج النصية وأوامر الإطلاق السريعة وفحوصات doctor وفتح tmux. |
-| **tmux** | نوافذ CLI حقيقية من المزوّدين تظل قيد التشغيل محليًا. |
-| **Agent control** | الفكرة الأساسية: وكيل واحد ينشئ الباقي ويقوده. تفعّله لكل CLI على حدة، وبعدها يستطيع وكيل Claude Code تشغيل وكلاء Codex وHermes وClaude Code في آن واحد. |
+| **TUI** | التحكم في التشغيلات من لوحة المفاتيح داخل الطرفية. |
+| **Web UI** | عرض مرئي محلي للتشغيلات واللوحات والوكلاء والموافقات والسجل. |
+| **CLI** | السكربتات والفحوص السريعة وإنشاء الوكلاء وتنظيف الحالة والانتقال إلى نوافذ tmux. |
+| **MCP التحكم بالوكلاء** | أداة CLI واحدة تثق بها تنشئ أدوات CLI أخرى وتوجّهها عبر أدوات محلية. |
+| **tmux** | نوافذ حقيقية لأدوات CLI من المزوّدين، تواصل العمل بعد إغلاق الواجهة. |
 
-## لماذا ReevesAgents
+صُمّم ReevesAgents ليعمل محليًا. الحالة ملفات JSON صِرفة تحت `~/.reeves`، وأدوات
+CLI التي يشغّلها هي نفسها التي تستخدمها بيدك كل يوم.
 
-- **دع وكيلك يقود الوكلاء.** ينشئ CLI القائد لديك (Claude Code مثلًا) مجموعة من وكلاء Claude أو Codex أو DeepSeek أو Hermes أو OpenCode أو غيرها ويوجّهها عبر MCP.
-- **نفّذ مهام متعددة وكرّرها في حلقات.** شغّل عدة وكلاء بالتوازي على أجزاء مختلفة من مشروع، وأبقِ الوكلاء طويلي التشغيل يعملون، وراقبهم جميعًا من عرض واحد. واجعل في المقدمة نموذجًا أرخص يوجّه العمل إلى وكلاء أذكى أو أصغر.
-- **أبقِ الكلفة عملية.** دع النماذج الرخيصة أو المجانية تكتب الكود الروتيني والاختبارات بينما تخطط أنت وتصمّم بنموذج أكبر، بدلًا من دفع كل شيء عبر نموذج افتراضي واحد مكلف.
-- **مساحة عمل واحدة دون فقدان السياق.** إن كنت تتنقل أصلًا بين Claude وCodex وDeepSeek وHermes وOpenCode، فسيجمع ReevesAgents تلك الجلسات في مكان محلي واحد؛ افتح أي وكيل من TUI أو Web UI لتقوده مباشرة.
-- **حافظ على مرونتك تجاه المزوّدين.** يبقى تسجيل الدخول إلى المزوّد ضمن كل CLI. لا يخزّن ReevesAgents أي بيانات اعتماد ولا يمرّر حركة النماذج عبر وسيط، فتضيف أدوات CLI وتزيلها وتبدّلها بحرية.
-- **شاهد العمل في لمحة.** التشغيلات النشطة والوكلاء والنماذج وأوضاع الأذونات وإجراءات الإيقاف والحذف والسجل في عرض Web UI واحد، بينما يُبقي tmux أدوات CLI الحقيقية حيّة.
+<a id="install"></a>
+<details>
+<summary><strong>التثبيت</strong></summary>
 
-هذه ليست منصة وكلاء سحابية، بل طبقة محلية صغيرة حول أدوات CLI حقيقية: لا قاعدة
-بيانات، ولا Docker، ولا عملية خفية في الخلفية، ولا مفاتيح API يخزّنها
-ReevesAgents.
-
-## التثبيت
-
-ثبّت ReevesAgents عبر Homebrew، أو تثبيتًا عامًا بأي مدير حزم Node (pnpm أو npm أو Yarn أو Bun)، ثم افحص الجهاز عبر `doctor`.
+يحتاج ReevesAgents إلى Node.js `20.19+` وtmux `3.0+`، وأداة CLI مدعومة واحدة على
+الأقل من أحد المزوّدين، مثبّتة ومسجَّل الدخول فيها. ويعمل على macOS وLinux وWSL.
 
 ```sh
 # Homebrew
-brew install mertkayacs/reevesagents/reevesagents
+brew tap mertkayacs/reevesagents
+brew install reevesagents
 
-# أو مدير حزم Node، pnpm معروض هنا
+# pnpm
 pnpm add -g reevesagents
-```
 
-```sh
-reevesagents doctor
-reevesagents
-```
-
-لتثبيت إصدار بعينه، أضف `@<version>` إلى اسم الحزمة، مثلًا
-`pnpm add -g reevesagents@<version>`.
-
-<details>
-<summary><b>pnpm</b></summary>
-
-```sh
-pnpm add -g reevesagents
-reevesagents doctor
-reevesagents
-```
-
-تشغيل لمرة واحدة بلا تثبيت عام:
-
-```sh
-pnpm dlx reevesagents doctor
-```
-
-</details>
-
-<details>
-<summary><b>npm</b></summary>
-
-```sh
+# npm
 npm install -g reevesagents
-reevesagents doctor
-reevesagents
-```
 
-تشغيل لمرة واحدة بلا تثبيت عام:
-
-```sh
+# one-shot checks
+pnpm dlx reevesagents doctor
 npx reevesagents doctor
 ```
 
-</details>
-
-<details>
-<summary><b>Yarn</b></summary>
-
-تشغيل لمرة واحدة عبر Yarn (Berry):
+لتثبيت إصدار بعينه، ضع رقمه مكان `<version>`:
 
 ```sh
-yarn dlx reevesagents doctor
+pnpm add -g reevesagents@<version>
 ```
 
-تثبيت عام عبر Yarn Classic:
-
-```sh
-yarn global add reevesagents
-reevesagents doctor
-reevesagents
-```
-
-</details>
-
-<details>
-<summary><b>Bun</b></summary>
-
-```sh
-bun add -g reevesagents
-reevesagents doctor
-reevesagents
-```
-
-تشغيل لمرة واحدة بلا تثبيت عام:
-
-```sh
-bunx reevesagents doctor
-```
-
-</details>
-
-<details>
-<summary><b>Homebrew</b></summary>
-
-```sh
-brew tap mertkayacs/reevesagents
-brew install reevesagents
-reevesagents doctor
-reevesagents
-```
-
-</details>
-
-<details>
-<summary><b>من المصدر</b></summary>
-
-استخدم المصدر حين تريد فحص الشيفرة أو المساهمة أو التشغيل من المستودع.
+التثبيت من المصدر:
 
 ```sh
 git clone https://github.com/mertkayacs/reevesagents.git
@@ -205,261 +112,220 @@ pnpm install
 pnpm build
 pnpm link --global
 reevesagents doctor
-reevesagents
 ```
 
 </details>
 
-## المتطلبات المسبقة
+<a id="screenshots"></a>
+<details>
+<summary><strong>لقطات الشاشة</strong></summary>
 
-ReevesAgents محلي أولًا، فهو يفترض جهاز مطوّر اعتياديًا عليه tmux وأداة CLI
-واحدة على الأقل من أحد المزوّدين.
+تتحكم TUI وWeb UI في التشغيلات المحلية نفسها:
 
-- macOS أو Linux أو WSL. نظام Windows الأصلي ليس بيئة التشغيل المستهدفة؛ استخدم WSL.
-- Node.js `20.19+`.
-- tmux. يُوصى بالإصدار `3.0+`.
-- صدفة تفاعلية اعتيادية على `PATH`.
-- أداة CLI واحدة على الأقل من مزوّد مدعوم على `PATH`.
+![ReevesAgents TUI: منتقي اللغة وقائمة الترحيب وشاشة doctor](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
 
-يستطيع ReevesAgents إطلاق أدوات CLI التالية من المزوّدين متى كانت مثبّتة وموثّقة
-على جهازك: Claude Code وCodex CLI وOpenCode وHermes وKimi وDeepSeek وPi وQwen
-وAider. وتحتفظ كل أداة بتسجيل دخولها ونماذجها وحصصها ومطالبات الأذونات الخاصة
-بها، تمامًا كما لو كنت شغّلتها بنفسك، ولهذا لا يحتاج ReevesAgents أصلًا إلى
-الاحتفاظ بمفتاح API أو الوقوف وسيطًا في مسار حركة النماذج.
+![ReevesAgents Web UI: التشغيلات ولوحات الوكلاء الحية](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web-ar.png)
 
-## البداية السريعة
+![ReevesAgents Web UI: بدء تشغيلة جديدة](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-newrun-ar.png)
+
+</details>
+
+<a id="commands"></a>
+<details>
+<summary><strong>الأوامر</strong></summary>
+
+تشغيله بلا معطيات يفتح TUI.
+
+| الأمر | الغرض |
+| --- | --- |
+| `reevesagents` | يفتح TUI. |
+| `spawn [spec...]` | يبدأ تشغيلة. تُكتب كل مواصفة بالشكل `provider[:nickname[:model]]`. |
+| `add [spec...]` | يضيف وكلاء إلى أحدث تشغيلة نشطة. |
+| `runs` | يسرد التشغيلات النشطة. |
+| `agents [run-id]` | يسرد الوكلاء في كل التشغيلات أو داخل تشغيلة واحدة. |
+| `open <id>` | ينتقل إلى نافذة tmux لتشغيلة أو لوكيل. |
+| `peek <agent-id>` | يطبع أحدث مخرجات وكيل واحد. |
+| `send <agent-id> <text...>` | يلصق نصًا في وكيل من دون إرساله. |
+| `key <agent-id> <key>` | يرسل `enter` أو `escape` أو الأسهم أو `tab` أو `space` أو `backspace` أو `ctrl-c`. |
+| `interrupt <agent-id>` | يرسل Ctrl-C إلى وكيل واحد. |
+| `stop <run-id>` | يوقف تشغيلة. يتطلب `--yes` أو `ALLOW_DESTRUCTIVE=1`. |
+| `kill <agent-id>` | يوقف وكيلًا واحدًا. يتطلب `--yes` أو `ALLOW_DESTRUCTIVE=1`. |
+| `setup` | فحص التشغيل الأول. ومع `--attach` يربط كل أداة CLI مضيفة مثبّتة. |
+| `doctor` | يفحص Node وtmux والحالة وأدوات CLI للمزوّدين. |
+| `web` | يشغّل Web UI على loopback وحده. |
+| `providers` | يسرد معرّفات المزوّدين وأسماءهم المستعارة ونماذجهم ومدى توفرهم. |
+| `approvals` | يسرد طلبات الموافقة المعلّقة. |
+| `approve` / `deny` | يحسم طلب موافقة واحدًا. |
+| `hosts` | يبيّن أي أدوات CLI المضيفة رُبط بها ReevesAgents. |
+| `attach [cli]` | يربط MCP التحكم بالوكلاء بأداة CLI مضيفة واحدة، أو بكل الأدوات المضيفة المثبّتة. |
+| `detach <cli>` | يزيل ذلك الربط من أداة CLI مضيفة واحدة. |
+| `skills [action]` | يثبّت مهارة ReevesAgents أو يزيلها أو يعرض حالتها. |
+| `mcp` | يشغّل خادم MCP عبر stdio. تشغّله الأدوات المضيفة بنفسها. |
+| `config [key] [value]` | يعرض الإعدادات القابلة للتعديل أو يغيّرها. |
+| `presets` | يسرد الإعدادات المسبقة المحفوظة للتشغيلات. |
+| `save-preset` | يحفظ تشغيلة حية إعدادًا مسبقًا. |
+| `start-preset` | يبدأ تشغيلة من إعداد مسبق. |
+| `delete-preset` | يحذف إعدادًا مسبقًا. |
+| `delete` | يحذف سجل وكيل واحد منتهٍ. يتطلب تأكيدًا. |
+| `delete-run` | يحذف تشغيلة منتهية ويؤرشفها. يتطلب تأكيدًا. |
+| `history` | يسرد التشغيلات المؤرشفة. |
+| `delete-history` | يحذف سجلًا مؤرشفًا واحدًا. يتطلب تأكيدًا. |
+| `reap` | ينهي الوكلاء العالقين والوكلاء الذين تجاوزوا `max_lifetime_ms`، ويغلق جلسات tmux اليتيمة التي لا يملكها أي سجل تشغيلة. |
+
+خيارات شائعة:
+
+- `--json`: متاح في أوامر السرد والإجراءات التي تستخدمها السكربتات.
+- `--name <name>`: يسمّي التشغيلة.
+- `--cwd <dir>`: يشغّل الوكلاء من دليل تحدده.
+- `--prompt <text>`: يلصق نص البداية في كل وكيل يُنشأ.
+- `--skip`: يتخطى مطالبات أذونات المزوّد للعمّال الذين يعملون بلا مراقبة.
+- `--run <run-id>`: يضيف الوكلاء إلى تشغيلة محددة.
+- `--port <n>` و`--no-open`: خيارات تشغيل Web UI.
+
+</details>
+
+<a id="agent-control"></a>
+<details>
+<summary><strong>التحكم بالوكلاء</strong></summary>
+
+التحكم بالوكلاء (Agent Control) خادم MCP اختياري. اربطه فقط بأداة CLI تأتمنها على
+تشغيل الأدوات المحلية:
 
 ```sh
-reevesagents                 # تشغيل واجهة TUI
-reevesagents web             # فتح واجهة Web UI المحلية
-reevesagents doctor          # فحص الجهاز
+reevesagents attach claude
+reevesagents hosts
 ```
 
-ابدأ تشغيلة مسمّاة من CLI. أول مواصفة هي القائد، والبقية عاملون، وكل مواصفة
-تُكتب `provider[:nickname[:model]]`:
+بعد إعادة التشغيل تحصل تلك الأداة على أدوات `spawn` و`read` و`send_text`
+و`send_key` و`interrupt` و`kill` و`stop`، وعلى أدوات لإدارة الموافقات والإعدادات
+المسبقة وفحص المضيفين. ويُتاح كتالوج المزوّدين أيضًا عبر المورد `reevesagents://providers`.
 
-```sh
-reevesagents spawn deepseek:backend claude-code:product codex:system hermes:research \
-  --name "launch week build" \
-  --prompt "Plan the backend, product surface, design system, and research notes."
-```
+لا يحصل العمّال على الـ MCP افتراضيًا. وإن أردت أن ينشئ عامل عمّالًا خاصين به،
+فاربط ReevesAgents بأداة CLI الخاصة بذلك العامل صراحةً.
 
-أو ابدأ صغيرًا ووسّع مساحة العمل وكيلًا واحدًا في كل مرة. ينضم `add` إلى أحدث
-تشغيلة، فلا تضطر أبدًا إلى نسخ معرّف تشغيلة ونقله:
+يعزل Codex استدعاءات MCP داخل sandbox افتراضيًا، وهذا يمنع إطلاق نوافذ tmux. فإذا
+استخدمت Codex مضيفًا يوجّه الوكلاء، فشغّله بصلاحيات كاملة، مثل
+`codex --sandbox danger-full-access`، أو استخدم ملف تعريف لـ Codex يضبط
+`sandbox_mode = "danger-full-access"`.
 
-```sh
-reevesagents spawn claude-code:product   # start a workspace
-reevesagents add codex:system            # add to it later
-reevesagents add hermes:research
-```
+المرجع الكامل للأدوات: [docs/mcp.md](../mcp.md). ودليل التشغيل الموجّه للوكلاء:
+[AGENTS.ar.md](../../AGENTS.ar.md).
 
-للاطلاع على شرح كامل، انظر [دليل المستخدمين](../GUIDE.ar.md).
+</details>
 
-## الأوامر
+<a id="configuration"></a>
+<details>
+<summary><strong>الإعداد</strong></summary>
 
-تشغيله بلا وسائط يطلق واجهة TUI. والأوامر الفرعية هي واجهة المشغّل للبشر
-والبرامج النصية.
-
-الواجهة اليومية:
-
-- `reevesagents`: إطلاق TUI (بلا أمر فرعي).
-- `spawn [spec...]`: بدء تشغيلة بوكيل واحد أو أكثر من المزوّدين. كل `spec` هو `provider[:nickname[:model]]`. أول مواصفة هي القائد، والبقية عاملون. وغياب المواصفة يجعل الافتراضي `codex`. الأعلام الأساسية: `--name <name>` (الافتراضي `run`), `--cwd <dir>` (الافتراضي الدليل الحالي), `--prompt <text>` (يُلصق في كل وكيل), `--skip` (تخطّي مطالبات الأذونات), `--run <run-id>` (إضافة وكلاء إلى تشغيلة موجودة), `--auth-mode <mode>`, `--effort <level>`, `--extra-args <args>` (أعلام تُلحق بكل إطلاق وكيل، مثل `"--remote-control"`), `--json`.
-- `add [spec...]`: أضف وكيلًا واحدًا أو أكثر إلى مساحة العمل الحالية، أي أحدث تشغيلة نشطة، دون تمرير معرّف تشغيلة. استخدمه لتوسيع مساحة عمل وكيلًا واحدًا في كل مرة. الأعلام نفسها لكل وكيل كما في `spawn`، إضافة إلى `--run <run-id>` لاستهداف تشغيلة بعينها بدل الأحدث.
-- `runs`: سرد التشغيلات النشطة، واحدة في كل سطر. الأعلام الأساسية: `--json` (سجلات التشغيلات الكاملة كمصفوفة JSON).
-- `agents [run-id]`: سرد الوكلاء عبر كل التشغيلات، أو وكلاء تشغيلة واحدة. الأعلام الأساسية: `--json`.
-- `open <id>`: تبديل tmux إلى نافذة Reeves الخاصة بتشغيلة أو إلى نافذة وكيل. داخل tmux يبدّل؛ وخارج tmux على TTY يتصل؛ وإلا فيطبع أمر tmux قابلًا للّصق. يقبل معرّف/اسم تشغيلة أو معرّف/كنية وكيل (يُسمح بمطابقة البادئة).
-- `peek <agent-id>`: طباعة المخرجات الحديثة من وكيل واحد. الأعلام الأساسية: `-n, --lines <n>` (الافتراضي `20`), `--json` (الأسطر كمصفوفة).
-- `send <agent-id> <text...>`: لصق نص عند موجّه الوكيل. لا يُرسِله؛ أتبِعه بـ `key <agent-id> enter`.
-- `key <agent-id> <key>`: إرسال مفتاح واحد: `enter` أو `escape` أو `backspace` أو `tab` أو `space` أو `up` أو `down` أو `left` أو `right` أو `ctrl-c`.
-- `interrupt <agent-id>`: إرسال ctrl-c إلى وكيل واحد.
-- `stop <run-id>`: إيقاف تشغيلة واحدة. الأعلام الأساسية: `-y, --yes` (أو `ALLOW_DESTRUCTIVE=1`).
-- `kill <agent-id>`: إيقاف وكيل واحد. الأعلام الأساسية: `-y, --yes` (أو `ALLOW_DESTRUCTIVE=1`).
-- `doctor`: تشغيل فحوصات سلامة البيئة (Node وtmux ومسار الحالة وأدوات CLI من المزوّدين). يخرج بقيمة غير صفرية عند فشل أي فحص. الأعلام الأساسية: `--json`.
-- `web`: بدء Web UI حسب الطلب والمقتصرة على loopback. تعمل في المقدمة؛ ويظل الوكلاء قيد التشغيل بعد إيقافها. الأعلام الأساسية: `--port <n>` (المنفذ المفضّل، ويرجع إلى المنفذ الحر التالي), `--no-open` (عدم فتح المتصفح).
-
-الاكتشاف والموافقات والتحكم بالوكلاء والإعدادات والتنظيف:
-
-- `providers`: سرد كل مزوّد مع حالة التوفر والكنى والنماذج المعروفة. الأعلام الأساسية: `--models`, `--json`.
-- `approvals`: سرد طلبات الموافقة المعلّقة الواردة من الوكلاء. الأعلام الأساسية: `--json`.
-- `approve <approval-id> [note]`: حسم طلب موافقة بالقبول.
-- `deny <approval-id> [note]`: حسم طلب موافقة بالرفض.
-- `hosts`: سرد أدوات CLI للوكلاء على هذا الجهاز وبيان أيّها يتصل به ReevesAgents.
-- `attach [cli]`: وصل ReevesAgents بأداة CLI واحدة للوكلاء، أو بكل أداة مثبّتة حين لا يُذكر اسم. يشغّل أمر `mcp add` الخاص بتلك الأداة.
-- `detach <cli>`: فصل ReevesAgents عن أداة CLI واحدة للوكلاء. يشغّل أمر `mcp remove` الخاص بتلك الأداة.
-- `mcp`: بدء خادم Agent control MCP عبر stdio. لا يُشغَّل يدويًا؛ بل تشغّله أداة CLI التي توصله بها.
-- `config [key] [value]`: عرض جميع الإعدادات القابلة للتعديل، أو قراءة أحدها، أو ضبطه. الأعلام الأساسية: `--json`.
-- `presets`: سرد إعدادات التشغيل الجاهزة المحفوظة. الأعلام الأساسية: `--json`.
-- `save-preset <run-id> <name> [description...]`: التقاط تشغيلة حيّة كإعداد جاهز قابل لإعادة الاستخدام.
-- `start-preset <name>`: بدء تشغيلة جديدة من إعداد جاهز. الأعلام الأساسية: `--name <run>`, `--cwd <dir>`.
-- `delete-preset <name>`: حذف إعداد جاهز. الأعلام الأساسية: `-y, --yes`.
-- `delete <agent-id>`: حذف سجل وكيل واحد منتهٍ. الأعلام الأساسية: `-y, --yes`.
-- `delete-run <run-id>`: حذف تشغيلة واحدة منتهية وأرشفتها في السجل. الأعلام الأساسية: `-y, --yes`.
-- `history`: سرد التشغيلات المنتهية والقديمة المؤرشفة. الأعلام الأساسية: `--json`.
-- `delete-history <id>`: حذف سجل مؤرشف واحد. الأعلام الأساسية: `-y, --yes`.
-
-`stop` و`kill` وأوامر `delete` أوامر مدمّرة، وهي ترفض العمل بدون `--yes` أو
-`ALLOW_DESTRUCTIVE=1`.
-
-## Agent control
-
-يأتي ReevesAgents بخادم MCP اختياري يتيح لأداة CLI واحدة من AI أن تنشئ أدوات CLI
-أخرى من AI وتقودها: بدء وكيل، ولصق موجّه، وإرسال مفاتيح، وقراءة المخرجات، وحسم
-طلبات الموافقة. وهو آلية مسطّحة لا سياسة تنسيق: لا أدوار، ولا حلقات مستقلة،
-ولا بروتوكول تنسيق.
-
-وهو معطّل افتراضيًا، ولا يربطه ReevesAgents بأي CLI من تلقاء نفسه.
-
-تفعّله من شاشة **Agent control** في TUI أو Web UI. تسرد تلك الشاشة أدوات CLI
-الموجودة على هذا الجهاز والقادرة على استضافة خادم MCP (claude وcodex وkimi
-وqwen وopencode وhermes)، وتتيح لك الربط أو فك الربط أو ربط الكل. يشغّل الربط
-أمر `mcp add` الخاص بذلك الـ CLI (مثلًا
-`claude mcp add reevesagents -- reevesagents mcp`)، أما فك الربط فيشغّل أمر
-الإزالة المقابل. ولا يستدعي ReevesAgents سوى أمر كل CLI الخاص به، فلا يحرّر
-ملفات إعداد المزوّدين يدويًا أبدًا. وOpenCode هو الاستثناء: فأمر `mcp add` عنده
-تفاعلي وليس له أمر إزالة، لذا تشير الشاشة إلى أنه يُربط يدويًا.
-
-بمجرد ربط أداة CLI، تصبح أدوات Agent Control بين يديها كلما بدأت. فتثبيتها
-اختيار صريح منك، وذلك الاختيار بعينه هو الموافقة. والتشغيلة الواحدة هي الـ CLI
-المتحكّم بوصفه الرأس ومعه الوكلاء الذين أنشأهم، وتظهر المجموعة كلها في TUI
-وWeb UI كأي تشغيلة أخرى.
-
-لا يتلقى العاملون المنشأون خادم MCP افتراضيًا، فلا يستطيعون إنشاء وكلاء آخرين.
-ولكي تدع عاملًا يقود عامليه الفرعيين، اربط الـ MCP بأداة CLI ذلك العامل من
-الشاشة نفسها. وتقع الحواجز الوقائية على مستوى الموارد: سقف وكلاء لكل تشغيلة
-(`max_agents`) يُفرض عندما تضيف أداة spawn إلى تشغيلة، إضافة إلى كون كل وكيل
-عملية CLI حقيقية في لوحة tmux خاصة به.
-
-يستطيع أي CLI مربوط أيضًا اكتشاف ما يمكنه إطلاقه: تعيد أداة `list_providers`
-والمورد `reevesagents://providers` المزوّدين الموجودين على هذا الجهاز مع
-معرّفاتهم وحالة تثبيتهم وكناهم ونماذجهم المعروفة، فيمرّر الوكيل معرّفًا حقيقيًا
-إلى `spawn` بدلًا من التخمين.
-
-راجع [docs/mcp.md](../mcp.md) للاطلاع على التصميم الكامل وقائمة الأدوات.
-
-## الإعدادات
-
-الحالة والإعدادات كلها ملفات JSON عادية على قرصك، فلا شيء تديره، ولا شيء يظل
-يعمل حين لا تستخدم الأداة.
-
-تقيم الحالة ضمن `~/.reeves`:
+تعيش الحالة تحت `~/.reeves`:
 
 ```text
 ~/.reeves/
-  config.json     إعدادات عامة (فترة peek واللغة والأذونات الافتراضية والحدود)
-  presets/        إعدادات تشغيلة جاهزة محفوظة
-  runs/           مجلد واحد لكل تشغيلة نشطة (run.json بالإضافة إلى agents/<id>.json)
-  history/        تشغيلات منتهية وقديمة مؤرشفة (history/runs/<id>.json)
+  config.json
+  presets/
+  runs/
+  history/
 ```
 
-هناك متغيّرا بيئة يتجاوزان الإعدادات الافتراضية، والغرض منهما أساسًا الاختبار
-المعزول أو الاستخدام بملفات تعريف متعددة:
+يغيّر متغيّرا بيئة المسارات الافتراضية:
 
-- `REEVES_REGISTRY`: تجاوز جذر الحالة. يستبدل `~/.reeves` كدليل لـ `runs/`
-  و`history/` و`presets/`.
-- `REEVES_CONFIG`: تجاوز مسار ملف الإعداد. يستبدل `~/.reeves/config.json`.
+- `REEVES_REGISTRY`: يغيّر جذر الحالة الذي يضم `runs/` و`history/` و`presets/`.
+- `REEVES_CONFIG`: يغيّر مسار ملف الإعداد.
+
+سجل واحد لكل خادم tmux: عملية تنظيف الجلسات اليتيمة في الخلفية تحكم على ملكية كل
+جلسة بمقارنتها بالسجل الحالي، ولذلك يجب ألا يتشارك سجلان خادم tmux واحدًا.
 
 وكل ما قد يحمل سرًّا يُنقّح قبل أن يصل إلى أي ملف.
 
-## أمثلة
+</details>
 
-وزّع مشروعًا واحدًا على أدوات CLI التي تناسب كل مهمة:
+<a id="examples"></a>
+<details>
+<summary><strong>أمثلة</strong></summary>
+
+وزّع مشروعًا واحدًا على عدة أدوات CLI:
 
 ```sh
 reevesagents spawn deepseek:backend claude-code:product codex:review \
-  --name "feature x" --prompt "Backend, product copy, and a review pass."
+  --name "feature x" \
+  --prompt "Backend, product copy, and a review pass."
 ```
 
-اسرد ما هو حيّ والتقط معرّف التشغيلة:
-
-```sh
-reevesagents runs
-reevesagents runs --json   # مناسب للبرمجة النصية
-```
-
-راقب وكيلًا واحدًا دون مغادرة صدفتك، ثم اقفز إليه حين يحتاجك:
+راقب وكيلًا واحدًا ثم افتح نافذته:
 
 ```sh
 reevesagents peek backend -n 40
 reevesagents open backend
 ```
 
-وحين ينتهي العمل، أوقف التشغيلة كلها باستدعاء واحد:
+أوقف التشغيلة حين ينتهي العمل:
 
 ```sh
 reevesagents stop "feature x" --yes
 ```
 
-## Web UI
+</details>
 
-واجهة Web UI محلية ومقتصرة على loopback.
+<a id="web-ui"></a>
+<details>
+<summary><strong>واجهة Web UI</strong></summary>
 
 ```sh
 reevesagents web
 ```
 
-لا تجيب إلا على `127.0.0.1`، وتبقى في المقدمة حتى توقفها، وهذا لا يغيّر
-للوكلاء شيئًا، لأنهم يعيشون في tmux لا في الصفحة. ومن المتصفح تنشئ التشغيلات،
-وتضيف وكلاء بالنموذج ووضع الأذونات اللذين تختارهما، وتوقف ما يلزم إيقافه،
-وتنقّب في السجل، بينما تواصل أدوات CLI الحقيقية عملها تحت كل ذلك.
+ترتبط واجهة Web UI بـ `127.0.0.1` وحده وتعمل في المقدمة. ويواصل الوكلاء عملهم
+بعد إغلاق الصفحة لأنهم يعيشون في tmux.
 
-تستخدم Web UI وحدتي تشغيل اختياريتين، `ws` و`@lydell/node-pty`. يثبّتهما npm
-افتراضيًا. ويظل CLI وTUI يعملان بدونهما، ويشرح أمر `web` ما الذي ينقص.
+تستخدم Web UI وحدتي تشغيل اختياريتين، `ws` و`@lydell/node-pty`، ويثبّتهما npm
+افتراضيًا. تعمل أوامر CLI وTUI من دونهما، ويشرح `reevesagents web` ما الذي ينقص.
 
-للوصول إلى Web UI من جهاز آخر، مرّر منفذ loopback عبر SSH؛ فلا يوجد نفق مدمج:
+للوصول إليها من جهاز آخر، مرّر منفذ loopback عبر SSH:
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@host
-# ثم تصفّح إلى http://localhost:8080
 ```
 
-## استكشاف الأخطاء وإصلاحها
+</details>
 
-**tmux غير مثبّت.** يحتاج ReevesAgents إلى tmux للتنقل القائم على النوافذ. ثبّته
-(`brew install tmux` أو `apt install tmux`) وشغّل `reevesagents doctor`. تلفّ
-TUI نفسها تلقائيًا في جلسة tmux باسم `reeves`؛ اضبط `REEVES_NO_TMUX_WRAPPER=1`
-لتخطّي هذا السلوك.
+<a id="troubleshooting"></a>
+<details>
+<summary><strong>استكشاف الأخطاء وإصلاحها</strong></summary>
 
-**أداة CLI من المزوّد مفقودة أو يبلّغ Doctor عن فشل.** لا يطلق ReevesAgents سوى
-أدوات CLI من المزوّدين الموجودة أصلًا على `PATH` لديك والموثّقة. شغّل
-`reevesagents doctor` لترى المزوّدين المكتشفين وما يفشل، ثم ثبّت أداة المزوّد
-التي تحتاجها أو سجّل الدخول إليها.
+**tmux غير مثبّت.** ثبّت tmux ثم شغّل `reevesagents doctor`. تلفّ TUI نفسها
+تلقائيًا في جلسة tmux اسمها `reeves`، ولتعطيل ذلك اضبط `REEVES_NO_TMUX_WRAPPER=1`.
 
-**تبلّغ Web UI عن حزم مفقودة.** تحتاج Web UI إلى `ws` و`@lydell/node-pty`. قد
-يُتخطّيان حين لا يكون للمنصّة ثنائي `@lydell/node-pty` مُسبق البناء أو حين أغفل
-التثبيت التبعيات الاختيارية. أعد التثبيت مع تمكين التبعيات الاختيارية، ثم شغّل
+**أداة CLI لمزوّد مفقودة أو خرجت من حسابها.** يطلق ReevesAgents أدوات CLI
+الموجودة أصلًا على `PATH` والمسجَّل الدخول فيها. يعرض `reevesagents doctor` ما
+اكتشفه. وإن كانت نافذة أُطلقت تنتظر عند شاشة تسجيل الدخول، فستراها في `peek`.
+
+**تبلّغ Web UI عن حزم ناقصة.** أعد التثبيت مع تفعيل التبعيات الاختيارية، ثم شغّل
 `reevesagents doctor`.
 
-**المنفذ مستخدم بالفعل.** يبدأ `reevesagents web` على المنفذ `8080` افتراضيًا. إن
-كان مأخوذًا، يرتبط الخادم بالمنفذ الحر التالي في نطاق صغير ويطبع الرابط المختار.
-مرّر `--port <n>` لاختيار منفذ بداية مختلف.
+**المنفذ مستخدم.** يبدأ `reevesagents web` على المنفذ `8080` افتراضيًا. وإن كان
+مشغولًا، يرتبط الخادم بأول منفذ حر في نطاق صغير ويطبع الرابط.
 
-## غير مطلوب
+</details>
 
-لست بحاجة إلى مفاتيح API مخزّنة لدى ReevesAgents، ولا قاعدة بيانات، ولا Docker،
-ولا خدمة في الخلفية، ولا إعداد MCP لتشغيلات الوكلاء المستقرة الاعتيادية.
-والتثبيت خامل: فهو لا يعيد كتابة إعدادات المزوّدين، ولا يضيف التثبيت العام إلا تلميحًا قصيرًا.
-وربط Agent Control MCP هو الخطوة الصريحة الاختيارية الوحيدة التي
-تمسّ إعدادات المزوّد، وذلك فقط عبر أمر `mcp add` الخاص بكل CLI.
+<a id="contributing"></a>
+<details>
+<summary><strong>المساهمة</strong></summary>
 
-## المساهمة
+توثيق المساهمين موجود في [docs/](..). ابدأ بـ
+[CONTRIBUTING.md](../../.github/CONTRIBUTING.md) و[الاختبار](../testing.md)
+و[الإصدار](../releasing.md).
 
-راجع [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) لمعرفة الفروع وسير طلبات السحب،
-و[SECURITY.md](../../.github/SECURITY.md) للإبلاغ عن الثغرات، و[CHANGELOG.md](../../CHANGELOG.md)
-لأحدث التغييرات. وتوجد وثائق المساهمين ضمن [docs/](..).
-
-لا يحتاج المستخدمون النهائيون إلى سلسلة أدوات التطوير. يستخدم المساهمون pnpm
+لا يحتاج المستخدمون النهائيون إلى أدوات التطوير. أما المساهمون فيستخدمون pnpm
 وTypeScript وtsup وVitest وESLint من المستودع.
+
+</details>
 
 ## روابط
 
 - الموقع: https://reevesagents.mertkayacs.com
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
-- Releases: https://github.com/mertkayacs/reevesagents/releases
-- Issues: https://github.com/mertkayacs/reevesagents/issues
-- Changelog: [CHANGELOG.md](../../CHANGELOG.md)
-- License: [Apache-2.0](../../LICENSE)
-
-## الترخيص
-
-Apache-2.0
+- الإصدارات: https://github.com/mertkayacs/reevesagents/releases
+- المشكلات: https://github.com/mertkayacs/reevesagents/issues
+- سجل التغييرات: [CHANGELOG.md](../../CHANGELOG.md)
+- الترخيص: [Apache-2.0](../../LICENSE)
