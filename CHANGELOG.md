@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.7.7](https://github.com/mertkayacs/reevesagents/compare/v1.7.6...v1.7.7) (2026-09-23)
+
+
+### Bug Fixes
+
+* **deps:** override qs to 6.16.0 for DoS and array-limit advisories ([#101](https://github.com/mertkayacs/reevesagents/issues/101)) ([e0af28f](https://github.com/mertkayacs/reevesagents/commit/e0af28fefee01f36999d452ed22add5d8ed3e3c0))
+* **deps:** update dependency @lydell/node-pty to v1.2.0-beta.14 ([#61](https://github.com/mertkayacs/reevesagents/issues/61)) ([73efdab](https://github.com/mertkayacs/reevesagents/commit/73efdabacb5558f30e18a544e3234371252b37bb))
+* **deps:** update dependency @lydell/node-pty to v1.2.0-beta.15 ([#67](https://github.com/mertkayacs/reevesagents/issues/67)) ([1a85242](https://github.com/mertkayacs/reevesagents/commit/1a85242c392a7e17d976cda33c130ea24d31015e))
+
 ## [1.7.6](https://github.com/mertkayacs/reevesagents/compare/v1.7.5...v1.7.6) (2026-08-06)
 
 
