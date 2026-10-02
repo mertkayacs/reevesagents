@@ -20,7 +20,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
-        version: 1.30.1(zod@4.4.3)
+        version: 1.31.0(zod@4.4.3)
       commander:
         specifier: ^14.0.3
         version: 14.0.3
@@ -91,7 +91,7 @@ importers:
         version: 1.2.0-beta.15
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
-        version: 1.30.1(zod@4.4.3)
+        version: 1.31.0(zod@4.4.3)
       commander:
         specifier: ^14.0.3
         version: 14.0.3
@@ -409,8 +409,8 @@ packages:
   '@lydell/node-pty@1.2.0-beta.15':
     resolution: {integrity: sha512-Br8wBxzbxFwdWgk9uQ+rdzE0xfoxOK4QuGH54swhRwc5IxP6H9Y1/bcyazRGvNUs6XkB5qNVkezuKSRxUwZe7A==}
 
-  '@modelcontextprotocol/sdk@1.30.1':
-    resolution: {integrity: sha512-H2HxLvC3HDNybePJaLdSrU1hhUK5iQw+WvV1b01myFyI7sdVGe1u/IPTE5D9fGCiJDVtgMV/lmFkQXLmQyIFYA==}
+  '@modelcontextprotocol/sdk@1.31.0':
+    resolution: {integrity: sha512-UvTMgnNlnIBO/22ob2RcVGDlcvOslQs8T59+FTGdA0L27a39fdGF/EDETNtDVK4DZGpwomlsYpRdA8UXcVL/pw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -2111,7 +2111,7 @@ snapshots:
       '@lydell/node-pty-win32-arm64': 1.2.0-beta.15
       '@lydell/node-pty-win32-x64': 1.2.0-beta.15
 
-  '@modelcontextprotocol/sdk@1.30.1(zod@4.4.3)':
+  '@modelcontextprotocol/sdk@1.31.0(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.9)
       ajv: 8.20.0
