@@ -6,6 +6,8 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/v/reevesagents.svg" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dt/reevesagents" alt="إجمالي التنزيلات من npm" /></a>
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dm/reevesagents" alt="التنزيلات الشهرية من npm" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/reevesagents.svg" alt="node" /></a>
   <a href="../../LICENSE"><img src="https://img.shields.io/npm/l/reevesagents.svg" alt="license" /></a>
   <a href="https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI" alt="CI" /></a>
@@ -329,3 +331,14 @@ ssh -L 8080:127.0.0.1:8080 user@host
 - المشكلات: https://github.com/mertkayacs/reevesagents/issues
 - سجل التغييرات: [CHANGELOG.md](../../CHANGELOG.md)
 - الترخيص: [Apache-2.0](../../LICENSE)
+
+<p align="center">
+  <a href="https://eschatialabs.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/eschatia-labs-lockup-dark.png" />
+      <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/eschatia-labs-lockup.png" alt="Eschatia Labs" width="160" />
+    </picture>
+    <br />
+    مشروع من Eschatia Labs
+  </a>
+</p>
