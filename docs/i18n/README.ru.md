@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
+  <a href="https://reevesagents.mertkayacs.com/ru/">
     <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
   </a>
 </p>
@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>Демо</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>Документация</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>Вопросы и ответы</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/ru/demo/"><b>Демо</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/ru/docs/"><b>Документация</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/ru/faq/"><b>Вопросы и ответы</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
 </p>
 
@@ -333,7 +333,7 @@ URL.
 
 ## Ссылки
 
-- Сайт: https://reevesagents.mertkayacs.com
+- Сайт: https://reevesagents.mertkayacs.com/ru/
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Релизы: https://github.com/mertkayacs/reevesagents/releases

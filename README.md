@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>Demo</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>Docs</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>FAQ</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/demo/"><b>Demo</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/docs/"><b>Docs</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/faq/"><b>FAQ</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
 </p>
 

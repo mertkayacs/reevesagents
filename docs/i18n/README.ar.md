@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
+  <a href="https://reevesagents.mertkayacs.com/ar/">
     <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
   </a>
 </p>
@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>العرض الحي</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>التوثيق</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>الأسئلة الشائعة</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/ar/demo/"><b>العرض الحي</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/ar/docs/"><b>التوثيق</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/ar/faq/"><b>الأسئلة الشائعة</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>المشكلات</b></a>
 </p>
 
@@ -324,7 +324,7 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## روابط
 
-- الموقع: https://reevesagents.mertkayacs.com
+- الموقع: https://reevesagents.mertkayacs.com/ar/
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - الإصدارات: https://github.com/mertkayacs/reevesagents/releases

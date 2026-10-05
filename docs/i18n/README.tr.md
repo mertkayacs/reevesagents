@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
+  <a href="https://reevesagents.mertkayacs.com/tr/">
     <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
   </a>
 </p>
@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>Demo</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>Dokümanlar</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>SSS</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/tr/demo/"><b>Demo</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/tr/docs/"><b>Dokümanlar</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/tr/faq/"><b>SSS</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issue'lar</b></a>
 </p>
 
@@ -330,7 +330,7 @@ depodaki pnpm, TypeScript, tsup, Vitest ve ESLint kurulumunu kullanır.
 
 ## Bağlantılar
 
-- Web sitesi: https://reevesagents.mertkayacs.com
+- Web sitesi: https://reevesagents.mertkayacs.com/tr/
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Sürümler: https://github.com/mertkayacs/reevesagents/releases

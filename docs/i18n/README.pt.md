@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
+  <a href="https://reevesagents.mertkayacs.com/pt/">
     <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
   </a>
 </p>
@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>Demo</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>Documentação</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>FAQ</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/pt/demo/"><b>Demo</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/pt/docs/"><b>Documentação</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/pt/faq/"><b>FAQ</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
 </p>
 
@@ -332,7 +332,7 @@ usa pnpm, TypeScript, tsup, Vitest e ESLint a partir do repositório.
 
 ## Links
 
-- Site: https://reevesagents.mertkayacs.com
+- Site: https://reevesagents.mertkayacs.com/pt/
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Releases: https://github.com/mertkayacs/reevesagents/releases

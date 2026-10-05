@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
+  <a href="https://reevesagents.mertkayacs.com/zh-Hans/">
     <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
   </a>
 </p>
@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>演示</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>文档</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>常见问题</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/zh-Hans/demo/"><b>演示</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/zh-Hans/docs/"><b>文档</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/zh-Hans/faq/"><b>常见问题</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>问题反馈</b></a>
 </p>
 
@@ -297,7 +297,7 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## 链接
 
-- 网站：https://reevesagents.mertkayacs.com
+- 网站：https://reevesagents.mertkayacs.com/zh-Hans/
 - npm：https://www.npmjs.com/package/reevesagents
 - GitHub：https://github.com/mertkayacs/reevesagents
 - 发行版：https://github.com/mertkayacs/reevesagents/releases

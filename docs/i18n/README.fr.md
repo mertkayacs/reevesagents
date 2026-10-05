@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
+  <a href="https://reevesagents.mertkayacs.com/fr/">
     <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
   </a>
 </p>
@@ -14,9 +14,9 @@
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>Démo</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>Docs</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>FAQ</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/fr/demo/"><b>Démo</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/fr/docs/"><b>Docs</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/fr/faq/"><b>FAQ</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
 </p>
 
@@ -333,7 +333,7 @@ dépôt.
 
 ## Liens
 
-- Site web : https://reevesagents.mertkayacs.com
+- Site web : https://reevesagents.mertkayacs.com/fr/
 - npm : https://www.npmjs.com/package/reevesagents
 - GitHub : https://github.com/mertkayacs/reevesagents
 - Releases : https://github.com/mertkayacs/reevesagents/releases
