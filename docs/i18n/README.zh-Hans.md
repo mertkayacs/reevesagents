@@ -1,20 +1,22 @@
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
+  <a href="https://reevesagents.mertkayacs.com/zh-Hans/">
     <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
   </a>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/v/reevesagents.svg" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dt/reevesagents" alt="npm 总下载量" /></a>
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dm/reevesagents" alt="npm 月下载量" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/reevesagents.svg" alt="node" /></a>
   <a href="../../LICENSE"><img src="https://img.shields.io/npm/l/reevesagents.svg" alt="license" /></a>
   <a href="https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI" alt="CI" /></a>
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>演示</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>文档</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>常见问题</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/zh-Hans/demo/"><b>演示</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/zh-Hans/docs/"><b>文档</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/zh-Hans/faq/"><b>常见问题</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>问题反馈</b></a>
 </p>
 
@@ -295,10 +297,21 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 ## 链接
 
-- 网站：https://reevesagents.mertkayacs.com
+- 网站：https://reevesagents.mertkayacs.com/zh-Hans/
 - npm：https://www.npmjs.com/package/reevesagents
 - GitHub：https://github.com/mertkayacs/reevesagents
 - 发行版：https://github.com/mertkayacs/reevesagents/releases
 - 问题反馈：https://github.com/mertkayacs/reevesagents/issues
 - 更新日志：[CHANGELOG.md](../../CHANGELOG.md)
 - 许可证：[Apache-2.0](../../LICENSE)
+
+<p align="center">
+  <a href="https://eschatialabs.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/eschatia-labs-lockup-dark.png" />
+      <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/eschatia-labs-lockup.png" alt="Eschatia Labs" width="160" />
+    </picture>
+    <br />
+    Eschatia Labs 项目
+  </a>
+</p>

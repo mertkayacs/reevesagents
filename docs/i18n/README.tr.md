@@ -1,20 +1,22 @@
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
+  <a href="https://reevesagents.mertkayacs.com/tr/">
     <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
   </a>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/v/reevesagents.svg" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dt/reevesagents" alt="toplam npm indirmesi" /></a>
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dm/reevesagents" alt="aylık npm indirmesi" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/reevesagents.svg" alt="node" /></a>
   <a href="../../LICENSE"><img src="https://img.shields.io/npm/l/reevesagents.svg" alt="license" /></a>
   <a href="https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI" alt="CI" /></a>
 </p>
 
 <p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo"><b>Demo</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs"><b>Dokümanlar</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq"><b>SSS</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/tr/demo/"><b>Demo</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/tr/docs/"><b>Dokümanlar</b></a> ·
+  <a href="https://reevesagents.mertkayacs.com/tr/faq/"><b>SSS</b></a> ·
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issue'lar</b></a>
 </p>
 
@@ -328,10 +330,21 @@ depodaki pnpm, TypeScript, tsup, Vitest ve ESLint kurulumunu kullanır.
 
 ## Bağlantılar
 
-- Web sitesi: https://reevesagents.mertkayacs.com
+- Web sitesi: https://reevesagents.mertkayacs.com/tr/
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
 - Sürümler: https://github.com/mertkayacs/reevesagents/releases
 - Issue'lar: https://github.com/mertkayacs/reevesagents/issues
 - Değişiklik günlüğü: [CHANGELOG.md](../../CHANGELOG.md)
 - Lisans: [Apache-2.0](../../LICENSE)
+
+<p align="center">
+  <a href="https://eschatialabs.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/eschatia-labs-lockup-dark.png" />
+      <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/eschatia-labs-lockup.png" alt="Eschatia Labs" width="160" />
+    </picture>
+    <br />
+    Bir Eschatia Labs projesi
+  </a>
+</p>
