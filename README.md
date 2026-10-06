@@ -1,346 +1,68 @@
-<p align="center">
-  <a href="https://reevesagents.mertkayacs.com">
-    <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-header.gif" alt="ReevesAgents" width="800" />
-  </a>
-</p>
+# reevesagents: a workspace for AI coding tools
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/v/reevesagents.svg" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dt/reevesagents" alt="total npm downloads" /></a>
-  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dm/reevesagents" alt="monthly npm downloads" /></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/reevesagents.svg" alt="node" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/npm/l/reevesagents.svg" alt="license" /></a>
-  <a href="https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI" alt="CI" /></a>
-</p>
+Run Claude Code, Codex, Kimi, OpenCode, Hermes and other AI coding tools side by side on your computer. reevesagents keeps their terminal sessions together so you can inspect each tool's work, send instructions and stop a run from one place.
 
-<p align="center">
-  <a href="https://reevesagents.mertkayacs.com/demo/"><b>Demo</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/docs/"><b>Docs</b></a> ·
-  <a href="https://reevesagents.mertkayacs.com/faq/"><b>FAQ</b></a> ·
-  <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
-</p>
+[See the demo](https://reevesagents.mertkayacs.com/demo/) or install the command-line tool below.
 
-**English** · [Deutsch](docs/i18n/README.de.md) · [Français](docs/i18n/README.fr.md) · [Español](docs/i18n/README.es.md) · [Português](docs/i18n/README.pt.md) · [Italiano](docs/i18n/README.it.md) · [Türkçe](docs/i18n/README.tr.md) · [Русский](docs/i18n/README.ru.md) · [简体中文](docs/i18n/README.zh-Hans.md) · [العربية](docs/i18n/README.ar.md)
+## Quick start
 
-ReevesAgents is a local workspace for AI coding CLIs. It runs Claude Code,
-Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider, and other provider
-CLIs side by side in tmux. You can use it as a normal CLI/TUI/Web UI, or attach
-its opt-in MCP so one agent can spawn, read, steer, and stop the rest.
-
-Provider logins stay inside each provider CLI. ReevesAgents keeps its own state
-as a few plain JSON files under `~/.reeves`, and it runs only while you or an
-attached CLI are using it.
-
-## Quick Start
+Requires Node.js 20.19 or newer, tmux 3.0 or newer, and an installed, authenticated AI coding tool. Supports macOS, Linux and WSL. tmux keeps the tools running when you close the interface.
 
 ```sh
-pnpm add -g reevesagents
-reevesagents doctor
-reevesagents
+npm install -g reevesagents && reevesagents doctor && reevesagents
 ```
 
-Start a run from the CLI:
+This opens the terminal interface. For the browser interface, run `reevesagents web`; it listens only on your computer's loopback address.
+
+## Run a team
+
+Start a run with a task for the tools:
 
 ```sh
-reevesagents spawn claude-code:lead codex:tests hermes:research \
-  --name "release check" \
-  --prompt "Review the release path, test coverage, and docs."
+reevesagents spawn claude-code:lead codex:tests --name "review" --prompt "Review the code and tests."
 ```
 
-Open the Web UI:
+Use the terminal or browser interface to read output and steer each tool. Each provider keeps its own login and sends its own model requests. Run state is stored as JSON under `~/.reeves`.
+
+## Let one tool direct the others
+
+Attach the optional Model Context Protocol (MCP) server, a standard connection between AI tools, to a host you trust:
 
 ```sh
-reevesagents web
+reevesagents attach claude && reevesagents hosts
 ```
 
-Let one attached agent drive the others:
+Restart that host to load the connection. It can then start, read, steer and stop other tools. Workers receive no MCP connection by default. Keep provider permission prompts enabled and review approvals before sensitive actions.
 
-```sh
-reevesagents attach codex
-reevesagents hosts
-```
+The [reevesagents skill](https://github.com/mertkayacs/reevesagents-skill) supplies the host's operating instructions. See the [MCP reference](docs/mcp.md) for tools and host requirements.
 
-Restart that CLI after attach so it loads the MCP tools.
+## Choose an interface
 
-## What It Gives You
-
-| Surface | Use it for |
+| Interface | Purpose |
 | --- | --- |
-| **TUI** | Keyboard-first run control inside the terminal. |
-| **Web UI** | Local visual view of runs, panes, agents, approvals, and history. |
-| **CLI** | Scripts, smoke checks, spawning, state cleanup, and tmux jumps. |
-| **Agent Control MCP** | One trusted CLI can spawn and drive other CLIs through local tools. |
-| **tmux** | Real provider CLI windows that keep running after the UI closes. |
+| Terminal UI | Inspect and control runs with the keyboard |
+| Web UI | Inspect runs, live output, approvals and history in a browser |
+| Command line | Start runs and inspect output from scripts |
+| MCP server | Let a trusted AI coding tool control a team |
 
-ReevesAgents is local by design. State is plain JSON under `~/.reeves`, and the
-CLIs it starts are the same CLIs you already use by hand.
-
-<a id="install"></a>
 <details>
-<summary><strong>Install</strong></summary>
+<summary>Web UI screenshot</summary>
 
-ReevesAgents needs Node.js `20.19+`, tmux `3.0+`, and at least one supported
-provider CLI installed and authenticated. It supports macOS, Linux, and WSL.
-
-```sh
-# Homebrew
-brew tap mertkayacs/reevesagents
-brew install reevesagents
-
-# pnpm
-pnpm add -g reevesagents
-
-# npm
-npm install -g reevesagents
-
-# one-shot checks
-pnpm dlx reevesagents doctor
-npx reevesagents doctor
-```
-
-Pin a version by replacing `<version>`:
-
-```sh
-pnpm add -g reevesagents@<version>
-```
-
-Source install:
-
-```sh
-git clone https://github.com/mertkayacs/reevesagents.git
-cd reevesagents
-pnpm install
-pnpm build
-pnpm link --global
-reevesagents doctor
-```
+![reevesagents Web UI showing runs and live agent output](docs/assets/reevesagents-web-en.png)
 
 </details>
 
-<a id="screenshots"></a>
-<details>
-<summary><strong>Screenshots</strong></summary>
+## Documentation
 
-The TUI and Web UI drive the same local runs:
+- [User guide](https://reevesagents.mertkayacs.com/docs/): installation, commands and configuration.
+- [FAQ](https://reevesagents.mertkayacs.com/faq/): provider setup and troubleshooting.
+- [MCP reference](docs/mcp.md): tools and host connections.
+- [Contributing](.github/CONTRIBUTING.md), [testing](docs/testing.md) and [changelog](CHANGELOG.md).
 
-![ReevesAgents TUI: language picker, welcome menu, and doctor](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif)
+Translations: [Deutsch](docs/i18n/README.de.md), [Français](docs/i18n/README.fr.md), [Español](docs/i18n/README.es.md), [Português](docs/i18n/README.pt.md), [Italiano](docs/i18n/README.it.md), [Türkçe](docs/i18n/README.tr.md), [Русский](docs/i18n/README.ru.md), [简体中文](docs/i18n/README.zh-Hans.md), [العربية](docs/i18n/README.ar.md). These are separate README translations.
 
-![ReevesAgents Web UI: runs and live agent panes](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-web-en.png)
+## License
 
-![ReevesAgents Web UI: starting a new run](https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-newrun-en.png)
+[Apache-2.0](LICENSE). Available on [npm](https://www.npmjs.com/package/reevesagents).
 
-</details>
-
-<a id="commands"></a>
-<details>
-<summary><strong>Commands</strong></summary>
-
-No arguments launches the TUI.
-
-| Command | Purpose |
-| --- | --- |
-| `reevesagents` | Launch the TUI. |
-| `spawn [spec...]` | Start a run. Each spec is `provider[:nickname[:model]]`. |
-| `add [spec...]` | Add agents to the most recent active run. |
-| `runs` | List active runs. |
-| `agents [run-id]` | List agents across runs or inside one run. |
-| `open <id>` | Jump to a run or agent tmux window. |
-| `peek <agent-id>` | Print recent output from one agent. |
-| `send <agent-id> <text...>` | Paste text into an agent without submitting. |
-| `key <agent-id> <key>` | Send `enter`, `escape`, arrows, `tab`, `space`, `backspace`, or `ctrl-c`. |
-| `interrupt <agent-id>` | Send Ctrl-C to one agent. |
-| `stop <run-id>` | Stop a run. Requires `--yes` or `ALLOW_DESTRUCTIVE=1`. |
-| `kill <agent-id>` | Stop one agent. Requires `--yes` or `ALLOW_DESTRUCTIVE=1`. |
-| `setup` | First-run check. `--attach` connects every installed host CLI. |
-| `doctor` | Check Node, tmux, state, and provider CLIs. |
-| `web` | Start the loopback-only Web UI. |
-| `providers` | List provider ids, aliases, models, and availability. |
-| `approvals` | List pending approval requests. |
-| `approve` / `deny` | Resolve one approval request. |
-| `hosts` | Show which host CLIs have ReevesAgents attached. |
-| `attach [cli]` | Connect the Agent Control MCP to one host CLI, or all installed hosts. |
-| `detach <cli>` | Remove that MCP connection from one host CLI. |
-| `skills [action]` | Install, remove, or inspect the ReevesAgents skill. |
-| `mcp` | Start the MCP server over stdio. Host CLIs run this. |
-| `config [key] [value]` | Show or update editable settings. |
-| `presets` | List saved run presets. |
-| `save-preset` | Save a live run as a preset. |
-| `start-preset` | Start a run from a preset. |
-| `delete-preset` | Delete a preset. |
-| `delete` | Delete one ended agent record. Requires confirmation. |
-| `delete-run` | Delete one ended run and archive it. Requires confirmation. |
-| `history` | List archived runs. |
-| `delete-history` | Delete one archived history record. Requires confirmation. |
-| `reap` | End zombie agents and agents past `max_lifetime_ms`, and kill orphan tmux sessions no run record owns. |
-
-Common flags:
-
-- `--json`: available on script-facing list and action commands.
-- `--name <name>`: name a run.
-- `--cwd <dir>`: run agents from a directory.
-- `--prompt <text>`: paste startup text into each spawned agent.
-- `--skip`: skip provider permission prompts for unattended workers.
-- `--run <run-id>`: add agents to a specific run.
-- `--port <n>` and `--no-open`: Web UI startup options.
-
-</details>
-
-<a id="agent-control"></a>
-<details>
-<summary><strong>Agent Control</strong></summary>
-
-Agent Control is an optional MCP server. Attach it only to a CLI you trust to
-drive local tools:
-
-```sh
-reevesagents attach claude
-reevesagents hosts
-```
-
-After restart, that CLI receives tools to `spawn`, `read`, `send_text`,
-`send_key`, `interrupt`, `kill`, `stop`, manage approvals, manage presets, and
-inspect hosts. The provider catalog is also exposed as `reevesagents://providers`.
-
-Workers do not receive the MCP by default. If a worker should create its own
-workers, attach ReevesAgents to that worker's CLI explicitly.
-
-Codex sandboxes MCP calls by default, which blocks tmux launches. When using
-Codex as the host that drives agents, run it with full access, for example
-`codex --sandbox danger-full-access`, or use a Codex profile that sets
-`sandbox_mode = "danger-full-access"`.
-
-Full tool reference: [docs/mcp.md](docs/mcp.md). Agent-facing operator guide:
-[AGENTS.md](AGENTS.md).
-
-</details>
-
-<a id="configuration"></a>
-<details>
-<summary><strong>Configuration</strong></summary>
-
-State lives under `~/.reeves`:
-
-```text
-~/.reeves/
-  config.json
-  presets/
-  runs/
-  history/
-```
-
-Two environment variables override the default paths:
-
-- `REEVES_REGISTRY`: state root override for `runs/`, `history/`, and `presets/`.
-- `REEVES_CONFIG`: config file path override.
-
-One registry per tmux server: the background orphan sweep judges session
-ownership against the current registry, so two registries must not share one
-tmux server.
-
-Anything that might contain a secret is scrubbed before it reaches a file.
-
-</details>
-
-<a id="examples"></a>
-<details>
-<summary><strong>Examples</strong></summary>
-
-Spread one project across multiple CLIs:
-
-```sh
-reevesagents spawn deepseek:backend claude-code:product codex:review \
-  --name "feature x" \
-  --prompt "Backend, product copy, and a review pass."
-```
-
-Watch one agent and then open its window:
-
-```sh
-reevesagents peek backend -n 40
-reevesagents open backend
-```
-
-Stop the run when the work is done:
-
-```sh
-reevesagents stop "feature x" --yes
-```
-
-</details>
-
-<a id="web-ui"></a>
-<details>
-<summary><strong>Web UI</strong></summary>
-
-```sh
-reevesagents web
-```
-
-The Web UI binds to `127.0.0.1` only and runs in the foreground. Agents keep
-running after the page closes because they live in tmux.
-
-The Web UI uses optional runtime modules, `ws` and `@lydell/node-pty`. npm
-installs them by default. CLI and TUI commands keep working without them, and
-`reevesagents web` explains what is missing.
-
-To reach it from another machine, forward the loopback port over SSH:
-
-```sh
-ssh -L 8080:127.0.0.1:8080 user@host
-```
-
-</details>
-
-<a id="troubleshooting"></a>
-<details>
-<summary><strong>Troubleshooting</strong></summary>
-
-**tmux is not installed.** Install tmux and run `reevesagents doctor`. The TUI
-auto-wraps itself in a tmux session named `reeves`; set
-`REEVES_NO_TMUX_WRAPPER=1` to skip that behavior.
-
-**A provider CLI is missing or signed out.** ReevesAgents launches provider CLIs
-that are already on `PATH` and authenticated. `reevesagents doctor` shows what
-is detected. If a launched window is waiting at login, `peek` shows it.
-
-**The Web UI reports missing packages.** Reinstall with optional dependencies
-enabled, then run `reevesagents doctor`.
-
-**Port already in use.** `reevesagents web` starts at `8080` by default. If it is
-taken, the server binds the next free port in a small range and prints the URL.
-
-</details>
-
-<a id="contributing"></a>
-<details>
-<summary><strong>Contributing</strong></summary>
-
-Contributor docs live under [docs/](docs). Start with
-[CONTRIBUTING.md](.github/CONTRIBUTING.md), [testing](docs/testing.md), and
-[releasing](docs/releasing.md).
-
-End users do not need the development toolchain. Contributors use pnpm,
-TypeScript, tsup, Vitest, and ESLint from the repository.
-
-</details>
-
-## Links
-
-- Website: https://reevesagents.mertkayacs.com
-- npm: https://www.npmjs.com/package/reevesagents
-- GitHub: https://github.com/mertkayacs/reevesagents
-- Releases: https://github.com/mertkayacs/reevesagents/releases
-- Issues: https://github.com/mertkayacs/reevesagents/issues
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- License: [Apache-2.0](LICENSE)
-
-<p align="center">
-  <a href="https://eschatialabs.com">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/eschatia-labs-lockup-dark.png" />
-      <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/eschatia-labs-lockup.png" alt="Eschatia Labs" width="160" />
-    </picture>
-    <br />
-    An Eschatia Labs project
-  </a>
-</p>
+An [Eschatia Labs](https://eschatialabs.com) project by [Mert Kaya](https://mertkayacs.com).
