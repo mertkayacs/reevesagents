@@ -2,6 +2,8 @@
 
 Run Claude Code, Codex, Kimi, OpenCode, Hermes and other AI coding tools side by side on your computer. reevesagents keeps their terminal sessions together so you can inspect each tool's work, send instructions and stop a run from one place.
 
+<img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif" width="800" alt="reevesagents terminal interface: choosing the interface language, the main menu and the doctor setup check">
+
 [See the demo](https://reevesagents.mertkayacs.com/demo/) or install the command-line tool below.
 
 ## Quick start
@@ -23,6 +25,8 @@ reevesagents spawn claude-code:lead codex:tests --name "review" --prompt "Review
 ```
 
 Use the terminal or browser interface to read output and steer each tool. Each provider keeps its own login and sends its own model requests. Run state is stored as JSON under `~/.reeves`.
+
+<img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-newrun-en.png" width="720" alt="reevesagents Web UI starting a new run: a run name, a choice of provider tools such as Claude Code, Codex CLI and Kimi Code, a model and a permission mode">
 
 ## Let one tool direct the others
 
@@ -48,7 +52,7 @@ The [reevesagents skill](https://github.com/mertkayacs/reevesagents-skill) suppl
 <details>
 <summary>Web UI screenshot</summary>
 
-![reevesagents Web UI showing runs and live agent output](docs/assets/reevesagents-web-en.png)
+<img src="docs/assets/reevesagents-web-en.png" width="720" alt="reevesagents Web UI before any run: an empty agent list, New run buttons and the language and settings controls">
 
 </details>
 
@@ -65,4 +69,4 @@ Translations: [Deutsch](docs/i18n/README.de.md), [Français](docs/i18n/README.fr
 
 [Apache-2.0](LICENSE). Available on [npm](https://www.npmjs.com/package/reevesagents).
 
-An [Eschatia Labs](https://eschatialabs.com) project by [Mert Kaya](https://mertkayacs.com).
+<a href="https://eschatialabs.com"><picture><source media="(min-resolution: 2dppx)" srcset="https://eschatialabs.com/brand/lockup-46@2x.png"><img src="https://eschatialabs.com/brand/lockup-46@1x.png" width="124" height="46" alt="Eschatia Labs"></picture></a><br>An [Eschatia Labs](https://eschatialabs.com) project by [Mert Kaya](https://mertkayacs.com).
