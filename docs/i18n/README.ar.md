@@ -202,6 +202,13 @@ reevesagents hosts
 و`send_key` و`interrupt` و`kill` و`stop`، وعلى أدوات لإدارة الموافقات والإعدادات
 المسبقة وفحص المضيفين. ويُتاح كتالوج المزوّدين أيضًا عبر المورد `reevesagents://providers`.
 
+في Claude Code يمكن أيضًا تثبيت اتصال MCP ومهارة ReevesAgents معًا كإضافة (plugin):
+
+```sh
+claude plugin marketplace add mertkayacs/reevesagents
+claude plugin install reevesagents@reevesagents
+```
+
 لا يحصل العمّال على الـ MCP افتراضيًا. وإن أردت أن ينشئ عامل عمّالًا خاصين به،
 فاربط ReevesAgents بأداة CLI الخاصة بذلك العامل صراحةً.
 

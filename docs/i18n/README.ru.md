@@ -206,6 +206,13 @@ reevesagents hosts
 пресетов и просмотра хостов. Каталог провайдеров доступен ещё и как ресурс
 `reevesagents://providers`.
 
+В Claude Code MCP-подключение и скилл ReevesAgents можно также установить вместе как плагин:
+
+```sh
+claude plugin marketplace add mertkayacs/reevesagents
+claude plugin install reevesagents@reevesagents
+```
+
 По умолчанию воркеры MCP не получают. Если воркер должен создавать собственных
 воркеров, явно подключите ReevesAgents к CLI этого воркера.
 

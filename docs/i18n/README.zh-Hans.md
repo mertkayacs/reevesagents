@@ -191,6 +191,13 @@ reevesagents hosts
 
 重启之后，那个 CLI 会拿到 `spawn`、`read`、`send_text`、`send_key`、`interrupt`、`kill`、`stop` 等工具，还能管理审批、管理预设和查看宿主。提供方目录也以 `reevesagents://providers` 的形式公开。
 
+在 Claude Code 中，也可以把 MCP 连接和 ReevesAgents 技能作为插件一起安装：
+
+```sh
+claude plugin marketplace add mertkayacs/reevesagents
+claude plugin install reevesagents@reevesagents
+```
+
 工作智能体默认拿不到这个 MCP。如果某个工作智能体需要自己再创建工作智能体，就把 ReevesAgents 明确附加到那个工作智能体的 CLI 上。
 
 Codex 默认会把 MCP 调用放进沙箱，这会拦住 tmux 的启动。用 Codex 当宿主去驱动智能体时，要给它完整权限，例如 `codex --sandbox danger-full-access`，或者使用一个设置了 `sandbox_mode = "danger-full-access"` 的 Codex profile。

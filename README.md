@@ -38,7 +38,14 @@ reevesagents attach claude && reevesagents hosts
 
 Restart that host to load the connection. It can then start, read, steer and stop other tools. Workers receive no MCP connection by default. Keep provider permission prompts enabled and review approvals before sensitive actions.
 
-The [reevesagents skill](https://github.com/mertkayacs/reevesagents-skill) supplies the host's operating instructions. See the [MCP reference](docs/mcp.md) for tools and host requirements.
+In Claude Code you can install the connection and its operating instructions together as a plugin:
+
+```sh
+claude plugin marketplace add mertkayacs/reevesagents
+claude plugin install reevesagents@reevesagents
+```
+
+For other hosts, the [reevesagents skill](https://github.com/mertkayacs/reevesagents-skill) supplies the operating instructions. See the [MCP reference](docs/mcp.md) for tools and host requirements.
 
 ## Choose an interface
 

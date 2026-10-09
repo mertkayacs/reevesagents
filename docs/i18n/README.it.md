@@ -202,6 +202,13 @@ Dopo il riavvio, quella CLI riceve gli strumenti `spawn`, `read`, `send_text`,
 e per ispezionare gli host. Il catalogo dei provider è esposto anche come
 `reevesagents://providers`.
 
+In Claude Code la connessione MCP e la skill di ReevesAgents si possono installare anche insieme, come plugin:
+
+```sh
+claude plugin marketplace add mertkayacs/reevesagents
+claude plugin install reevesagents@reevesagents
+```
+
 Per default i worker non ricevono l'MCP. Se un worker deve creare i propri worker,
 collega esplicitamente ReevesAgents alla CLI di quel worker.
 

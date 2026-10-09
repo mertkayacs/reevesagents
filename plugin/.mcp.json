@@ -1,0 +1,6 @@
+{
+  "reevesagents": {
+    "command": "reevesagents",
+    "args": ["mcp"]
+  }
+}

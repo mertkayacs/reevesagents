@@ -203,6 +203,13 @@ Yeniden başlattıktan sonra o CLI; `spawn`, `read`, `send_text`, `send_key`,
 ve host'ları incelemek için araçları alır. Sağlayıcı kataloğu da
 `reevesagents://providers` olarak sunulur.
 
+Claude Code'da MCP bağlantısı ve ReevesAgents skill'i birlikte bir eklenti olarak da kurulabilir:
+
+```sh
+claude plugin marketplace add mertkayacs/reevesagents
+claude plugin install reevesagents@reevesagents
+```
+
 Worker'lar MCP'yi varsayılan olarak almaz. Bir worker'ın kendi worker'larını
 oluşturması gerekiyorsa ReevesAgents'ı o worker'ın CLI'sine ayrıca bağlayın.
 

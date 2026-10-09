@@ -1,0 +1,17 @@
+{
+  "name": "reevesagents",
+  "owner": {
+    "name": "Mert Kaya",
+    "url": "https://mertkayacs.com"
+  },
+  "description": "Run and steer a team of AI coding CLIs from Claude Code",
+  "plugins": [
+    {
+      "name": "reevesagents",
+      "source": "./plugin",
+      "description": "Run and steer other AI coding CLIs (Claude Code, Codex, Kimi, Qwen, OpenCode and more) from Claude Code, each in its own tmux window, through the reevesagents MCP server",
+      "category": "development",
+      "tags": ["agents", "multi-agent", "mcp", "tmux", "orchestration"]
+    }
+  ]
+}
