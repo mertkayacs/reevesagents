@@ -1,4 +1,4 @@
-<p align="center"><a href="https://reevesagents.mertkayacs.com/fr/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.png" width="800" alt="ReevesAgents : faire travailler ensemble les assistants de code IA"></a></p>
+<p align="center"><a href="https://reevesagents.mertkayacs.com/fr/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.gif" width="800" alt="ReevesAgents : faire travailler ensemble les assistants de code IA"></a></p>
 
 # reevesagents : un espace de travail pour les outils de code IA
 

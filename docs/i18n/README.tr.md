@@ -1,4 +1,4 @@
-<p align="center"><a href="https://reevesagents.mertkayacs.com/tr/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.png" width="800" alt="ReevesAgents: yapay zekâ kodlama asistanlarını birlikte çalıştırın"></a></p>
+<p align="center"><a href="https://reevesagents.mertkayacs.com/tr/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.gif" width="800" alt="ReevesAgents: yapay zekâ kodlama asistanlarını birlikte çalıştırın"></a></p>
 
 # reevesagents: yapay zekâ kodlama araçları için bir çalışma alanı
 

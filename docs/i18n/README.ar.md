@@ -1,4 +1,4 @@
-<p align="center"><a href="https://reevesagents.mertkayacs.com/ar/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.png" width="800" alt="ReevesAgents: شغّل مساعدي البرمجة بالذكاء الاصطناعي معًا"></a></p>
+<p align="center"><a href="https://reevesagents.mertkayacs.com/ar/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.gif" width="800" alt="ReevesAgents: شغّل مساعدي البرمجة بالذكاء الاصطناعي معًا"></a></p>
 
 # reevesagents: مساحة عمل لأدوات البرمجة بالذكاء الاصطناعي
 
