@@ -1,6 +1,6 @@
 {
   "name": "reevesagents",
-  "version": "1.7.7",
+  "version": "1.8.0",
   "description": "Run and steer other AI coding CLIs (Claude Code, Codex, Kimi, Qwen, OpenCode and more) from Claude Code, each in its own tmux window, through the reevesagents MCP server",
   "author": {
     "name": "Mert Kaya",
@@ -9,5 +9,14 @@
   "homepage": "https://reevesagents.mertkayacs.com",
   "repository": "https://github.com/mertkayacs/reevesagents",
   "license": "Apache-2.0",
-  "keywords": ["agents", "multi-agent", "mcp", "tmux", "orchestration", "codex", "kimi", "opencode"]
+  "keywords": [
+    "agents",
+    "multi-agent",
+    "mcp",
+    "tmux",
+    "orchestration",
+    "codex",
+    "kimi",
+    "opencode"
+  ]
 }

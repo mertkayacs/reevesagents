@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/mertkayacs/reevesagents/compare/v1.7.7...v1.8.0) (2026-10-09)
+
+
+### Features
+
+* **mcp:** publish to the official MCP registry ([#120](https://github.com/mertkayacs/reevesagents/issues/120)) ([f3f5e03](https://github.com/mertkayacs/reevesagents/commit/f3f5e0385f17a42ec13b7eaaaa99b3af0335c1e9))
+* **plugin:** ship a Claude Code plugin and marketplace in the repository ([#122](https://github.com/mertkayacs/reevesagents/issues/122)) ([93e0e9c](https://github.com/mertkayacs/reevesagents/commit/93e0e9c582e0d1654a93423daff6fb94705cae68))
+
 ## [1.7.7](https://github.com/mertkayacs/reevesagents/compare/v1.7.6...v1.7.7) (2026-09-23)
 
 
