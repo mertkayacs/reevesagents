@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes target the current `1.7.x` release line.
+Security fixes target the current `1.8.x` release line.
 
 ## Reporting A Vulnerability
 
