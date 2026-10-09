@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/mertkayacs/reevesagents/compare/v1.8.0...v1.8.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **docs:** repair links to removed README sections and ship the current README to npm ([#126](https://github.com/mertkayacs/reevesagents/issues/126)) ([63db4e6](https://github.com/mertkayacs/reevesagents/commit/63db4e602806c4bafa65d725e11ce740391b8bb4))
+
 ## [1.8.0](https://github.com/mertkayacs/reevesagents/compare/v1.7.7...v1.8.0) (2026-10-09)
 
 
