@@ -8,13 +8,13 @@
     "source": "github"
   },
   "websiteUrl": "https://reevesagents.mertkayacs.com",
-  "version": "1.7.7",
+  "version": "1.8.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "reevesagents",
-      "version": "1.7.7",
+      "version": "1.8.0",
       "transport": {
         "type": "stdio"
       },
