@@ -1,8 +1,10 @@
+<p align="center"><a href="https://reevesagents.mertkayacs.com/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.png" width="800" alt="ReevesAgents: Run AI coding assistants together"></a></p>
+
 # reevesagents: a workspace for AI coding tools
 
 Run Claude Code, Codex, Kimi, OpenCode, Hermes and other AI coding tools side by side on your computer. reevesagents keeps their terminal sessions together so you can inspect each tool's work, send instructions and stop a run from one place.
 
-<img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-tui.gif" width="800" alt="reevesagents terminal interface: choosing the interface language, the main menu and the doctor setup check">
+<img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-hero.webp" width="720" alt="A gold-framed lead pane joined by fine gold threads to eight glowing glass panes, one for each tool in a run">
 
 [See the demo](https://reevesagents.mertkayacs.com/demo/) or install the command-line tool below.
 
@@ -46,6 +48,10 @@ claude plugin install reevesagents@reevesagents
 ```
 
 For other hosts, the [reevesagents skill](https://github.com/mertkayacs/reevesagents-skill) supplies the operating instructions. See the [MCP reference](docs/mcp.md) for tools and host requirements.
+
+The server is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/?q=io.github.mertkayacs/reevesagents) as `io.github.mertkayacs/reevesagents`.
+
+<img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-steer.webp" width="560" alt="A gold-framed lead pane sending messages along gold threads to three other panes">
 
 ## Choose an interface
 
