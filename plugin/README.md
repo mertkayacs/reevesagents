@@ -19,11 +19,17 @@ Run `reevesagents doctor` to check the setup.
 ## Install
 
 ```sh
+claude plugin install reevesagents --marketplace mertkayacs/reevesagents
+```
+
+This adds the marketplace and installs the plugin in one step. The two-step form also works, in the terminal or inside Claude Code with a leading slash:
+
+```sh
 claude plugin marketplace add mertkayacs/reevesagents
 claude plugin install reevesagents@reevesagents
 ```
 
-Inside Claude Code the same works with `/plugin marketplace add mertkayacs/reevesagents` and `/plugin install reevesagents@reevesagents`. Restart Claude Code afterwards.
+Restart Claude Code afterwards.
 
 ## Use
 
