@@ -1,4 +1,4 @@
-<p align="center"><a href="https://reevesagents.mertkayacs.com/zh-Hans/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.png" width="800" alt="ReevesAgents：让多个 AI 编程助手协同工作"></a></p>
+<p align="center"><a href="https://reevesagents.mertkayacs.com/zh-Hans/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.gif" width="800" alt="ReevesAgents：让多个 AI 编程助手协同工作"></a></p>
 
 # reevesagents：AI 编程工具的工作区
 

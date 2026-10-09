@@ -1,4 +1,4 @@
-<p align="center"><a href="https://reevesagents.mertkayacs.com/pt/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.png" width="800" alt="ReevesAgents: execute assistentes de programação com IA em conjunto"></a></p>
+<p align="center"><a href="https://reevesagents.mertkayacs.com/pt/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.gif" width="800" alt="ReevesAgents: execute assistentes de programação com IA em conjunto"></a></p>
 
 # reevesagents: um espaço de trabalho para ferramentas de programação com IA
 

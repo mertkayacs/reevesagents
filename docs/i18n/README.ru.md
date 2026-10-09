@@ -1,4 +1,4 @@
-<p align="center"><a href="https://reevesagents.mertkayacs.com/ru/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.png" width="800" alt="ReevesAgents: запускайте AI-ассистентов для программирования вместе"></a></p>
+<p align="center"><a href="https://reevesagents.mertkayacs.com/ru/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.gif" width="800" alt="ReevesAgents: запускайте AI-ассистентов для программирования вместе"></a></p>
 
 # reevesagents: рабочее пространство для AI-инструментов программирования
 
