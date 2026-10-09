@@ -145,6 +145,6 @@ reevesagents stop <run-id> --yes
 
 ## 更多
 
-- [README](README.md)：完整的功能介绍和全部命令。
+- [用户指南](https://reevesagents.mertkayacs.com/zh-Hans/docs/)：全部命令、标志和配置项。
 - [docs/GUIDE.md](docs/GUIDE.md)：分步用户指南。
 - [docs/mcp.md](docs/mcp.md)：智能体控制 MCP 的设计与工具列表。

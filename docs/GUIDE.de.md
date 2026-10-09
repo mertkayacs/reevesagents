@@ -4,7 +4,7 @@
 
 Dieses Handbuch bringt dich von der frischen Installation bis zu dem Punkt, an dem ein
 Agent die anderen für dich betreibt. Und wenn du stattdessen jeden Befehl mit jeder
-Option brauchst: Das steht in der [README](i18n/README.de.md).
+Option brauchst: Das steht im [Online-Handbuch](https://reevesagents.mertkayacs.com/de/docs/).
 
 ## Was ReevesAgents ist
 
@@ -39,8 +39,8 @@ Option brauchst: Das steht in der [README](i18n/README.de.md).
 - Prüfe deine Maschine: `reevesagents doctor` (prüft Node, tmux, den State-Ordner
   und welche Provider-CLIs sichtbar sind).
 - Starte es: `reevesagents`
-- Lieber npm, Yarn, Bun oder npx? Siehe [Installation](i18n/README.de.md#installation)
-  in der README.
+- Lieber npm, Yarn, Bun oder npx? Siehe [Installation](https://reevesagents.mertkayacs.com/de/docs/#install)
+  im Online-Handbuch.
 
 ## Dein erster Durchlauf
 
@@ -150,12 +150,12 @@ sie.
 - **Port bereits in Benutzung:** Da ist nichts kaputt. `reevesagents web` nimmt einfach
   den nächsten freien Port und gibt die URL aus. Übergib `--port <n>`, wenn dir der
   Port nicht egal ist.
-- Mehr Details unter [Fehlerbehebung](i18n/README.de.md#fehlerbehebung).
+- Mehr Details unter [Fehlerbehebung](https://reevesagents.mertkayacs.com/de/docs/#troubleshooting).
 
 ## Wie es weitergeht
 
 - [Doku-Übersicht](README.md): der vollständige Dokumentationsindex.
-- [Befehle](i18n/README.de.md#befehle): jeder Subcommand mit allen Flags.
-- [Agent-Control](i18n/README.de.md#agent-control): das vollständige Opt-in-Modell.
-- [Konfiguration](i18n/README.de.md#konfiguration): was unter `~/.reeves` liegt.
+- [Befehle](https://reevesagents.mertkayacs.com/de/docs/#commands): jeder Subcommand mit allen Flags.
+- [Agent-Control](https://reevesagents.mertkayacs.com/de/docs/#agent-control): das vollständige Opt-in-Modell.
+- [Konfiguration](https://reevesagents.mertkayacs.com/de/docs/#configuration): was unter `~/.reeves` liegt.
 - [docs/mcp.md](mcp.md): das Agent-Control-Design und die Tool-Liste.

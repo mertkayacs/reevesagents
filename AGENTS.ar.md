@@ -145,6 +145,6 @@ reevesagents stop <run-id> --yes
 
 ## المزيد
 
-- [README](README.md): جولة كاملة في الميزات وكل الأوامر.
+- [دليل المستخدم](https://reevesagents.mertkayacs.com/ar/docs/): كل الأوامر والأعلام ومفاتيح الإعدادات.
 - [docs/GUIDE.md](docs/GUIDE.md): دليل المستخدم خطوة بخطوة.
 - [docs/mcp.md](docs/mcp.md): تصميم Agent control MCP وقائمة الأدوات.

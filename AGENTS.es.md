@@ -211,8 +211,7 @@ Qué no hacer:
 
 ## Más
 
-- [README](docs/i18n/README.es.md): recorrido completo por las características y
-  todos los comandos.
+- [Guía de usuario](https://reevesagents.mertkayacs.com/es/docs/): todos los comandos, flags y claves de configuración.
 - [docs/GUIDE.md](docs/GUIDE.es.md): guía del usuario paso a paso.
 - [docs/mcp.md](docs/mcp.md): el diseño del MCP de Agent control y la lista de
   herramientas.

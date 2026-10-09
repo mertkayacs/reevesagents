@@ -2,7 +2,7 @@
 
 [English](GUIDE.md) · [Deutsch](GUIDE.de.md) · [Français](GUIDE.fr.md) · [Español](GUIDE.es.md) · [Português](GUIDE.pt.md) · [Italiano](GUIDE.it.md) · [Türkçe](GUIDE.tr.md) · [Русский](GUIDE.ru.md) · [简体中文](GUIDE.zh-Hans.md) · **العربية**
 
-يأخذك هذا الدليل من التثبيت الأول إلى اللحظة التي يتولى فيها وكيل واحد تشغيل الباقي نيابة عنك. أما حين تريد كل أمر وكل خيار، فذلك كله في [README](i18n/README.ar.md).
+يأخذك هذا الدليل من التثبيت الأول إلى اللحظة التي يتولى فيها وكيل واحد تشغيل الباقي نيابة عنك. أما حين تريد كل أمر وكل خيار، فذلك كله في [الدليل على الموقع](https://reevesagents.mertkayacs.com/ar/docs/).
 
 ## ما هو ReevesAgents
 
@@ -24,7 +24,7 @@
 - ثبّته عبر Homebrew: `brew install mertkayacs/reevesagents/reevesagents`، أو تثبيتًا عامًا بمدير حزم Node مثل pnpm: `pnpm add -g reevesagents`
 - افحص جهازك: `reevesagents doctor` (يتحقق من Node وtmux ومجلد الحالة وأدوات CLI للمزوّدين التي يراها).
 - شغّله: `reevesagents`
-- أتفضّل npm أو Yarn أو Bun أو npx؟ انظر [التثبيت](i18n/README.ar.md#التثبيت) في README.
+- أتفضّل npm أو Yarn أو Bun أو npx؟ انظر [التثبيت](https://reevesagents.mertkayacs.com/ar/docs/#install) في الدليل على الموقع.
 
 ## تشغيلتك الأولى
 
@@ -96,12 +96,12 @@ reevesagents add codex:worker
 - **مزوّد لم يُكتشف:** السبب يكاد يكون دائمًا أنه غير مثبّت أو غير مسجّل الدخول، لأن ReevesAgents لا يطلق إلا الأدوات الموجودة على `PATH` لديك والموثّقة.
 - **تبلّغ Web UI عن حزم مفقودة:** جرى تخطي الوحدتين الاختياريتين `ws` و`@lydell/node-pty` وقت التثبيت، وإعادة التثبيت على نحو اعتيادي تعيدهما في العادة.
 - **المنفذ مستخدم بالفعل:** لا خطب هنا، إذ يأخذ `reevesagents web` ببساطة المنفذ الحر التالي ويطبع الرابط. مرّر `--port <n>` إن كنت تريد منفذًا بعينه.
-- مزيد من التفاصيل في [استكشاف الأخطاء](i18n/README.ar.md#استكشاف-الأخطاء-وإصلاحها).
+- مزيد من التفاصيل في [استكشاف الأخطاء](https://reevesagents.mertkayacs.com/ar/docs/#troubleshooting).
 
 ## أين تذهب بعد ذلك
 
 - [الصفحة الرئيسية للوثائق](README.md): فهرس التوثيق الكامل.
-- [الأوامر](i18n/README.ar.md#الأوامر): كل أمر فرعي وكل علم.
-- [Agent control](i18n/README.ar.md#agent-control): نموذج التفعيل الاختياري كاملًا.
-- [الإعدادات](i18n/README.ar.md#الإعدادات): ما يقيم تحت `~/.reeves`.
+- [الأوامر](https://reevesagents.mertkayacs.com/ar/docs/#commands): كل أمر فرعي وكل علم.
+- [Agent control](https://reevesagents.mertkayacs.com/ar/docs/#agent-control): نموذج التفعيل الاختياري كاملًا.
+- [الإعدادات](https://reevesagents.mertkayacs.com/ar/docs/#configuration): ما يقيم تحت `~/.reeves`.
 - [docs/mcp.md](mcp.md): تصميم Agent control وقائمة الأدوات.

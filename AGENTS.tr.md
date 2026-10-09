@@ -145,6 +145,6 @@ Yapma:
 
 ## Daha fazlası
 
-- [README](README.md): özelliklerin tam turu ve her komut.
+- [Kullanım kılavuzu](https://reevesagents.mertkayacs.com/tr/docs/): tüm komutlar, flag'ler ve yapılandırma anahtarları.
 - [docs/GUIDE.md](docs/GUIDE.md): adım adım kullanıcı rehberi.
 - [docs/mcp.md](docs/mcp.md): agent kontrol MCP tasarımı ve araç listesi.

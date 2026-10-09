@@ -4,7 +4,7 @@
 
 This guide walks you from a fresh install to the point where one agent is
 running the others for you. When you need every command and option instead,
-that lives in the [README](../README.md).
+that lives in the [online user guide](https://reevesagents.mertkayacs.com/docs/).
 
 ## What ReevesAgents is
 
@@ -36,7 +36,7 @@ that lives in the [README](../README.md).
 - Check your machine: `reevesagents doctor` (verifies Node, tmux, the state
   folder, and which provider CLIs it can see).
 - Launch it: `reevesagents`
-- Prefer npm, Yarn, Bun, or npx? See [Install](../README.md#install) in the README.
+- Prefer npm, Yarn, Bun, or npx? See [Install](https://reevesagents.mertkayacs.com/docs/#install) in the online guide.
 
 ## Your first run
 
@@ -140,12 +140,12 @@ agent on another, then watch and steer both.
   modules were skipped at install time. Reinstalling normally brings them back.
 - **Port already in use:** nothing is wrong; `reevesagents web` uses the next
   free port and prints the URL. Pass `--port <n>` if you care which one.
-- More detail in [Troubleshooting](../README.md#troubleshooting).
+- More detail in [Troubleshooting](https://reevesagents.mertkayacs.com/docs/#troubleshooting).
 
 ## Where to go next
 
 - [Docs home](README.md): the full documentation index.
-- [Commands](../README.md#commands): every subcommand and flag.
-- [Agent control](../README.md#agent-control): the full opt-in model.
-- [Configuration](../README.md#configuration): what lives under `~/.reeves`.
+- [Commands](https://reevesagents.mertkayacs.com/docs/#commands): every subcommand and flag.
+- [Agent control](https://reevesagents.mertkayacs.com/docs/#agent-control): the full opt-in model.
+- [Configuration](https://reevesagents.mertkayacs.com/docs/#configuration): what lives under `~/.reeves`.
 - [docs/mcp.md](mcp.md): the Agent control design and tool list.

@@ -4,7 +4,7 @@
 
 Ce guide vous emmène d'une installation toute fraîche jusqu'au moment où un
 agent fait tourner les autres pour vous. Le jour où il vous faut plutôt chaque
-commande et chaque option, tout est recensé dans le [README](i18n/README.fr.md).
+commande et chaque option, tout est recensé dans le [guide en ligne](https://reevesagents.mertkayacs.com/fr/docs/).
 
 ## Qu'est-ce que ReevesAgents
 
@@ -40,8 +40,8 @@ commande et chaque option, tout est recensé dans le [README](i18n/README.fr.md)
 - Vérifiez votre machine : `reevesagents doctor` (contrôle Node, tmux, le dossier
   d'état et les CLI de fournisseurs qu'il détecte).
 - Lancez-le : `reevesagents`
-- Vous préférez npm, Yarn, Bun ou npx ? Consultez [Installation](i18n/README.fr.md#installation)
-  dans le README.
+- Vous préférez npm, Yarn, Bun ou npx ? Consultez [Installation](https://reevesagents.mertkayacs.com/fr/docs/#install)
+  dans le guide en ligne.
 
 ## Votre première exécution
 
@@ -159,12 +159,12 @@ agent Claude Code sur une autre, puis observer et diriger les deux.
 - **Port déjà utilisé :** rien de grave, `reevesagents web` prend simplement le
   port libre suivant et affiche l'URL. Passez `--port <n>` si le numéro vous
   importe.
-- Plus de détails dans [Dépannage](i18n/README.fr.md#dépannage).
+- Plus de détails dans [Dépannage](https://reevesagents.mertkayacs.com/fr/docs/#troubleshooting).
 
 ## Où aller ensuite
 
 - [Accueil de la doc](README.md) : l'index complet de la documentation.
-- [Commandes](i18n/README.fr.md#commandes) : chaque sous-commande et chaque flag.
-- [Contrôle d'agent](i18n/README.fr.md#contrôle-dagent) : le modèle opt-in complet.
-- [Configuration](i18n/README.fr.md#configuration) : ce qui vit sous `~/.reeves`.
+- [Commandes](https://reevesagents.mertkayacs.com/fr/docs/#commands) : chaque sous-commande et chaque flag.
+- [Contrôle d'agent](https://reevesagents.mertkayacs.com/fr/docs/#agent-control) : le modèle opt-in complet.
+- [Configuration](https://reevesagents.mertkayacs.com/fr/docs/#configuration) : ce qui vit sous `~/.reeves`.
 - [docs/mcp.md](mcp.md) : la conception du Contrôle d'agent et la liste des outils.
