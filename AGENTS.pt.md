@@ -213,8 +213,7 @@ Não fazer:
 
 ## Mais
 
-- [README](README.md): a panorâmica completa das funcionalidades e todos os
-  comandos.
+- [Guia do utilizador](https://reevesagents.mertkayacs.com/pt/docs/): todos os comandos, flags e chaves de configuração.
 - [docs/GUIDE.md](docs/GUIDE.md): guia do utilizador passo a passo.
 - [docs/mcp.md](docs/mcp.md): o design do MCP de controlo de agentes e a lista
   de ferramentas.

@@ -2,7 +2,7 @@
 
 [English](GUIDE.md) · [Deutsch](GUIDE.de.md) · [Français](GUIDE.fr.md) · [Español](GUIDE.es.md) · [Português](GUIDE.pt.md) · [Italiano](GUIDE.it.md) · **Türkçe** · [Русский](GUIDE.ru.md) · [简体中文](GUIDE.zh-Hans.md) · [العربية](GUIDE.ar.md)
 
-Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerinize çalıştırdığı noktaya kadar götürür. Her komutun ve seçeneğin dökümünü aradığınız gün ise bakacağınız yer [README](i18n/README.tr.md).
+Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerinize çalıştırdığı noktaya kadar götürür. Her komutun ve seçeneğin dökümünü aradığınız gün ise bakacağınız yer [çevrimiçi kılavuz](https://reevesagents.mertkayacs.com/tr/docs/).
 
 ## ReevesAgents nedir
 
@@ -24,7 +24,7 @@ Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerin
 - Homebrew ile kurun: `brew install mertkayacs/reevesagents/reevesagents`, ya da pnpm gibi bir Node paket yöneticisiyle global olarak: `pnpm add -g reevesagents`
 - Makinenizi kontrol edin: `reevesagents doctor` (Node'u, tmux'u, durum klasörünü ve hangi sağlayıcı CLI'lerini görebildiğini doğrular).
 - Başlatın: `reevesagents`
-- npm, Yarn, Bun ya da npx ile kurmak isterseniz README'deki [Kurulum](i18n/README.tr.md#kurulum) bölümüne bakın.
+- npm, Yarn, Bun ya da npx ile kurmak isterseniz çevrimiçi kılavuzdaki [Kurulum](https://reevesagents.mertkayacs.com/tr/docs/#install) bölümüne bakın.
 
 ## İlk run'ınız
 
@@ -96,12 +96,12 @@ Somut bir örnek: Claude Code'a bağlanın ve yeniden başlatın. Artık tek bir
 - **Bir sağlayıcı algılanmıyor:** neredeyse her zaman ya kurulu değildir ya da giriş yapılmamıştır. ReevesAgents yalnızca `PATH`'inizde duran ve oturumu açık CLI'leri başlatabilir.
 - **Web UI eksik paket bildiriyor:** opsiyonel `ws` ve `@lydell/node-pty` modülleri kurulum sırasında atlanmış demektir. Normal bir yeniden kurulum ikisini de geri getirir.
 - **Port zaten kullanımda:** ortada bir sorun yok, `reevesagents web` sıradaki boş portu alıp URL'yi yazdırır. Hangi port olacağı sizin için önemliyse `--port <n>` verin.
-- Daha fazla ayrıntı [Sorun Giderme](i18n/README.tr.md#sorun-giderme) bölümünde.
+- Daha fazla ayrıntı [Sorun Giderme](https://reevesagents.mertkayacs.com/tr/docs/#troubleshooting) bölümünde.
 
 ## Sonra nereye
 
 - [Doküman ana sayfası](README.md): tam dokümantasyon dizini.
-- [Komutlar](i18n/README.tr.md#komutlar): her alt komut ve flag.
-- [Agent Kontrol](i18n/README.tr.md#agent-kontrol): opt-in modelinin tamamı.
-- [Yapılandırma](i18n/README.tr.md#yapılandırma): `~/.reeves` altında neler var.
+- [Komutlar](https://reevesagents.mertkayacs.com/tr/docs/#commands): her alt komut ve flag.
+- [Agent Kontrol](https://reevesagents.mertkayacs.com/tr/docs/#agent-control): opt-in modelinin tamamı.
+- [Yapılandırma](https://reevesagents.mertkayacs.com/tr/docs/#configuration): `~/.reeves` altında neler var.
 - [docs/mcp.md](mcp.md): Agent Kontrol tasarımı ve araç listesi.

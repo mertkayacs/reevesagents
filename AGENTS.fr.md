@@ -213,6 +213,6 @@ La CLI hôte appelle elle-même les outils spawn/read/send. Voir
 
 ## Pour aller plus loin
 
-- [README](README.md) : visite complète des fonctionnalités et toutes les commandes.
+- [Guide utilisateur](https://reevesagents.mertkayacs.com/fr/docs/) : toutes les commandes, options et clés de configuration.
 - [docs/GUIDE.md](docs/GUIDE.md) : le guide utilisateur pas à pas.
 - [docs/mcp.md](docs/mcp.md) : la conception du MCP de contrôle d'agent et la liste des outils.

@@ -93,4 +93,4 @@ ReevesAgents keeps the safety boundary simple:
 - `stop`, `kill`, and delete tools act only on ReevesAgents run records and tmux
   targets tracked in local state.
 
-For the main user flow, see the [README Agent control section](../README.md#agent-control).
+For the main user flow, see [Agent control](https://reevesagents.mertkayacs.com/docs/#agent-control) in the online user guide.

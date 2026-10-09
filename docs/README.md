@@ -1,8 +1,8 @@
 # ReevesAgents Documentation
 
 The complete doc index for ReevesAgents. New here? Start with the User Guide.
-Looking for a command or a config key? That lives in the main
-[README](../README.md).
+Looking for a command or a config key? That lives in the
+[online user guide](https://reevesagents.mertkayacs.com/docs/).
 
 ## Start here
 
@@ -13,11 +13,11 @@ Languages: [English](GUIDE.md) · [Deutsch](GUIDE.de.md) · [Français](GUIDE.fr
 
 ## Reference
 
-The command and option reference lives in the main README:
+The command and option reference lives in the online user guide:
 
-- [Commands](../README.md#commands): every subcommand and flag.
-- [Configuration](../README.md#configuration): what lives under `~/.reeves`.
-- [Agent control](../README.md#agent-control): the opt-in model for one agent driving others.
+- [Commands](https://reevesagents.mertkayacs.com/docs/#commands): every subcommand and flag.
+- [Configuration](https://reevesagents.mertkayacs.com/docs/#configuration): what lives under `~/.reeves`.
+- [Agent control](https://reevesagents.mertkayacs.com/docs/#agent-control): the opt-in model for one agent driving others.
 
 README languages: [English](../README.md) · [Deutsch](i18n/README.de.md) · [Français](i18n/README.fr.md) · [Español](i18n/README.es.md) · [Português](i18n/README.pt.md) · [Italiano](i18n/README.it.md) · [Türkçe](i18n/README.tr.md) · [Русский](i18n/README.ru.md) · [简体中文](i18n/README.zh-Hans.md) · [العربية](i18n/README.ar.md)
 

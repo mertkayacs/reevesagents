@@ -2,7 +2,7 @@
 
 [English](GUIDE.md) · [Deutsch](GUIDE.de.md) · [Français](GUIDE.fr.md) · [Español](GUIDE.es.md) · [Português](GUIDE.pt.md) · [Italiano](GUIDE.it.md) · [Türkçe](GUIDE.tr.md) · [Русский](GUIDE.ru.md) · **简体中文** · [العربية](GUIDE.ar.md)
 
-这份指南从全新安装讲起，一路带你走到让一个智能体替你运行其余智能体的那一步。至于每条命令、每个选项的完整清单，都在 [README](i18n/README.zh-Hans.md) 里。
+这份指南从全新安装讲起，一路带你走到让一个智能体替你运行其余智能体的那一步。至于每条命令、每个选项的完整清单，都在[在线文档](https://reevesagents.mertkayacs.com/zh-Hans/docs/)里。
 
 ## ReevesAgents 是什么
 
@@ -24,7 +24,7 @@
 - 用 Homebrew 安装：`brew install mertkayacs/reevesagents/reevesagents`，或者用 pnpm 这类 Node 包管理器全局安装：`pnpm add -g reevesagents`
 - 检查机器：`reevesagents doctor`（验证 Node、tmux、状态文件夹，以及它能看到哪些提供方 CLI）。
 - 启动：`reevesagents`
-- 更习惯 npm、Yarn、Bun 或 npx？见 README 中的[安装](i18n/README.zh-Hans.md#安装)。
+- 更习惯 npm、Yarn、Bun 或 npx？见在线文档中的[安装](https://reevesagents.mertkayacs.com/zh-Hans/docs/#install)。
 
 ## 第一次运行
 
@@ -96,12 +96,12 @@ reevesagents add codex:worker
 - **某个提供方没被检测到：** 十有八九是没安装或者没登录。ReevesAgents 只能启动 `PATH` 上并且已登录的东西。
 - **Web UI 报告缺少包：** 可选模块 `ws` 和 `@lydell/node-pty` 在安装时被跳过了。按正常方式重装一遍通常就回来了。
 - **端口已被占用：** 这不算故障，`reevesagents web` 会自己拿下一个空闲端口并打印 URL。在乎用哪个端口就传 `--port <n>`。
-- 更多细节见[故障排查](i18n/README.zh-Hans.md#故障排查)。
+- 更多细节见[故障排查](https://reevesagents.mertkayacs.com/zh-Hans/docs/#troubleshooting)。
 
 ## 下一步
 
 - [文档主页](README.md)：完整的文档索引。
-- [命令](i18n/README.zh-Hans.md#命令)：全部子命令与标志。
-- [智能体控制](i18n/README.zh-Hans.md#智能体控制)：完整的按需启用设计。
-- [配置](i18n/README.zh-Hans.md#配置)：`~/.reeves` 下有什么。
+- [命令](https://reevesagents.mertkayacs.com/zh-Hans/docs/#commands)：全部子命令与标志。
+- [智能体控制](https://reevesagents.mertkayacs.com/zh-Hans/docs/#agent-control)：完整的按需启用设计。
+- [配置](https://reevesagents.mertkayacs.com/zh-Hans/docs/#configuration)：`~/.reeves` 下有什么。
 - [docs/mcp.md](mcp.md)：智能体控制的设计与工具列表。

@@ -4,7 +4,7 @@
 
 Это руководство доводит вас от свежей установки до момента, когда один агент
 уже ведёт остальных за вас. А когда понадобится каждая команда и каждый флаг,
-всё это лежит в [README](i18n/README.ru.md).
+всё это лежит в [онлайн-документации](https://reevesagents.mertkayacs.com/ru/docs/).
 
 ## Что такое ReevesAgents
 
@@ -38,8 +38,8 @@
 - Проверьте машину: `reevesagents doctor` (проверяет Node, tmux, папку состояния
   и то, какие провайдерские CLI ему видны).
 - Запустите: `reevesagents`
-- Предпочитаете npm, Yarn, Bun или npx? См. [Установка](i18n/README.ru.md#установка)
-  в README.
+- Предпочитаете npm, Yarn, Bun или npx? См. [Установка](https://reevesagents.mertkayacs.com/ru/docs/#install)
+  в онлайн-документации.
 
 ## Первый запуск
 
@@ -156,12 +156,12 @@ reevesagents add codex:worker
 - **Порт уже занят:** ничего не сломалось, `reevesagents web` просто берёт
   следующий свободный порт и печатает URL. Передайте `--port <n>`, если вам
   важен конкретный.
-- Подробнее в разделе [Устранение неполадок](i18n/README.ru.md#устранение-неполадок).
+- Подробнее в разделе [Устранение неполадок](https://reevesagents.mertkayacs.com/ru/docs/#troubleshooting).
 
 ## Что дальше
 
 - [Главная страница документации](README.md): полный указатель документации.
-- [Команды](i18n/README.ru.md#команды): каждая подкоманда и каждый флаг.
-- [Agent control](i18n/README.ru.md#agent-control): полная модель явного включения.
-- [Конфигурация](i18n/README.ru.md#конфигурация): что лежит под `~/.reeves`.
+- [Команды](https://reevesagents.mertkayacs.com/ru/docs/#commands): каждая подкоманда и каждый флаг.
+- [Agent control](https://reevesagents.mertkayacs.com/ru/docs/#agent-control): полная модель явного включения.
+- [Конфигурация](https://reevesagents.mertkayacs.com/ru/docs/#configuration): что лежит под `~/.reeves`.
 - [docs/mcp.md](mcp.md): дизайн Agent control и список инструментов.

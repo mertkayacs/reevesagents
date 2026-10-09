@@ -2,7 +2,7 @@
 
 [English](GUIDE.md) · [Deutsch](GUIDE.de.md) · [Français](GUIDE.fr.md) · [Español](GUIDE.es.md) · [Português](GUIDE.pt.md) · **Italiano** · [Türkçe](GUIDE.tr.md) · [Русский](GUIDE.ru.md) · [简体中文](GUIDE.zh-Hans.md) · [العربية](GUIDE.ar.md)
 
-Questa guida ti porta da un'installazione pulita fino al punto in cui è un agente a far girare gli altri per te. Quando invece ti servono tutti i comandi e tutte le opzioni, quelli vivono nel [README](i18n/README.it.md).
+Questa guida ti porta da un'installazione pulita fino al punto in cui è un agente a far girare gli altri per te. Quando invece ti servono tutti i comandi e tutte le opzioni, quelli vivono nella [guida online](https://reevesagents.mertkayacs.com/it/docs/).
 
 ## Cos'è ReevesAgents
 
@@ -24,7 +24,7 @@ Questa guida ti porta da un'installazione pulita fino al punto in cui è un agen
 - Installalo con Homebrew: `brew install mertkayacs/reevesagents/reevesagents`, oppure globalmente con un gestore di pacchetti Node come pnpm: `pnpm add -g reevesagents`
 - Controlla la tua macchina: `reevesagents doctor` (verifica Node, tmux, la cartella dello stato e quali CLI di provider riesce a vedere).
 - Avvialo: `reevesagents`
-- Preferisci npm, Yarn, Bun o npx? Vedi [Installazione](i18n/README.it.md#installazione) nel README.
+- Preferisci npm, Yarn, Bun o npx? Vedi [Installazione](https://reevesagents.mertkayacs.com/it/docs/#install) nella guida online.
 
 ## Il tuo primo run
 
@@ -96,12 +96,12 @@ Un esempio concreto: collega Claude Code, riavvialo, e da dentro una sola sessio
 - **Un provider non viene rilevato:** quasi sempre non è installato, oppure manca il login. ReevesAgents può avviare solo ciò che sta nel tuo `PATH` con l'accesso già fatto.
 - **La Web UI segnala pacchetti mancanti:** i moduli opzionali `ws` e `@lydell/node-pty` sono stati saltati all'installazione. Di solito basta reinstallare per riaverli.
 - **Porta già in uso:** non si è rotto niente; `reevesagents web` prende la prima porta libera e stampa l'URL. Passa `--port <n>` se vuoi decidere tu quale.
-- Più dettagli in [Risoluzione dei problemi](i18n/README.it.md#risoluzione-dei-problemi).
+- Più dettagli in [Risoluzione dei problemi](https://reevesagents.mertkayacs.com/it/docs/#troubleshooting).
 
 ## Dove andare dopo
 
 - [Home della documentazione](README.md): l'indice completo della documentazione.
-- [Comandi](i18n/README.it.md#comandi): ogni sottocomando e flag.
-- [Agent control](i18n/README.it.md#agent-control): il modello opt-in completo.
-- [Configurazione](i18n/README.it.md#configurazione): cosa vive sotto `~/.reeves`.
+- [Comandi](https://reevesagents.mertkayacs.com/it/docs/#commands): ogni sottocomando e flag.
+- [Agent control](https://reevesagents.mertkayacs.com/it/docs/#agent-control): il modello opt-in completo.
+- [Configurazione](https://reevesagents.mertkayacs.com/it/docs/#configuration): cosa vive sotto `~/.reeves`.
 - [docs/mcp.md](mcp.md): il design di Agent control e l'elenco degli strumenti.

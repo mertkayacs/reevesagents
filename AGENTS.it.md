@@ -195,6 +195,6 @@ Non fare:
 
 ## Altro
 
-- [README](README.md): il tour completo delle funzioni e ogni comando.
+- [Guida utente](https://reevesagents.mertkayacs.com/it/docs/): ogni comando, flag e chiave di configurazione.
 - [docs/GUIDE.md](docs/GUIDE.md): la guida utente passo dopo passo.
 - [docs/mcp.md](docs/mcp.md): il design dell'MCP di Controllo agenti e l'elenco degli strumenti.

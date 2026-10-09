@@ -187,6 +187,6 @@ Don't:
 
 ## More
 
-- [README](README.md): full feature tour and every command.
+- [User guide](https://reevesagents.mertkayacs.com/docs/): every command, flag and config key.
 - [docs/GUIDE.md](docs/GUIDE.md): step-by-step user guide.
 - [docs/mcp.md](docs/mcp.md): the agent-control MCP design and tool list.

@@ -4,7 +4,7 @@
 
 Este guia acompanha-o desde uma instalação feita do zero até ao ponto em que
 tem um agente a conduzir os restantes por si. Quando precisar de cada comando
-e de cada opção, está tudo no [README](i18n/README.pt.md).
+e de cada opção, está tudo no [guia online](https://reevesagents.mertkayacs.com/pt/docs/).
 
 ## O que é o ReevesAgents
 
@@ -39,8 +39,8 @@ e de cada opção, está tudo no [README](i18n/README.pt.md).
 - Verifique a sua máquina: `reevesagents doctor` (verifica o Node, o tmux, a
   pasta de estado e que CLIs de fornecedor consegue ver).
 - Lance-o: `reevesagents`
-- Prefere npm, Yarn, Bun ou npx? Consulte [Instalação](i18n/README.pt.md#instalação)
-  no README.
+- Prefere npm, Yarn, Bun ou npx? Consulte [Instalação](https://reevesagents.mertkayacs.com/pt/docs/#install)
+  no guia online.
 
 ## A sua primeira execução
 
@@ -153,12 +153,12 @@ um segundo agente Claude Code noutra, e depois observar e orientar ambos.
 - **Porta já em uso:** não há nada de errado. O `reevesagents web` limita-se a
   ocupar a porta livre seguinte e a imprimir o URL. Passe `--port <n>` se
   quiser uma em concreto.
-- Mais detalhe em [Resolução de Problemas](i18n/README.pt.md#resolução-de-problemas).
+- Mais detalhe em [Resolução de Problemas](https://reevesagents.mertkayacs.com/pt/docs/#troubleshooting).
 
 ## Para onde ir a seguir
 
 - [Início da documentação](README.md): o índice completo da documentação.
-- [Comandos](i18n/README.pt.md#comandos): todos os subcomandos e flags.
-- [Agent control](i18n/README.pt.md#agent-control): o modelo opt-in completo.
-- [Configuração](i18n/README.pt.md#configuração): o que fica em `~/.reeves`.
+- [Comandos](https://reevesagents.mertkayacs.com/pt/docs/#commands): todos os subcomandos e flags.
+- [Agent control](https://reevesagents.mertkayacs.com/pt/docs/#agent-control): o modelo opt-in completo.
+- [Configuração](https://reevesagents.mertkayacs.com/pt/docs/#configuration): o que fica em `~/.reeves`.
 - [docs/mcp.md](mcp.md): o design do Agent control e a lista de ferramentas.

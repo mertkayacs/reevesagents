@@ -193,6 +193,6 @@ Don'ts:
 
 ## Mehr
 
-- [README](README.md): kompletter Funktionsüberblick und alle Befehle.
+- [Benutzerhandbuch](https://reevesagents.mertkayacs.com/de/docs/): alle Befehle, Flags und Konfigurationsschlüssel.
 - [docs/GUIDE.md](docs/GUIDE.md): das Schritt-für-Schritt-Benutzerhandbuch.
 - [docs/mcp.md](docs/mcp.md): Design und Tool-Liste des Agent-Control-MCP.

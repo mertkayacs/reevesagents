@@ -4,7 +4,7 @@
 
 Esta guía te lleva desde una instalación limpia hasta el punto en que un agente
 ejecuta a los demás por ti. Cuando lo que necesites sea cada comando y cada
-opción, eso vive en el [README](i18n/README.es.md).
+opción, eso vive en la [guía en línea](https://reevesagents.mertkayacs.com/es/docs/).
 
 ## Qué es ReevesAgents
 
@@ -39,7 +39,7 @@ opción, eso vive en el [README](i18n/README.es.md).
   de estado y qué CLI de proveedor puede ver).
 - Lánzalo: `reevesagents`
 - ¿Prefieres npm, Yarn, Bun o npx? Consulta
-  [Instalación](i18n/README.es.md#instalación) en el README.
+  [Instalación](https://reevesagents.mertkayacs.com/es/docs/#install) en la guía en línea.
 
 ## Tu primer run
 
@@ -150,12 +150,12 @@ agente Claude Code en otra, y luego observar y dirigir ambos.
   normal los trae de vuelta.
 - **El puerto ya está en uso:** no pasa nada; `reevesagents web` toma el
   siguiente puerto libre e imprime la URL. Pasa `--port <n>` si te importa cuál.
-- Más detalle en [Resolución de problemas](i18n/README.es.md#resolución-de-problemas).
+- Más detalle en [Resolución de problemas](https://reevesagents.mertkayacs.com/es/docs/#troubleshooting).
 
 ## Dónde ir después
 
 - [Inicio de la documentación](README.md): el índice completo.
-- [Comandos](i18n/README.es.md#comandos): cada subcomando y flag.
-- [Agent control](i18n/README.es.md#agent-control): el modelo opt-in completo.
-- [Configuración](i18n/README.es.md#configuración): qué vive bajo `~/.reeves`.
+- [Comandos](https://reevesagents.mertkayacs.com/es/docs/#commands): cada subcomando y flag.
+- [Agent control](https://reevesagents.mertkayacs.com/es/docs/#agent-control): el modelo opt-in completo.
+- [Configuración](https://reevesagents.mertkayacs.com/es/docs/#configuration): qué vive bajo `~/.reeves`.
 - [docs/mcp.md](mcp.md): el diseño de Agent control y la lista de herramientas.
