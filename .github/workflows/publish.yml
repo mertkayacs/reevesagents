@@ -70,6 +70,22 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # Lists the just-published npm version on the official MCP Registry
+      # (registry.modelcontextprotocol.io). The registry checks mcpName in the
+      # published package.json, so this must run after the npm publish. GitHub
+      # OIDC login uses the job's id-token: write permission, no secret needed.
+      - name: Publish to the MCP Registry
+        run: |
+          for V in "$(jq -r .version server.json)" "$(jq -r '.packages[0].version' server.json)"; do
+            if [ "${GITHUB_REF_NAME#v}" != "$V" ]; then
+              echo "tag $GITHUB_REF_NAME does not match server.json version $V"
+              exit 1
+            fi
+          done
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
   # Bumps the Homebrew tap formula (url + sha256) to the just-published version.
   # Runs after publish so the npm tarball exists for sha256 computation. Commits
   # directly to the tap (create-pullrequest/create-branch false); drop those two

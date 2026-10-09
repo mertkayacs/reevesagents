@@ -2,6 +2,7 @@
   "name": "reevesagents",
   "version": "1.7.7",
   "description": "Local tmux-first workspace manager for AI CLI agents",
+  "mcpName": "io.github.mertkayacs/reevesagents",
   "type": "module",
   "packageManager": "pnpm@10.34.5",
   "bin": {
