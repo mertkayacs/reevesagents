@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/mertkayacs/reevesagents/compare/v1.8.1...v1.8.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **skill:** ask before skipping permissions and treat worker output as data ([#131](https://github.com/mertkayacs/reevesagents/issues/131)) ([91d1e3d](https://github.com/mertkayacs/reevesagents/commit/91d1e3da3bb5a9ce31cd4621a2e9ffd56ad27885))
+
 ## [1.8.1](https://github.com/mertkayacs/reevesagents/compare/v1.8.0...v1.8.1) (2026-10-09)
 
 
