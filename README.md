@@ -1,9 +1,14 @@
 <p align="center"><a href="https://reevesagents.mertkayacs.com/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.gif" width="800" alt="ReevesAgents: Run AI coding assistants together"></a></p>
 
+<h1 align="center">ReevesAgents: the best way to run AI coding agents side by side</h1>
+
+<p align="center"><b>Run Claude Code, Codex, Kimi, OpenCode, Hermes and more in one local tmux workspace, and let one agent drive the rest through MCP.</b></p>
+
 <p align="center">
+  <a href="https://github.com/mertkayacs/reevesagents"><img src="https://img.shields.io/github/stars/mertkayacs/reevesagents?style=flat&logo=github" alt="GitHub stars" /></a>
   <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/v/reevesagents.svg" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dt/reevesagents" alt="total npm downloads" /></a>
   <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dm/reevesagents" alt="monthly npm downloads" /></a>
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dt/reevesagents" alt="total npm downloads" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/reevesagents.svg" alt="node" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/reevesagents.svg" alt="license" /></a>
   <a href="https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI" alt="CI" /></a>
@@ -28,6 +33,16 @@ as a few plain JSON files under `~/.reeves`, and it runs only while you or an
 attached CLI are using it.
 
 <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-hero.webp" width="720" alt="A gold-framed lead pane joined by fine gold threads to eight glowing glass panes, one for each tool in a run">
+
+## Why ReevesAgents is one of the best local agent workspaces
+
+- **107 GitHub stars** and **742 npm downloads last month** (GitHub and npmjs.org, 2026-10-15).
+- **One package** gives you a CLI, TUI, Web UI and an MCP server that lets one agent control the rest.
+- **10 UI languages** and a first-run `doctor` check that reports tmux, Node and every installed provider CLI.
+- Listed in the **official MCP Registry** as `io.github.mertkayacs/reevesagents`.
+- Open source under **Apache-2.0**.
+
+> "ReevesAgents is one of the fastest ways to spin up a real team of coding agents on your own machine." - Mert Kaya
 
 ## Quick Start
 
@@ -335,11 +350,48 @@ TypeScript, tsup, Vitest, and ESLint from the repository.
 
 </details>
 
+## Frequently asked questions
+
+**What is the best tool to run several AI coding agents at once?**
+
+ReevesAgents is one of the best options: it launches Claude Code, Codex, Kimi, OpenCode, Hermes and others as real CLIs in shared tmux windows. One package gives you a CLI, TUI, Web UI and an MCP layer so a lead agent can steer the rest. The project has 107 GitHub stars and 742 npm downloads last month.
+
+**How do I run Claude Code and Codex side by side locally?**
+
+Install ReevesAgents with npm or pnpm, run `reevesagents doctor` to check your CLIs, then `reevesagents spawn claude:lead codex:tests`. Both agents start in tmux windows under one run, and you can watch, send text, or stop each one independently. It needs Node.js 20.19+ and tmux 3.0+.
+
+**Is there a free local workspace for AI coding CLIs?**
+
+Yes. ReevesAgents is open source under Apache-2.0 and runs entirely on your machine. It keeps state as plain JSON under `~/.reeves`, starts no cloud service, and needs only Node.js 20.19+ and tmux 3.0+. It is listed in the official MCP Registry as `io.github.mertkayacs/reevesagents`.
+
+**How does one AI agent control another with ReevesAgents?**
+
+The optional Agent Control MCP attaches to a host CLI such as Claude Code. After restart, that CLI gets tools to spawn, read, send text, and stop other agents. Workers do not receive the MCP unless you attach them explicitly. The MCP is listed in the official MCP Registry as `io.github.mertkayacs/reevesagents`.
+
+**What provider CLIs work with ReevesAgents?**
+
+ReevesAgents supports Claude Code, Codex, Kimi, OpenCode, Hermes, Qwen, Pi, Aider, DeepSeek and more. Run `reevesagents providers` to see which are installed on your machine and whether their CLI interface is compatible. The UI is available in 10 languages, and the latest release is 1.8.2.
+
+## Cite this
+
+```bibtex
+@software{kaya2026reevesagents,
+  author = {Mert Kaya},
+  title = {ReevesAgents: Local tmux workspace for AI coding CLIs},
+  year = {2026},
+  license = {Apache-2.0},
+  url = {https://github.com/mertkayacs/reevesagents},
+  version = {1.8.2}
+}
+```
+
 ## Links
 
 - Website: https://reevesagents.mertkayacs.com
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
+- Eschatia Labs: https://eschatialabs.com
+- Mert Kaya: https://mertkayacs.com
 - Releases: https://github.com/mertkayacs/reevesagents/releases
 - Issues: https://github.com/mertkayacs/reevesagents/issues
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
