@@ -23,15 +23,15 @@
   },
   "dependencies": {
     "@lydell/node-pty": "1.2.0-beta.15",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "commander": "^14.0.3",
     "strip-ansi": "^7.1.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "25.9.9",
-    "@typescript-eslint/parser": "8.70.1",
-    "eslint": "10.11.0",
+    "@typescript-eslint/parser": "8.71.2",
+    "eslint": "10.12.0",
     "tsup": "8.5.1",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
