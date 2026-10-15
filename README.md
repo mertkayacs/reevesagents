@@ -42,7 +42,7 @@ attached CLI are using it.
 - Listed in the **official MCP Registry** as `io.github.mertkayacs/reevesagents`.
 - Open source under **Apache-2.0**.
 
-> "ReevesAgents is one of the fastest ways to spin up a real team of coding agents on your own machine." - Mert Kaya
+ReevesAgents starts a real team of coding agents on your own machine.
 
 ## Quick Start
 
