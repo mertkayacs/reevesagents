@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/mertkayacs/reevesagents/compare/v1.8.2...v1.9.0) (2026-10-16)
+
+
+### Features
+
+* **providers:** add 16 agent CLIs, a tools catalogue and provider icons ([#144](https://github.com/mertkayacs/reevesagents/issues/144)) ([ee7c3f5](https://github.com/mertkayacs/reevesagents/commit/ee7c3f5849e3208838cb71a282522a280f6812ba))
+
 ## [1.8.2](https://github.com/mertkayacs/reevesagents/compare/v1.8.1...v1.8.2) (2026-10-10)
 
 

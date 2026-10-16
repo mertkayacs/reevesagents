@@ -1,6 +1,6 @@
 {
   "name": "reevesagents",
-  "version": "1.8.2",
+  "version": "1.9.0",
   "description": "Local tmux-first workspace manager for AI CLI agents",
   "mcpName": "io.github.mertkayacs/reevesagents",
   "type": "module",
