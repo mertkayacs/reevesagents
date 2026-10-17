@@ -6,9 +6,9 @@
 // all derive from this map, so adding a tool is one entry here.
 
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { binaryOnPath } from './providers.js'
 
 export type Tool = 'pplx' | 'colab' | 'hf' | 'ollama'
@@ -22,15 +22,16 @@ export interface ToolDef {
   purpose: string
   // Environment variables whose presence means signed in.
   authEnv: readonly string[]
-  // Filesystem paths whose existence means signed in. Existence only: the file
-  // is never read, it holds credentials. A leading ~/ resolves against the
-  // home dir.
-  authFiles?: readonly string[]
   // A status command judged only by its exit code (0 means yes). stdin is
   // closed and output is discarded: it can contain account names. Use only
   // commands verified against the tool's real behavior; a probe that cannot
   // run counts as unknown.
   authCheckArgs?: readonly string[]
+  // A bespoke state probe for a tool whose sign-in sources the generic
+  // env/exit-code judgement above cannot express. Same contract: presence
+  // only, so credentials are never read and variable values are never
+  // printed, stored or compared.
+  probe?: (_env: Record<string, string | undefined>, _home: string) => ToolState
   // What the auth probe reports for this tool, shown by every surface
   // ('signed in' for credential checks, 'reachable' for a service check).
   stateLabel: string
@@ -47,8 +48,8 @@ export const TOOL_REGISTRY: Record<Tool, ToolDef> = {
     displayName: 'Perplexity CLI',
     color: '#3f7f8d', // muted Perplexity teal
     purpose: 'Web search and page snippets from Perplexity, as JSON.',
-    authEnv: ['PERPLEXITY_API_KEY'],
-    authFiles: ['~/.config/perplexity/credentials.json'],
+    authEnv: [],
+    probe: pplxSigninState,
     stateLabel: 'signed in',
     example: 'pplx search web "node 24 release date" --limit 3',
     docsUrl: 'https://github.com/perplexityai/perplexity-cli',
@@ -103,18 +104,49 @@ export type ToolState = 'yes' | 'no' | 'unknown'
 
 const TOOL_AUTH_CHECK_TIMEOUT_MS = 3000
 
-function authFilePresent(path: string, home: string): boolean {
-  if (!path.startsWith('~/')) return existsSync(path)
-  return existsSync(join(home, path.slice(2)))
+// Perplexity CLI sign-in state, presence only, checked in the CLI's order:
+// the PPLX_SDK_BASE_URL and PPLX_SDK_API_KEY pair (exactly one set makes the
+// CLI refuse to run, so no), then PERPLEXITY_API_KEY, then the credentials
+// file. A blank value counts as unset for all three variables. The file sits
+// under the platform config dir: $XDG_CONFIG_HOME (only when absolute) or
+// ~/.config on Linux, ~/Library/Application Support on macOS. The CLI ships
+// no other builds, so on other platforms a missing key proves nothing and
+// the state stays unknown. The file is never read; a stat that fails for a
+// reason other than absence (such as a permission error) means unknown.
+export function pplxSigninState(
+  env: Record<string, string | undefined>,
+  home: string,
+  platform = process.platform,
+): ToolState {
+  const set = (name: string) => Boolean(env[name]?.trim())
+  const sdkBase = set('PPLX_SDK_BASE_URL')
+  const sdkKey = set('PPLX_SDK_API_KEY')
+  if (sdkBase !== sdkKey) return 'no'
+  if (sdkBase && sdkKey) return 'yes'
+  if (set('PERPLEXITY_API_KEY')) return 'yes'
+  let credentials: string
+  if (platform === 'linux') {
+    const xdg = env.XDG_CONFIG_HOME
+    credentials = join(xdg && isAbsolute(xdg) ? xdg : join(home, '.config'), 'perplexity', 'credentials.json')
+  } else if (platform === 'darwin') {
+    credentials = join(home, 'Library', 'Application Support', 'perplexity', 'credentials.json')
+  } else {
+    return 'unknown'
+  }
+  try {
+    return statSync(credentials, { throwIfNoEntry: false }) ? 'yes' : 'no'
+  } catch {
+    return 'unknown'
+  }
 }
 
-// State for one tool: yes when an authEnv variable is set or an authFiles path
-// exists; otherwise a declared authCheckArgs command is judged by exit code
-// alone (stdin closed, output discarded); anything else (no probe, or the probe
-// could not run) is unknown.
+// State for one tool: a tool-declared probe wins; otherwise yes when an
+// authEnv variable is set; otherwise a declared authCheckArgs command is
+// judged by exit code alone (stdin closed, output discarded); anything else
+// (no command, or the command could not run) is unknown.
 export function toolState(def: ToolDef, env: Record<string, string | undefined> = process.env, home = homedir()): ToolState {
+  if (def.probe) return def.probe(env, home)
   if (def.authEnv.some(name => Boolean(env[name]))) return 'yes'
-  if ((def.authFiles ?? []).some(path => authFilePresent(path, home))) return 'yes'
   if (!def.authCheckArgs) return 'unknown'
   try {
     const checked = spawnSync(def.bin, [...def.authCheckArgs], {

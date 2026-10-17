@@ -394,7 +394,7 @@ describe('cli parity', () => {
   })
 
   describe('tools', () => {
-    const toolKeys = ['PERPLEXITY_API_KEY', 'HF_TOKEN', 'OLLAMA_API_KEY'] as const
+    const toolKeys = ['PERPLEXITY_API_KEY', 'PPLX_SDK_BASE_URL', 'PPLX_SDK_API_KEY', 'XDG_CONFIG_HOME', 'HF_TOKEN', 'OLLAMA_API_KEY'] as const
     const savedKeys = new Map<string, string | undefined>()
     let savedHome: string | undefined
     let tmpHome: string
@@ -440,7 +440,7 @@ describe('cli parity', () => {
 
       const pplx = tools.find(tool => tool.id === 'pplx')!
       expect(pplx.installed).toBe(false)
-      expect(pplx.state).toBe('unknown') // nothing to probe with
+      expect(pplx.state).toBe('no') // no key in the env, no credentials file under the temp home
 
       const ollama = tools.find(tool => tool.id === 'ollama')!
       expect(ollama.state_means).toBe('reachable')

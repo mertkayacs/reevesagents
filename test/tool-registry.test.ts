@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 // child_process is mocked so the status probes never touch real subprocesses:
@@ -54,7 +54,6 @@ describe('tool registry', () => {
       expect(def.docsUrl).toMatch(/^https:\/\//)
       expect(Array.isArray(def.authEnv)).toBe(true)
       for (const name of def.authEnv) expect(name).toMatch(/^[A-Z][A-Z0-9_]*$/)
-      for (const path of def.authFiles ?? []) expect(path.startsWith('~/')).toBe(true)
     }
   })
 
@@ -97,16 +96,16 @@ describe('tool registry', () => {
 describe('tool state', () => {
   it('an authEnv variable set means yes, without running any command', async () => {
     const { TOOL_REGISTRY, toolState } = await import('../src/core/tool-registry.js')
-    expect(toolState(TOOL_REGISTRY.pplx, { PERPLEXITY_API_KEY: 'set' }, tmpHome)).toBe('yes')
+    expect(toolState(TOOL_REGISTRY.hf, { HF_TOKEN: 'set' }, tmpHome)).toBe('yes')
     expect(spawnSync).not.toHaveBeenCalled()
   })
 
-  it('an existing auth file means yes; the file is never read', async () => {
+  it('a tool-declared probe decides the state from the env and home, without running any command', async () => {
     const { TOOL_REGISTRY, toolState } = await import('../src/core/tool-registry.js')
-    const credPath = join(tmpHome, '.config', 'perplexity')
-    mkdirSync(credPath, { recursive: true })
-    writeFileSync(join(credPath, 'credentials.json'), '', 'utf-8')
-    expect(toolState(TOOL_REGISTRY.pplx, {}, tmpHome)).toBe('yes')
+    const probe = vi.fn(() => 'no' as const)
+    const env = { HF_TOKEN: 'set' }
+    expect(toolState({ ...TOOL_REGISTRY.hf, probe }, env, tmpHome)).toBe('no') // wins over authEnv and authCheckArgs
+    expect(probe).toHaveBeenCalledWith(env, tmpHome)
     expect(spawnSync).not.toHaveBeenCalled()
   })
 
@@ -128,11 +127,110 @@ describe('tool state', () => {
     expect(toolState(TOOL_REGISTRY.hf, {}, tmpHome)).toBe('unknown')
   })
 
-  it('a tool with no probe is unknown when no authEnv variable is set and no auth file exists', async () => {
+  it('a tool with no probe and no check command is unknown when no authEnv variable is set', async () => {
     const { TOOL_REGISTRY, toolState } = await import('../src/core/tool-registry.js')
-    expect(TOOL_REGISTRY.pplx.authCheckArgs).toBeUndefined()
-    expect(toolState(TOOL_REGISTRY.pplx, {}, tmpHome)).toBe('unknown')
+    const bare = { ...TOOL_REGISTRY.hf, probe: undefined, authCheckArgs: undefined }
+    expect(toolState(bare, {}, tmpHome)).toBe('unknown')
     expect(spawnSync).not.toHaveBeenCalled()
+  })
+})
+
+describe('pplxSigninState', () => {
+  // Hermetic: the env object, the home dir (a temp dir) and the platform are
+  // all passed in, so the real environment and home are never consulted.
+  const touch = (path: string) => {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, '', 'utf-8') // presence only, so an empty file is enough
+  }
+  const linuxFile = (configDir: string) => join(configDir, 'perplexity', 'credentials.json')
+
+  it('a non-blank PERPLEXITY_API_KEY means yes; an empty or blank one with nothing else means no', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: 'set' }, tmpHome, 'linux')).toBe('yes')
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: '' }, tmpHome, 'linux')).toBe('no')
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: '   ' }, tmpHome, 'linux')).toBe('no')
+  })
+
+  it('PPLX_SDK_BASE_URL with PPLX_SDK_API_KEY means yes; either one alone means no', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    const base = 'http://127.0.0.1:9'
+    expect(pplxSigninState({ PPLX_SDK_BASE_URL: base, PPLX_SDK_API_KEY: 'set' }, tmpHome, 'linux')).toBe('yes')
+    expect(pplxSigninState({ PPLX_SDK_BASE_URL: base }, tmpHome, 'linux')).toBe('no')
+    expect(pplxSigninState({ PPLX_SDK_API_KEY: 'set' }, tmpHome, 'linux')).toBe('no')
+  })
+
+  it('half an SDK pair means no beside PERPLEXITY_API_KEY or a credentials file, since the CLI refuses to run', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    const base = 'http://127.0.0.1:9'
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: 'set', PPLX_SDK_BASE_URL: base }, tmpHome, 'linux')).toBe('no')
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: 'set', PPLX_SDK_API_KEY: 'set' }, tmpHome, 'linux')).toBe('no')
+    touch(linuxFile(join(tmpHome, '.config')))
+    expect(pplxSigninState({}, tmpHome, 'linux')).toBe('yes') // the file alone counts
+    expect(pplxSigninState({ PPLX_SDK_BASE_URL: base }, tmpHome, 'linux')).toBe('no')
+    expect(pplxSigninState({ PPLX_SDK_API_KEY: 'set' }, tmpHome, 'linux')).toBe('no')
+  })
+
+  it('a blank SDK variable counts as unset: beside a set partner it means no, and two blanks fall through', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    const base = 'http://127.0.0.1:9'
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: 'set', PPLX_SDK_BASE_URL: '   ', PPLX_SDK_API_KEY: 'set' }, tmpHome, 'linux')).toBe('no')
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: 'set', PPLX_SDK_BASE_URL: base, PPLX_SDK_API_KEY: '   ' }, tmpHome, 'linux')).toBe('no')
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: 'set', PPLX_SDK_BASE_URL: '', PPLX_SDK_API_KEY: '   ' }, tmpHome, 'linux')).toBe('yes')
+  })
+
+  it('linux: the credentials file under ~/.config means yes, and it is never opened', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    const file = linuxFile(join(tmpHome, '.config'))
+    expect(pplxSigninState({}, tmpHome, 'linux')).toBe('no')
+    touch(file)
+    expect(pplxSigninState({}, tmpHome, 'linux')).toBe('yes')
+    chmodSync(file, 0o000) // stat needs no read permission on the file; a non-root open would fail
+    expect(pplxSigninState({}, tmpHome, 'linux')).toBe('yes')
+  })
+
+  it('linux: an absolute XDG_CONFIG_HOME holds the file instead, so ~/.config alone means no', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    const xdg = join(tmpHome, 'xdg')
+    touch(linuxFile(join(tmpHome, '.config')))
+    expect(pplxSigninState({ XDG_CONFIG_HOME: xdg }, tmpHome, 'linux')).toBe('no')
+    touch(linuxFile(xdg))
+    expect(pplxSigninState({ XDG_CONFIG_HOME: xdg }, tmpHome, 'linux')).toBe('yes')
+  })
+
+  it('linux: a relative XDG_CONFIG_HOME falls back to ~/.config', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    expect(pplxSigninState({ XDG_CONFIG_HOME: 'rel/xdg' }, tmpHome, 'linux')).toBe('no')
+    touch(linuxFile(join(tmpHome, '.config')))
+    expect(pplxSigninState({ XDG_CONFIG_HOME: 'rel/xdg' }, tmpHome, 'linux')).toBe('yes')
+  })
+
+  it('darwin: the file under ~/Library/Application Support means yes; the Linux paths do not count', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    const xdg = join(tmpHome, 'xdg')
+    touch(linuxFile(join(tmpHome, '.config')))
+    touch(linuxFile(xdg))
+    expect(pplxSigninState({ XDG_CONFIG_HOME: xdg }, tmpHome, 'darwin')).toBe('no')
+    touch(join(tmpHome, 'Library', 'Application Support', 'perplexity', 'credentials.json'))
+    expect(pplxSigninState({}, tmpHome, 'darwin')).toBe('yes')
+  })
+
+  it('win32: the CLI has no build there, so no key means unknown; PERPLEXITY_API_KEY still means yes', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    expect(pplxSigninState({}, tmpHome, 'win32')).toBe('unknown')
+    expect(pplxSigninState({ PERPLEXITY_API_KEY: 'set' }, tmpHome, 'win32')).toBe('yes')
+  })
+
+  // Root bypasses permission checks, so the stat below would succeed there.
+  it.skipIf(process.getuid?.() === 0)('a stat that fails for a reason other than absence means unknown', async () => {
+    const { pplxSigninState } = await import('../src/core/tool-registry.js')
+    const dir = join(tmpHome, '.config', 'perplexity')
+    touch(join(dir, 'credentials.json'))
+    chmodSync(dir, 0o000)
+    try {
+      expect(pplxSigninState({}, tmpHome, 'linux')).toBe('unknown')
+    } finally {
+      chmodSync(dir, 0o700) // so afterEach can remove the temp home
+    }
   })
 })
 
