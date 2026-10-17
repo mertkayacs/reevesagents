@@ -24,7 +24,7 @@
   "dependencies": {
     "@lydell/node-pty": "1.2.0-beta.15",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "strip-ansi": "^7.1.0"
   },
   "devDependencies": {
