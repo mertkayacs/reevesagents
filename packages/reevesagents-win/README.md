@@ -10,7 +10,7 @@ It is the native-Windows sibling of [`reevesagents`](https://www.npmjs.com/packa
 npm install -g reevesagents-win
 ```
 
-Needs Node 20.19+ and at least one provider CLI installed and signed in.
+Needs Node 22.12+ and at least one provider CLI installed and signed in.
 
 ## Use it
 

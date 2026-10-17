@@ -115,7 +115,7 @@ export const tr = {
     'setup.intro': 'Diğer AI CLI agent\'larını tek yerden çalıştır ve yönet.',
     'setup.manageHosts': 'Bağlantıları yönet',
     'setup.manageHostsHint': 'her host için bağla veya ayır',
-    'setup.nodeOld': 'çok eski (20.19+ gerekli)',
+    'setup.nodeOld': 'çok eski (22.12+ gerekli)',
     'setup.noProviders': 'hiçbiri kurulu değil',
     'setup.ok': 'tamam',
     'setup.providersLabel': 'sağlayıcılar',

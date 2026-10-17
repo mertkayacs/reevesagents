@@ -118,7 +118,7 @@ export const ar = {
     'setup.intro': 'شغّل ووجّه وكلاء AI CLI آخرين من مكان واحد.',
     'setup.manageHosts': 'إدارة الاتصالات',
     'setup.manageHostsHint': 'إرفاق أو فصل لكل مضيف',
-    'setup.nodeOld': 'قديم جدًا (يلزم 20.19+)',
+    'setup.nodeOld': 'قديم جدًا (يلزم 22.12+)',
     'setup.noProviders': 'لا شيء مثبّت',
     'setup.ok': 'سليم',
     'setup.providersLabel': 'المزوّدون',

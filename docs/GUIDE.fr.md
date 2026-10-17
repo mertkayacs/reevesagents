@@ -30,7 +30,7 @@ commande et chaque option, tout est recensé dans le [guide en ligne](https://re
 ## Avant de commencer
 
 - macOS, Linux ou WSL (Windows natif n'est pas la cible ; utilisez WSL).
-- Node.js 20.19 ou plus récent.
+- Node.js 22.12 ou plus récent.
 - tmux 3.0 ou plus récent.
 - Au moins une CLI de fournisseur installée et authentifiée : Claude Code,
   Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI,

@@ -15,7 +15,7 @@ Questa guida ti porta da un'installazione pulita fino al punto in cui è un agen
 ## Prima di iniziare
 
 - macOS, Linux o WSL (Windows nativo non è il target; usa WSL).
-- Node.js 20.19 o più recente.
+- Node.js 22.12 o più recente.
 - tmux 3.0 o più recente.
 - Almeno una CLI di provider installata e loggata: Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI o Rovo Dev CLI.
 

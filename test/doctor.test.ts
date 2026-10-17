@@ -76,17 +76,19 @@ describe('doctor', () => {
     expect(result.checks.find(c => c.name === 'provider compat')).toBeDefined()
   })
 
-  it('node check passes on node 20+', async () => {
+  it('node check passes on node 22.12+', async () => {
     const { runDoctor } = await import('../src/core/doctor.js')
     const result = runDoctor()
     expect(result.checks.find(c => c.name === 'node')?.status).toBe('ok')
   })
 
-  it('node check enforces package minimum 20.19.0', async () => {
+  it('node check enforces package minimum 22.12.0', async () => {
     const { nodeVersionCheck } = await import('../src/core/doctor.js')
-    expect(nodeVersionCheck('v20.18.1').status).toBe('fail')
-    expect(nodeVersionCheck('v20.19.0').status).toBe('ok')
-    expect(nodeVersionCheck('v22.0.0').status).toBe('ok')
+    expect(nodeVersionCheck('v20.19.0').status).toBe('fail')
+    expect(nodeVersionCheck('v22.11.0').status).toBe('fail')
+    expect(nodeVersionCheck('v22.11.0').detail).toBe('22.11.0 (need >=22.12.0)')
+    expect(nodeVersionCheck('v22.12.0').status).toBe('ok')
+    expect(nodeVersionCheck('v24.0.0').status).toBe('ok')
   })
 
   it('does not expose runtime cleanup from doctor', async () => {

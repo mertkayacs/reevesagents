@@ -111,7 +111,7 @@ export const de = {
     'setup.intro': 'Andere AI-CLI-Agenten von einem Ort aus starten und steuern.',
     'setup.manageHosts': 'Verbindungen verwalten',
     'setup.manageHostsHint': 'pro Host anhängen oder entfernen',
-    'setup.nodeOld': 'zu alt (20.19+ nötig)',
+    'setup.nodeOld': 'zu alt (22.12+ nötig)',
     'setup.noProviders': 'keine installiert',
     'setup.ok': 'ok',
     'setup.providersLabel': 'Provider',

@@ -117,7 +117,7 @@ export const ru = {
     'setup.intro': 'Запускайте и направляйте других AI CLI агентов из одного места.',
     'setup.manageHosts': 'Управление подключениями',
     'setup.manageHostsHint': 'подключать или отключать по хосту',
-    'setup.nodeOld': 'слишком старая (нужна 20.19+)',
+    'setup.nodeOld': 'слишком старая (нужна 22.12+)',
     'setup.noProviders': 'ничего не установлено',
     'setup.ok': 'ок',
     'setup.providersLabel': 'провайдеры',

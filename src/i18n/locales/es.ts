@@ -116,7 +116,7 @@ export const es = {
     'setup.intro': 'Ejecuta y dirige otros agentes CLI de IA desde un solo lugar.',
     'setup.manageHosts': 'Gestionar conexiones',
     'setup.manageHostsHint': 'conectar o desconectar por host',
-    'setup.nodeOld': 'demasiado antiguo (requiere 20.19+)',
+    'setup.nodeOld': 'demasiado antiguo (requiere 22.12+)',
     'setup.noProviders': 'ninguno instalado',
     'setup.ok': 'ok',
     'setup.providersLabel': 'proveedores',

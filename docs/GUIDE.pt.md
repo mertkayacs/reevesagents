@@ -29,7 +29,7 @@ e de cada opção, está tudo no [guia online](https://reevesagents.mertkayacs.c
 ## Antes de começar
 
 - macOS, Linux ou WSL (o Windows nativo não é o alvo; use WSL).
-- Node.js 20.19 ou mais recente.
+- Node.js 22.12 ou mais recente.
 - tmux 3.0 ou mais recente.
 - Pelo menos uma CLI de fornecedor instalada e com sessão iniciada: Claude Code,
   Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI,

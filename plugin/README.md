@@ -10,7 +10,7 @@ The plugin contains two parts:
 ## Requirements
 
 - Claude Code
-- Node.js 20.19 or newer and tmux 3.0 or newer
+- Node.js 22.12 or newer and tmux 3.0 or newer
 - the reevesagents command-line tool: `npm install -g reevesagents` (or `brew install mertkayacs/reevesagents/reevesagents`)
 - at least one other AI coding tool, installed and signed in
 

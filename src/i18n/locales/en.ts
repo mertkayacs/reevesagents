@@ -117,7 +117,7 @@ export const en = {
   'setup.intro': 'Run and steer other AI CLI agents from one place.',
   'setup.manageHosts': 'Manage connections',
   'setup.manageHostsHint': 'attach or detach per host',
-  'setup.nodeOld': 'too old (need 20.19+)',
+  'setup.nodeOld': 'too old (need 22.12+)',
   'setup.noProviders': 'none installed',
   'setup.ok': 'ok',
   'setup.providersLabel': 'providers',

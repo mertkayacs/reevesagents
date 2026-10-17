@@ -132,7 +132,7 @@ Ollama نماذج محلية أو سحابية من الطرفية. يستدعي
 <details>
 <summary><strong>التثبيت</strong></summary>
 
-يحتاج ReevesAgents إلى Node.js `20.19+` وtmux `3.0+`، وأداة CLI مدعومة واحدة على
+يحتاج ReevesAgents إلى Node.js `22.12+` وtmux `3.0+`، وأداة CLI مدعومة واحدة على
 الأقل من أحد المزوّدين، مثبّتة ومسجَّل الدخول فيها. ويعمل على macOS وLinux وWSL.
 
 ```sh

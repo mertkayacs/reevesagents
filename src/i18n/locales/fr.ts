@@ -113,7 +113,7 @@ export const fr = {
     'setup.intro': 'Lancez et pilotez d\'autres agents CLI IA depuis un seul endroit.',
     'setup.manageHosts': 'Gérer les connexions',
     'setup.manageHostsHint': 'attacher ou détacher par hôte',
-    'setup.nodeOld': 'trop ancien (20.19+ requis)',
+    'setup.nodeOld': 'trop ancien (22.12+ requis)',
     'setup.noProviders': 'aucun installé',
     'setup.ok': 'ok',
     'setup.providersLabel': 'fournisseurs',

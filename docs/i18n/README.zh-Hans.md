@@ -115,7 +115,7 @@ ReevesAgents 从设计上就是纯本地的。状态是 `~/.reeves` 下的纯 JS
 <details>
 <summary><strong>安装</strong></summary>
 
-ReevesAgents 需要 Node.js `20.19+`、tmux `3.0+`，以及至少一个装好并完成认证的受支持提供方 CLI。支持 macOS、Linux 和 WSL。
+ReevesAgents 需要 Node.js `22.12+`、tmux `3.0+`，以及至少一个装好并完成认证的受支持提供方 CLI。支持 macOS、Linux 和 WSL。
 
 ```sh
 # Homebrew

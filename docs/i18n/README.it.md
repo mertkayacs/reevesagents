@@ -131,7 +131,7 @@ con `list_tools`.
 <details>
 <summary><strong>Installazione</strong></summary>
 
-ReevesAgents richiede Node.js `20.19+`, tmux `3.0+` e almeno una CLI di provider
+ReevesAgents richiede Node.js `22.12+`, tmux `3.0+` e almeno una CLI di provider
 supportata, installata e autenticata. Gira su macOS, Linux e WSL.
 
 ```sh

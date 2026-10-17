@@ -118,7 +118,7 @@ export const zhHans = {
     'setup.intro': '在一个地方运行并操控其他 AI CLI 智能体。',
     'setup.manageHosts': '管理连接',
     'setup.manageHostsHint': '按宿主接入或断开',
-    'setup.nodeOld': '版本过旧（需 20.19+）',
+    'setup.nodeOld': '版本过旧（需 22.12+）',
     'setup.noProviders': '未安装',
     'setup.ok': '正常',
     'setup.providersLabel': '服务商',

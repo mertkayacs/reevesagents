@@ -34,7 +34,7 @@ Führe es vor dem Spawnen aus, damit ein Run nicht an einer fehlenden CLI scheit
 (unten) entlarvt ein Fenster, das an einem Login-Bildschirm hängt. `reevesagents doctor --json`
 liefert dasselbe als maschinenlesbares JSON.
 
-Voraussetzungen: Node 20.19+, tmux 3.0+ und mindestens eine Provider-CLI, installiert und
+Voraussetzungen: Node 22.12+, tmux 3.0+ und mindestens eine Provider-CLI, installiert und
 authentifiziert. macOS, Linux oder WSL (natives Windows ist kein Ziel).
 
 ## Installation

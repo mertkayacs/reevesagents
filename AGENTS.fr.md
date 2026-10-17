@@ -38,7 +38,7 @@ des agents, pour qu'une exécution n'échoue pas sur une CLI manquante ; `peek`
 `reevesagents doctor --json` renvoie les mêmes informations en JSON exploitable
 par un script.
 
-Prérequis : Node 20.19+, tmux 3.0+, et au moins une CLI de fournisseur installée
+Prérequis : Node 22.12+, tmux 3.0+, et au moins une CLI de fournisseur installée
 et authentifiée. macOS, Linux ou WSL (Windows natif n'est pas une cible).
 
 ## Installation

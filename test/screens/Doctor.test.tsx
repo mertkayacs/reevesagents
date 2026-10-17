@@ -8,7 +8,7 @@ const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 vi.mock('../../src/core/doctor.js', () => ({
   runDoctor: () => ({
     checks: [
-      { name: 'node', status: 'ok' as const, detail: '20.19.0' },
+      { name: 'node', status: 'ok' as const, detail: '22.12.0' },
       { name: 'tmux', status: 'ok' as const, detail: 'tmux 3.2' },
       { name: 'providers', status: 'warn' as const, detail: 'Claude Code: ok; Codex CLI: missing' },
     ],

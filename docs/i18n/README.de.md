@@ -131,7 +131,7 @@ Ein Agent mit angehängtem MCP bekommt dieselbe Liste über `list_tools`.
 <details>
 <summary><strong>Installation</strong></summary>
 
-ReevesAgents braucht Node.js `20.19+`, tmux `3.0+` und mindestens eine
+ReevesAgents braucht Node.js `22.12+`, tmux `3.0+` und mindestens eine
 unterstützte Anbieter-CLI, die installiert und eingeloggt ist. Es läuft auf
 macOS, Linux und WSL.
 

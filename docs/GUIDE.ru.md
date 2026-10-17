@@ -28,7 +28,7 @@
 ## Перед началом
 
 - macOS, Linux или WSL (нативный Windows не является целевой средой; используйте WSL).
-- Node.js версии 20.19 или новее.
+- Node.js версии 22.12 или новее.
 - tmux версии 3.0 или новее.
 - Хотя бы один провайдерский CLI, установленный и с выполненным входом:
   Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider,

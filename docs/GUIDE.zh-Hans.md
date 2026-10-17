@@ -15,7 +15,7 @@
 ## 开始前
 
 - macOS、Linux 或 WSL（原生 Windows 不是目标；请使用 WSL）。
-- Node.js 20.19 或更新版本。
+- Node.js 22.12 或更新版本。
 - tmux 3.0 或更新版本。
 - 至少一个已安装并登录的提供方 CLI：Claude Code、Codex、OpenCode、Hermes、Kimi、DeepSeek、Pi、Qwen、Aider、Gemini CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI 或 Rovo Dev CLI。
 

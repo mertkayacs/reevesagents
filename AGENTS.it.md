@@ -33,7 +33,7 @@ così un run non fallisce per una CLI mancante; `peek` (sotto) intercetta una fi
 ferma su una schermata di login. `reevesagents doctor --json` restituisce lo stesso risultato
 in JSON leggibile da macchina.
 
-Requisiti: Node 20.19+, tmux 3.0+ e almeno una CLI di provider installata e autenticata.
+Requisiti: Node 22.12+, tmux 3.0+ e almeno una CLI di provider installata e autenticata.
 macOS, Linux o WSL (Windows nativo non è il target).
 
 ## Installa

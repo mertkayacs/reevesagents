@@ -37,7 +37,7 @@ criar agentes, para que uma execução não falhe por uma CLI em falta; o `peek`
 (abaixo) apanha uma janela deixada num ecrã de início de sessão.
 `reevesagents doctor --json` devolve o mesmo em JSON legível por máquina.
 
-Requisitos: Node 20.19+, tmux 3.0+ e pelo menos uma CLI de fornecedor instalada
+Requisitos: Node 22.12+, tmux 3.0+ e pelo menos uma CLI de fornecedor instalada
 e autenticada. macOS, Linux ou WSL (o Windows nativo não é um alvo).
 
 ## Instalar

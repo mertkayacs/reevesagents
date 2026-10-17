@@ -131,7 +131,7 @@ durumu listeler: kurulu mu, giriş yapılmış mı (Ollama için: erişilebilir 
 <details>
 <summary><strong>Kurulum</strong></summary>
 
-ReevesAgents için Node.js `20.19+`, tmux `3.0+` ve kurulu, girişi yapılmış en az bir
+ReevesAgents için Node.js `22.12+`, tmux `3.0+` ve kurulu, girişi yapılmış en az bir
 desteklenen sağlayıcı CLI'si gerekir. macOS, Linux ve WSL üzerinde çalışır.
 
 ```sh

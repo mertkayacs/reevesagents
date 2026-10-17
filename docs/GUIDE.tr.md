@@ -15,7 +15,7 @@ Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerin
 ## Başlamadan önce
 
 - macOS, Linux veya WSL (yerel Windows hedef değildir; WSL kullanın).
-- Node.js 20.19 veya daha yenisi.
+- Node.js 22.12 veya daha yenisi.
 - tmux 3.0 veya daha yenisi.
 - Kurulu ve giriş yapılmış en az bir sağlayıcı CLI'si: Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI veya Rovo Dev CLI.
 

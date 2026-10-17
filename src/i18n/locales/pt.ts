@@ -117,7 +117,7 @@ export const pt = {
     'setup.intro': 'Execute e conduza outros agentes CLI de IA a partir de um só lugar.',
     'setup.manageHosts': 'Gerir ligações',
     'setup.manageHostsHint': 'anexar ou desanexar por host',
-    'setup.nodeOld': 'demasiado antigo (requer 20.19+)',
+    'setup.nodeOld': 'demasiado antigo (requer 22.12+)',
     'setup.noProviders': 'nenhum instalado',
     'setup.ok': 'ok',
     'setup.providersLabel': 'fornecedores',

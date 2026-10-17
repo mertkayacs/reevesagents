@@ -133,7 +133,7 @@ Hub, а Ollama запускает локальные и облачные мод�
 <details>
 <summary><strong>Установка</strong></summary>
 
-Для ReevesAgents нужны Node.js `20.19+`, tmux `3.0+` и хотя бы один
+Для ReevesAgents нужны Node.js `22.12+`, tmux `3.0+` и хотя бы один
 поддерживаемый CLI провайдера, который установлен и в котором выполнен вход.
 Поддерживаются macOS, Linux и WSL.
 

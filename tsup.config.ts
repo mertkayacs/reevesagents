@@ -8,7 +8,7 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   clean: true,
-  target: 'node20',
+  target: 'node22',
   platform: 'node',
   // Optional web extras: keep them as runtime imports so an absent native module
   // degrades gracefully instead of breaking the bundle. tsup only auto-externalizes

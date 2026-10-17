@@ -28,7 +28,7 @@ opción, eso vive en la [guía en línea](https://reevesagents.mertkayacs.com/es
 ## Antes de empezar
 
 - macOS, Linux o WSL (Windows nativo no es el objetivo; usa WSL).
-- Node.js 20.19 o superior.
+- Node.js 22.12 o superior.
 - tmux 3.0 o superior.
 - Al menos una CLI de proveedor instalada y autenticada: Claude Code, Codex,
   OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Cline CLI,

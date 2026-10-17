@@ -132,7 +132,7 @@ para scripts. Um agente com o MCP associado obtém a mesma lista com
 <details>
 <summary><strong>Instalação</strong></summary>
 
-O ReevesAgents precisa de Node.js `20.19+`, tmux `3.0+` e pelo menos uma CLI de
+O ReevesAgents precisa de Node.js `22.12+`, tmux `3.0+` e pelo menos uma CLI de
 fornecedor suportada, instalada e autenticada. Funciona em macOS, Linux e WSL.
 
 ```sh

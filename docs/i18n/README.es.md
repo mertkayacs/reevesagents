@@ -131,7 +131,7 @@ su estado: instalada y con sesión iniciada (en Ollama: accesible). Añade
 <details>
 <summary><strong>Instalación</strong></summary>
 
-ReevesAgents necesita Node.js `20.19+`, tmux `3.0+` y al menos una CLI de
+ReevesAgents necesita Node.js `22.12+`, tmux `3.0+` y al menos una CLI de
 proveedor compatible, instalada y con la sesión iniciada. Funciona en macOS,
 Linux y WSL.
 

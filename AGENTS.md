@@ -32,7 +32,7 @@ signed in, so an installed but signed-out CLI still passes here. Run it before s
 so a run does not fail on a missing CLI; `peek` (below) catches a window left sitting at
 a login screen. `reevesagents doctor --json` returns the same as machine-readable JSON.
 
-Requirements: Node 20.19+, tmux 3.0+, and at least one provider CLI installed and
+Requirements: Node 22.12+, tmux 3.0+, and at least one provider CLI installed and
 authenticated. macOS, Linux, or WSL (native Windows is not a target).
 
 ## Install

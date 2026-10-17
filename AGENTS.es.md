@@ -38,7 +38,7 @@ falle por una CLI que falta; `peek` (más abajo) detecta una ventana que se qued
 en la pantalla de inicio de sesión. `reevesagents doctor --json` devuelve lo mismo
 como JSON legible por máquina.
 
-Requisitos: Node 20.19+, tmux 3.0+ y al menos una CLI de proveedor instalada y
+Requisitos: Node 22.12+, tmux 3.0+ y al menos una CLI de proveedor instalada y
 autenticada. macOS, Linux o WSL (Windows nativo no es un objetivo).
 
 ## Instalar

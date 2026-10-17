@@ -115,7 +115,7 @@ export const it = {
     'setup.intro': 'Avvia e guida altri agenti CLI AI da un unico posto.',
     'setup.manageHosts': 'Gestisci le connessioni',
     'setup.manageHostsHint': 'collega o scollega per host',
-    'setup.nodeOld': 'troppo vecchio (serve 20.19+)',
+    'setup.nodeOld': 'troppo vecchio (serve 22.12+)',
     'setup.noProviders': 'nessuno installato',
     'setup.ok': 'ok',
     'setup.providersLabel': 'provider',

@@ -20,7 +20,7 @@ export function registerSetup(program: Command): void {
           return
         }
         console.log(`tmux       ${state.tmuxOk ? 'ok' : 'missing (required; install tmux 3.0+)'}`)
-        console.log(`node       ${state.nodeOk ? 'ok' : 'too old (need >=20.19)'}`)
+        console.log(`node       ${state.nodeOk ? 'ok' : 'too old (need >=22.12)'}`)
         console.log(`providers  ${state.installedProviders.length > 0 ? state.installedProviders.map(providerDisplayName).join(', ') : 'none installed'}`)
 
         if (state.installedProviders.length === 0) {

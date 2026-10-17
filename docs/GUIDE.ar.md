@@ -15,7 +15,7 @@
 ## قبل أن تبدأ
 
 - macOS أو Linux أو WSL (نظام Windows الأصلي ليس الهدف؛ استخدم WSL).
-- Node.js 20.19 أو أحدث.
+- Node.js 22.12 أو أحدث.
 - tmux 3.0 أو أحدث.
 - أداة CLI واحدة على الأقل من مزوّد، مثبّتة وموثّقة: Claude Code أو Codex أو OpenCode أو Hermes أو Kimi أو DeepSeek أو Pi أو Qwen أو Aider أو Gemini CLI أو Cline CLI أو Crush أو Goose أو Kilo Code أو Letta Code أو Mistral Vibe أو Grok Build أو Kiro CLI أو Factory Droid أو Qoder CLI أو Warp أو Junie CLI أو GitHub Copilot CLI أو Cursor CLI أو Rovo Dev CLI.
 

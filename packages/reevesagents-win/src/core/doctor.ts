@@ -15,7 +15,7 @@ export interface DoctorResult {
   checks: CheckResult[]
 }
 
-const MIN_NODE_VERSION = [20, 19, 0] as const
+const MIN_NODE_VERSION = [22, 12, 0] as const
 
 function parseNodeVersion(version: string): [number, number, number] {
   const clean = version.startsWith('v') ? version.slice(1) : version
@@ -31,10 +31,10 @@ function nodeMeetsMinimum(version: [number, number, number]): boolean {
   return true
 }
 
-function nodeVersionCheck(rawVersion = process.version): CheckResult {
+export function nodeVersionCheck(rawVersion = process.version): CheckResult {
   const version = rawVersion.startsWith('v') ? rawVersion.slice(1) : rawVersion
   const ok = nodeMeetsMinimum(parseNodeVersion(version))
-  return { name: 'node', status: ok ? 'ok' : 'fail', detail: ok ? version : `${version} (need >=20.19.0)` }
+  return { name: 'node', status: ok ? 'ok' : 'fail', detail: ok ? version : `${version} (need >=22.12.0)` }
 }
 
 // This package targets native Windows. It runs fine on Linux/macOS (real ptys), but

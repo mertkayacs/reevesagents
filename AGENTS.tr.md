@@ -19,7 +19,7 @@ reevesagents doctor
 
 tmux'u, Node'u, `~/.reeves` durum dizinini ve hangi sağlayıcı CLI'lerinin kurulu ve CLI uyumlu olduğunu raporlar (her CLI'nin `--help` çıktısına bakar). Bir CLI'nin oturum açıp açmadığını test edemez; kurulu ama oturumu kapalı bir CLI buradan yine geçer. Spawn'dan önce çalıştır ki run eksik bir CLI yüzünden başarısız olmasın; login ekranında bekleyen bir pencereyi de `peek` (aşağıda) yakalar. `reevesagents doctor --json` aynı çıktıyı makine tarafından okunabilir JSON olarak döndürür.
 
-Gereksinimler: Node 20.19+, tmux 3.0+ ve kurulu, oturum açılmış en az bir sağlayıcı CLI. macOS, Linux veya WSL (yerel Windows hedef değildir).
+Gereksinimler: Node 22.12+, tmux 3.0+ ve kurulu, oturum açılmış en az bir sağlayıcı CLI. macOS, Linux veya WSL (yerel Windows hedef değildir).
 
 ## Kurulum
 
