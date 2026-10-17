@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/mertkayacs/reevesagents/compare/v1.9.0...v1.9.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **tools:** report Perplexity as signed out when no API key is set ([#147](https://github.com/mertkayacs/reevesagents/issues/147)) ([6205228](https://github.com/mertkayacs/reevesagents/commit/6205228cb57bad4607608d9cfd5b78fac44cec21))
+
 ## [1.9.0](https://github.com/mertkayacs/reevesagents/compare/v1.8.2...v1.9.0) (2026-10-16)
 
 
