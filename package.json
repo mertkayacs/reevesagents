@@ -4,7 +4,7 @@
   "description": "Local tmux-first workspace manager for AI CLI agents",
   "mcpName": "io.github.mertkayacs/reevesagents",
   "type": "module",
-  "packageManager": "pnpm@10.34.6",
+  "packageManager": "pnpm@12.13.0",
   "bin": {
     "reevesagents": "dist/cli.js"
   },
