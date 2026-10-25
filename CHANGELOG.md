@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/mertkayacs/reevesagents/compare/v2.0.0...v2.1.0) (2026-10-25)
+
+
+### Features
+
+* **windows:** run natively on Windows via winmux, a tmux-compatible ConPTY multiplexer ([#172](https://github.com/mertkayacs/reevesagents/issues/172)) ([58946a0](https://github.com/mertkayacs/reevesagents/commit/58946a0e3694e96dc8b30c3ff46d53916de6e4f0))
+
 ## [2.0.0](https://github.com/mertkayacs/reevesagents/compare/v1.9.1...v2.0.0) (2026-10-17)
 
 

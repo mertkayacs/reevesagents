@@ -1,6 +1,6 @@
 {
   "name": "reevesagents",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Run and steer other AI coding CLIs (Claude Code, Codex, Kimi, Qwen, OpenCode, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI and more) from Claude Code, each in its own tmux window, through the reevesagents MCP server",
   "author": {
     "name": "Mert Kaya",
