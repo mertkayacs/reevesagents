@@ -30,7 +30,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "25.9.9",
-    "@typescript-eslint/parser": "8.72.0",
+    "@typescript-eslint/parser": "8.72.1",
     "eslint": "10.13.0",
     "tsup": "8.5.1",
     "typescript": "6.0.3",
