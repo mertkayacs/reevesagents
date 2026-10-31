@@ -119,6 +119,22 @@ agent on another, then watch and steer both.
 - `stop` and `kill` end work, and the `delete` commands remove ended records.
   All of them refuse to run without `--yes`.
 
+## Watching a dev -> review -> fix flow
+
+A flow attaches the dev -> review -> fix loop to one run and keeps its state in
+`~/.reeves/flows/<run-id>.json`. The run row in the TUI and the run card in the Web
+UI show a badge (`flow: review (2/6)`, `flow: escalated`), and a flow that needs a
+human is highlighted with the same warning colour as a stale run.
+
+- `reevesagents flow status --run <run>` — state, round budget, the commit under
+  review, the last verdict and the last decision. Add `--json` for scripts.
+- `reevesagents flow tick --run <run> --dry-run` — print what the engine would do
+  next without sending anything or writing the flow file. Drop `--dry-run` to
+  apply it; the engine then pastes through its idle check and refuses a pane that
+  is not positively free.
+- Nothing ticks a flow on its own: with no dashboard open, run `flow tick` from
+  cron (for example every minute) or keep the TUI/Web UI open.
+
 ## Keeping cost down
 
 - Put a cheap or free model in front as the router, and let it wake the

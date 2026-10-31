@@ -159,6 +159,7 @@ No arguments launches the TUI.
 | `skills [action]` | Install, remove, or inspect the ReevesAgents skill. |
 | `mcp` | Start the MCP server over stdio. Host CLIs run this. |
 | `config [key] [value]` | Show or update editable settings. |
+| `flow status\|tick` | Read the dev -> review -> fix flow of a run, or take one engine step (`--dry-run` prints it). |
 | `presets` | List saved run presets. |
 | `save-preset` | Save a live run as a preset. |
 | `start-preset` | Start a run from a preset. |

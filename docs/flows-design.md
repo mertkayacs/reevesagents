@@ -378,16 +378,21 @@ moving target.
 
 ### 4.1 CLI (`src/surfaces/cli/flow.ts`, registered in `index.ts:41`–`:71` so `--help` order stays intentional)
 
+Planned shape and what ships today (`shipped` = in this branch, `planned` = not written):
+
 ```
-reevesagents flow start --run <id> --dev <agent> --review <agent> --repo <dir> \
+reevesagents flow start --run <id> --dev <agent> --review <agent> --repo <dir> \   # planned
     --review-prompt <file> [--max-rounds 6] [--review-timeout 900] [--json]
-reevesagents flow status [<id>] [--json]
-reevesagents flow add-spec <id> <spec.json…>        # structured block spec (§3.2)
-reevesagents flow add-spec <id> --markdown <file>    # convenience: body + title only
-reevesagents flow tick [<id>] [--json]
-reevesagents flow pause|resume|stop <id>
-reevesagents flow logs <id> [--tail N] [--json]
+reevesagents flow status --run <id> [--json]                        # shipped
+reevesagents flow tick   --run <id> [--json] [--dry-run]            # shipped
+reevesagents flow add-spec <id> <spec.json…>                        # planned (MCP has it)
+reevesagents flow add-spec <id> --markdown <file>                   # planned
+reevesagents flow pause|resume|stop <id>                            # planned
+reevesagents flow logs <id> [--tail N] [--json]                     # planned
 ```
+
+`status` and `tick` take the run id (`--run`, unique prefix accepted) because a flow is keyed by
+its run; the flow file itself is `~/.reeves/flows/<run-id>.json`.
 
 Conventions taken from the neighbouring command files: `resolveRun`/`resolveAgent` for
 prefix matching (`src/surfaces/cli/helpers.ts:7`, `:17`), `requireDestructiveConfirmation` for
@@ -460,10 +465,10 @@ changes a written contract, so the change is deliberate and recorded:
 | Tool | Effect | Notes |
 | --- | --- | --- |
 | `list_flows` | every flow with status, rounds, HEAD, queue depth | read-only |
-| `flow_status` | one flow plus its recent log | read-only |
+| `flow_status` | one flow plus its recent log | **shipped**, read-only |
 | `flow_start` | attach a flow to an existing run (`run_id`, `dev`, `review`, `repo`, `review_prompt`) | validates like the CLI; refuses a second flow on the same run (D6) |
-| `flow_add_spec` | queue a structured block spec | same validator as §3.2 |
-| `flow_step` | one engine step (the `flow tick` equivalent) | returns the events it produced |
+| `flow_add_spec` | queue a block spec file | **shipped**; same validator as §3.2, takes a JSON or markdown path |
+| `flow_step` | one engine step (the `flow tick` equivalent) | **not implemented** — deliberately deferred to its own block, because it sends into a pane and deserves a review focused on that |
 | `flow_control` | `action: pause \| resume \| stop` | one tool, three intents, so the surface does not grow three near-identical entries |
 
 - Guardrails, because a host holding these tools can spend money: `flow_step` answers
@@ -505,6 +510,25 @@ generic mechanism. The reaction belongs to the runner, on its next tick: it look
 The engine stays the only writer of flow state, and a tick is the only thing that reads a
 decision — which also means an escalation is picked up by the same headless `flow tick` recipe
 as everything else (§2.3).
+
+### 4.6 Surfaces: shipped vs planned (state of the branch)
+
+| Surface | State |
+| --- | --- |
+| Engine, store, CLI `flow status` / `flow tick` | **shipped** (`src/core/flow.ts`, `flow-store.ts`, `flow-runner.ts`, `src/surfaces/cli/flow.ts`) |
+| TUI runs-list badge + attention | **shipped** (`src/core/flow-view.ts`, `src/core/flow-label.ts`, `src/surfaces/tui/screens/Runs.tsx`) |
+| Web run-card badge + attention | **shipped** (`src/surfaces/webui/state.ts` `WebRun.flow`, `client/app.js`, `client/app.css`) |
+| MCP `flow_status`, `flow_add_spec` | **shipped** (`src/surfaces/mcp/server.ts`); no tool here ticks a flow |
+| MCP `flow_step` | **not implemented** — separate block, send-safety review |
+| MCP `flow_start` / `flow_control` | **not implemented** |
+| CLI `flow start` / `add-spec` / `pause` / `resume` / `stop` / `logs` | **not implemented** |
+| TUI Flow section on the run page (§4.2) | **not implemented** — the badge and attention exist, the detail section does not |
+| `flow-escalated` approval pickup (§4.5) | **not implemented** — an escalation is a state, a human sees it, nothing raises an approval yet |
+| `paused` / `orphaned` / one-active-flow-per-run validation | **not implemented** — a closed flow is `escalated`/`done`; a flow of an archived run is skipped, not marked `orphaned` |
+| Review prompt template stored per flow | **not implemented** — the request is rendered by a fixed renderer with the same tokens |
+
+Nothing above is described as working elsewhere in this document: the tables and the sections it
+cites keep `planned` marking, so the next block starts from the truth.
 
 ---
 

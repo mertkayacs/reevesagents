@@ -85,15 +85,48 @@ A flow attaches the dev -> review -> fix pipeline to one run: the dev commits, a
 reviewer answers with a verdict, the engine sends the findings back or queues the
 next block.
 
-- `flow_status { run_id }` returns the state, the round budget, the commit under
-  review, the last verdict, the review deadline and the last decision. It is
-  read-only: it does not tick the flow and sends nothing to an agent.
-- `flow_add_spec { run_id, path }` queues a block spec file as the next piece of
-  work. A JSON file is a structured block (id, title, goal, requirements, checks,
-  report); a markdown file is queued as an unstructured block whose id comes from
-  its heading. A relative path resolves inside the flow's project directory and
-  may not leave it; an absolute path is taken as written. Queueing dispatches
-  nothing.
+### `flow_status { run_id }`
+
+Returns the flow attached to a run. `run_id` is the run's id, or a unique prefix
+of it; an unknown id comes back as an error that lists the flows that do exist.
+Read-only: it does not tick the flow and sends nothing to an agent.
+
+What the fields mean when you are deciding whether to wait or to act:
+
+- `state`: `idle` (waiting for the dev's next commit), `reviewing` (a review was
+  requested), `fixing` (a fix round was handed to the dev), `escalated` (the round
+  budget is spent — a human has to decide), `done` (accepted, nothing queued).
+- `rounds` / `max_rounds`: the fix budget, cumulative for the whole flow and not
+  reset by a new commit.
+- `claim.head`: the commit the current review or fix is about. A verdict always
+  belongs to this commit; a newer HEAD means the flow will re-request a review
+  instead of applying an older answer.
+- `claim.verdict` / `claim.verdict_count`: the last verdict read and how many
+  verdicts the reviewer's pane held when the claim was taken. A verdict counts as
+  new only when that counter goes up, which is why re-reading the same ACCEPT is
+  not a second green light.
+- `review_started_at` + `review_timeout_sec`: when the outstanding review was
+  asked for and how long it may stay unanswered. A tick past the deadline
+  escalates; the badge in the TUI and the Web UI shows the same condition.
+- `queue`: blocks queued and not yet dispatched, with their source file.
+- `last_decision` / `log`: the most recent events, which is where
+  `dispatch_unconfirmed` shows up when a paste landed but the submit was not
+  confirmed.
+
+### `flow_add_spec { run_id, path }`
+
+Queues a block spec file as the next piece of work; it does not dispatch it. A
+JSON file is a structured block (id, title, goal, requirements, checks, report); a
+markdown file is queued as an unstructured block with the heading as its id and
+title. The path must be an existing readable file: a relative path resolves inside
+the flow's project directory and may not leave it, an absolute path is taken as
+written. Refused without touching the flow file: a missing or empty file, a spec
+without requirements or checks, a block id already queued or dispatched, and a
+closed flow (`escalated` or `done`).
+
+Paths and log text in both tools come back home-shortened and redacted: a tool
+answer is a transcript, so a spec title carrying a token is reported as
+`[REDACTED]` while the flow file keeps the author's text.
 
 The MCP never runs the pipeline by itself: no tool here starts a loop or a timer,
 and a flow step happens when the TUI or Web UI ticks it or when someone runs
