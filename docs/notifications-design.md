@@ -522,21 +522,29 @@ writers.
 single acquisition:
 
 1. `statSync` once, **before this line is written**, and compare the result with the cache the previous
-   append left behind (`{ dev, ino, size, count }`, below); on a mismatch recompute the exact line count
-   and merge the dedupe index with what the file says (§3.5 — a merge, not a rebuild: rotation removes
-   rows whose keys the index must keep). The same scan that recomputes the count collects the
-   `dedupe_key` values, so the two never disagree;
+   append left behind (`{ dev, ino, size, count }`, below). This yields `size_before` and
+   `count_before`; on a mismatch the exact line count is recomputed and the dedupe index merged with
+   what the file says (§3.5 — a merge, not a rebuild: rotation removes rows whose keys the index must
+   keep). The same scan that recomputes the count collects the `dedupe_key` values, so the two never
+   disagree;
 2. if the input carries a `dedupe_key` that the reconciled index already holds, return that entry with
    `duplicate: true` and write nothing (§3.5);
 3. `writeSync` of the line on the `O_APPEND` fd (short; readers may see a partial tail and skip it,
    §3.2);
-4. push the key onto the index and write `notifications-dedupe.json` (temp + rename);
-5. if `size > MAX_BYTES` or `count > MAX_EVENTS`, call the **internal** `rotateUnlocked()`;
-6. release.
+4. **update the size and the count to their post-write values** — `size_after = size_before +
+   byteLength(line)`, `count_after = count_before + 1` — and store them, with the current
+   `{ dev, ino }`, as the new cache. A cache that still described the pre-write file would make the
+   next append rescan for nothing; a rotation check that used the pre-write numbers would miss the
+   crossing it is there to catch;
+5. push the key onto the index and write `notifications-dedupe.json` (temp + rename);
+6. if `size_after > MAX_BYTES` or `count_after > MAX_EVENTS`, call the **internal** `rotateUnlocked()`,
+   which also replaces the cache with the post-rotation `{ dev, ino, size, count }` (a rotation is a
+   `rename`, so the inode changes and the next append cannot mistake the new file for the old one);
+7. release.
 
 Two rules make this correct rather than merely locked:
 
-- nothing inside steps 1–3 may `await`, yield, or call back into `appendNotification`: the critical
+- nothing inside steps 1–6 may `await`, yield, or call back into `appendNotification`: the critical
   section is fully synchronous, so no other append can interleave between the size check and the
   rename. This is exactly what the naive "rotation takes a lock, appends do not" design gets wrong:
   the rotation is locked against itself, but not against the writer that makes it necessary;
@@ -565,8 +573,12 @@ Properties, all of them unit-testable:
   rather than "usually true";
 - the 25 % headroom under `MAX_BYTES` means the next rotation happens ~500 KiB later instead of on
   the very next append — the amortization the count-only trim was aiming for;
-- between rotations the file can exceed `MAX_BYTES` by at most one line (≤ 4096 bytes, the §4.2
-  ceiling); that overrun is precisely what triggers the next rotation;
+- the cap is evaluated on the **post-write** numbers inside the same critical section (step 6 above),
+  so a completed append never leaves the file over `MAX_BYTES`: if this line crossed the cap, the
+  rotation happens before the lock is released and the next append starts from `KEEP_BYTES`. The only
+  over-cap size that ever exists is the transient `MAX_BYTES + byteLength(line)` (≤ 4096 bytes more,
+  the §4.2 ceiling) in the instant between the write and the rewrite — never a state a second append
+  can observe;
 - at least one line is always kept (`len(kept) > 0` guard), and the file always ends on a line
   boundary with a trailing `\n`, so a reader never sees a half line produced by rotation;
 - the trim only drops the oldest lines and never rewrites the survivors, so redaction and `seq` are
