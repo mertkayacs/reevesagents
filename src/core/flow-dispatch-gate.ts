@@ -45,6 +45,7 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFile
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { stateRoot } from './state-path.js'
+import { displayPath } from '../utils/paths.js'
 
 // How long a control command (or a runner) waits for the gate before giving up. A send is a paste
 // plus a submit confirmation, so a few seconds; 15 s is generous without hiding a stuck process.
@@ -74,15 +75,17 @@ interface Ticket {
   pid: number
   token: string
   ts: number
+  // The process instance behind `pid`; empty when this platform has no probe for it.
+  instance: string
 }
 
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
-// `kill(pid, 0)` is the only portable liveness probe: `ESRCH` means gone, `EPERM` means alive but
-// owned by another user, and an unparseable answer means "assume alive" — a contender is never
-// dropped on a guess.
+// `kill(pid, 0)` is the portable liveness probe: `ESRCH` means gone, `EPERM` means alive but owned by
+// another user, and an unparseable answer means "assume alive" — a contender is never dropped on a
+// guess.
 function pidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
@@ -90,6 +93,32 @@ function pidAlive(pid: number): boolean {
   } catch (err) {
     return (err as { code?: string }).code !== 'ESRCH'
   }
+}
+
+// The identity of one process *instance*: `/proc/<pid>/stat` field 22 is the start time in clock
+// ticks since boot, which a recycled pid cannot repeat. `null` when the platform has no /proc (or the
+// process is already gone), in which case callers fall back to the pid alone.
+function processInstance(pid: number): string | null {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf-8')
+    // `comm` may contain spaces and parentheses, so everything after the last ')' is the field list
+    // starting at field 3 (state); starttime is field 22, i.e. index 19 from there.
+    const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+    const start = fields[19]
+    return start && /^\d+$/.test(start) ? start : null
+  } catch {
+    return null
+  }
+}
+
+// Is the participant that wrote `record` still running? A reused pid answers "alive" to
+// `kill(pid, 0)` while its owner is long gone, so the instance has to match too.
+function participantAlive(record: { pid: number, instance: string }): boolean {
+  if (!pidAlive(record.pid)) return false
+  if (!record.instance) return true              // nothing recorded to compare against
+  const current = processInstance(record.pid)
+  if (current === null) return true              // cannot verify here: assume alive
+  return current === record.instance
 }
 
 // Publish `data` under `path` with a rename, so a reader never observes a partially written file.
@@ -115,14 +144,20 @@ function entries(root: string, kind: 'cand' | 'choosing'): Ticket[] {
   let names: string[]
   try {
     names = readdirSync(root)
-  } catch {
-    return []
+  } catch (err) {
+    // Not an empty field: entering here would race a contender this process cannot see. Refuse, and
+    // name the directory home-shortened the way every other error does (§4.1).
+    const code = (err as { code?: string }).code ?? 'unknown'
+    throw new Error(
+      `cannot read the state directory ${displayPath(root)} (${code}); the dispatch gate needs read access to it`,
+      { cause: err },
+    )
   }
   const found: Ticket[] = []
   for (const name of names) {
     if (!name.startsWith(`${PREFIX}.${kind}.`)) continue
     const path = join(root, name)
-    let record: { pid?: unknown, token?: unknown, ts?: unknown }
+    let record: { pid?: unknown, token?: unknown, ts?: unknown, instance?: unknown }
     try {
       record = JSON.parse(readFileSync(path, 'utf-8')) as typeof record
     } catch {
@@ -131,12 +166,13 @@ function entries(root: string, kind: 'cand' | 'choosing'): Ticket[] {
     if (typeof record.pid !== 'number' || !Number.isFinite(record.pid)) continue
     const token = typeof record.token === 'string' ? record.token : ''
     const ts = typeof record.ts === 'number' && Number.isFinite(record.ts) ? record.ts : 0
-    if (!pidAlive(record.pid)) {
+    const instance = typeof record.instance === 'string' ? record.instance : ''
+    if (!participantAlive({ pid: record.pid, instance })) {
       // The owner is gone: the entry can never be consulted again, so collecting it is safe.
       try { unlinkSync(path) } catch { /* another contender collected it first */ }
       continue
     }
-    found.push({ path, pid: record.pid, token, ts })
+    found.push({ path, pid: record.pid, token, ts, instance })
   }
   return found
 }
@@ -153,10 +189,22 @@ function acquire(root: string, token: string, timeoutMs: number): boolean {
   const choosing = pathFor(root, 'choosing', process.pid, token)
   const ticket = pathFor(root, 'cand', process.pid, token)
 
-  publish(choosing, { pid: process.pid, token })
-  const maxTs = liveTickets(root).reduce((max, entry) => Math.max(max, entry.ts), 0)
-  publish(ticket, { pid: process.pid, token, ts: maxTs + 1 })
-  try { unlinkSync(choosing) } catch { /* the marker is ours; someone collected a stale one */ }
+  const instance = processInstance(process.pid) ?? ''
+  // Prove the field is readable before publishing anything into it: a directory this process cannot
+  // list is not an empty field, and a marker written into one would be a leak nobody can read away.
+  entries(root, 'cand')
+
+  try {
+    publish(choosing, { pid: process.pid, token, instance })
+    const maxTs = liveTickets(root).reduce((max, entry) => Math.max(max, entry.ts), 0)
+    publish(ticket, { pid: process.pid, token, ts: maxTs + 1, instance })
+    try { unlinkSync(choosing) } catch { /* the marker is ours; someone collected a stale one */ }
+  } catch (err) {
+    // Never leave our own half-finished bid behind: the caller gets the error, the field stays clean.
+    try { unlinkSync(choosing) } catch { /* nothing to remove */ }
+    try { unlinkSync(ticket) } catch { /* nothing to remove */ }
+    throw err
+  }
 
   while (true) {
     // A live chooser means "the ticket set is in flux": its ts is not visible yet, so any minimum

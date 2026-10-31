@@ -197,10 +197,20 @@ ever removed by someone who did not create it:
 - a contender enters when its own ticket is the smallest live `(ts, pid, token)` and no live marker
   exists. Between that check and its entry nobody can obtain a smaller ticket, which is the mutual
   exclusion the runner and the control commands need;
-- a participant that died leaves its files behind, and they are ignored the moment its pid is gone
-  (`process.kill(pid, 0)` → `ESRCH`). Collecting a dead participant's file is the one removal that
-  needs no coordination — it can neither read nor be waited on again — so it is the only one anybody
-  performs. A live contender's ticket and marker are never touched.
+- a participant that died leaves its files behind, and they are ignored and collected. "Died" is
+  decided on the **process instance**, not on the pid alone (round 13): a recycled pid answers "alive"
+  to `kill(pid, 0)`, so a dead contender's ticket could otherwise block the gate for ever and a stale
+  choosing marker could make every operation wait out its timeout. Each entry records the pid plus the
+  kernel's start time for it (`/proc/<pid>/stat`, field 22); a different start time means a different
+  process, so the predecessor's files are collectable. Where that probe is unavailable the pid is the
+  best answer available and the entry is treated as **alive** — the conservative direction, which can
+  stall a waiter but never admit two holders. Collecting a dead participant's file needs no
+  coordination (it can neither read nor be waited on again), so it is the only removal anybody
+  performs; a live contender's ticket and marker are never touched;
+- the field is only usable if it can be **read** (round 13). A state directory this process can write
+  but not list is not an empty field: publishing a ticket into it would enter the gate blind, next to
+  a contender it cannot see. The gate probes the directory before writing anything and refuses with a
+  named error; a failure after the bid starts withdraws the bid, so no half-finished entry is left.
 
 Release removes this call's own ticket, which is why no token check is needed: the name is unique to
 the call and nobody else can own it.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -36,10 +36,17 @@ function gateFiles(): string[] {
   return readdirSync(root).filter(name => name.startsWith('.flow-dispatch'))
 }
 
-function writeEntry(kind: 'cand' | 'choosing', pid: number, token: string, ts = 0): string {
+function writeEntry(kind: 'cand' | 'choosing', pid: number, token: string, ts = 0, instance = ''): string {
   const path = join(root, `.flow-dispatch.${kind}.${pid}.${token}`)
-  writeFileSync(path, JSON.stringify(kind === 'cand' ? { pid, token, ts } : { pid, token }), 'utf-8')
+  const body = kind === 'cand' ? { pid, token, ts, instance } : { pid, token, instance }
+  writeFileSync(path, JSON.stringify(body), 'utf-8')
   return path
+}
+
+// The `/proc` start time of this very process, i.e. the instance id the gate writes for itself.
+function ownInstance(): string {
+  const stat = readFileSync(`/proc/${process.pid}/stat`, 'utf-8')
+  return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]!
 }
 
 describe('withDispatchGate', () => {
@@ -100,6 +107,51 @@ describe('contenders', () => {
     expect(result).toEqual({ acquired: true, value: 'mine' })
     expect(existsSync(stale)).toBe(false)
     expect(gateFiles()).toEqual([])
+  })
+
+  it('collects a ticket whose pid was reused by another process', () => {
+    // Round 13: `kill(pid, 0)` answers "alive" for a recycled pid, so a dead contender's ticket would
+    // block the gate for ever. The instance id tells the two apart.
+    const stale = writeEntry('cand', process.pid, 'recycled', 1, 'a-different-instance')
+
+    const result = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
+
+    expect(result).toEqual({ acquired: true, value: 'mine' })
+    expect(existsSync(stale)).toBe(false)
+    expect(gateFiles()).toEqual([])
+  })
+
+  it('does not treat its own live instance as dead', () => {
+    // The same pid with the *matching* instance is a real contender: this must still wait.
+    writeEntry('cand', process.pid, 'live', 1, ownInstance())
+
+    const result = withDispatchGate(() => 'never', { root, timeoutMs: 120 })
+
+    expect(result.acquired).toBe(false)
+  })
+
+  it('collects a choosing marker left by a reused pid', () => {
+    const stale = writeEntry('choosing', process.pid, 'recycled', 0, 'a-different-instance')
+
+    const result = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
+
+    expect(result).toEqual({ acquired: true, value: 'mine' })
+    expect(existsSync(stale)).toBe(false)
+  })
+
+  it('refuses to enter when the state directory cannot be read', () => {
+    // A directory this process can write but not list is not an empty field: entering blind would
+    // mean entering alongside a contender it cannot see. Root ignores the mode bits, so skip there.
+    if (process.getuid?.() === 0) return
+    chmodSync(root, 0o300)
+    try {
+      expect(() => withDispatchGate(() => 'never', { root, timeoutMs: 100 })).toThrow(/cannot read the state directory/)
+      // Nothing was published into the dark.
+      chmodSync(root, 0o700)
+      expect(gateFiles()).toEqual([])
+    } finally {
+      chmodSync(root, 0o700)
+    }
   })
 
   it('waits while a live process is choosing its ticket', () => {
