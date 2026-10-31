@@ -735,3 +735,10 @@ and the minor was worse than it looked: the test guarding it passed for the wron
 The same round also closed a family the review named only once: the "already has a flow" error printed
 the registry path the same way, and it is now rendered by the same helper.
 
+**Round 2 on the same block** (review of `b5102f4`) found the rule still applied in only one of the
+three modules that print paths: `flow-queue.ts` and `flow-store.ts` kept `shortHomePath`, so a project
+under `/srv` or a registry outside `$HOME` stayed absolute in the answer a host keeps. Every path in
+those messages now goes through `displayPath`, and three tests pin it with `HOME` deliberately away
+from both the project and the registry — the previous tests pinned `HOME` *around* the temp tree, which
+is the arrangement that let the leak through twice. The same review caught a `git diff --check`
+failure (a blank line at the end of this document); it is removed, not configured away.

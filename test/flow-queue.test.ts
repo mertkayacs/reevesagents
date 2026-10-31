@@ -138,6 +138,35 @@ describe('readSpecFile', () => {
     expect(notFile).not.toContain(root)
   })
 
+  it('names a spec path outside HOME by its last component only', () => {
+    // `flow_add_spec` answers a host, and a host keeps the answer: a project under /srv must not put
+    // its whole path into that transcript.
+    const savedHome = process.env.HOME
+    process.env.HOME = mkdtempSync(join(tmpdir(), 'reeves-flow-queue-home-'))
+    try {
+      const missing = message(() => readSpecFile('ghost.json', { repo }))
+      expect(missing).toContain('spec file not found: ghost.json')
+      expect(missing).not.toContain(repo)
+
+      const empty = message(() => readSpecFile(writeFile('empty2.json', '  \n'), { repo }))
+      expect(empty).toContain('spec file is empty: empty2.json')
+      expect(empty).not.toContain(repo)
+
+      const big = message(() => readSpecFile(writeFile('big2.json', 'x'.repeat(70 * 1024)), { repo }))
+      expect(big).toContain('larger than')
+      expect(big).not.toContain(repo)
+
+      const dir = join(repo, 'a-directory-2')
+      mkdirSync(dir, { recursive: true })
+      const notFile = message(() => readSpecFile(dir, { repo }))
+      expect(notFile).toContain('not a file')
+      expect(notFile).not.toContain(repo)
+    } finally {
+      if (savedHome === undefined) delete process.env.HOME
+      else process.env.HOME = savedHome
+    }
+  })
+
   it('refuses a structured spec without requirements or checks, and reports every field', () => {
     const path = writeFile('thin.json', JSON.stringify({ id: 'block_06', title: 'Thin' }))
     expect(message(() => readSpecFile(path, { repo }))).toContain('requirements')

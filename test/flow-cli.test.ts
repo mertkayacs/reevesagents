@@ -276,6 +276,21 @@ describe('flow start', () => {
 })
 
 describe('flow status', () => {
+  it('reports a damaged flow file without an absolute registry path', async () => {
+    // The surface prints whatever the store raises, so the store is where the path has to be
+    // rendered safely — this is the end-to-end half of that rule.
+    mkdirSync(join(tmpDir, 'flows'), { recursive: true })
+    writeFileSync(join(tmpDir, 'flows', 'run-c1.json'), '{"schema_version":1,', 'utf-8')
+
+    const failure = await outsideHome(() => runCli(['flow', 'status', '--run', 'run-c1']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    ))
+
+    expect(failure?.cli_err).toContain('flow state is not valid JSON: run-c1.json')
+    expect(failure?.cli_err).not.toContain(tmpDir)
+  })
+
   it('prints the flow as JSON, home-shortened, with the queue depth', async () => {
     seedFlow()
     const { out } = await runCli(['flow', 'status', '--run', 'run-c1', '--json'])

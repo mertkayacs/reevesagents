@@ -97,6 +97,52 @@ describe('flow store', () => {
     }
   })
 
+  it('names the flow file by its last component when the registry is outside HOME', () => {
+    // The registry is a deployment decision (`REEVES_REGISTRY`, a service account, a container
+    // volume), so `shortHomePath` would keep the whole path. Every message the store raises is
+    // quoted by a host, so all of them go through `displayPath`.
+    const savedHome = process.env.HOME
+    process.env.HOME = mkdtempSync(join(tmpdir(), 'reeves-flow-store-home-'))
+    try {
+      let missing = ''
+      try {
+        readFlow('absent', { root })
+      } catch (err) {
+        missing = (err as Error).message
+      }
+      expect(missing).toBe('no flow state at absent.json')
+      expect(missing).not.toContain(root)
+
+      mkdirSync(join(root, 'flows'), { recursive: true })
+      writeFileSync(flowPath('bad-json', root), '{"schema_version":1,', 'utf-8')
+      let damaged = ''
+      try {
+        readFlow('bad-json', { root })
+      } catch (err) {
+        damaged = (err as Error).message
+      }
+      expect(damaged).toBe('flow state is not valid JSON: bad-json.json')
+      expect(damaged).not.toContain(root)
+
+      let unsaved = ''
+      try {
+        saveFlow(makeState('never'), {
+          root,
+          rename: () => {
+            throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+          },
+        })
+      } catch (err) {
+        unsaved = (err as Error).message
+      }
+      expect(unsaved).toContain('flow state was not saved: never.json')
+      expect(unsaved).not.toContain(root)
+    } finally {
+      if (savedHome === undefined) delete process.env.HOME
+      else process.env.HOME = savedHome
+    }
+  })
+
   it('reports a save failure by its error code, never by the path the fs error carries', () => {
     saveFlow(makeState(), { root })
     let message = ''

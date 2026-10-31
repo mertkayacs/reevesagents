@@ -4,8 +4,9 @@
 // one place: a spec is validated once, when it is queued, and a bad file is refused with its
 // reason instead of being stored and discovered at dispatch time (§3.2 of docs/flows-design.md).
 //
-// Paths in these messages are home-shortened: an MCP host quotes the error verbatim into its own
-// transcript, and that transcript must not carry the account layout.
+// Paths in these messages go through `displayPath`: an MCP host quotes the error verbatim into its
+// own transcript, and that transcript must not carry the account layout (a registry outside `$HOME`
+// prints as its last component, not as a deployment path).
 //
 // The file is the source of truth for its own text; the record stored on the flow is the
 // structured spec, so a dispatch is reproducible from the flow file alone and the dev's brief does
@@ -16,7 +17,7 @@ import { isAbsolute, extname, relative, resolve, sep } from 'node:path'
 import type { FlowState } from './flow.js'
 import type { BlockSpec } from './spec.js'
 import { formatSpecIssues, parseSpecJson, specFromMarkdown } from './spec.js'
-import { shortHomePath } from '../utils/paths.js'
+import { displayPath } from '../utils/paths.js'
 
 // A spec is text a human wrote; anything this large is not a block brief, and reading it into a
 // flow file would make the document unusable.
@@ -82,7 +83,7 @@ export function readSpecFile(path: string, options: SpecFileOptions): BlockSpec 
   // file's content into the flow record. `realpathSync` also turns a missing target into one clear
   // error before anything is read — and a broken link is exactly that case.
   const real = realPath(absolute)
-  if (!real) throw new FlowSpecError(`spec file not found: ${shortHomePath(absolute)}`)
+  if (!real) throw new FlowSpecError(`spec file not found: ${displayPath(absolute)}`)
   if (fromProject && escapesProject(real, realPath(options.repo) ?? resolve(options.repo))) {
     throw new FlowSpecError(`spec path ${raw} resolves outside the project directory; pass an absolute path`)
   }
@@ -90,23 +91,23 @@ export function readSpecFile(path: string, options: SpecFileOptions): BlockSpec 
   let size: number
   try {
     const stats = statSync(real)
-    if (!stats.isFile()) throw new FlowSpecError(`spec path is not a file: ${shortHomePath(absolute)}`)
+    if (!stats.isFile()) throw new FlowSpecError(`spec path is not a file: ${displayPath(absolute)}`)
     size = stats.size
   } catch (err) {
     if (err instanceof FlowSpecError) throw err
-    throw new FlowSpecError(`spec file not found: ${shortHomePath(absolute)}`)
+    throw new FlowSpecError(`spec file not found: ${displayPath(absolute)}`)
   }
   if (size > SPEC_FILE_MAX_BYTES) {
-    throw new FlowSpecError(`spec file is larger than ${SPEC_FILE_MAX_BYTES} bytes: ${shortHomePath(absolute)}`)
+    throw new FlowSpecError(`spec file is larger than ${SPEC_FILE_MAX_BYTES} bytes: ${displayPath(absolute)}`)
   }
 
   let text: string
   try {
     text = readFileSync(real, 'utf-8')
   } catch {
-    throw new FlowSpecError(`spec file could not be read: ${shortHomePath(absolute)}`)
+    throw new FlowSpecError(`spec file could not be read: ${displayPath(absolute)}`)
   }
-  if (!text.trim()) throw new FlowSpecError(`spec file is empty: ${shortHomePath(absolute)}`)
+  if (!text.trim()) throw new FlowSpecError(`spec file is empty: ${displayPath(absolute)}`)
 
   // A JSON spec is the structured contract; anything else is markdown and is downgraded to an
   // unstructured block explicitly, with its heading as the id and title.

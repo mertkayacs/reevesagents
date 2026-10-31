@@ -11,11 +11,14 @@
 //   tick is cheaper than losing the state.
 // - **No silent reset.** A file with another schema_version, damaged JSON or a missing field is a
 //   read error naming the file, never "start fresh" — a reset would drop a pipeline mid-round.
+//   Every path in a message goes through `displayPath` (§4.1): `~/…` under the home directory, and
+//   only the last component when the registry lives outside it, because a host quotes these errors
+//   into its own transcript.
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { stateRoot } from './runs.js'
-import { shortHomePath } from '../utils/paths.js'
+import { displayPath } from '../utils/paths.js'
 import type { FlowState } from './flow.js'
 import { FLOW_SCHEMA_VERSION, FlowStateError, parseFlowState } from './flow.js'
 
@@ -97,9 +100,9 @@ export function readFlowFile(path: string, runId = ''): FlowState {
     raw = readFileSync(path, 'utf-8')
   } catch (err) {
     if ((err as { code?: string }).code === 'ENOENT') {
-      throw new FlowStateError(`no flow state at ${shortHomePath(path)}`)
+      throw new FlowStateError(`no flow state at ${displayPath(path)}`)
     }
-    throw new FlowStateError(`flow state could not be read: ${shortHomePath(path)} (${fsFailure(err)})`)
+    throw new FlowStateError(`flow state could not be read: ${displayPath(path)} (${fsFailure(err)})`)
   }
   let parsed: unknown
   try {
@@ -107,17 +110,17 @@ export function readFlowFile(path: string, runId = ''): FlowState {
   } catch {
     // Explicit, and it names the file: a flow file that no longer parses can only be deleted by
     // a human, so hiding it behind "no flow" would be a lie.
-    throw new FlowStateError(`flow state is not valid JSON: ${shortHomePath(path)}`)
+    throw new FlowStateError(`flow state is not valid JSON: ${displayPath(path)}`)
   }
   let state: FlowState
   try {
     state = parseFlowState(parsed)
   } catch (err) {
-    if (err instanceof FlowStateError) throw new FlowStateError(`${err.message}: ${shortHomePath(path)}`)
+    if (err instanceof FlowStateError) throw new FlowStateError(`${err.message}: ${displayPath(path)}`)
     throw err
   }
   if (runId && state.run_id !== runId) {
-    throw new FlowStateError(`flow state at ${shortHomePath(path)} belongs to run ${state.run_id}, not ${runId}`)
+    throw new FlowStateError(`flow state at ${displayPath(path)} belongs to run ${state.run_id}, not ${runId}`)
   }
   return state
 }
@@ -135,7 +138,7 @@ export function saveFlow(state: FlowState, options: FlowStoreOptions = {}): stri
     // Remove the half-written temp file: the next reader must see the previous document or
     // nothing at all, never a file this save abandoned.
     try { unlinkSync(tmpPath) } catch { /* already gone */ }
-    throw new FlowStateError(`flow state was not saved: ${shortHomePath(path)} (${fsFailure(err)})`)
+    throw new FlowStateError(`flow state was not saved: ${displayPath(path)} (${fsFailure(err)})`)
   }
   return path
 }
