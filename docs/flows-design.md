@@ -192,19 +192,17 @@ lock in miniature (review rounds 8–9). Four rules make it safe, and none is op
   `process.kill(pid, 0)` and only a definite `ESRCH` counts as gone; the file must also be older than
   `DISPATCH_GATE_STALE_MS` (60 s), which covers a recycled pid. Age alone would take a live gate away
   from a slow paste, and a gate whose owner cannot be read at all is left for a human.
-- **Reclamation is scoped to one file identity.** The reclaimer takes a token named after the inode it
-  judged (`<gate>.reclaim.<dev>-<ino>`) and, inside it, re-reads the gate: it unlinks only when the
-  path still holds *that* inode and its owner is still gone. While the dead file occupies the path no
-  fresh gate can be created there (publication needs the name free), and a gate that appeared after
-  the judgement has a different inode, so the reclaimer skips it. Nothing is moved or restored, so no
-  reclaimer can destroy a gate it did not judge.
-- **A live reclaimer keeps its token; only a dead one's is cleared** (round 10). The token is the
-  exclusion, so age alone must never clear it: a reclaimer paused for longer than the window would
-  lose its token to a second process, and the two could interleave a check and a removal — the exact
-  race the token exists to prevent. A token is abandoned only when its recorded pid is provably gone
-  (`ESRCH`) *and* the file is older than `RECLAIM_TOKEN_STALE_MS`, and it is re-read once before
-  removal so a fresh token that replaced it is left alone. A waiter that meets a live token simply
-  reports "busy"; a crashed reclaimer costs one clearing attempt, after which the gate is reclaimed.
+- **The takeover is serialised by the runs lock, not by a lock of its own** (rounds 10–11). Every
+  bespoke exclusion for the reclaimer — an age-cleared token, a token keyed by inode, a re-read before
+  the removal — reproduced the same defect one level down: a check that a second waiter could
+  invalidate before the removal. The runs lock already exists and is already trusted for the state
+  tree, so the reclaimer takes it for the length of one judgement and one `unlink`. Inside it, judge
+  and remove are a single decision: no other reclaimer can be there, and no publisher can put a fresh
+  gate in place, because publication needs the name to be free and only a reclaimer frees it. An
+  attempt that cannot get the runs lock skips that round and lets its own deadline decide. Ordering
+  stays one-way: nothing *waits for the gate while holding the runs lock* — the reclaimer releases the
+  runs lock before it tries to publish, and a control command takes the gate first and the runs lock
+  inside it.
 
 Release checks the gate's token before unlinking, so a process that was reclaimed while it believed it
 held the lock cannot delete the new holder's file.

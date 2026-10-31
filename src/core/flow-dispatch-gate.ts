@@ -18,29 +18,27 @@
 //
 // Lock ordering, and the only rule that keeps this deadlock-free: **the gate first, the runs lock
 // second**. No path here takes the runs lock and then waits for the gate — the runner writes the
-// claim under the runs lock, releases it, and only then takes the gate.
+// claim under the runs lock, releases it, and only then takes the gate, and reclamation takes the
+// runs lock for a moment *before* the gate exists.
 //
-// Three properties make the file itself safe, and each one closes a failure a review named:
+// Three properties make the file safe, and each one closes a failure a review named:
 //
 // 1. **A gate is never visible without its content** (round 9). Acquisition writes the owner to a
 //    unique temp file and publishes it with `link`, which is atomic and fails with `EEXIST` when a
-//    gate is already there. `open('wx')` followed by a write would leave a window in which the gate
-//    exists and cannot be attributed to anybody — exactly the state a reclaimer must never see.
+//    gate is already there. `open('wx')` followed by a write leaves a window in which the gate exists
+//    and cannot be attributed to anybody — exactly the state a reclaimer must never see.
 // 2. **A live holder is never reclaimed, whatever the file's age** (round 8). The recorded pid is
 //    probed with `process.kill(pid, 0)`; only a definite `ESRCH` counts as gone, and the file must
 //    also be older than `DISPATCH_GATE_STALE_MS`, so a recycled pid cannot make an old lock look dead.
 //    A gate whose owner cannot be read at all is left for a human instead of guessed at.
-// 3. **Reclamation is scoped to one file identity** (round 9). The reclaimer takes a token named
-//    after the *inode* it judged (`<gate>.reclaim.<dev>-<ino>`), and inside that token it re-reads the
-//    gate and unlinks it only if the path still holds that same inode and its owner is still gone.
-//    Two consequences, and they are the whole fix: while the dead file still occupies the path nobody
-//    can create a fresh gate there (publication is `link`, which needs the name to be free), and a
-//    gate that appeared after the judgement has a *different* inode, so the reclaimer skips it. No
-//    file is ever moved or restored, so no reclaimer can destroy a gate it did not judge. A token left
-//    behind by a crashed reclaimer costs nothing: clearing it can only let two reclaimers work on the
-//    same dead inode, which is idempotent (one unlinks, the other finds `ENOENT`) — and a token whose
-//    owner is *alive* is never cleared, however long that owner takes (round 10): the token is the
-//    exclusion, so a slow reclaimer keeps it and a waiter simply reports "busy".
+// 3. **Reclamation is serialised by the runs lock, not by a lock of its own** (rounds 10–11). Every
+//    attempt to write a second exclusion (a reclaim token, an identity tag, a rename-and-restore)
+//    produced the same defect one level down: a check that a second waiter could invalidate before
+//    the removal. The runs lock already exists, is already trusted for the state tree, and gives what
+//    the takeover needs — one reclaimer at a time, so the judgement and the removal become a single
+//    decision. While a reclaimer holds it, nobody else can judge or remove that gate, and no
+//    publisher can put a fresh gate in its place: publication needs the name to be free, and only a
+//    reclaimer frees it. An attempt that cannot get the runs lock simply skips this round.
 //
 // Release verifies its own token first, so a process that was reclaimed while it believed it held the
 // gate cannot delete somebody else's file.
@@ -49,6 +47,7 @@ import { linkSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync 
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { stateRoot } from './state-path.js'
+import { isRunsLockTimeout, withRunsLock } from './runs.js'
 
 // How long a control command (or a runner) waits for the gate before giving up. A send is a paste
 // plus a submit confirmation, so a few seconds; 15 s is generous without hiding a stuck process.
@@ -59,9 +58,10 @@ export const DISPATCH_GATE_TIMEOUT_MS = 15_000
 // pasting, and waiting is always cheaper than taking a live gate away.
 export const DISPATCH_GATE_STALE_MS = 60_000
 
-// A reclaimer's token is held for one stat and one unlink; anything older belongs to a crashed
-// reclaimer, and clearing it is harmless (property 3 above).
-export const RECLAIM_TOKEN_STALE_MS = 5_000
+// Mirrors the stale window `withRunsLock` applies to its own lock file. It is only used to skip a
+// reclaim attempt cheaply instead of blocking inside `withRunsLock` for its whole deadline; the
+// authoritative check stays inside that lock.
+const RUNS_LOCK_WINDOW_MS = 5_000
 
 export function dispatchGatePath(root = stateRoot()): string {
   return join(root, '.flow-dispatch.lock')
@@ -114,18 +114,6 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-// The identity of the file currently at `path`, as `<dev>-<ino>`: the handle a reclaimer is scoped to.
-// `null` when there is no file there (or it cannot be stat'ed).
-function fileId(path: string): string | null {
-  try {
-    const stats = statSync(path, { bigint: true })
-    if (!stats.isFile()) return null
-    return `${stats.dev}-${stats.ino}`
-  } catch {
-    return null
-  }
-}
-
 function ageOf(path: string): number | null {
   try {
     return Date.now() - statSync(path).mtimeMs
@@ -160,66 +148,26 @@ function reclaimable(path: string): boolean {
   return age !== null && age > DISPATCH_GATE_STALE_MS
 }
 
-interface ReclaimToken {
-  pid: number
-  file: string
+// Is the runs lock currently held? A cheap peek that keeps the wait loop from spending five seconds
+// inside `withRunsLock` on every spin; the decision itself is re-made under that lock.
+function runsLockBusy(path: string): boolean {
+  const age = ageOf(join(dirname(path), '.runs.lock'))
+  return age !== null && age < RUNS_LOCK_WINDOW_MS
 }
 
-function readToken(path: string): ReclaimToken | null {
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ReclaimToken>
-    if (typeof parsed.pid !== 'number' || !Number.isFinite(parsed.pid)) return null
-    return { pid: parsed.pid, file: typeof parsed.file === 'string' ? parsed.file : '' }
-  } catch {
-    return null
-  }
-}
-
-// A reclaim token is exclusive for as long as its owner is alive, however long its owner takes
-// (review round 10). Clearing it by age alone would let a second reclaimer into the same inode after
-// five seconds, and the two could then interleave a check and a removal — the very race the token
-// exists to prevent. So a token is abandoned only when its recorded pid is provably gone *and* the
-// file is old, and it is re-read once before removal so a fresh token that replaced it is left alone.
-function clearAbandonedToken(token: string): void {
-  const judged = readToken(token)
-  if (!judged || pidAlive(judged.pid)) return
-  const age = ageOf(token)
-  if (age === null || age <= RECLAIM_TOKEN_STALE_MS) return
-  const again = readToken(token)
-  if (!again || again.pid !== judged.pid || again.file !== judged.file) return
-  try { unlinkSync(token) } catch { /* the token vanished meanwhile */ }
-}
-
-// Take over a gate whose owner is gone. Scoped to one inode: the token name carries it, and the
-// removal is conditional on the path still holding that inode. Nothing is moved or restored, so a
-// gate that appeared after the judgement (a different inode) is invisible to this function.
+// Take over a gate whose owner is gone, serialised by the runs lock. Inside it the judgement and the
+// removal are one decision: no second reclaimer can be here, and no publisher can fill the path while
+// the dead file still occupies it.
 function reclaim(path: string): void {
-  const id = fileId(path)
-  if (!id) return
-  const token = `${path}.reclaim.${id}`
+  if (runsLockBusy(path)) return
   try {
-    writeFileSync(token, JSON.stringify({ pid: process.pid, file: id }), { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
+    withRunsLock(() => {
+      if (!reclaimable(path)) return
+      try { unlinkSync(path) } catch { /* another reclaimer already freed it */ }
+    })
   } catch (err) {
-    if ((err as { code?: string }).code !== 'EEXIST') return
-    // Another reclaimer holds this inode's token. A live one keeps it — it is the exclusion, not a
-    // hint — and only an abandoned token is cleared so a later attempt can proceed.
-    clearAbandonedToken(token)
-    return
-  }
-
-  try {
-    // Identity is re-checked under the token: only this inode's reclaimer can get here, and no new
-    // gate can be created at the path while the dead one still occupies it.
-    if (fileId(path) !== id) return
-    const owner = readOwner(path)
-    if (!owner || pidAlive(owner.pid)) return
-    const age = ageOf(path)
-    if (age === null || age <= DISPATCH_GATE_STALE_MS) return
-    unlinkSync(path)
-  } catch {
-    // The path emptied under us: another reclaimer of the same inode was first, which is fine.
-  } finally {
-    try { unlinkSync(token) } catch { /* already gone */ }
+    // Somebody is writing the state tree right now: skip this attempt, the next one will do it.
+    if (!isRunsLockTimeout(err)) throw err
   }
 }
 

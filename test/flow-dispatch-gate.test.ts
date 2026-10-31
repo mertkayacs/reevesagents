@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -125,36 +125,22 @@ describe('reclaiming a gate left behind by a dead process', () => {
     expect(existsSync(lockPath())).toBe(true)
   })
 
-  it('keeps a live reclaimer\'s token, however long it has been held', () => {
-    // Round 10: age alone must not clear a token. A live reclaimer that pauses for longer than the
-    // token window keeps its exclusion, and the second waiter simply fails to reclaim.
+  it('does not reclaim while the runs lock is held, and does once it is free', () => {
+    // Reclamation is serialised by the runs lock (round 11): while somebody is writing the state tree
+    // a takeover must not happen, because the judgement and the removal have to be one decision.
     const dead = deadPid()
     writeGate(10 * DISPATCH_GATE_STALE_MS, dead)
-    const id = statSync(lockPath(), { bigint: true })
-    const token = `${lockPath()}.reclaim.${id.dev}-${id.ino}`
-    writeFileSync(token, JSON.stringify({ pid: process.pid, file: `${id.dev}-${id.ino}` }), 'utf-8')
-    const longAgo = new Date(Date.now() - 10 * 60 * 1000)
-    utimesSync(token, longAgo, longAgo)
+    const runsLock = join(root, '.runs.lock')
+    writeFileSync(runsLock, JSON.stringify({ pid: process.pid }), 'utf-8')
 
     const blocked = withDispatchGate(() => 'never', { root, timeoutMs: 150 })
 
     expect(blocked.acquired).toBe(false)
-    // The dead gate is still there and the live token was not touched.
     expect(owner().pid).toBe(dead)
-    expect(existsSync(token)).toBe(true)
-  })
 
-  it('clears a token whose reclaimer died, then takes the lock over', () => {
-    const dead = deadPid()
-    writeGate(10 * DISPATCH_GATE_STALE_MS, dead)
-    const id = statSync(lockPath(), { bigint: true })
-    const token = `${lockPath()}.reclaim.${id.dev}-${id.ino}`
-    writeFileSync(token, JSON.stringify({ pid: dead, file: `${id.dev}-${id.ino}` }), 'utf-8')
-    const longAgo = new Date(Date.now() - 10 * 60 * 1000)
-    utimesSync(token, longAgo, longAgo)
-
+    // The runs lock is free again: the same attempt now reclaims the gate.
+    rmSync(runsLock, { force: true })
     const taken = withDispatchGate(() => 'taken over', { root, timeoutMs: 500 })
-
     expect(taken).toEqual({ acquired: true, value: 'taken over' })
     expect(strays()).toEqual([])
   })
