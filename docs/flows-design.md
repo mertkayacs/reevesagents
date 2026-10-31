@@ -182,17 +182,25 @@ command takes the gate and then the runs lock inside it. A tick that cannot take
 nothing, releases its claim and answers `locked`.
 
 A gate left behind by a process that died mid-paste has to be taken over, and the takeover itself is a
-lock in miniature (review round 8). Two rules make it safe, and neither is optional:
+lock in miniature (review rounds 8–9). Four rules make it safe, and none is optional:
 
+- **A gate is published with its content, never before it.** Acquisition writes the owner to a unique
+  temp file and `link`s it into place; `link` is atomic and fails `EEXIST` when a gate exists. A gate
+  created empty and written afterwards has a window in which it cannot be attributed to anybody, and
+  a reclaimer that treats "no owner" as "reclaimable" deletes a live process's lock.
 - **A live holder is never reclaimed, whatever the file's age.** The owner's pid is probed with
   `process.kill(pid, 0)` and only a definite `ESRCH` counts as gone; the file must also be older than
   `DISPATCH_GATE_STALE_MS` (60 s), which covers a recycled pid. Age alone would take a live gate away
-  from a slow paste, and a lock whose owner cannot be identified (damaged JSON) is left for a human.
-- **Reclamation moves the file it judged; it never unlinks the path.** `rename` is the
-  compare-and-swap: of two waiters that both saw a dead lock only one can move it, the other gets
-  `ENOENT` and retries, and a fresh gate that appears at the path afterwards is never touched by the
-  loser. The winner deletes the file it moved, after re-reading that copy and confirming its owner is
-  still gone, and it restores it with a hard link if the owner turned out to be alive.
+  from a slow paste, and a gate whose owner cannot be read at all is left for a human.
+- **Reclamation is scoped to one file identity.** The reclaimer takes a token named after the inode it
+  judged (`<gate>.reclaim.<dev>-<ino>`) and, inside it, re-reads the gate: it unlinks only when the
+  path still holds *that* inode and its owner is still gone. While the dead file occupies the path no
+  fresh gate can be created there (publication needs the name free), and a gate that appeared after
+  the judgement has a different inode, so the reclaimer skips it. Nothing is moved or restored, so no
+  reclaimer can destroy a gate it did not judge.
+- **A crashed reclaimer's token is not a deadlock.** Clearing a token older than
+  `RECLAIM_TOKEN_STALE_MS` can only let two reclaimers work on the same dead inode, which is
+  idempotent: one unlinks, the other finds `ENOENT`.
 
 Release checks the gate's token before unlinking, so a process that was reclaimed while it believed it
 held the lock cannot delete the new holder's file.

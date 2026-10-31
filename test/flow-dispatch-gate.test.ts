@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -44,8 +44,10 @@ function writeGate(mtimeAgoMs: number, ownerPid: number, token = 'foreign'): voi
   utimesSync(lockPath(), when, when)
 }
 
+// Every file the gate may leave behind besides the gate itself: a publisher's temp, a reclaimer's
+// inode token, or the round-8 rename artefact. A clean run leaves none of them.
 function strays(): string[] {
-  return readdirSync(root).filter(name => name.includes('.dead.'))
+  return readdirSync(root).filter(name => /\.(dead|owner|reclaim)\./.test(name))
 }
 
 describe('withDispatchGate', () => {
@@ -108,6 +110,40 @@ describe('reclaiming a gate left behind by a dead process', () => {
 
     expect(result.acquired).toBe(false)
     expect(owner()).toMatchObject({ pid: before, token: 'live-holder' })
+  })
+
+  it('never touches a gate that exists without its content yet', () => {
+    // Round 9: a gate created but not yet written cannot be attributed to anybody. Removing it would
+    // delete the file a publisher is about to complete, so it is left alone like a damaged lock.
+    writeFileSync(lockPath(), '', 'utf-8')
+    const when = new Date(Date.now() - 10 * DISPATCH_GATE_STALE_MS)
+    utimesSync(lockPath(), when, when)
+
+    const result = withDispatchGate(() => 'never', { root, timeoutMs: 150 })
+
+    expect(result.acquired).toBe(false)
+    expect(existsSync(lockPath())).toBe(true)
+  })
+
+  it('skips an inode whose reclaim token is already held by another waiter', () => {
+    // Reclamation is scoped per inode; a second waiter must not work on the same file. The token is
+    // taken here for the dead gate's inode, so the reclaim is skipped while it exists.
+    const dead = deadPid()
+    writeGate(10 * DISPATCH_GATE_STALE_MS, dead)
+    const id = statSync(lockPath(), { bigint: true })
+    writeFileSync(`${lockPath()}.reclaim.${id.dev}-${id.ino}`, JSON.stringify({ pid: process.pid }), 'utf-8')
+
+    const blocked = withDispatchGate(() => 'never', { root, timeoutMs: 100 })
+    expect(blocked.acquired).toBe(false)
+    expect(owner().pid).toBe(dead)
+
+    // A token left behind is not a deadlock: past its own stale window it is cleared and the lock is
+    // reclaimed on the next attempt.
+    const old = new Date(Date.now() - 10 * 60 * 1000)
+    utimesSync(`${lockPath()}.reclaim.${id.dev}-${id.ino}`, old, old)
+    const taken = withDispatchGate(() => 'taken over', { root, timeoutMs: 500 })
+    expect(taken).toEqual({ acquired: true, value: 'taken over' })
+    expect(strays()).toEqual([])
   })
 
   it('never reclaims a lock younger than the stale window, even when its owner is gone', () => {
