@@ -178,10 +178,24 @@ The gate exists because the runs lock cannot do this job: `sendWhenIdle` takes i
 not reentrant, so holding it across the paste deadlocks (§3.4). It is a **second lock domain with a
 fixed ordering — gate first, runs lock second — and no path takes them the other way round**: the
 runner writes its claim under the runs lock, releases it, and only then takes the gate; a control
-command takes the gate and then the runs lock inside it. A gate left behind by a process that died
-mid-paste is broken after `DISPATCH_GATE_STALE_MS` (60 s), which is longer than any send, so a live
-paste is never broken underneath itself; a tick that cannot take the gate pastes nothing, releases its
-claim and answers `locked`.
+command takes the gate and then the runs lock inside it. A tick that cannot take the gate pastes
+nothing, releases its claim and answers `locked`.
+
+A gate left behind by a process that died mid-paste has to be taken over, and the takeover itself is a
+lock in miniature (review round 8). Two rules make it safe, and neither is optional:
+
+- **A live holder is never reclaimed, whatever the file's age.** The owner's pid is probed with
+  `process.kill(pid, 0)` and only a definite `ESRCH` counts as gone; the file must also be older than
+  `DISPATCH_GATE_STALE_MS` (60 s), which covers a recycled pid. Age alone would take a live gate away
+  from a slow paste, and a lock whose owner cannot be identified (damaged JSON) is left for a human.
+- **Reclamation moves the file it judged; it never unlinks the path.** `rename` is the
+  compare-and-swap: of two waiters that both saw a dead lock only one can move it, the other gets
+  `ENOENT` and retries, and a fresh gate that appears at the path afterwards is never touched by the
+  loser. The winner deletes the file it moved, after re-reading that copy and confirming its owner is
+  still gone, and it restores it with a hard link if the owner turned out to be alive.
+
+Release checks the gate's token before unlinking, so a process that was reclaimed while it believed it
+held the lock cannot delete the new holder's file.
 
 ---
 
