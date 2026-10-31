@@ -24,7 +24,7 @@ import { readGitHead } from './flow-runner.js'
 import { flowExists, flowPath, readFlow, saveFlow } from './flow-store.js'
 import type { FlowStoreOptions } from './flow-store.js'
 import { isRunsLockTimeout, listAgents, listRuns, withRunsLock } from './runs.js'
-import { shortHomePath } from '../utils/paths.js'
+import { displayPath } from '../utils/paths.js'
 
 export interface StartFlowInput {
   // Run id, run name, or a unique prefix of either.
@@ -107,7 +107,9 @@ export function startFlow(input: StartFlowInput, options: StartFlowOptions = {})
   }
   const head = options.head ?? readGitHead(repo)
   if (!head) {
-    throw new FlowStateError(`cannot read HEAD in ${shortHomePath(repo)} (is it a git repository with a commit?)`)
+    // `displayPath`, not `shortHomePath`: a repo outside the home directory has no shorthand, and
+    // this message is quoted by every surface that prints an error (an MCP host keeps it verbatim).
+    throw new FlowStateError(`cannot read HEAD in ${displayPath(repo)} (is it a git repository with a commit?)`)
   }
   // Specs are read before the lock: a bad file must fail without touching the flow directory.
   const specs = input.specs?.length ? readQueuedSpecs(input.specs, repo) : []
@@ -121,7 +123,7 @@ export function startFlow(input: StartFlowInput, options: StartFlowOptions = {})
         const closed = existing.state === 'escalated' || existing.state === 'done'
         if (!closed) {
           throw new FlowStateError(
-            `run ${run.id} already has a flow in state ${existing.state} (${shortHomePath(flowPath(run.id, options.root))});`
+            `run ${run.id} already has a flow in state ${existing.state} (${displayPath(flowPath(run.id, options.root))});`
             + ` use \`flow status --run ${run.id}\`, or wait until it is escalated or done`,
           )
         }

@@ -262,6 +262,16 @@ reading `null` as empty would make the add-time validator the one place that coe
 §3.2 forbids everywhere else. `test/spec.test.ts` pins both halves: a present `null` is refused with
 its field name, an omitted key is accepted.
 
+**Containment is decided on real paths, not on the spelled one** (review round 5). A relative path
+resolves against the flow's project directory and may not leave it, but a lexical comparison is not
+enough: `stat` and `read` follow symlinks, so a link inside the project pointing at a file outside it
+used to pass the check and copy that file's content into the flow record. `readSpecFile` therefore
+resolves both sides with `realpathSync` and compares those: a link that lands outside the project is
+refused with `resolves outside the project directory`, a link that stays inside is followed, and a
+broken link is reported as a missing spec file (which is what it is). An absolute path is still taken
+as written — the caller named that file themselves, and a symlink does not change what they asked
+for.
+
 ### 3.3 Lifecycle against run archival (D7)
 
 The run lifecycle here is stricter than it looks: `stop` (`src/core/runtime.ts:715`–`:717`) and
@@ -427,7 +437,11 @@ failure (`src/surfaces/cli/agents.ts:54`–`:55`), and stable `--json` payloads 
 - paths: the flow file stores absolute paths because git needs them, but **every payload renders
   them home-shortened** — anything under `$HOME` prints as `~/…`, so a transcript never carries
   `/home/<user>/…`. A path the caller passed is echoed the way the caller wrote it (a relative
-  argument stays relative), never silently expanded. Errors are covered by the same rule: a spec
+  argument stays relative), never silently expanded. An **error** is stricter, because a host may
+  quote it verbatim: `displayPath` renders a path under `$HOME` as `~/…` and a path outside it as its
+  last component only (`run-1.json`, never `/srv/deploy/registry/flows/run-1.json`), since the parent
+  chain of an outside path is deployment layout the reader did not ask for while the component still
+  names what failed. Errors are covered by the same rule: a spec
   file that cannot be read is named `~/…` in the message, because an MCP host quotes that message
   into its own transcript. The rule covers **error messages** as well as
   payloads: `flow status` on a damaged file names it as `~/.reeves/flows/<id>.json`, and
@@ -705,3 +719,19 @@ Two things the review did not name are also corrected here, because they were th
 `docs/mcp.md` described the flow tools as read-and-queue only (there are three now, one of which
 writes) and the `flow status` field list did not mention `pending`, which is the field that explains
 why a flow is sitting still.
+
+---
+
+## Appendix E — review round 5 on the shipped branch (CHANGES_REQUESTED → resolved)
+
+The review of `daa0c05` came back **CHANGES_REQUESTED** with one major and one minor. Both were real,
+and the minor was worse than it looked: the test guarding it passed for the wrong reason.
+
+| Finding | Verdict | Where it is fixed |
+| --- | --- | --- |
+| MAJOR `src/core/flow-queue.ts:50`–`:63` — the project-containment check compared the spelled path only, while `statSync`/`readFileSync` follow symlinks, so a link inside the project read a file outside it and stored that content in the flow | Real; §3.2 said "may not leave the project" and the implementation checked a string | containment is now decided on `realpathSync` of both the spec and the repo, after the cheap spelled-path pass: a link that lands outside is refused, one that stays inside is followed, a broken link reads as a missing file. `test/flow-queue.test.ts` covers a link to an outside file, a symlinked directory that leaves, an inside link and a dangling one |
+| MINOR `src/core/flow-start.ts:110` — the `flow start` error printed `shortHomePath(repo)`, which is the whole absolute path for a repo outside `$HOME`; the test meant to catch it passed only because `TMPDIR` happened to sit under the home directory | Real, and the test proved nothing in a sandbox whose temp dir is elsewhere | `displayPath` in `src/utils/paths.ts` renders an outside-home path as its last component; both `flow start` errors (the repo, and a flow file that already exists) use it, and the CLI tests now pin `HOME` away from the temp tree, so the assertion cannot pass by accident |
+
+The same round also closed a family the review named only once: the "already has a flow" error printed
+the registry path the same way, and it is now rendered by the same helper.
+

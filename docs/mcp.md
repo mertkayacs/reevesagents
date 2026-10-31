@@ -141,10 +141,11 @@ Queues a block spec file as the next piece of work; it does not dispatch it. A
 JSON file is a structured block (id, title, goal, requirements, checks, report); a
 markdown file is queued as an unstructured block with the heading as its id and
 title. The path must be an existing readable file: a relative path resolves inside
-the flow's project directory and may not leave it, an absolute path is taken as
-written. Refused without touching the flow file: a missing or empty file, a spec
-without requirements or checks, a block id already queued or dispatched, and a
-closed flow (`escalated` or `done`).
+the flow's project directory and may not leave it — the check runs on the
+resolved path, so a symlink that lands outside is refused too — while an
+absolute path is taken as written. Refused without touching the flow file: a
+missing or empty file, a spec without requirements or checks, a block id already
+queued or dispatched, and a closed flow (`escalated` or `done`).
 
 Paths and log text in both tools come back home-shortened and redacted: a tool
 answer is a transcript, so a spec title carrying a token is reported as

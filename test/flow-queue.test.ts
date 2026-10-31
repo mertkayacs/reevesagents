@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
@@ -76,6 +76,41 @@ describe('readSpecFile', () => {
 
     writeFileSync(join(root, 'outside.json'), jsonSpec(), 'utf-8')
     expect(message(() => readSpecFile('../outside.json', { repo }))).toContain('outside the project directory')
+  })
+
+  it('refuses a symlink inside the project that points at a file outside it', () => {
+    // The spelled path is inside the project, which is why the containment check has to look at the
+    // resolved path: otherwise this link copies an unrelated file's content into the flow.
+    const secret = join(root, 'secret.json')
+    writeFileSync(secret, jsonSpec({ id: 'block_99', title: 'Secret' }), 'utf-8')
+    symlinkSync(secret, join(repo, 'link.json'))
+
+    const err = message(() => readSpecFile('link.json', { repo }))
+    expect(err).toContain('outside the project directory')
+    // An absolute path is still taken as written: the caller named that file themselves.
+    expect(readSpecFile(secret, { repo }).id).toBe('block_99')
+  })
+
+  it('refuses a symlinked directory inside the project that leaves it', () => {
+    const elsewhere = join(root, 'elsewhere')
+    mkdirSync(elsewhere, { recursive: true })
+    writeFileSync(join(elsewhere, 'block_08.json'), jsonSpec({ id: 'block_08' }), 'utf-8')
+    symlinkSync(elsewhere, join(repo, 'dir-link'))
+
+    expect(message(() => readSpecFile('dir-link/block_08.json', { repo }))).toContain('outside the project directory')
+  })
+
+  it('still follows a symlink that stays inside the project', () => {
+    const target = writeFile('specs/block_04.json', jsonSpec())
+    symlinkSync(target, join(repo, 'link.json'))
+
+    expect(readSpecFile('link.json', { repo }).id).toBe('block_04')
+  })
+
+  it('reports a broken symlink as a missing spec file', () => {
+    symlinkSync(join(root, 'gone.json'), join(repo, 'dangling.json'))
+
+    expect(message(() => readSpecFile('dangling.json', { repo }))).toContain('spec file not found')
   })
 
   it('downgrades markdown explicitly, taking the heading as the id and title', () => {

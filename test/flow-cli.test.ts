@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentRecord, RunRecord } from '../src/core/types.js'
 import { createFlowState } from '../src/core/flow.js'
@@ -68,6 +68,21 @@ async function runCli(args: string[]): Promise<{ out: string, err: string }> {
     errSpy.mockRestore()
     exitSpy.mockRestore()
     process.exitCode = 0
+  }
+}
+
+// Run `fn` with HOME pointing at a directory the temp tree is *not* under, so a path assertion about
+// a home shorthand cannot pass by accident when TMPDIR happens to live inside the real home.
+async function outsideHome<T>(fn: () => Promise<T>): Promise<T> {
+  const savedHome = process.env.HOME
+  const fakeHome = mkdtempSync(join(tmpdir(), 'reeves-flow-cli-home-'))
+  process.env.HOME = fakeHome
+  try {
+    return await fn()
+  } finally {
+    if (savedHome === undefined) delete process.env.HOME
+    else process.env.HOME = savedHome
+    rmSync(fakeHome, { recursive: true, force: true })
   }
 }
 
@@ -226,19 +241,37 @@ describe('flow start', () => {
     expect(failure?.cli_err).toContain('run not found: ghost')
   })
 
-  it('refuses a directory that is not a git repository', async () => {
+  it('refuses a directory that is not a git repository without printing its absolute path', async () => {
     seedRun()
     execFileSync.mockImplementation((file: string, args: string[]) => {
       if (file === 'git' && args.includes('rev-parse')) throw new Error('not a repository')
       return ''
     })
 
-    const failure = await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review']).then(
-      () => null,
-      (error: Error & { cli_err?: string }) => error,
-    )
+    // The repo has to sit *outside* the home directory for this assertion to mean anything: with
+    // TMPDIR under $HOME the path would be shortened by luck rather than by the code, and the test
+    // would pass while the message still leaked in a sandbox whose temp dir is elsewhere.
+    const failure = await outsideHome(() => runCli([
+      'flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review',
+    ]).then(() => null, (error: Error & { cli_err?: string }) => error))
+
     expect(failure?.cli_err).toContain('cannot read HEAD in')
     expect(failure?.cli_err).not.toContain(tmpDir)
+    // The last component still names what failed, so the message stays usable.
+    expect(failure?.cli_err).toContain(basename(tmpDir))
+  })
+
+  it('names the existing flow file without an absolute path when the registry is outside home', async () => {
+    seedRun()
+    await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review'])
+
+    const failure = await outsideHome(() => runCli([
+      'flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review',
+    ]).then(() => null, (error: Error & { cli_err?: string }) => error))
+
+    expect(failure?.cli_err).toContain('already has a flow in state idle')
+    expect(failure?.cli_err).not.toContain(tmpDir)
+    expect(failure?.cli_err).toContain('run-c1.json')
   })
 })
 

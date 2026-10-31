@@ -11,8 +11,8 @@
 // structured spec, so a dispatch is reproducible from the flow file alone and the dev's brief does
 // not depend on a path still existing.
 
-import { readFileSync, statSync } from 'node:fs'
-import { isAbsolute, extname, relative, resolve } from 'node:path'
+import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { isAbsolute, extname, relative, resolve, sep } from 'node:path'
 import type { FlowState } from './flow.js'
 import type { BlockSpec } from './spec.js'
 import { formatSpecIssues, parseSpecJson, specFromMarkdown } from './spec.js'
@@ -37,19 +37,38 @@ export interface SpecFileOptions {
   existingIds?: string[]
 }
 
+// Does `target` sit outside `base`? Decided on strings only, so it is the caller's job to hand in
+// resolved paths. `..` alone is the parent itself, and anything starting with `..<sep>` is above it;
+// a sibling literally named `..foo` is *not* outside, which a bare `startsWith('..')` gets wrong.
+function escapesProject(target: string, base: string): boolean {
+  const inside = relative(base, target)
+  return inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)
+}
+
+// The path a symlink ends at, or null when it does not resolve (a missing file, a broken link).
+function realPath(path: string): string | null {
+  try {
+    return realpathSync(path)
+  } catch {
+    return null
+  }
+}
+
 // Resolve and validate one spec file. Throws FlowSpecError with the reason, never returns a
 // half-valid record.
 export function readSpecFile(path: string, options: SpecFileOptions): BlockSpec {
   const raw = path.trim()
   if (!raw) throw new FlowSpecError('a spec file path is required')
 
+  const fromProject = !isAbsolute(raw)
   let absolute: string
-  if (isAbsolute(raw)) {
+  if (!fromProject) {
     absolute = raw
   } else if (options.repo) {
     absolute = resolve(options.repo, raw)
-    const inside = relative(options.repo, absolute)
-    if (inside === '' || inside.startsWith('..')) {
+    // First pass: the path as spelled. Cheap and it reports the common mistake with the reason the
+    // author made it.
+    if (escapesProject(absolute, options.repo)) {
       // A relative path is a path inside the project; anything else must be spelled absolutely so
       // the caller sees exactly which file it queued.
       throw new FlowSpecError(`spec path ${raw} is outside the project directory; pass an absolute path`)
@@ -58,9 +77,19 @@ export function readSpecFile(path: string, options: SpecFileOptions): BlockSpec 
     throw new FlowSpecError(`spec path ${raw} is relative and the flow has no project directory`)
   }
 
+  // Second pass, and the one that decides: every fs call below follows symlinks, so a link inside
+  // the project pointing at a file outside it would pass the spelled-path check and then copy that
+  // file's content into the flow record. `realpathSync` also turns a missing target into one clear
+  // error before anything is read — and a broken link is exactly that case.
+  const real = realPath(absolute)
+  if (!real) throw new FlowSpecError(`spec file not found: ${shortHomePath(absolute)}`)
+  if (fromProject && escapesProject(real, realPath(options.repo) ?? resolve(options.repo))) {
+    throw new FlowSpecError(`spec path ${raw} resolves outside the project directory; pass an absolute path`)
+  }
+
   let size: number
   try {
-    const stats = statSync(absolute)
+    const stats = statSync(real)
     if (!stats.isFile()) throw new FlowSpecError(`spec path is not a file: ${shortHomePath(absolute)}`)
     size = stats.size
   } catch (err) {
@@ -73,7 +102,7 @@ export function readSpecFile(path: string, options: SpecFileOptions): BlockSpec 
 
   let text: string
   try {
-    text = readFileSync(absolute, 'utf-8')
+    text = readFileSync(real, 'utf-8')
   } catch {
     throw new FlowSpecError(`spec file could not be read: ${shortHomePath(absolute)}`)
   }
