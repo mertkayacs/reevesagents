@@ -426,6 +426,20 @@ The same payload shape feeds the MCP tools, so both surfaces obey one redaction 
 - Copy goes through `translate()`; new keys `flow.*` in `locales/en.ts` and the nine other
   locales.
 
+What the runs list ships (`src/core/flow-view.ts` + `src/surfaces/tui/screens/Runs.tsx`): one
+badge per run row read from the flow file on every tick — `flow: review (2/6)` where the row has
+room, the bare `flow: review` below ~96 columns so it cannot wrap the row at 80x24, and
+`flow: escalated` / `flow: done` without a ratio because the budget is spent or irrelevant. A run
+without a flow has no badge at all.
+
+Attention reuses the product's existing warn signal instead of adding a widget: an `escalated` flow,
+and a `reviewing` flow past `review_timeout_sec`, colour the badge with `colors.status.warn`, add an
+`attention` counter to the frame header and a `needs attention` legend entry. Both are computed on
+read (`flowBadge(state, now)`) with the same `>= timeout` comparison the tick uses, so the badge can
+never claim "overdue" while the engine still waits. Nothing is written to `task_status` or any other
+lifecycle field: `test/screens/FlowBadge.test.tsx` renders an escalated flow, swaps it for a closed
+one, and asserts both the badge going away and the run/agent records being byte-identical.
+
 ### 4.3 MCP — full control, with an explicit contract amendment (D3)
 
 The owner's decision: an MCP host must be able to *drive* a flow, not only read it. That

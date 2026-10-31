@@ -7,9 +7,9 @@
 //
 // Nothing here decides anything: the engine owns the transitions, this module only describes them.
 
-import type { FlowState } from './flow.js'
+import type { FlowState, FlowStatus } from './flow.js'
 import { FlowStateError } from './flow.js'
-import { flowPath, listFlowFiles } from './flow-store.js'
+import { flowPath, listFlowFiles, readFlow } from './flow-store.js'
 import { redactSecrets } from './redact.js'
 import { shortHomePath } from '../utils/paths.js'
 
@@ -88,4 +88,73 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
     log,
     path: shortHomePath(path),
   }
+}
+
+
+// The badge a run row shows. Derived on every read from the flow document, never stored in a run
+// record: a heuristic written into a lifecycle field outlives the reason that produced it, and the
+// next reader cannot tell "escalated" from "was escalated an hour ago".
+export type FlowAttention = 'escalated' | 'review_timeout'
+
+export interface FlowBadge {
+  status: FlowStatus
+  rounds: number
+  max_rounds: number
+  // A review past its deadline: the flow is waiting for an answer that will not arrive.
+  review_overdue: boolean
+  // Why a human is needed, or null while the flow is moving on its own.
+  attention: FlowAttention | null
+}
+
+// Same comparison the engine makes, so a badge can never say "overdue" while the tick still waits:
+// `>= timeout` on the ms difference, measured from `review_started_at`.
+export function flowBadge(state: FlowState, now: number = Date.now()): FlowBadge {
+  const overdue = state.state === 'reviewing'
+    && state.review_started_at !== null
+    && now - state.review_started_at >= state.review_timeout_sec * 1000
+  return {
+    status: state.state,
+    rounds: state.rounds,
+    max_rounds: state.max_rounds,
+    review_overdue: overdue,
+    attention: state.state === 'escalated' ? 'escalated' : overdue ? 'review_timeout' : null,
+  }
+}
+
+// A run without a flow has no badge, and neither has one whose file cannot be read: a dashboard
+// skips a damaged file instead of breaking the board, while `flow status` still reports it (§3.3).
+export function readFlowBadge(runId: string, now: number = Date.now(), root?: string): FlowBadge | null {
+  try {
+    return flowBadge(readFlow(runId, { root }), now)
+  } catch {
+    return null
+  }
+}
+
+export function listFlowBadges(
+  runIds: readonly string[],
+  now: number = Date.now(),
+  root?: string,
+): Map<string, FlowBadge> {
+  const badges = new Map<string, FlowBadge>()
+  for (const runId of runIds) {
+    const badge = readFlowBadge(runId, now, root)
+    if (badge) badges.set(runId, badge)
+  }
+  return badges
+}
+
+// A 2 s tick must not re-render the list for an unchanged board.
+export function sameFlowBadges(
+  a: ReadonlyMap<string, FlowBadge>,
+  b: ReadonlyMap<string, FlowBadge>,
+): boolean {
+  if (a.size !== b.size) return false
+  for (const [runId, badge] of a) {
+    const other = b.get(runId)
+    if (!other) return false
+    if (other.status !== badge.status || other.rounds !== badge.rounds || other.max_rounds !== badge.max_rounds) return false
+    if (other.attention !== badge.attention || other.review_overdue !== badge.review_overdue) return false
+  }
+  return true
 }
