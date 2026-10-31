@@ -15,7 +15,7 @@ import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../src/core/flow-control.js'
 import type { FlowPorts } from '../src/core/flow-runner.js'
 import { stepFlow } from '../src/core/flow-runner.js'
-import { deleteRunHistory, writeAgent, writeRun } from '../src/core/runs.js'
+import { deleteRunHistory, runPath, writeAgent, writeRun } from '../src/core/runs.js'
 
 // Operator lifecycle: the transition table, pause/resume/stop, the `orphaned` parking, and queueing a
 // block on a flow that already exists. Nothing in this file sends into a pane, and the one test that
@@ -291,6 +291,51 @@ describe('orphaned', () => {
     expect(parked.orphan_reason).toContain('role agents')
   })
 
+  it('does not park a flow when the registry cannot be read', () => {
+    // `readRun` answers "Run not found" for a corrupt file too, so existence is what decides: a run
+    // file that exists but does not parse is a broken probe, not an archived run.
+    seedLiveRun()
+    seed(makeState({ state: 'idle' }))
+    writeFileSync(runPath('run-1'), '{"id": "run-1", broken', 'utf-8')
+
+    const result = step(makePorts())
+
+    expect(result.decision.kind).not.toBe('orphan')
+    expect(readFlow('run-1', { root }).state).not.toBe('orphaned')
+  })
+
+  it('parks a flow whose role agent has ended, even though its record is still there', () => {
+    seedLiveRun()
+    // The reviewer's agent ended: the record stays in the run directory, the pane does not exist.
+    writeAgent({
+      id: 'rev-1',
+      run_id: 'run-1',
+      nickname: 'rev-1',
+      provider: 'cc',
+      model: '',
+      role: 'worker',
+      working_dir: join(root, 'repo'),
+      task: 'x',
+      task_status: 'done',
+      task_note: '',
+      tmux_session: 'reeves-run-1',
+      tmux_window_id: '@1',
+      tmux_pane_id: '%1',
+      rc_enabled: false,
+      permissions: 'ask',
+      inbox: [],
+      last_seen: NOW,
+      started_at: AT,
+      ended_at: '2026-01-01T01:00:00.000Z',
+    })
+    seed(makeState({ state: 'idle' }))
+
+    const result = step(makePorts())
+
+    expect(result.decision.reason).toBe('agents_gone')
+    expect(readFlow('run-1', { root }).state).toBe('orphaned')
+  })
+
   it('does not park a flow whose run and agents are there', () => {
     seedLiveRun()
     seed(makeState({ state: 'idle' }))
@@ -306,6 +351,55 @@ describe('orphaned', () => {
     expect(() => pauseFlow('run-1')).toThrow(/cannot pause a flow in state orphaned/)
     expect(() => resumeFlow('run-1')).toThrow(/cannot resume a flow in state orphaned/)
     expect(stopFlow('run-1', { at: AT }).state.state).toBe('done')
+  })
+})
+
+describe('a control command that lands during a dispatch', () => {
+  // The claim is taken under the lock and the paste happens outside it, so a pause/stop can arrive
+  // in exactly that window. Both drop the claim, which is why the runner re-reads it once before the
+  // paste: without that check the operator would pause the flow and still receive one prompt.
+  it('sends nothing when a pause lands between the claim and the paste', () => {
+    seedLiveRun()
+    seed(makeState({ state: 'idle' }))
+    const ports = makePorts()
+
+    const result = step(ports, {
+      onClaimed: () => { pauseFlow('run-1', { at: AT, now: NOW }) },
+    })
+
+    expect(result.status).toBe('cancelled')
+    expect(ports.send).not.toHaveBeenCalled()
+    const after = readFlow('run-1', { root })
+    expect(after.state).toBe('paused')
+    expect(after.pending).toBeNull()
+    // The decision was never applied: the review request is not on the flow.
+    expect(after.claim.head).toBe('aaa111')
+    expect(after.log.some(entry => entry.event === 'request_review')).toBe(false)
+  })
+
+  it('sends nothing when a stop lands between the claim and the paste', () => {
+    seedLiveRun()
+    seed(makeState({ state: 'idle' }))
+    const ports = makePorts()
+
+    const result = step(ports, {
+      onClaimed: () => { stopFlow('run-1', { at: AT }) },
+    })
+
+    expect(result.status).toBe('cancelled')
+    expect(ports.send).not.toHaveBeenCalled()
+    expect(readFlow('run-1', { root }).state).toBe('done')
+  })
+
+  it('still sends when nothing interrupts it', () => {
+    seedLiveRun()
+    seed(makeState({ state: 'idle' }))
+    const ports = makePorts()
+
+    const result = step(ports, { onClaimed: () => {} })
+
+    expect(result.status).toBe('applied')
+    expect(ports.send).toHaveBeenCalledTimes(1)
   })
 })
 

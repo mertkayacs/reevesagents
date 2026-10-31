@@ -106,6 +106,13 @@ function printTick(result: FlowStepResult, dryRun: boolean): void {
     console.log('result    locked — another reevesagents process is writing the state directory; nothing was sent')
     return
   }
+  if (result.status === 'cancelled') {
+    // A pause/stop dropped the claim between the claim and the paste: nothing was sent, and the
+    // operator's own command is what the flow now shows.
+    console.log('result    cancelled — the flow was paused or stopped while the dispatch was being prepared; nothing was sent')
+    console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
+    return
+  }
   console.log(`result    ${result.status}`)
   console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
   if (result.path) console.log(`file      ${shortHomePath(result.path)}`)

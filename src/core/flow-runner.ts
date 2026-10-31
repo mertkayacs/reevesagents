@@ -18,6 +18,7 @@
 // the engine, which escalates it after `PENDING_TTL_SEC` instead of re-sending.
 
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { PaneBusyState } from './activity.js'
 import type { FlowDecision, FlowObservations, FlowState } from './flow.js'
@@ -30,7 +31,8 @@ import {
   releaseDispatch,
 } from './flow.js'
 import { readFlow, saveFlow } from './flow-store.js'
-import { isRunsLockTimeout, listAgents, readRun, withRunsLock } from './runs.js'
+import { isRunsLockTimeout, listAgents, readRun, runPath, withRunsLock } from './runs.js'
+import type { AgentRecord, RunRecord } from './types.js'
 import { paneBusy, peekAgentRaw, sendWhenIdle } from './runtime.js'
 import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
@@ -95,24 +97,32 @@ export interface ObserveFlowOptions {
 // (`stop`, `delete-run`, the stale sweep) removes the run directory, and a missing role agent means
 // the flow would paste into a pane that no longer exists — both park the flow as `orphaned` (§3.3).
 //
-// A registry that cannot be read is reported as "not seen", never as "gone": a broken probe must
-// not archive a live pipeline. The engine only orphans on an explicit `false`.
-function registryPresence(state: FlowState): { run_present: boolean, agents_present: boolean } {
-  let run: { id: string, status: string, ended_at: string | null }
+// Three distinctions matter here, because parking is irreversible from the engine's side:
+// - a **missing run file** is a run that is gone (archiving removes the directory);
+// - a run file that **exists but cannot be read** is this process failing to see the registry, not a
+//   missing run — `readRun` reports both as "Run not found", so existence is checked first and a
+//   read failure answers "not seen" (`undefined`), which the engine refuses to treat as absence;
+// - an agent that is still on disk but has **ended** is not a live pane, so `ended_at` decides.
+function registryPresence(state: FlowState): { run_present?: boolean, agents_present?: boolean } {
+  if (!existsSync(runPath(state.run_id))) return { run_present: false, agents_present: false }
+  let run: RunRecord
   try {
     run = readRun(state.run_id)
   } catch {
-    return { run_present: false, agents_present: false }
+    // A damaged or unreadable registry: say nothing rather than park a live pipeline. The pane
+    // guard still holds the tick, so this cannot turn into a blind send either.
+    return {}
   }
   if (run.status === 'ended' || run.ended_at !== null) return { run_present: false, agents_present: false }
   const agents = listAgents(run.id)
-  const present = everyAgentPresent(state, agents)
-  return { run_present: true, agents_present: present }
+  return { run_present: true, agents_present: everyAgentPresent(state, agents) }
 }
 
-function everyAgentPresent(state: FlowState, agents: { id: string }[]): boolean {
-  const ids = new Set(agents.map(agent => agent.id))
-  return [state.roles.dev, state.roles.review].every(id => id !== '' && ids.has(id))
+function everyAgentPresent(state: FlowState, agents: AgentRecord[]): boolean {
+  // An ended agent keeps its record in the run directory, so its id alone proves nothing: the flow
+  // would wait on a pane that no longer exists. Only a live agent counts.
+  const live = new Set(agents.filter(agent => agent.ended_at === null).map(agent => agent.id))
+  return [state.roles.dev, state.roles.review].every(id => id !== '' && live.has(id))
 }
 
 // The observations a parked flow gets: no git, no tmux, no registry. `flowTick` holds on `paused` and
@@ -167,6 +177,9 @@ export type FlowApplyStatus =
   | 'refused'
   | 'unconfirmed'
   | 'locked'
+  // A claim was taken and then dropped before the paste: `flow pause` or `flow stop` landed in
+  // between, so nothing was sent and nothing was applied.
+  | 'cancelled'
 
 export interface FlowStepResult {
   observations: FlowObservations
@@ -186,6 +199,9 @@ export interface StepFlowOptions extends ObserveFlowOptions {
   at?: string
   // Observe and decide, then print: nothing is sent and nothing is written.
   dryRun?: boolean
+  // Called once the claim is on disk and before the paste. A surface can render "dispatching" from
+  // it, and a test uses it to interleave a control command with the exact race it guards against.
+  onClaimed?: (_state: FlowState) => void
 }
 
 interface ClaimedDispatch {
@@ -210,6 +226,14 @@ interface ClaimPhaseResult {
 interface SettlePhaseResult {
   state: FlowState
   status: FlowApplyStatus
+  path?: string
+}
+
+// The answer to "is this claim still mine and is the flow still live?", asked once right before the
+// paste. `send: false` means a control command won the race and nothing may be pasted.
+interface PreSendGuard {
+  send: boolean
+  state: FlowState
   path?: string
 }
 
@@ -294,8 +318,40 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     }
   }
 
-  // Phase two — act, outside every lock: `sendWhenIdle` reaches `updateAgent`, which takes the runs
-  // lock itself, so holding it across the paste would deadlock and then steal the lock from itself.
+  // Phase two — act. The claim is ours, but a control command may have landed between the claim and
+  // this line: `flow pause` and `flow stop` drop the claim on purpose, so the intent is re-read once
+  // immediately before the paste. A claim that is gone, or a flow that is no longer live, means
+  // nothing is sent — without this check a paused flow would still receive one prompt.
+  options.onClaimed?.(dispatch.state)
+  const guard = withStateLock<PreSendGuard>(() => {
+    const current = readFlow(runId, { root: options.root })
+    if (current.pending?.op_id !== dispatch.op_id) return { send: false, state: current }
+    if (current.state === 'paused' || current.state === 'orphaned' || current.state === 'done') {
+      // Our claim survived but the flow was parked: release it so a later resume cannot inherit a
+      // send that never happened, and leave the reason in the journal.
+      const released = releaseDispatch(current, `flow is ${current.state}`, at)
+      return { send: false, state: released, path: saveFlow(released, { root: options.root }) }
+    }
+    return { send: true, state: current }
+  })
+
+  if (guard.locked) {
+    // Someone is writing the state right now, so the claim cannot be verified: send nothing and let
+    // the next tick decide. The claim stays and expires with `PENDING_TTL_SEC` if nobody settles it.
+    return { observations, decision: phase.decision, status: 'locked', state: dispatch.state, path: dispatch.path }
+  }
+  if (!guard.value.send) {
+    return {
+      observations,
+      decision: phase.decision,
+      status: 'cancelled',
+      state: guard.value.state,
+      path: guard.value.path,
+    }
+  }
+
+  // The paste happens outside every lock: `sendWhenIdle` reaches `updateAgent`, which takes the runs
+  // lock itself, so holding it across the send would deadlock and then steal the lock from itself.
   const send = ports.send(dispatch.agent, dispatch.message)
 
   // Phase three — settle, and only for our own claim: a claim that someone else already settled

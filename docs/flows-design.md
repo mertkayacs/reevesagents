@@ -155,6 +155,18 @@ is not in this build: escalating is the answer that cannot send the same prompt 
 nothing at all. This is the only concurrency rule the engine has, and it is what makes a cron
 `flow tick` safe to run next to a manual one.
 
+**The claim is re-read once before the paste (review round 6).** The claim protects a ticker from
+another ticker; it does not, by itself, protect the flow from a *human*: `flow pause` and `flow stop`
+drop the claim precisely so nothing lands in a pipeline the operator just stopped, and they can win
+the race between the claim write and the send. So the runner takes one more short lock immediately
+before the paste and asks "is this still my `op_id`, and is the flow still live?". A claim that is
+gone, or a flow that is `paused`/`orphaned`/`done`, means **nothing is pasted** and the step answers
+`cancelled` (a claim that survived but is now parked is released with a journal line, so a resume
+cannot inherit a send that never happened). The window that remains — between that check and the
+`sendWhenIdle` call — is microseconds and cannot be closed without holding the runs lock across the
+send, which the non-reentrant lock forbids (§3.4); a command landing there leaves the flow paused and
+the agent with one prompt it will need to finish, which is exactly what the operator asked for.
+
 ---
 
 ## 3. State model: where the pipeline lives
@@ -310,9 +322,16 @@ review (`archiveAndRemoveRun` writes the record at `src/core/runs.ts:455`).
 TUI/Web badge shows it muted, and a tick logs one line and parks instead of throwing every 2 s.
 
 Shipped in block 07 exactly as written here: `flow-runner.ts` reports `run_present` /
-`agents_present` from the registry (an unreadable registry reports "not seen", never "gone"), the
-engine returns an `orphan` decision, and `applyDecisionToState` writes `orphaned` plus
-`orphan_reason` **once** — the next tick holds on `flow_orphaned` and writes nothing. The cascade
+`agents_present` from the registry, the engine returns an `orphan` decision, and
+`applyDecisionToState` writes `orphaned` plus `orphan_reason` **once** — the next tick holds on
+`flow_orphaned` and writes nothing.
+
+The presence probe distinguishes three cases (review round 6), because parking is irreversible from
+the engine's side: a **missing run file** is a run that is gone (archiving removes the directory); a
+run file that **exists but does not read** is a broken probe, reported as "not seen" (`undefined`),
+which the engine refuses to treat as absence — `readRun` answers "Run not found" for both, so
+existence is checked first; and an agent whose record is still there but has **ended**
+(`ended_at !== null`) is not a live pane, so it counts as gone. The cascade
 is `deleteFlowFileForRun` called from `deleteRunHistory` (`src/core/runs.ts:377`), inside the runs
 lock it already holds; no other path deletes a flow file.
 
@@ -326,7 +345,7 @@ module cycle.
 | --- | --- | --- | --- |
 | `idle` | nothing pending, waiting for the dev's next HEAD | request review when HEAD moved | `reviewing` |
 | `reviewing` | review requested for `req_head` | record a verdict, log a timeout once | `fixing` / `accepted` / `escalated` |
-| `dispatching` | a claim is out (`pending` set, send in flight) | nothing — another ticker owns it | `pending` cleared by settle |
+| `dispatching` | a claim is out (`pending` set, send in flight) | nothing — another ticker owns it | `pending` cleared by settle, or by a control command (`pause`/`stop`), in which case the runner re-checks the claim before pasting and answers `cancelled` |
 | `fixing` | fix request delivered | request review for a new HEAD | `reviewing` |
 | `dispatch_unconfirmed` | the paste/Enter did not visibly start the agent | nothing without a human | `flow resume --retry` (one explicit retry) |
 | `accepted` | reviewer said ACCEPT, no spec left | nothing but `need_spec` once | `flow add-spec` → next tick dispatches |

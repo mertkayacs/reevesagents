@@ -166,6 +166,8 @@ The answer tells a polling host whether anything happened:
   `flow_status` returns.
 - `send: { sent, reason }` names the paste outcome: `sent: false` with `pane_changed`
   or `unconfirmed` is the one case a human should look at.
+- `status: "cancelled"` means the claim was dropped before the paste — a `flow pause` or
+  `flow stop` landed in between — so nothing was sent and nothing was applied.
 
 Two concurrent calls cannot paste twice. The first writes a `pending` claim into the
 flow before the paste; the second reads that claim, answers

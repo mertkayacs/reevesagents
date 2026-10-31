@@ -159,6 +159,9 @@ human is highlighted with the same warning colour as a stale run.
   send into the flow file, and the second finds that claim and sends nothing. If a
   tick dies mid-send, the claim is escalated to a human after two minutes instead of
   being pasted again.
+- `pause` and `stop` also win against a tick that is already preparing a send: the
+  runner re-checks its claim right before pasting, so a flow you stopped does not
+  receive one last prompt (`flow tick` reports `cancelled` when that happens).
 - A flow whose run was stopped, deleted or swept is parked as `orphaned`: `flow status`
   prints the reason, nothing is ticked, and `flow stop` is how you close it. Deleting
   the run's history record deletes the flow file too — that is the only automatic
