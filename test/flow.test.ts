@@ -369,6 +369,26 @@ describe('flowTick — a review without an answer is bounded by review_timeout_s
     expect(flowTick(young, makeObservations({ review_pane: 'unknown' })).reason).toBe('review_pane_unknown')
   })
 
+  it('escalates an expired review even when HEAD cannot be read', () => {
+    // The unreadable-HEAD guard used to run before the reviewing branch, so a requested review
+    // could sit past its deadline for ever: the deadline is a fact about the request, not about
+    // what this tick is able to observe.
+    const reviewing = makeState({
+      state: 'reviewing',
+      review_started_at: NOW - REVIEW_TIMEOUT_SEC * 1000,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+    })
+    const decision = flowTick(reviewing, makeObservations({ head: '', verdict_count: 1 }))
+    expect(decision.kind).toBe('escalate')
+    expect(decision.reason).toBe('review_timeout')
+    expect(decision.next_state).toBe('escalated')
+
+    // Inside the deadline the same blind spot only holds, and idle still refuses to even start.
+    const young = makeState({ state: 'reviewing', review_started_at: NOW, claim: reviewing.claim })
+    expect(flowTick(young, makeObservations({ head: '', verdict_count: 1 })).reason).toBe('head_unknown')
+    expect(flowTick(makeState(), makeObservations({ head: '' })).reason).toBe('head_unknown')
+  })
+
   it('honours a per-flow timeout instead of the default', () => {
     const brisk = makeState({
       state: 'reviewing',

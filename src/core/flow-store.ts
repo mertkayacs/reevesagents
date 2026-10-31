@@ -31,6 +31,25 @@ export interface FlowStoreOptions {
   rename?: (_from: string, _to: string) => void
 }
 
+// An fs error message embeds the absolute path it failed on ("ENOENT: no such file or directory,
+// open '/home/u/.reeves/flows/x.json.tmp'"), which would defeat the shorthand in front of it. The
+// code is the diagnosable part, so it is preferred; any other text is stripped of absolute paths
+// before it is repeated to a human.
+function fsFailure(err: unknown): string {
+  const code = (err as { code?: string }).code
+  if (typeof code === 'string' && code !== '') return code
+  const message = err instanceof Error ? err.message : String(err)
+  const scrubbed = message
+    .split(/\s+/)
+    .map(token => {
+      const bare = token.replace(/^['"(]+|['"),;]+$/g, '')
+      return /^(?:\/|[A-Za-z]:\\)/.test(bare) ? '<path>' : token
+    })
+    .join(' ')
+    .trim()
+  return scrubbed || 'unknown error'
+}
+
 export function flowsDir(root = stateRoot()): string {
   return join(root, 'flows')
 }
@@ -70,7 +89,7 @@ export function readFlowFile(path: string, runId = ''): FlowState {
     if ((err as { code?: string }).code === 'ENOENT') {
       throw new FlowStateError(`no flow state at ${shortHomePath(path)}`)
     }
-    throw new FlowStateError(`flow state could not be read: ${shortHomePath(path)}: ${(err as Error).message}`)
+    throw new FlowStateError(`flow state could not be read: ${shortHomePath(path)} (${fsFailure(err)})`)
   }
   let parsed: unknown
   try {
@@ -106,7 +125,7 @@ export function saveFlow(state: FlowState, options: FlowStoreOptions = {}): stri
     // Remove the half-written temp file: the next reader must see the previous document or
     // nothing at all, never a file this save abandoned.
     try { unlinkSync(tmpPath) } catch { /* already gone */ }
-    throw new FlowStateError(`flow state was not saved: ${shortHomePath(path)}: ${(err as Error).message}`)
+    throw new FlowStateError(`flow state was not saved: ${shortHomePath(path)} (${fsFailure(err)})`)
   }
   return path
 }

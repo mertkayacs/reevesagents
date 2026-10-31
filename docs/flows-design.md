@@ -360,7 +360,10 @@ The review **timeout** is implemented, because "wait for a verdict" without a de
 that hangs on a crashed reviewer: `review_started_at` (epoch ms) is stamped by the review request,
 `review_timeout_sec` defaults to `REVIEW_TIMEOUT_SEC` (900, §3.1) per flow, and a tick that finds no
 new verdict past the deadline moves to `escalated` with reason `review_timeout` — no send, no round
-counted, a human decides. A state that carries no clock (written before the field existed) is
+counted, a human decides. The deadline is evaluated **before** the blind spots a tick may have: an
+unreadable reviewer pane, and an unreadable HEAD. Both are ways a hang presents itself, so neither
+may extend a deadline that has already expired; before it expires they still hold the flow, and
+`idle`/`fixing` keep refusing to act on a HEAD they cannot read. A state that carries no clock (written before the field existed) is
 stamped on the first pass instead of waiting forever, and a dispatch that was not confirmed keeps
 the running clock rather than restarting it.
 
@@ -404,7 +407,10 @@ failure (`src/surfaces/cli/agents.ts:54`–`:55`), and stable `--json` payloads 
   argument stays relative), never silently expanded. The rule covers **error messages** as well as
   payloads: `flow status` on a damaged file names it as `~/.reeves/flows/<id>.json`, and
   `src/utils/paths.ts` is the single implementation both sides use, so the shorthand cannot drift
-  between the store that knows the path and the command that prints it.
+  between the store that knows the path and the command that prints it. An fs failure is reported
+  by its error code (`ENOENT`, `EISDIR`), never by the raw message: node embeds the absolute path it
+  failed on — including the `.tmp` name — and repeating that would undo the shorthand in front of
+  it.
 
 The same payload shape feeds the MCP tools, so both surfaces obey one redaction rule.
 

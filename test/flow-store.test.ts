@@ -97,6 +97,55 @@ describe('flow store', () => {
     }
   })
 
+  it('reports a save failure by its error code, never by the path the fs error carries', () => {
+    saveFlow(makeState(), { root })
+    let message = ''
+    try {
+      saveFlow(makeState('run-1', '2026-02-02T00:00:00.000Z'), {
+        root,
+        rename: () => {
+          throw Object.assign(
+            new Error("ENOENT: no such file or directory, rename '/tmp/elsewhere/x.json.tmp' -> '/tmp/elsewhere/x.json'"),
+            { code: 'ENOENT' },
+          )
+        },
+      })
+    } catch (err) {
+      message = (err as Error).message
+    }
+    expect(message).toContain('flow state was not saved')
+    expect(message).toContain('ENOENT')
+    expect(message).not.toContain('/tmp/elsewhere')
+  })
+
+  it('scrubs absolute paths from a failure that carries no error code', () => {
+    let message = ''
+    try {
+      saveFlow(makeState(), {
+        root,
+        rename: () => { throw new Error("could not swap '/home/someone/.reeves/flows/run-1.json.tmp' into place") },
+      })
+    } catch (err) {
+      message = (err as Error).message
+    }
+    expect(message).toContain('<path>')
+    expect(message).not.toContain('/home/someone')
+  })
+
+  it('reports a read failure by its code, keeping the home shorthand', () => {
+    // A directory where the document should be: the fs error names it, the report must not.
+    mkdirSync(join(root, 'flows', 'dir-run.json'), { recursive: true })
+    let message = ''
+    try {
+      readFlow('dir-run', { root })
+    } catch (err) {
+      message = (err as Error).message
+    }
+    expect(message).toContain('flow state could not be read')
+    expect(message).toContain('EISDIR')
+    expect(message).not.toContain(root)
+  })
+
   it('refuses a run id that is not a plain file name', () => {
     expect(() => flowPath('../escape', root)).toThrow(/not a valid flow id/)
     expect(() => readFlow('a/b', { root })).toThrow(/not a valid flow id/)

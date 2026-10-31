@@ -469,8 +469,15 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // reading a capture that failed as "zero verdicts" and re-baselining on it. An expired deadline
   // still wins, because it is a fact about the request and not about what this tick can see — a
   // reviewer whose pane cannot be read is one of the ways a hang looks.
+  const expired = (): FlowDecision => escalate(state, observations, 'review_timeout')
   if (observations.review_pane === 'unknown') {
-    return timedOut ? escalate(state, observations, 'review_timeout') : hold(state, 'review_pane_unknown')
+    return timedOut ? expired() : hold(state, 'review_pane_unknown')
+  }
+
+  // HEAD is what binds a verdict to a commit, so nothing can be applied without it — but the
+  // deadline outranks this blind spot for the same reason it outranks an unreadable pane.
+  if (!observations.head) {
+    return timedOut ? expired() : hold(state, 'head_unknown')
   }
 
   // Fewer verdicts visible than the baseline is a scrolled window, not "no verdict" — the
@@ -483,7 +490,7 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   if (!fresh) {
     // Nothing answered within the budget: a reviewer that crashed, hit a login screen or is stuck
     // on a modal never prints a verdict, so the flow escalates instead of waiting for ever.
-    return timedOut ? escalate(state, observations, 'review_timeout') : hold(state, 'awaiting_verdict')
+    return timedOut ? expired() : hold(state, 'awaiting_verdict')
   }
 
   // The dev committed while the review was running: the verdict describes an older commit, so it
@@ -527,9 +534,11 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
 // One step. Pure: it reads its arguments and returns a decision, never a pane, a file or a clock.
 export function flowTick(state: FlowState, observations: FlowObservations): FlowDecision {
   if (state.state === 'escalated' || state.state === 'done') return hold(state, 'flow_closed')
+  // `reviewing` owns the unreadable-HEAD case itself: a review that was requested still has a
+  // deadline, and a repository this tick cannot read must not be able to keep it waiting for ever.
+  if (state.state === 'reviewing') return tickReviewing(state, observations)
   if (!observations.head) return hold(state, 'head_unknown')
   if (state.state === 'idle') return tickIdle(state, observations)
-  if (state.state === 'reviewing') return tickReviewing(state, observations)
   return tickFixing(state, observations)
 }
 
