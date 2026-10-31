@@ -10,6 +10,11 @@
 // run_id reuses one run created on the first spawn, so a chain of spawns lands
 // together.
 //
+// The two flow tools are read-and-queue only: `flow_status` describes the pipeline
+// attached to a run and `flow_add_spec` queues a block. Neither ticks the flow or
+// sends anything, so the server keeps its "no implicit loops" contract — the flow
+// engine owns the loop and a host drives it by calling the engine, not this server.
+//
 // Each tool is one entry in TOOLS, colocating its schema and its handler so the
 // advertised list and the dispatch can never drift. MCP_TOOLS is derived from it.
 
@@ -37,6 +42,10 @@ import {
   stopRun,
   type AllowedKey,
 } from '../../core/runtime.js'
+import { resolveFlowRunId, flowStatusPayload } from '../../core/flow-view.js'
+import { flowPath, readFlow, saveFlow } from '../../core/flow-store.js'
+import { queueSpecFile } from '../../core/flow-queue.js'
+import { shortHomePath } from '../../utils/paths.js'
 import { detectHostProvider } from './host.js'
 import {
   archiveAndRemoveRun,
@@ -47,6 +56,7 @@ import {
   listRunHistory,
   listRuns,
   readRun,
+  withRunsLock,
 } from '../../core/runs.js'
 import { detectAvailable, isProvider, coerceExtraArgs } from '../../core/providers.js'
 import { PROVIDER_DEFS } from '../../core/provider-registry.js'
@@ -616,6 +626,53 @@ const TOOLS: ToolDef[] = [
       },
     },
     handler: (a) => ok(a.status === true ? skillsStatus() : installSkills()),
+  },
+  {
+    name: 'flow_status',
+    description: 'Read the dev -> review -> fix pipeline attached to one run: its state, the round budget, the commit under review, the last verdict, the review deadline and the last decision. Read-only: it does not tick the flow and sends nothing to an agent.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it. A flow is keyed by run id.' },
+      },
+      required: ['run_id'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      return ok(flowStatusPayload(readFlow(runId), flowPath(runId)))
+    },
+  },
+  {
+    name: 'flow_add_spec',
+    description: 'Queue a block spec file on the flow of one run: the next block the dev will receive. The file must already exist; a relative path resolves inside the flow project directory and may not leave it, an absolute path is taken as written. Refuses an unreadable or empty file, a spec without requirements or checks, and a block id already queued or dispatched. Queueing dispatches nothing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        path: { type: 'string', description: 'Spec file: a JSON block spec, or a markdown brief (queued as an unstructured block).' },
+      },
+      required: ['run_id', 'path'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const specPath = asString(a.path)
+      // Read-modify-write inside the existing runs lock: short, no runtime call, and the store has
+      // no lock of its own by design (§2.4).
+      return withRunsLock(() => {
+        const queued = queueSpecFile(readFlow(runId), specPath)
+        saveFlow(queued.state)
+        return ok({
+          run_id: runId,
+          block: {
+            id: queued.spec.id,
+            title: queued.spec.title,
+            unstructured: queued.spec.unstructured === true,
+            source_path: shortHomePath(queued.spec.source_path ?? ''),
+          },
+          queue: flowStatusPayload(queued.state, flowPath(runId)).queue,
+        })
+      })
+    },
   },
 ]
 

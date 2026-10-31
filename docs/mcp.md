@@ -73,9 +73,32 @@ own CLI only if you explicitly want that worker to spawn more agents.
 - `attach_host`: attach ReevesAgents to a host CLI.
 - `detach_host`: detach ReevesAgents from a host CLI.
 - `install_skills`: install the ReevesAgents skill for skill-aware CLIs.
+- `flow_status`: read the dev -> review -> fix pipeline attached to one run.
+- `flow_add_spec`: queue a block spec file on that pipeline.
 
 The provider catalog is also available as the `reevesagents://providers` MCP
 resource. The guide is available as `reevesagents://guide`.
+
+## Flows
+
+A flow attaches the dev -> review -> fix pipeline to one run: the dev commits, a
+reviewer answers with a verdict, the engine sends the findings back or queues the
+next block.
+
+- `flow_status { run_id }` returns the state, the round budget, the commit under
+  review, the last verdict, the review deadline and the last decision. It is
+  read-only: it does not tick the flow and sends nothing to an agent.
+- `flow_add_spec { run_id, path }` queues a block spec file as the next piece of
+  work. A JSON file is a structured block (id, title, goal, requirements, checks,
+  report); a markdown file is queued as an unstructured block whose id comes from
+  its heading. A relative path resolves inside the flow's project directory and
+  may not leave it; an absolute path is taken as written. Queueing dispatches
+  nothing.
+
+The MCP never runs the pipeline by itself: no tool here starts a loop or a timer,
+and a flow step happens when the TUI or Web UI ticks it or when someone runs
+`reevesagents flow tick`. Every call is explicit, which keeps this server flat —
+it gives a host control, not an autonomous process.
 
 ## Safety Model
 
