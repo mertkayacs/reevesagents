@@ -280,8 +280,12 @@ Two invariants make the table safe: a transition is written only inside a short 
 
 **Rules that make the store safe (3.1–3.4):**
 
-- **Atomic and private**: temp file + rename, mode 0600 — the same pattern as
-  `src/core/runs.ts:117` and `src/core/store.ts:21`.
+- **Atomic and private, with no fallback**: temp file + rename, mode 0600, following
+  `src/core/runs.ts:117`–`:123` (which has no fallback). Deliberately **not** the
+  `src/core/store.ts:21`–`:31` variant: its `catch` writes the target file directly, so a crash
+  during that fallback leaves torn JSON where a reader expects a whole document. For a flow file
+  a failed rename must fail the save, and the caller reports it — losing one tick is cheaper than
+  losing the state.
 - **Locked, but never across a send**: state transitions use the existing global lock
   (`withRunsLock`, `src/core/runs.ts:82`) in short claim/settle sections, and the paste itself
   happens outside it — `withRunsLock` is not reentrant and `sendText` takes it internally
@@ -328,6 +332,13 @@ prefix matching (`src/surfaces/cli/helpers.ts:7`, `:17`), `requireDestructiveCon
 anything irreversible (`:31`), `console.error(message)` + `process.exit(1)` for a clean
 failure (`src/surfaces/cli/agents.ts:54`–`:55`), and stable `--json` payloads (`:117`).
 
+`--json` output is a published surface, so it follows the record rules: secret-looking values
+pass through `redactSecrets` (`src/core/redact.ts`, already applied to agent tasks at
+`src/core/runs.ts:222`), the review prompt template is summarised rather than dumped verbatim
+(its text can carry a repository's private instructions), and paths are printed as given
+(`~/…` when the caller used it) instead of being expanded into absolute home paths. The same
+payload shape feeds the MCP tools, so both surfaces obey one redaction rule.
+
 ### 4.2 TUI
 
 - **Runs list**: one derived flow badge per run row, computed the same way the run status is
@@ -371,6 +382,8 @@ changes a written contract, so the change is deliberate and recorded:
 - `flow_control` is the one place where an `action` enum is used instead of one tool per
   action; splitting it into `flow_pause` / `flow_resume` / `flow_stop` is equally defensible and
   can be revised in review.
+- Every tool returns the redacted, path-summarised shape of §4.1 — the MCP transcript is a log,
+  and a review prompt or a repository path in it is a leak with no upside.
 
 ### 4.4 Web UI
 
@@ -412,6 +425,8 @@ as everything else (§2.3).
 | **A bypassable round budget** | With `rounds` reset per HEAD, a normal cycle never reaches `max_rounds` and `escalated` is unreachable | Cumulative `rounds_total` + `reviews_this_head` (§3.1); escalation tested by the engine tests, not by hand |
 | **Self-deadlock on the runs lock** | `withRunsLock` is not reentrant and `sendText` takes it (`runs.ts:82`, `runtime.ts:605`) | Two-phase claim/settle, never a lock across a send (§2.4); `pending` + `op_id` make a crash recoverable |
 | **The second Enter** | The bash prototype sent a second Enter when the pane did not look busy. This is the documented project hazard: a queued Enter later answers someone else's prompt | Never blind-retry. Paste → one Enter → confirm busy; if not confirmed, record `dispatch_unconfirmed`, do not re-send, surface it. (D5) |
+| Torn flow state after a failed write | `src/core/store.ts:28`–`:30` degrades to a direct write when rename fails; copying that pattern can leave half a JSON document | The flow store follows `src/core/runs.ts:117`–`:123`: no fallback, the save fails loudly (§3.1) |
+| Private text in `--json` / MCP output | The review prompt is repository-authored content; absolute paths leak the home layout | Summarise the template, redact via `redactSecrets`, keep caller-given paths (§4.1, §4.3) |
 | Verdict parsing on redacted text | `peekAgent` strips ANSI *and* redacts secrets (`runtime.ts:579`) | Parse a raw capture. Either add `peekAgentRaw` or make the parser tolerate `[redacted]`; decide before writing the parser |
 | **The MCP contract changes** | `.github/CONTRIBUTING.md:59` promises a flat MCP; six flow tools that can start/step a pipeline contradict the old wording | Amend the sentence to "no implicit loops" in the same commit as the tools (§4.3, D3), and say it in `docs/mcp.md` |
 | Structured specs are authoring work | A spec with empty `requirements`/`checks` produces a vacuous brief, and validation only catches it at add time | Validate hard (§3.2), keep `--markdown` explicitly downgraded, and show a full example in `docs/flows.md` |
@@ -430,7 +445,7 @@ as everything else (§2.3).
 | --- | --- | --- | --- |
 | **01 — recon (this)** | `docs/flows-design.md` | Decisions recorded in §7; no code written | Reviewed read-only by a second model (this document) |
 | **02 — core primitives only** | `src/core/activity.ts` (busy per provider + fail-closed allow-list), `verdict.ts`, `spec.ts` (model + validator + prompt renderer), `runtime.paneBusy` / `sendWhenIdle`; no flow yet | Existing behaviour unchanged; a busy or unknown pane is never written to; a malformed spec is refused at add time | `pnpm typecheck && pnpm lint && pnpm test` green, plus new unit tests: busy markers per provider, refusal against a busy pane, one-Enter-and-confirm, verdict/notes parsing |
-| **03 — engine + store + CLI** | `flow.ts` (cumulative budget + §3.4 automaton), `flow-store.ts`, `flow-runner.ts` (claim/settle dispatch, approval pickup), `src/surfaces/cli/flow.ts` (structured `add-spec`), `orphaned` lifecycle, TUI tick wiring only | A full ACCEPT → next dispatched spec runs end-to-end on a temp registry with real tmux fake agents; three concurrent tickers produce exactly one send; a crashed claim is recovered by observation, never by a blind retry; an orphaned flow survives archival and dies with the history record | `vitest run test/flow*.test.ts` + the real-tmux rehearsal script + `pnpm verify`; i18n untouched (CLI copy is English, like every other command) |
+| **03 — engine + store + CLI** | `flow.ts` (cumulative budget + §3.4 automaton), `flow-store.ts`, `flow-runner.ts` (claim/settle dispatch, approval pickup), `src/surfaces/cli/flow.ts` (structured `add-spec`), `orphaned` lifecycle, TUI tick wiring only | A full ACCEPT → next dispatched spec runs end-to-end on a temp registry with real tmux fake agents; three concurrent tickers produce exactly one send, and a repeated verdict for the same HEAD sends exactly once; a crashed claim is recovered by observation, never by a blind retry; an orphaned flow survives archival and dies with the history record | `vitest run test/flow*.test.ts` + the real-tmux rehearsal script + `pnpm verify`; i18n untouched (CLI copy is English, like every other command) |
 | **04 — surfaces + contract** | TUI Flow section + run badge, `WebRun.flow` + card + `web.flow*` in 10 locales, the six MCP flow tools **and** the `CONTRIBUTING.md:59` / `server.ts:1`–`:14` / `docs/mcp.md` amendment, `flow-escalated` approval, `docs/flows.md` + README command table | The state is visible without reading a JSON file; a human can resolve an escalation from the existing Approvals page | `pnpm verify`, `pnpm check:package`, manual TUI pass (narrow terminal too), Web UI pass with a fresh browser tab |
 
 Each block is one commit with an English conventional message; `AGENTS.md` stays untouched;
@@ -464,13 +479,13 @@ Work these decisions create:
 
 ## Appendix — state of the branch
 
-`feature/flow-engine` holds two commits: `4a08585`, a throw-away `flow` implementation from a
-*superseded* assignment (`src/core/flow.ts`, `src/core/flow-store.ts`,
-`src/surfaces/cli/flow.ts`, `test/flow.test.ts`, `docs/flows.md`), and this design document.
-The prototype is committed, unpushed and **not** part of this design: it was written before the
-recon, it puts the busy heuristic in the CLI layer, and it touches neither the runtime guard nor
-the tick sites of §2. Mine it for details; do not treat it as a baseline. Where they disagree,
-this document wins, and the prototype is expected to be reset before block 02.
+`feature/flow-engine` now carries this design document and nothing else on top of
+`origin/master` (`39ce3ac`). The throw-away `flow` implementation written before the recon
+(`src/core/flow.ts`, `src/core/flow-store.ts`, `src/surfaces/cli/flow.ts`, `test/flow.test.ts`,
+`docs/flows.md`) was **dropped from the branch by the owner's decision** — it was never a
+baseline, it put the busy heuristic in the CLI layer, and it is superseded by §2 of this
+document. Its review survives as Appendix C, because the findings were real and two of them
+changed the design.
 
 ---
 
@@ -497,3 +512,27 @@ redaction on everything that is logged (§5), and "who reacts to the approval" s
 Deferred on purpose: a background worker (documented as a later decision, §2.3), wiring
 `peek_interval_ms` (separate chore), and the exact splitting of `flow_control` into three tools
 (left to implementation review).
+
+---
+
+## Appendix C — review round 2: the prototype code (CHANGES_REQUESTED → resolved)
+
+While this design was being finalised, a second read-only review ran against the branch HEAD
+that still contained the prototype (`5182a12`, before the rebase). Verdict:
+**CHANGES_REQUESTED** — four blockers, two majors, two minors, all of them about the prototype
+code, none about this document.
+
+| Finding | Status | Where the design answers it |
+| --- | --- | --- |
+| BLOCKER: the CLI still sends a second Enter when no busy marker appears | Real; the prototype copied the bash loop | D5 + §2.2: one Enter, confirm, `dispatch_unconfirmed` — never a retry |
+| BLOCKER: an unknown busy marker counts as a free pane, and there is no runtime gate between check and send | Real | §2.2 fail-closed tri-state in `runtime`, no caller-side gate at all |
+| BLOCKER: the send happens inside the state step, before the state is saved, without claim/settle — a parallel tick or a crash re-sends | Real, and the deepest one | §2.4 claim → act → settle with `pending`/`op_id` and observation-based recovery |
+| BLOCKER: rounds reset on a new HEAD and on resume, so the limit is bypassed | Real | §3.1 cumulative `rounds_total` + explicit budget on `resume` |
+| MAJOR: the store falls back to a direct write when rename fails, so a crash can leave torn JSON | Real, and it warns against copying `store.ts`'s pattern | §3.1 "no fallback"; the flow store follows `runs.ts:117`–`:123` |
+| MAJOR: `status --json` emits the review template unredacted and expands absolute paths | Real | §4.1 / §4.3 payload hygiene: summarise the template, `redactSecrets`, keep caller-given paths |
+| MINOR: the idempotency test never covers a repeated verdict for the same HEAD | Real | Block 03 definition of done now requires "a repeated verdict for the same HEAD sends exactly once" |
+| MINOR: the full suite reported 39 failures (EPERM on git and the loopback server) | **Environment, not code**: the reviewer ran in a sandbox without those permissions. The same suite on this machine is green (90 files, 746 tests after the prototype was dropped; 91/775 while it was still in the tree) | No design change; recorded here so a later reader does not re-chase it |
+
+The prototype was dropped instead of patched: every one of its blockers is a *design* decision
+that this document now makes explicitly, and rewriting the prototype to match would be block 02's
+job, done once, against the reviewed design.
