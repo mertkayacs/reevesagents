@@ -125,23 +125,36 @@ describe('reclaiming a gate left behind by a dead process', () => {
     expect(existsSync(lockPath())).toBe(true)
   })
 
-  it('skips an inode whose reclaim token is already held by another waiter', () => {
-    // Reclamation is scoped per inode; a second waiter must not work on the same file. The token is
-    // taken here for the dead gate's inode, so the reclaim is skipped while it exists.
+  it('keeps a live reclaimer\'s token, however long it has been held', () => {
+    // Round 10: age alone must not clear a token. A live reclaimer that pauses for longer than the
+    // token window keeps its exclusion, and the second waiter simply fails to reclaim.
     const dead = deadPid()
     writeGate(10 * DISPATCH_GATE_STALE_MS, dead)
     const id = statSync(lockPath(), { bigint: true })
-    writeFileSync(`${lockPath()}.reclaim.${id.dev}-${id.ino}`, JSON.stringify({ pid: process.pid }), 'utf-8')
+    const token = `${lockPath()}.reclaim.${id.dev}-${id.ino}`
+    writeFileSync(token, JSON.stringify({ pid: process.pid, file: `${id.dev}-${id.ino}` }), 'utf-8')
+    const longAgo = new Date(Date.now() - 10 * 60 * 1000)
+    utimesSync(token, longAgo, longAgo)
 
-    const blocked = withDispatchGate(() => 'never', { root, timeoutMs: 100 })
+    const blocked = withDispatchGate(() => 'never', { root, timeoutMs: 150 })
+
     expect(blocked.acquired).toBe(false)
+    // The dead gate is still there and the live token was not touched.
     expect(owner().pid).toBe(dead)
+    expect(existsSync(token)).toBe(true)
+  })
 
-    // A token left behind is not a deadlock: past its own stale window it is cleared and the lock is
-    // reclaimed on the next attempt.
-    const old = new Date(Date.now() - 10 * 60 * 1000)
-    utimesSync(`${lockPath()}.reclaim.${id.dev}-${id.ino}`, old, old)
+  it('clears a token whose reclaimer died, then takes the lock over', () => {
+    const dead = deadPid()
+    writeGate(10 * DISPATCH_GATE_STALE_MS, dead)
+    const id = statSync(lockPath(), { bigint: true })
+    const token = `${lockPath()}.reclaim.${id.dev}-${id.ino}`
+    writeFileSync(token, JSON.stringify({ pid: dead, file: `${id.dev}-${id.ino}` }), 'utf-8')
+    const longAgo = new Date(Date.now() - 10 * 60 * 1000)
+    utimesSync(token, longAgo, longAgo)
+
     const taken = withDispatchGate(() => 'taken over', { root, timeoutMs: 500 })
+
     expect(taken).toEqual({ acquired: true, value: 'taken over' })
     expect(strays()).toEqual([])
   })

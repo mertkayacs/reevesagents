@@ -198,9 +198,13 @@ lock in miniature (review rounds 8–9). Four rules make it safe, and none is op
   fresh gate can be created there (publication needs the name free), and a gate that appeared after
   the judgement has a different inode, so the reclaimer skips it. Nothing is moved or restored, so no
   reclaimer can destroy a gate it did not judge.
-- **A crashed reclaimer's token is not a deadlock.** Clearing a token older than
-  `RECLAIM_TOKEN_STALE_MS` can only let two reclaimers work on the same dead inode, which is
-  idempotent: one unlinks, the other finds `ENOENT`.
+- **A live reclaimer keeps its token; only a dead one's is cleared** (round 10). The token is the
+  exclusion, so age alone must never clear it: a reclaimer paused for longer than the window would
+  lose its token to a second process, and the two could interleave a check and a removal — the exact
+  race the token exists to prevent. A token is abandoned only when its recorded pid is provably gone
+  (`ESRCH`) *and* the file is older than `RECLAIM_TOKEN_STALE_MS`, and it is re-read once before
+  removal so a fresh token that replaced it is left alone. A waiter that meets a live token simply
+  reports "busy"; a crashed reclaimer costs one clearing attempt, after which the gate is reclaimed.
 
 Release checks the gate's token before unlinking, so a process that was reclaimed while it believed it
 held the lock cannot delete the new holder's file.

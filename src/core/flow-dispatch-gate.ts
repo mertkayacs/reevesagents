@@ -38,7 +38,9 @@
 //    gate that appeared after the judgement has a *different* inode, so the reclaimer skips it. No
 //    file is ever moved or restored, so no reclaimer can destroy a gate it did not judge. A token left
 //    behind by a crashed reclaimer costs nothing: clearing it can only let two reclaimers work on the
-//    same dead inode, which is idempotent (one unlinks, the other finds `ENOENT`).
+//    same dead inode, which is idempotent (one unlinks, the other finds `ENOENT`) — and a token whose
+//    owner is *alive* is never cleared, however long that owner takes (round 10): the token is the
+//    exclusion, so a slow reclaimer keeps it and a waiter simply reports "busy".
 //
 // Release verifies its own token first, so a process that was reclaimed while it believed it held the
 // gate cannot delete somebody else's file.
@@ -158,6 +160,36 @@ function reclaimable(path: string): boolean {
   return age !== null && age > DISPATCH_GATE_STALE_MS
 }
 
+interface ReclaimToken {
+  pid: number
+  file: string
+}
+
+function readToken(path: string): ReclaimToken | null {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ReclaimToken>
+    if (typeof parsed.pid !== 'number' || !Number.isFinite(parsed.pid)) return null
+    return { pid: parsed.pid, file: typeof parsed.file === 'string' ? parsed.file : '' }
+  } catch {
+    return null
+  }
+}
+
+// A reclaim token is exclusive for as long as its owner is alive, however long its owner takes
+// (review round 10). Clearing it by age alone would let a second reclaimer into the same inode after
+// five seconds, and the two could then interleave a check and a removal — the very race the token
+// exists to prevent. So a token is abandoned only when its recorded pid is provably gone *and* the
+// file is old, and it is re-read once before removal so a fresh token that replaced it is left alone.
+function clearAbandonedToken(token: string): void {
+  const judged = readToken(token)
+  if (!judged || pidAlive(judged.pid)) return
+  const age = ageOf(token)
+  if (age === null || age <= RECLAIM_TOKEN_STALE_MS) return
+  const again = readToken(token)
+  if (!again || again.pid !== judged.pid || again.file !== judged.file) return
+  try { unlinkSync(token) } catch { /* the token vanished meanwhile */ }
+}
+
 // Take over a gate whose owner is gone. Scoped to one inode: the token name carries it, and the
 // removal is conditional on the path still holding that inode. Nothing is moved or restored, so a
 // gate that appeared after the judgement (a different inode) is invisible to this function.
@@ -169,12 +201,9 @@ function reclaim(path: string): void {
     writeFileSync(token, JSON.stringify({ pid: process.pid, file: id }), { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
   } catch (err) {
     if ((err as { code?: string }).code !== 'EEXIST') return
-    // Another reclaimer holds this inode's token. A token that is itself abandoned is cleared; the
-    // worst case is two reclaimers on the same dead inode, which is idempotent.
-    const age = ageOf(token)
-    if (age !== null && age > RECLAIM_TOKEN_STALE_MS) {
-      try { unlinkSync(token) } catch { /* the token vanished meanwhile */ }
-    }
+    // Another reclaimer holds this inode's token. A live one keeps it — it is the exclusion, not a
+    // hint — and only an abandoned token is cleared so a later attempt can proceed.
+    clearAbandonedToken(token)
     return
   }
 
