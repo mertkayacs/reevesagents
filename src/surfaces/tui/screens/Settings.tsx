@@ -29,6 +29,22 @@ const CONFIG_PATHS = {
   pi: '~/.pi',
   qwen: '~/.qwen/settings.json',
   aider: '~/.aider.conf.yml',
+  gemini: '~/.gemini/settings.json',
+  cline: '~/.cline',
+  crush: '~/.config/crush',
+  goose: '~/.config/goose/config.yaml',
+  kilo: '~/.config/kilo/kilo.json',
+  letta: '~/.letta/settings.json',
+  vibe: '~/.vibe/config.toml',
+  grok: '~/.grok/config.toml',
+  kiro: '~/.kiro/settings/cli.json',
+  droid: '~/.factory/settings.json',
+  qoder: '~/.qoder/settings.json',
+  warp: '~/.warp',
+  junie: '~/.junie/config.json',
+  copilot: '~/.copilot',
+  cursor: '~/.cursor/cli-config.json',
+  rovo: '~/.rovodev/config.yml',
 }
 
 const PROVIDER_LABEL_WIDTH = Math.max(...PROVIDERS.map(provider => providerDisplayName(provider).length))

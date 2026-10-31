@@ -6,7 +6,7 @@
 
 ## ReevesAgents 是什么
 
-- 一个免费的本地工作区，你的 AI 编码智能体（Claude Code、Codex、Hermes、DeepSeek、Kimi 等）在你的机器上并肩干活。
+- 一个免费的本地工作区，你的 AI 编码智能体（Claude Code、Codex、Hermes、DeepSeek、Kimi、Gemini CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI、Rovo Dev CLI 等）在你的机器上并肩干活。
 - 一个智能体可以通过 MCP 创建并驱动其他智能体。例如，一个 Claude Code 会话可以让 Codex 和 Claude Code 智能体分别处理不同任务。
 - 你也可以把 ReevesAgents 当成普通工作区：生成你想要的智能体，再用 `reevesagents add` 不断往里加。它们并排运行，谁也不控制谁，直到你主动开启 MCP。
 - 它架在你已有的 CLI 之上，所以每一份登录信息都待在原来的地方。ReevesAgents 从不持有 API 密钥，也从不碰你的模型流量。
@@ -15,9 +15,15 @@
 ## 开始前
 
 - macOS、Linux 或 WSL（原生 Windows 不是目标；请使用 WSL）。
-- Node.js 20.19 或更新版本。
+- Node.js 22.12 或更新版本。
 - tmux 3.0 或更新版本。
-- 至少一个已安装并登录的提供方 CLI：Claude Code、Codex、OpenCode、Hermes、Kimi、DeepSeek、Pi、Qwen 或 Aider。
+- 至少一个已安装并登录的提供方 CLI：Claude Code、Codex、OpenCode、Hermes、Kimi、DeepSeek、Pi、Qwen、Aider、Gemini CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI 或 Rovo Dev CLI。
+
+## 工具
+
+- 编码 CLI 之外还有四个工具：Perplexity CLI（网页搜索）、Google Colab CLI（CPU、GPU 和 TPU 运行时）、Hugging Face CLI（Hub 上的模型和数据集）以及 Ollama（本地和云端模型）。智能体在自己的 shell 中运行它们。
+- `reevesagents tools` 显示其中哪些已安装、你是否已登录（Ollama 则是服务是否响应），并为每个工具附上用途和示例命令。脚本场景可加 `--json`。
+- 已附加 MCP 的智能体调用 `list_tools` 就能得到同一份列表。
 
 ## 安装和检查
 

@@ -1,5 +1,43 @@
 # Changelog
 
+## [2.1.0](https://github.com/mertkayacs/reevesagents/compare/v2.0.0...v2.1.0) (2026-10-25)
+
+
+### Features
+
+* **windows:** run natively on Windows via winmux, a tmux-compatible ConPTY multiplexer ([#172](https://github.com/mertkayacs/reevesagents/issues/172)) ([58946a0](https://github.com/mertkayacs/reevesagents/commit/58946a0e3694e96dc8b30c3ff46d53916de6e4f0))
+
+## [2.0.0](https://github.com/mertkayacs/reevesagents/compare/v1.9.1...v2.0.0) (2026-10-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* reevesagents now needs Node.js 22.12 or later. Node 20 reached end of life in April 2026, and commander 15 and ink 8 no longer support it.
+
+### Features
+
+* require Node.js 22.12 or later ([#165](https://github.com/mertkayacs/reevesagents/issues/165)) ([30a8e22](https://github.com/mertkayacs/reevesagents/commit/30a8e22a755439836e09841304fcaa7a137e862c))
+
+
+### Bug Fixes
+
+* **deps:** update dependency commander to v15 ([#160](https://github.com/mertkayacs/reevesagents/issues/160)) ([492352f](https://github.com/mertkayacs/reevesagents/commit/492352fc564d5524b124a9bfcd6518008af012fd))
+* **deps:** update dependency ink to v8 ([#161](https://github.com/mertkayacs/reevesagents/issues/161)) ([4647f15](https://github.com/mertkayacs/reevesagents/commit/4647f15ba7f0ea139ddb77d50f68354a462ddba2))
+
+## [1.9.1](https://github.com/mertkayacs/reevesagents/compare/v1.9.0...v1.9.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **tools:** report Perplexity as signed out when no API key is set ([#147](https://github.com/mertkayacs/reevesagents/issues/147)) ([6205228](https://github.com/mertkayacs/reevesagents/commit/6205228cb57bad4607608d9cfd5b78fac44cec21))
+
+## [1.9.0](https://github.com/mertkayacs/reevesagents/compare/v1.8.2...v1.9.0) (2026-10-16)
+
+
+### Features
+
+* **providers:** add 16 agent CLIs, a tools catalogue and provider icons ([#144](https://github.com/mertkayacs/reevesagents/issues/144)) ([ee7c3f5](https://github.com/mertkayacs/reevesagents/commit/ee7c3f5849e3208838cb71a282522a280f6812ba))
+
 ## [1.8.2](https://github.com/mertkayacs/reevesagents/compare/v1.8.1...v1.8.2) (2026-10-10)
 
 

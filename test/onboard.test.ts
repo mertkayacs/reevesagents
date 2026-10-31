@@ -20,11 +20,12 @@ interface Env {
 
 function wireEnv(env: Env): void {
   execFileSync.mockImplementation((file: string, args: string[]) => {
+    if (file === process.execPath && String(args?.[0] ?? '').includes('winmux')) { file = 'tmux'; args = args!.slice(1) }
     if (file === 'tmux') {
       if (env.tmux === null) throw new Error('tmux absent')
       return `tmux ${env.tmux ?? '3.4'}\n`
     }
-    if (file === 'which') {
+    if ((file === 'which' || file === 'where')) {
       if (env.installed.has(args[0]!)) return `/usr/bin/${args[0]}\n`
       throw new Error(`absent: ${args[0]}`)
     }

@@ -1,9 +1,9 @@
 {
   "name": "reevesagents-win",
-  "version": "1.8.2",
+  "version": "2.1.0",
   "description": "MCP-only, ConPTY-driven agent-control server for native Windows: spawn and drive AI CLIs without tmux or WSL",
   "type": "module",
-  "packageManager": "pnpm@10.34.5",
+  "packageManager": "pnpm@10.34.7",
   "bin": {
     "reevesagents-win": "dist/cli.js"
   },
@@ -23,21 +23,21 @@
   },
   "dependencies": {
     "@lydell/node-pty": "1.2.0-beta.15",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "commander": "^14.0.3",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "commander": "^15.0.0",
     "strip-ansi": "^7.1.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "25.9.9",
-    "@typescript-eslint/parser": "8.70.1",
-    "eslint": "10.11.0",
+    "@typescript-eslint/parser": "8.72.1",
+    "eslint": "10.13.0",
     "tsup": "8.5.1",
     "typescript": "6.0.3",
-    "vitest": "4.1.11"
+    "vitest": "5.0.5"
   },
   "engines": {
-    "node": ">=20.19"
+    "node": ">=22.12"
   },
   "license": "Apache-2.0",
   "repository": {

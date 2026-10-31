@@ -6,17 +6,29 @@
 (() => {
   'use strict'
 
-  const TERM_THEME = {
-    background: '#15191f',
-    foreground: '#ece7dc',
-    cursor: '#7eb8f5',
-    selectionBackground: '#3a4b5f',
-    black: '#15191f', brightBlack: '#817b70',
-    red: '#d56a60', brightRed: '#d56a60',
-    green: '#83a36f', brightGreen: '#83a36f',
-    yellow: '#d7a84f', brightYellow: '#d7a84f',
-    blue: '#7eb8f5', brightBlue: '#7eb8f5',
-    white: '#ece7dc', brightWhite: '#ffffff',
+  const TERM_THEMES = {
+    dark: {
+      background: '#15191f',
+      foreground: '#ece7dc',
+      cursor: '#7eb8f5',
+      selectionBackground: '#3a4b5f',
+      black: '#15191f', brightBlack: '#817b70',
+      red: '#d56a60', brightRed: '#d56a60',
+      green: '#83a36f', brightGreen: '#83a36f',
+      yellow: '#d7a84f', brightYellow: '#d7a84f',
+      blue: '#7eb8f5', brightBlue: '#7eb8f5',
+      white: '#ece7dc', brightWhite: '#ffffff',
+    },
+    light: {
+      background: '#f7f9fc', foreground: '#25313d', cursor: '#1763aa',
+      selectionBackground: '#bfd8f1',
+      black: '#25313d', brightBlack: '#687987',
+      red: '#b43b37', brightRed: '#c44b45',
+      green: '#367342', brightGreen: '#448b50',
+      yellow: '#916009', brightYellow: '#a67311',
+      blue: '#1763aa', brightBlue: '#287ac3',
+      white: '#5d6874', brightWhite: '#334252',
+    },
   }
 
   const WEB_EN = {
@@ -152,6 +164,8 @@
     'web.mcpAttachAllError': 'Could not attach all: {{message}}',
     'web.mcpLoadError': 'Could not load MCP hosts: {{message}}',
     'web.config': 'Config',
+    'web.themeDark': 'Dark',
+    'web.themeLight': 'Light',
     'web.presets': 'Presets',
     'web.doctor': 'Doctor',
     'web.about': 'About',
@@ -287,6 +301,7 @@
   let providers = []
   let appVersion = ''
   let language = 'en'
+  let webTheme = 'dark'
   let languages = []
   let messages = WEB_EN
   let welcomeChecked = false
@@ -337,6 +352,7 @@
     approvals = data.approvals || []
     appVersion = data.version || ''
     applyLanguage(data.language)
+    applyTheme(data.web_theme)
     renderProviders()
     renderSidebar()
     reconcileCreateDialog()
@@ -1228,6 +1244,12 @@
     session = null
   }
 
+  function applyTheme(value) {
+    webTheme = value === 'light' ? 'light' : 'dark'
+    document.documentElement.dataset.theme = webTheme
+    if (session) session.term.options.theme = TERM_THEMES[webTheme]
+  }
+
   function attach(id) {
     if (session && session.id === id) return
     const found = findAgent(id)
@@ -1249,7 +1271,7 @@
       fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
       fontSize: 13,
       cursorBlink: true,
-      theme: TERM_THEME,
+      theme: TERM_THEMES[webTheme],
       scrollback: 5000,
     })
     const fit = new FitAddon.FitAddon()
@@ -1915,6 +1937,7 @@
     try {
       const payload = await api('GET', '/api/config')
       renderConfigFields(payload)
+      applyTheme(payload.config.web_theme)
     } catch (err) {
       el.configList.textContent = ''
       el.configError.hidden = false
@@ -1933,16 +1956,19 @@
       label.className = 'field-label'
       label.textContent = field.label
       row.appendChild(label)
-      if (field.kind === 'permissions') {
+      if (field.kind === 'permissions' || field.kind === 'web-theme') {
         const select = document.createElement('select')
         select.dataset.key = field.key
-        for (const value of ['ask', 'skip']) {
+        const values = field.kind === 'web-theme' ? ['dark', 'light'] : ['ask', 'skip']
+        for (const value of values) {
           const opt = document.createElement('option')
           opt.value = value
-          opt.textContent = value === 'ask' ? t('web.askFirst') : t('web.skipPrompts')
+          opt.textContent = field.kind === 'web-theme'
+            ? t(value === 'light' ? 'web.themeLight' : 'web.themeDark')
+            : t(value === 'ask' ? 'web.askFirst' : 'web.skipPrompts')
           select.appendChild(opt)
         }
-        select.value = config[field.key] === 'skip' ? 'skip' : 'ask'
+        select.value = config[field.key] || values[0]
         row.appendChild(select)
       } else {
         const input = document.createElement('input')
@@ -1967,6 +1993,7 @@
     try {
       const payload = await api('POST', '/api/config', patch)
       renderConfigFields(payload)
+      applyTheme(payload.config.web_theme)
     } catch (err) {
       el.configError.hidden = false
       el.configError.textContent = err.message

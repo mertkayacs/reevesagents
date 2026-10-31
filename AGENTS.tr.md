@@ -19,7 +19,7 @@ reevesagents doctor
 
 tmux'u, Node'u, `~/.reeves` durum dizinini ve hangi sağlayıcı CLI'lerinin kurulu ve CLI uyumlu olduğunu raporlar (her CLI'nin `--help` çıktısına bakar). Bir CLI'nin oturum açıp açmadığını test edemez; kurulu ama oturumu kapalı bir CLI buradan yine geçer. Spawn'dan önce çalıştır ki run eksik bir CLI yüzünden başarısız olmasın; login ekranında bekleyen bir pencereyi de `peek` (aşağıda) yakalar. `reevesagents doctor --json` aynı çıktıyı makine tarafından okunabilir JSON olarak döndürür.
 
-Gereksinimler: Node 20.19+, tmux 3.0+ ve kurulu, oturum açılmış en az bir sağlayıcı CLI. macOS, Linux veya WSL (yerel Windows hedef değildir).
+Gereksinimler: Node 22.12+, tmux 3.0+ ve kurulu, oturum açılmış en az bir sağlayıcı CLI. macOS, Linux veya WSL (yerel Windows hedef değildir).
 
 ## Kurulum
 
@@ -50,17 +50,33 @@ Bir çalışma alanını teker teker büyütmek için `reevesagents add <spec...
 
 `reevesagents providers` çalıştır (makine listesi için `--json` ekle). Spawn spec'inde sağlayıcı olarak herhangi bir takma ad geçer.
 
-| id         | sağlayıcı    | yaygın takma adlar          |
-| ---------- | ------------ | --------------------------- |
-| `cc`       | Claude Code  | `claude`, `claude-code`     |
-| `codex`    | Codex CLI    | `codex-cli`                 |
-| `kimi`     | Kimi Code    | `kimi-code`                 |
-| `qwen`     | Qwen Code    | `qwen-code`                 |
-| `opencode` | OpenCode CLI | `open_code`                 |
-| `hermes`   | Hermes       |                             |
-| `pi`       | Pi           |                             |
-| `aider`    | Aider        |                             |
-| `deepseek` | DeepSeek CLI | `deepseek-cli`              |
+| id         | sağlayıcı          | yaygın takma adlar                             |
+| ---------- | ------------------ | ---------------------------------------------- |
+| `cc`       | Claude Code        | `claude`, `claude-code`                        |
+| `codex`    | Codex CLI          | `codex-cli`                                    |
+| `kimi`     | Kimi Code          | `kimi-code`                                    |
+| `qwen`     | Qwen Code          | `qwen-code`                                    |
+| `opencode` | OpenCode CLI       | `open_code`                                    |
+| `hermes`   | Hermes             |                                                |
+| `pi`       | Pi                 |                                                |
+| `aider`    | Aider              |                                                |
+| `deepseek` | DeepSeek CLI       | `deepseek-cli`                                 |
+| `gemini`   | Gemini CLI         | `gemini cli`, `gemini-cli`                     |
+| `cline`    | Cline CLI          | `cline cli`, `cline-cli`                       |
+| `crush`    | Crush              | `charm crush`, `charm-crush`                   |
+| `goose`    | Goose              |                                                |
+| `kilo`     | Kilo Code          | `kilo code`, `kilo-code`, `kilocode`           |
+| `letta`    | Letta Code         | `letta code`, `letta-code`                     |
+| `vibe`     | Mistral Vibe       | `mistral vibe`, `mistral-vibe`, `mistral`      |
+| `grok`     | Grok Build         | `grok build`, `grok-build`, `xai`              |
+| `kiro`     | Kiro CLI           | `kiro cli`, `kiro-cli`                         |
+| `droid`    | Factory Droid      | `factory`, `factory droid`, `factory-droid`    |
+| `qoder`    | Qoder CLI          | `qoder cli`, `qoder-cli`, `qodercli`           |
+| `warp`     | Warp               | `warp agent`, `warp-agent`                     |
+| `junie`    | Junie CLI          | `junie cli`, `junie-cli`, `jetbrains junie`    |
+| `copilot`  | GitHub Copilot CLI | `copilot cli`, `copilot-cli`, `github copilot` |
+| `cursor`   | Cursor CLI         | `cursor cli`, `cursor-cli`, `cursor-agent`     |
+| `rovo`     | Rovo Dev CLI       | `rovo dev`, `rovo-dev`, `rovodev`              |
 
 ## Çalışan agent'ları izle ve yönlendir
 

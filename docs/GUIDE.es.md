@@ -8,9 +8,11 @@ opción, eso vive en la [guía en línea](https://reevesagents.mertkayacs.com/es
 
 ## Qué es ReevesAgents
 
-- Un espacio de trabajo gratuito y local donde tus agentes de codificación de
-  IA (Claude Code, Codex, Hermes, DeepSeek, Kimi y más) trabajan codo con codo
-  en tu máquina.
+- Un espacio de trabajo gratuito y local donde tus agentes de codificación de IA
+  (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI, Crush,
+  Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
+  Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
+  Rovo Dev CLI y más) trabajan codo con codo en tu máquina.
 - Un agente puede crear y dirigir a los demás por MCP. Por ejemplo, una sesión
   de Claude Code puede ejecutar agentes de Codex y Claude Code en tareas
   separadas.
@@ -26,10 +28,24 @@ opción, eso vive en la [guía en línea](https://reevesagents.mertkayacs.com/es
 ## Antes de empezar
 
 - macOS, Linux o WSL (Windows nativo no es el objetivo; usa WSL).
-- Node.js 20.19 o superior.
+- Node.js 22.12 o superior.
 - tmux 3.0 o superior.
 - Al menos una CLI de proveedor instalada y autenticada: Claude Code, Codex,
-  OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen o Aider.
+  OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Cline CLI,
+  Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
+  Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI o
+  Rovo Dev CLI.
+
+## Herramientas
+
+- Cuatro herramientas acompañan a las CLIs de programación: Perplexity CLI
+  (búsqueda web), Google Colab CLI (entornos de ejecución con CPU, GPU y TPU),
+  Hugging Face CLI (modelos y conjuntos de datos en el Hub) y Ollama (modelos
+  locales y en la nube). Los agentes las ejecutan desde su propia shell.
+- `reevesagents tools` muestra cuáles están instaladas y si tienes la sesión
+  iniciada (en Ollama: si el servidor responde), con el propósito y un comando
+  de ejemplo de cada una. Añade `--json` para scripts.
+- Un agente con el MCP adjunto llama a `list_tools` para obtener la misma lista.
 
 ## Instalar y comprobar
 

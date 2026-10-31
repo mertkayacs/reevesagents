@@ -5,6 +5,8 @@
 // pane's window existed moments ago (a successful kill-window/kill-session):
 // a stale record's pane_pid can name an unrelated reused process.
 
+import { spawnSync } from 'node:child_process'
+
 function sleepSync(ms: number): void {
   const buffer = new SharedArrayBuffer(4)
   const view = new Int32Array(buffer)
@@ -20,9 +22,14 @@ export function processAlive(pid: number): boolean {
   }
 }
 
-// tmux panes are session leaders, so the pane pid is also its process group id;
+// POSIX: panes are session leaders, so the pane pid is its process group id;
 // signal the group to reach detached children, falling back to the bare pid.
+// win32: negative pids are invalid there; kill the whole tree with taskkill.
 function signalProcessGroup(pid: number, signal: 'SIGTERM' | 'SIGKILL'): void {
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    return
+  }
   try {
     process.kill(-pid, signal)
   } catch {

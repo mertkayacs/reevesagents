@@ -249,7 +249,9 @@ function terminalShellCommand(config: AgentLaunchConfig, permissions: Permission
     rc_enabled: false,
     extra_args: config.extra_args,
   })
-  return `exec ${cmd.map(shellQuote).join(' ')}`
+  const joined = cmd.map(shellQuote).join(' ')
+  // cmd knows no `exec`; the shell prefix only makes sense on POSIX.
+  return process.platform === 'win32' ? joined : `exec ${joined}`
 }
 
 function sendDelayedStartupInput(

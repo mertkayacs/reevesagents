@@ -19,7 +19,7 @@ reevesagents doctor
 
 يبلّغ عن tmux وNode ودليل الحالة `~/.reeves`، وعن أدوات CLI للمزوّدين المثبّتة والمتوافقة (يفحص `--help` لكل أداة). لا يستطيع اختبار ما إذا كانت الأداة موثّقة، لذا تمرّ هنا أداة مثبّتة لكنها غير مسجّلة الدخول. شغّله قبل الإنشاء حتى لا تفشل تشغيلة بسبب CLI مفقود؛ ويلتقط `peek` (أدناه) نافذة تُركت واقفة عند شاشة تسجيل الدخول. ويعيد `reevesagents doctor --json` النتيجة نفسها بصيغة JSON قابلة للقراءة آليًا.
 
-المتطلبات: Node 20.19+ وtmux 3.0+ وأداة CLI واحدة على الأقل من مزوّد، مثبّتة وموثّقة. macOS أو Linux أو WSL (نظام Windows الأصلي ليس هدفًا).
+المتطلبات: Node 22.12+ وtmux 3.0+ وأداة CLI واحدة على الأقل من مزوّد، مثبّتة وموثّقة. macOS أو Linux أو WSL (نظام Windows الأصلي ليس هدفًا).
 
 ## التثبيت
 
@@ -50,17 +50,33 @@ reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \
 
 شغّل `reevesagents providers` (أضف `--json` لقائمة قابلة للقراءة آليًا). وتصلح أي كنية اسمًا للمزوّد في مواصفة spawn.
 
-| المعرّف    | المزوّد      | الكنى الشائعة                    |
-| ---------- | ------------ | ----------------------------- |
-| `cc`       | Claude Code  | `claude`, `claude-code`       |
-| `codex`    | Codex CLI    | `codex-cli`                   |
-| `kimi`     | Kimi Code    | `kimi-code`                   |
-| `qwen`     | Qwen Code    | `qwen-code`                   |
-| `opencode` | OpenCode CLI | `open_code`                   |
-| `hermes`   | Hermes       |                               |
-| `pi`       | Pi           |                               |
-| `aider`    | Aider        |                               |
-| `deepseek` | DeepSeek CLI | `deepseek-cli`                |
+| المعرّف    | المزوّد            | الكنى الشائعة                                  |
+| ---------- | ------------------ | ---------------------------------------------- |
+| `cc`       | Claude Code        | `claude`, `claude-code`                        |
+| `codex`    | Codex CLI          | `codex-cli`                                    |
+| `kimi`     | Kimi Code          | `kimi-code`                                    |
+| `qwen`     | Qwen Code          | `qwen-code`                                    |
+| `opencode` | OpenCode CLI       | `open_code`                                    |
+| `hermes`   | Hermes             |                                                |
+| `pi`       | Pi                 |                                                |
+| `aider`    | Aider              |                                                |
+| `deepseek` | DeepSeek CLI       | `deepseek-cli`                                 |
+| `gemini`   | Gemini CLI         | `gemini cli`, `gemini-cli`                     |
+| `cline`    | Cline CLI          | `cline cli`, `cline-cli`                       |
+| `crush`    | Crush              | `charm crush`, `charm-crush`                   |
+| `goose`    | Goose              |                                                |
+| `kilo`     | Kilo Code          | `kilo code`, `kilo-code`, `kilocode`           |
+| `letta`    | Letta Code         | `letta code`, `letta-code`                     |
+| `vibe`     | Mistral Vibe       | `mistral vibe`, `mistral-vibe`, `mistral`      |
+| `grok`     | Grok Build         | `grok build`, `grok-build`, `xai`              |
+| `kiro`     | Kiro CLI           | `kiro cli`, `kiro-cli`                         |
+| `droid`    | Factory Droid      | `factory`, `factory droid`, `factory-droid`    |
+| `qoder`    | Qoder CLI          | `qoder cli`, `qoder-cli`, `qodercli`           |
+| `warp`     | Warp               | `warp agent`, `warp-agent`                     |
+| `junie`    | Junie CLI          | `junie cli`, `junie-cli`, `jetbrains junie`    |
+| `copilot`  | GitHub Copilot CLI | `copilot cli`, `copilot-cli`, `github copilot` |
+| `cursor`   | Cursor CLI         | `cursor cli`, `cursor-cli`, `cursor-agent`     |
+| `rovo`     | Rovo Dev CLI       | `rovo dev`, `rovo-dev`, `rovodev`              |
 
 ## مراقبة الوكلاء العاملين وتوجيههم
 

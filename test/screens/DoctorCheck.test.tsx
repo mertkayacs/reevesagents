@@ -8,7 +8,7 @@ const waitForInput = () => new Promise(resolve => setTimeout(resolve, 50))
 vi.mock('../../src/core/doctor.js', () => ({
   runDoctor: () => ({
     checks: [
-      { name: 'node', status: 'ok' as const, detail: '20.19.0' },
+      { name: 'node', status: 'ok' as const, detail: '22.12.0' },
       { name: 'tmux', status: 'fail' as const, detail: 'not on PATH' },
     ],
   }),

@@ -19,6 +19,25 @@ export function resolveWorkingDir(requested: string | undefined, fallback: strin
   throw new Error(`Working directory does not exist: ${expanded}`)
 }
 
-export function shellQuote(s: string): string {
+// POSIX single-quoted argv token. Pure so tests can pin both platforms.
+function shellQuotePosix(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
+}
+
+// cmd.exe-safe argv token. Plain tokens pass through unquoted; anything else is
+// double-quoted with embedded quotes doubled (cmd doubles `""` back to a literal).
+const CMD_SAFE = /^[A-Za-z0-9_\-.,:\\=:@+/]+$/
+function shellQuoteCmd(s: string): string {
+  if (CMD_SAFE.test(s)) return s
+  return `"${s.replace(/"/g, '""')}"`
+}
+
+// Quote a single argument for the platform's pane shell (sh vs cmd.exe).
+export function shellQuoteFor(s: string, platform: string): string {
+  if (platform === 'win32') return shellQuoteCmd(s)
+  return shellQuotePosix(s)
+}
+
+export function shellQuote(s: string): string {
+  return shellQuoteFor(s, process.platform)
 }

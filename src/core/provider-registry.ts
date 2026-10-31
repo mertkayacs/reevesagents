@@ -16,6 +16,22 @@ import {
   PI_MODELS, PI_MODEL_SOURCE,
   QWEN_MODELS, QWEN_MODEL_SOURCE,
   AIDER_MODELS, AIDER_MODEL_SOURCE,
+  GEMINI_MODELS, GEMINI_MODEL_SOURCE,
+  CLINE_MODELS, CLINE_MODEL_SOURCE,
+  CRUSH_MODELS, CRUSH_MODEL_SOURCE,
+  GOOSE_MODELS, GOOSE_MODEL_SOURCE,
+  KILO_MODELS, KILO_MODEL_SOURCE,
+  LETTA_MODELS, LETTA_MODEL_SOURCE,
+  VIBE_MODELS, VIBE_MODEL_SOURCE,
+  GROK_MODELS, GROK_MODEL_SOURCE,
+  KIRO_MODELS, KIRO_MODEL_SOURCE,
+  DROID_MODELS, DROID_MODEL_SOURCE,
+  QODER_MODELS, QODER_MODEL_SOURCE,
+  WARP_MODELS, WARP_MODEL_SOURCE,
+  JUNIE_MODELS, JUNIE_MODEL_SOURCE,
+  COPILOT_MODELS, COPILOT_MODEL_SOURCE,
+  CURSOR_MODELS, CURSOR_MODEL_SOURCE,
+  ROVO_MODELS, ROVO_MODEL_SOURCE,
 } from './model-data.js'
 
 // The user-chosen knobs that shape a launch. The provider is implicit: each entry
@@ -260,6 +276,324 @@ export const PROVIDER_REGISTRY: Record<Provider, ProviderDef> = {
       const args: string[] = []
       if (permissions === 'skip') args.push('--yes-always')
       if (model) args.push('--model', model)
+      return args
+    },
+  },
+  gemini: {
+    id: 'gemini',
+    bin: 'gemini',
+    displayName: 'Gemini CLI',
+    color: '#8b7fe8', // muted blue-violet, the Gemini spark gradient
+    aliases: ['gemini', 'gemini cli', 'gemini-cli'],
+    models: GEMINI_MODELS,
+    modelSource: GEMINI_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--approval-mode'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--approval-mode', 'yolo')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  cline: {
+    id: 'cline',
+    bin: 'cline',
+    displayName: 'Cline CLI',
+    color: '#6b9fd6', // muted Cline blue
+    aliases: ['cline', 'cline cli', 'cline-cli'],
+    models: CLINE_MODELS,
+    modelSource: CLINE_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--auto-approve'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      // --tui keeps the interactive session running; without it a prompt
+      // argument would run one turn and exit.
+      const args: string[] = ['--tui']
+      if (permissions === 'skip') args.push('--auto-approve', 'true')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  crush: {
+    id: 'crush',
+    bin: 'crush',
+    displayName: 'Crush',
+    color: '#e092b8', // muted Charm pink
+    aliases: ['crush', 'charm crush', 'charm-crush'],
+    models: CRUSH_MODELS,
+    modelSource: CRUSH_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'skip permissions', tokens: ['--yolo'] },
+    ],
+    buildArgs: ({ permissions }) => {
+      // Interactive crush has no --model flag (model is picked in the TUI
+      // with /models), so the model knob is not passed to the launch.
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--yolo')
+      return args
+    },
+  },
+  goose: {
+    id: 'goose',
+    bin: 'goose',
+    displayName: 'Goose',
+    color: '#b39a80', // muted goose tan
+    aliases: ['goose'],
+    models: GOOSE_MODELS,
+    modelSource: GOOSE_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'interactive session', tokens: ['session'] },
+      { feature: 'model selection', tokens: ['--model'] },
+    ],
+    helpArgs: ['session', '--help'],
+    buildArgs: ({ model }) => {
+      // Auto-approval has no launch flag; goose reads GOOSE_MODE from its
+      // config (auto approves all tool actions), like opencode's entry.
+      const args: string[] = ['session']
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  kilo: {
+    id: 'kilo',
+    bin: 'kilo',
+    displayName: 'Kilo Code',
+    color: '#c46f6f', // muted soft red
+    aliases: ['kilo', 'kilo code', 'kilo-code', 'kilocode'],
+    models: KILO_MODELS,
+    modelSource: KILO_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--auto'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--auto')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  letta: {
+    id: 'letta',
+    bin: 'letta',
+    displayName: 'Letta Code',
+    color: '#6fb387', // muted starling green
+    aliases: ['letta', 'letta code', 'letta-code'],
+    models: LETTA_MODELS,
+    modelSource: LETTA_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'fresh conversation', tokens: ['--new'] },
+      { feature: 'model selection', tokens: ['--model'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      // Bare letta resumes the last conversation for the project; --new always
+      // starts a fresh one so a new worker never inherits old context.
+      const args: string[] = ['--new']
+      // --permission-mode is real but hidden from --help, so doctor cannot require it.
+      if (permissions === 'skip') args.push('--permission-mode', 'unrestricted')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  vibe: {
+    id: 'vibe',
+    bin: 'vibe',
+    displayName: 'Mistral Vibe',
+    color: '#e3a35e', // muted Mistral amber
+    aliases: ['vibe', 'mistral vibe', 'mistral-vibe', 'mistral'],
+    models: VIBE_MODELS,
+    modelSource: VIBE_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'skip permissions', tokens: ['--auto-approve'] },
+    ],
+    buildArgs: ({ permissions }) => {
+      // Interactive vibe has no model flag (the model comes from config
+      // active_model or VIBE_ACTIVE_MODEL), so the model knob is not passed.
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--auto-approve')
+      return args
+    },
+  },
+  grok: {
+    id: 'grok',
+    bin: 'grok',
+    displayName: 'Grok Build',
+    color: '#9a9a96', // muted xAI graphite
+    aliases: ['grok', 'grok build', 'grok-build', 'xai'],
+    models: GROK_MODELS,
+    modelSource: GROK_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--always-approve'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--always-approve')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  kiro: {
+    id: 'kiro',
+    bin: 'kiro-cli',
+    displayName: 'Kiro CLI',
+    color: '#b070c8', // muted Kiro violet
+    aliases: ['kiro', 'kiro cli', 'kiro-cli'],
+    models: KIRO_MODELS,
+    modelSource: KIRO_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--trust-all-tools'] },
+    ],
+    helpArgs: ['chat', '--help'],
+    buildArgs: ({ permissions, model }) => {
+      // The chat subcommand is the interactive session; the task is pasted later.
+      const args: string[] = ['chat']
+      if (permissions === 'skip') args.push('--trust-all-tools')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  droid: {
+    id: 'droid',
+    bin: 'droid',
+    displayName: 'Factory Droid',
+    color: '#7f8fa3', // muted slate
+    aliases: ['droid', 'factory', 'factory droid', 'factory-droid'],
+    models: DROID_MODELS,
+    modelSource: DROID_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'skip permissions', tokens: ['--auto'] },
+    ],
+    buildArgs: ({ permissions }) => {
+      // Interactive droid sets autonomy with --auto and has no model flag
+      // (--skip-permissions-unsafe and --model exist only on `droid exec`).
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--auto', 'high')
+      return args
+    },
+  },
+  qoder: {
+    id: 'qoder',
+    bin: 'qodercli',
+    displayName: 'Qoder CLI',
+    color: '#57c785', // muted Qoder green
+    aliases: ['qoder', 'qoder cli', 'qoder-cli', 'qodercli'],
+    models: QODER_MODELS,
+    modelSource: QODER_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--dangerously-skip-permissions'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--dangerously-skip-permissions')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  warp: {
+    id: 'warp',
+    bin: 'warp',
+    displayName: 'Warp',
+    color: '#4aa3b0', // muted Warp teal
+    aliases: ['warp', 'warp agent', 'warp-agent'],
+    models: WARP_MODELS,
+    modelSource: WARP_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'skip permissions', tokens: ['--auto-approve'] },
+    ],
+    buildArgs: ({ permissions }) => {
+      // The Warp TUI has no model flag (the model is chosen per conversation
+      // in the UI), so the model knob is not passed to the launch.
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--auto-approve')
+      return args
+    },
+  },
+  junie: {
+    id: 'junie',
+    bin: 'junie',
+    displayName: 'Junie CLI',
+    color: '#a9c256', // muted Junie lime
+    aliases: ['junie', 'junie cli', 'junie-cli', 'jetbrains junie'],
+    models: JUNIE_MODELS,
+    modelSource: JUNIE_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--brave'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      // Brave mode runs sensitive actions without approval (interactive only).
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--brave')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  copilot: {
+    id: 'copilot',
+    bin: 'copilot',
+    displayName: 'GitHub Copilot CLI',
+    color: '#7d8ce8', // muted Copilot indigo
+    aliases: ['copilot', 'copilot cli', 'copilot-cli', 'github copilot'],
+    models: COPILOT_MODELS,
+    modelSource: COPILOT_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--allow-all'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      // --allow-all covers tools, paths and URLs; --allow-all-tools alone
+      // would still stop at path and URL prompts in the interactive session.
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--allow-all')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  cursor: {
+    id: 'cursor',
+    bin: 'cursor-agent',
+    displayName: 'Cursor CLI',
+    color: '#cfd8dc', // muted Cursor silver
+    aliases: ['cursor', 'cursor cli', 'cursor-cli', 'cursor-agent'],
+    models: CURSOR_MODELS,
+    modelSource: CURSOR_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--force'] },
+    ],
+    buildArgs: ({ permissions, model }) => {
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--force')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  rovo: {
+    id: 'rovo',
+    bin: 'acli',
+    displayName: 'Rovo Dev CLI',
+    color: '#3f7fd0', // muted Atlassian blue
+    aliases: ['rovo', 'rovo dev', 'rovo-dev', 'rovodev'],
+    models: ROVO_MODELS,
+    modelSource: ROVO_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'skip permissions', tokens: ['--yolo'] },
+    ],
+    helpArgs: ['rovodev', 'run', '--help'],
+    buildArgs: ({ permissions }) => {
+      // `run` without an instruction is the interactive session. It has no
+      // launch model flag (/models in the TUI or agent.modelId in config).
+      // The help text is behind Atlassian login, so doctor warns until signed in.
+      const args: string[] = ['rovodev', 'run']
+      if (permissions === 'skip') args.push('--yolo')
       return args
     },
   },

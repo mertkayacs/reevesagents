@@ -33,7 +33,7 @@ così un run non fallisce per una CLI mancante; `peek` (sotto) intercetta una fi
 ferma su una schermata di login. `reevesagents doctor --json` restituisce lo stesso risultato
 in JSON leggibile da macchina.
 
-Requisiti: Node 20.19+, tmux 3.0+ e almeno una CLI di provider installata e autenticata.
+Requisiti: Node 22.12+, tmux 3.0+ e almeno una CLI di provider installata e autenticata.
 macOS, Linux o WSL (Windows nativo non è il target).
 
 ## Installa
@@ -80,17 +80,33 @@ Controllo agenti.
 Esegui `reevesagents providers` (aggiungi `--json` per un elenco leggibile da macchina).
 Qualsiasi alias funziona come provider in una spec di spawn.
 
-| id         | provider     | alias comuni                |
-| ---------- | ------------ | --------------------------- |
-| `cc`       | Claude Code  | `claude`, `claude-code`     |
-| `codex`    | Codex CLI    | `codex-cli`                 |
-| `kimi`     | Kimi Code    | `kimi-code`                 |
-| `qwen`     | Qwen Code    | `qwen-code`                 |
-| `opencode` | OpenCode CLI | `open_code`                 |
-| `hermes`   | Hermes       |                             |
-| `pi`       | Pi           |                             |
-| `aider`    | Aider        |                             |
-| `deepseek` | DeepSeek CLI | `deepseek-cli`              |
+| id         | provider           | alias comuni                                   |
+| ---------- | ------------------ | ---------------------------------------------- |
+| `cc`       | Claude Code        | `claude`, `claude-code`                        |
+| `codex`    | Codex CLI          | `codex-cli`                                    |
+| `kimi`     | Kimi Code          | `kimi-code`                                    |
+| `qwen`     | Qwen Code          | `qwen-code`                                    |
+| `opencode` | OpenCode CLI       | `open_code`                                    |
+| `hermes`   | Hermes             |                                                |
+| `pi`       | Pi                 |                                                |
+| `aider`    | Aider              |                                                |
+| `deepseek` | DeepSeek CLI       | `deepseek-cli`                                 |
+| `gemini`   | Gemini CLI         | `gemini cli`, `gemini-cli`                     |
+| `cline`    | Cline CLI          | `cline cli`, `cline-cli`                       |
+| `crush`    | Crush              | `charm crush`, `charm-crush`                   |
+| `goose`    | Goose              |                                                |
+| `kilo`     | Kilo Code          | `kilo code`, `kilo-code`, `kilocode`           |
+| `letta`    | Letta Code         | `letta code`, `letta-code`                     |
+| `vibe`     | Mistral Vibe       | `mistral vibe`, `mistral-vibe`, `mistral`      |
+| `grok`     | Grok Build         | `grok build`, `grok-build`, `xai`              |
+| `kiro`     | Kiro CLI           | `kiro cli`, `kiro-cli`                         |
+| `droid`    | Factory Droid      | `factory`, `factory droid`, `factory-droid`    |
+| `qoder`    | Qoder CLI          | `qoder cli`, `qoder-cli`, `qodercli`           |
+| `warp`     | Warp               | `warp agent`, `warp-agent`                     |
+| `junie`    | Junie CLI          | `junie cli`, `junie-cli`, `jetbrains junie`    |
+| `copilot`  | GitHub Copilot CLI | `copilot cli`, `copilot-cli`, `github copilot` |
+| `cursor`   | Cursor CLI         | `cursor cli`, `cursor-cli`, `cursor-agent`     |
+| `rovo`     | Rovo Dev CLI       | `rovo dev`, `rovo-dev`, `rovodev`              |
 
 ## Osserva e sterza gli agenti in esecuzione
 

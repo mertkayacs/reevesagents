@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 const required = new Set([
   'dist/cli.js',
   'dist/index.js',
+  'dist/winmux.js',
   'package.json',
   'README.md',
   'CHANGELOG.md',
@@ -18,6 +19,7 @@ const required = new Set([
   'dist/web/xterm.css',
   'dist/web/addon-fit.js',
   'dist/web/brand-duck.json',
+  'dist/web/favicon.png',
 ])
 
 const forbiddenPrefixes = [

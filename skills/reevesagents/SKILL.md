@@ -48,6 +48,17 @@ Spawn several agents with run_id omitted so they land in one run, then poll each
    spawn { "provider": "kimi",  "task": "worker: the docs" }
 Add "permissions": "skip" to a spawn only if the user explicitly asked for it.
 
+## Tools
+list_tools lists the helper tool CLIs on this machine: what each is for,
+whether it is installed, and signed in (Ollama: server reachable). They are
+not spawn providers; run them from your own shell. Examples:
+   pplx search web "node 24 release date" --limit 3
+   colab --auth=oauth2 run job.py
+   hf download Qwen/Qwen3-0.6B config.json
+   ollama run gemma4:31b-cloud "summarize README.md"
+Ollama cloud models (tagged -cloud or :cloud) run remotely on ollama.com;
+plain model names need a local ollama server.
+
 ## Housekeeping
 - list shows every live run and agent; list_history shows ended ones.
 - reap ends zombie agents: any whose tmux window died, plus any older than

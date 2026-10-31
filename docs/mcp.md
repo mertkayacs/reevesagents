@@ -32,7 +32,7 @@ When a host CLI uses the MCP to spawn agents, ReevesAgents records one run:
 
 - the host CLI appears as the run head when ReevesAgents can identify it
 - spawned agents follow as workers
-- windowed agents run in tmux windows
+- windowed agents run in tmux windows (on native Windows through the built-in winmux multiplexer, tmux-compatible)
 - an external host CLI can be recorded as a headless head, since ReevesAgents
   does not own its terminal
 
@@ -43,6 +43,8 @@ own CLI only if you explicitly want that worker to spawn more agents.
 
 - `list_providers`: list installed provider CLIs, aliases, model ids, and launch
   capabilities.
+- `list_tools`: list the supported tools (Perplexity CLI, Google Colab CLI, Hugging Face
+  CLI, Ollama) with purpose, example command, and install and sign-in state.
 - `spawn`: start an agent, either in a new run or an existing run.
 - `read`: read recent output from one agent.
 - `send_text`: paste text into an agent. It does not submit.

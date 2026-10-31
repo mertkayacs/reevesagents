@@ -18,6 +18,7 @@ const copies = [
   ['src/surfaces/webui/client/app.css', 'app.css'],
   ['src/surfaces/webui/client/app.js', 'app.js'],
   ['src/surfaces/webui/client/brand-duck.json', 'brand-duck.json'],
+  ['src/surfaces/webui/client/favicon.png', 'favicon.png'],
 ]
 
 mkdirSync(outDir, { recursive: true })

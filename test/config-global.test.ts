@@ -28,6 +28,7 @@ describe('config global fields', () => {
     expect(cfg.global.max_lifetime_ms).toBe(0)
     expect(cfg.global.default_permissions).toBe('ask')
     expect(cfg.global.language).toBe('en')
+    expect(cfg.global.web_theme).toBe('dark')
   })
 
   it('preserves global config on save and reload', async () => {
@@ -36,10 +37,12 @@ describe('config global fields', () => {
     cfg.global.peek_interval_ms = 5000
     cfg.global.default_permissions = 'ask'
     cfg.global.language = 'tr'
+    cfg.global.web_theme = 'light'
     saveConfig(cfg)
     const reloaded = loadConfig()
     expect(reloaded.global.peek_interval_ms).toBe(5000)
     expect(reloaded.global.default_permissions).toBe('ask')
     expect(reloaded.global.language).toBe('tr')
+    expect(reloaded.global.web_theme).toBe('light')
   })
 })

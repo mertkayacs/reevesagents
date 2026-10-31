@@ -9,8 +9,10 @@
 ## Что такое ReevesAgents
 
 - Бесплатное локальное рабочее пространство, где ваши AI-агенты для работы с
-  кодом (Claude Code, Codex, Hermes, DeepSeek, Kimi и другие) работают бок о
-  бок на вашей машине.
+  кодом (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI,
+  Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
+  Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
+  Rovo Dev CLI и другие) работают бок о бок на вашей машине.
 - Один агент может создавать других и управлять ими через MCP. Например, сессия
   Claude Code может вести агентов Codex и Claude Code по отдельным задачам.
 - Можно использовать ReevesAgents и как обычное рабочее пространство. Запустите
@@ -26,10 +28,24 @@
 ## Перед началом
 
 - macOS, Linux или WSL (нативный Windows не является целевой средой; используйте WSL).
-- Node.js версии 20.19 или новее.
+- Node.js версии 22.12 или новее.
 - tmux версии 3.0 или новее.
-- Хотя бы один провайдерский CLI, установленный и с выполненным входом: Claude
-  Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen или Aider.
+- Хотя бы один провайдерский CLI, установленный и с выполненным входом:
+  Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider,
+  Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe,
+  Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI,
+  GitHub Copilot CLI, Cursor CLI или Rovo Dev CLI.
+
+## Инструменты
+
+- Рядом с CLI для кода есть четыре инструмента: Perplexity CLI (поиск в вебе),
+  Google Colab CLI (среды CPU, GPU и TPU), Hugging Face CLI (модели и датасеты
+  на Hub) и Ollama (локальные и облачные модели). Агенты запускают их из
+  собственной оболочки.
+- `reevesagents tools` показывает, какие из них установлены и выполнен ли вход
+  (для Ollama: отвечает ли сервер), с назначением и примером команды для
+  каждого. Для скриптов добавьте `--json`.
+- Агент с подключённым MCP вызывает `list_tools` и получает тот же список.
 
 ## Установка и проверка
 

@@ -16,13 +16,54 @@
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issue'lar</b></a>
 </p>
 
+<p align="center">
+  <img src="../assets/providers/cc.svg" width="40" height="40" alt="Claude Code" title="Claude Code">
+  <img src="../assets/providers/codex.svg" width="40" height="40" alt="Codex CLI" title="Codex CLI">
+  <img src="../assets/providers/opencode.svg" width="40" height="40" alt="OpenCode" title="OpenCode">
+  <img src="../assets/providers/hermes.svg" width="40" height="40" alt="Hermes" title="Hermes">
+  <img src="../assets/providers/kimi.svg" width="40" height="40" alt="Kimi Code" title="Kimi Code">
+  <img src="../assets/providers/deepseek.svg" width="40" height="40" alt="DeepSeek CLI" title="DeepSeek CLI">
+  <img src="../assets/providers/pi.svg" width="40" height="40" alt="Pi" title="Pi">
+  <img src="../assets/providers/qwen.svg" width="40" height="40" alt="Qwen Code" title="Qwen Code">
+  <img src="../assets/providers/aider.svg" width="40" height="40" alt="Aider" title="Aider">
+</p>
+<p align="center">
+  <img src="../assets/providers/gemini.svg" width="40" height="40" alt="Gemini CLI" title="Gemini CLI">
+  <img src="../assets/providers/cline.svg" width="40" height="40" alt="Cline CLI" title="Cline CLI">
+  <img src="../assets/providers/crush.svg" width="40" height="40" alt="Crush" title="Crush">
+  <img src="../assets/providers/goose.svg" width="40" height="40" alt="Goose" title="Goose">
+  <img src="../assets/providers/kilo.svg" width="40" height="40" alt="Kilo Code" title="Kilo Code">
+  <img src="../assets/providers/letta.svg" width="40" height="40" alt="Letta Code" title="Letta Code">
+  <img src="../assets/providers/vibe.svg" width="40" height="40" alt="Mistral Vibe" title="Mistral Vibe">
+  <img src="../assets/providers/grok.svg" width="40" height="40" alt="Grok Build" title="Grok Build">
+  <img src="../assets/providers/kiro.svg" width="40" height="40" alt="Kiro CLI" title="Kiro CLI">
+</p>
+<p align="center">
+  <img src="../assets/providers/droid.svg" width="40" height="40" alt="Factory Droid" title="Factory Droid">
+  <img src="../assets/providers/qoder.svg" width="40" height="40" alt="Qoder CLI" title="Qoder CLI">
+  <img src="../assets/providers/warp.svg" width="40" height="40" alt="Warp" title="Warp">
+  <img src="../assets/providers/junie.svg" width="40" height="40" alt="Junie CLI" title="Junie CLI">
+  <img src="../assets/providers/copilot.svg" width="40" height="40" alt="GitHub Copilot CLI" title="GitHub Copilot CLI">
+  <img src="../assets/providers/cursor.svg" width="40" height="40" alt="Cursor CLI" title="Cursor CLI">
+  <img src="../assets/providers/rovo.svg" width="40" height="40" alt="Rovo Dev CLI" title="Rovo Dev CLI">
+</p>
+<p align="center">
+  <img src="../assets/providers/pplx.svg" width="40" height="40" alt="Perplexity" title="Perplexity">
+  <img src="../assets/providers/colab.svg" width="40" height="40" alt="Google Colab" title="Google Colab">
+  <img src="../assets/providers/hf.svg" width="40" height="40" alt="Hugging Face" title="Hugging Face">
+  <img src="../assets/providers/ollama.svg" width="40" height="40" alt="Ollama" title="Ollama">
+</p>
+
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · **Türkçe** · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
 ReevesAgents, AI kodlama CLI'leri için yerel bir çalışma alanıdır. Claude Code,
-Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider ve diğer sağlayıcı
-CLI'lerini tmux içinde yan yana çalıştırır. Onu sıradan bir CLI/TUI/Web UI olarak
-kullanabilir ya da isteğe bağlı MCP'sini bağlayarak bir agent'ın geri kalanları
-başlatmasını, okumasını, yönlendirmesini ve durdurmasını sağlayabilirsiniz.
+Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider, Gemini CLI, Cline CLI,
+Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
+Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
+Rovo Dev CLI ve diğer sağlayıcı CLI'lerini tmux içinde yan yana çalıştırır. Onu
+sıradan bir CLI/TUI/Web UI olarak kullanabilir ya da isteğe bağlı MCP'sini
+bağlayarak bir agent'ın geri kalanları başlatmasını, okumasını, yönlendirmesini
+ve durdurmasını sağlayabilirsiniz.
 
 Sağlayıcı girişi her sağlayıcı CLI'sinin kendi içinde kalır. ReevesAgents kendi durumunu
 `~/.reeves` altındaki birkaç düz JSON dosyasında tutar ve yalnızca siz ya da bağlı bir CLI
@@ -74,11 +115,23 @@ MCP araçlarını yüklemesi için `attach` sonrasında o CLI'yi yeniden başlat
 ReevesAgents baştan yerel çalışmak üzere tasarlandı. Durum `~/.reeves` altında düz JSON
 olarak tutulur ve başlattığı CLI'ler, zaten elle kullandığınız CLI'lerin aynısıdır.
 
+## Araçlar
+
+Kodlama CLI'lerinin yanında dört araç bulunur. Perplexity CLI web'de arama
+yapar, Google Colab CLI script'leri ve notebook'ları CPU, GPU ve TPU çalışma
+ortamlarında çalıştırır, Hugging Face CLI modelleri ve veri kümelerini indirir,
+yükler ve Hub üzerinde iş çalıştırır, Ollama ise yerel ya da bulut modellerini
+terminalden çalıştırır. Agent'lar bunları kendi kabuklarından çağırır.
+
+`reevesagents tools` bu dört aracın her biri için amacı, örnek bir komutu ve
+durumu listeler: kurulu mu, giriş yapılmış mı (Ollama için: erişilebilir mi). Script'ler için
+`--json` ekleyin. MCP'si bağlı bir agent aynı listeyi `list_tools` ile alır.
+
 <a id="install"></a>
 <details>
 <summary><strong>Kurulum</strong></summary>
 
-ReevesAgents için Node.js `20.19+`, tmux `3.0+` ve kurulu, girişi yapılmış en az bir
+ReevesAgents için Node.js `22.12+`, tmux `3.0+` ve kurulu, girişi yapılmış en az bir
 desteklenen sağlayıcı CLI'si gerekir. macOS, Linux ve WSL üzerinde çalışır.
 
 ```sh
@@ -152,6 +205,7 @@ Argümansız çalıştırıldığında TUI açılır.
 | `doctor` | Node, tmux, durum dizini ve sağlayıcı CLI'lerini kontrol eder. |
 | `web` | Yalnızca loopback üzerinde dinleyen Web UI'yi başlatır. |
 | `providers` | Sağlayıcı id'lerini, takma adları, modelleri ve kullanılabilirliği listeler. |
+| `tools` | Perplexity, Google Colab, Hugging Face ve Ollama'yı amaçları, örnekleri, kurulum ve giriş durumlarıyla listeler. |
 | `approvals` | Bekleyen onay isteklerini listeler. |
 | `approve` / `deny` | Bir onay isteğini sonuçlandırır. |
 | `hosts` | ReevesAgents'ın hangi host CLI'lere bağlı olduğunu gösterir. |

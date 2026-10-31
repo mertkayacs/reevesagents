@@ -9,8 +9,10 @@ commande et chaque option, tout est recensé dans le [guide en ligne](https://re
 ## Qu'est-ce que ReevesAgents
 
 - Un espace de travail libre et local où vos agents de programmation d'IA
-  (Claude Code, Codex, Hermes, DeepSeek, Kimi et d'autres) travaillent côte à
-  côte sur votre machine.
+  (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI, Crush,
+  Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
+  Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
+  Rovo Dev CLI et d'autres) travaillent côte à côte sur votre machine.
 - Un agent peut créer et piloter les autres via MCP. Par exemple, une session
   Claude Code peut faire travailler des agents Codex et Claude Code sur des
   tâches distinctes.
@@ -28,10 +30,25 @@ commande et chaque option, tout est recensé dans le [guide en ligne](https://re
 ## Avant de commencer
 
 - macOS, Linux ou WSL (Windows natif n'est pas la cible ; utilisez WSL).
-- Node.js 20.19 ou plus récent.
+- Node.js 22.12 ou plus récent.
 - tmux 3.0 ou plus récent.
-- Au moins une CLI de fournisseur installée et authentifiée : Claude Code, Codex,
-  OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen ou Aider.
+- Au moins une CLI de fournisseur installée et authentifiée : Claude Code,
+  Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI,
+  Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build,
+  Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI,
+  Cursor CLI ou Rovo Dev CLI.
+
+## Outils
+
+- Quatre outils complètent les CLI de code : Perplexity CLI (recherche
+  web), Google Colab CLI (runtimes CPU, GPU et TPU), Hugging Face CLI (modèles
+  et jeux de données sur le Hub) et Ollama (modèles locaux et cloud). Les agents
+  les lancent depuis leur propre shell.
+- `reevesagents tools` indique lesquels sont installés et si vous êtes connecté
+  (pour Ollama : si le serveur répond), avec un rôle et un exemple de commande
+  pour chacun. Ajoutez `--json` pour les scripts.
+- Un agent avec le MCP attaché appelle `list_tools` pour obtenir la même
+  liste.
 
 ## Installation et vérification
 

@@ -63,9 +63,13 @@ export function Config() {
       return
     }
     const field = EDITABLE_FIELDS[selectedIdx]!
-    if (field.kind === 'permissions') {
+    if (field.kind === 'permissions' || field.kind === 'web-theme') {
       if (key.leftArrow || key.rightArrow || key.return) {
-        applyValue(field.key, (global[field.key] as Permissions) === 'ask' ? 'skip' : 'ask')
+        if (field.kind === 'permissions') {
+          applyValue(field.key, (global[field.key] as Permissions) === 'ask' ? 'skip' : 'ask')
+        } else {
+          applyValue(field.key, global.web_theme === 'dark' ? 'light' : 'dark')
+        }
       }
       return
     }

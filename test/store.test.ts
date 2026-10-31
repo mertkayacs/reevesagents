@@ -129,15 +129,31 @@ describe('store', () => {
         { nickname_template: 'pi-w', provider: 'pi', model: 'sonnet', auth_mode: 'default', effort: 'default', initial_prompt: 'pi prompt', working_dir: '/tmp', permissions: 'ask', rc_enabled: false },
         { nickname_template: 'qwen-w', provider: 'qwen', model: 'qwen3-coder-plus', auth_mode: 'default', effort: 'default', initial_prompt: 'qwen prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
         { nickname_template: 'aider-w', provider: 'aider', model: 'deepseek/deepseek-chat', auth_mode: 'default', effort: 'default', initial_prompt: 'aider prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'gemini-w', provider: 'gemini', model: 'gemini-3.5-flash', auth_mode: 'default', effort: 'default', initial_prompt: 'gemini prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'cline-w', provider: 'cline', model: 'anthropic/claude-sonnet-4-6', auth_mode: 'default', effort: 'default', initial_prompt: 'cline prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'crush-w', provider: 'crush', model: '', auth_mode: 'default', effort: 'default', initial_prompt: 'crush prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'goose-w', provider: 'goose', model: 'claude-sonnet-4-6', auth_mode: 'default', effort: 'default', initial_prompt: 'goose prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'kilo-w', provider: 'kilo', model: 'kilo/~anthropic/claude-sonnet-latest', auth_mode: 'default', effort: 'default', initial_prompt: 'kilo prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'letta-w', provider: 'letta', model: 'zai-org/GLM-5.3-max', auth_mode: 'default', effort: 'default', initial_prompt: 'letta prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'vibe-w', provider: 'vibe', model: '', auth_mode: 'default', effort: 'default', initial_prompt: 'vibe prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'grok-w', provider: 'grok', model: 'grok-4.6', auth_mode: 'default', effort: 'default', initial_prompt: 'grok prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'kiro-w', provider: 'kiro', model: 'claude-sonnet-4.6', auth_mode: 'default', effort: 'default', initial_prompt: 'kiro prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'droid-w', provider: 'droid', model: 'gpt-6-sol', auth_mode: 'default', effort: 'default', initial_prompt: 'droid prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'qoder-w', provider: 'qoder', model: 'auto', auth_mode: 'default', effort: 'default', initial_prompt: 'qoder prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'warp-w', provider: 'warp', model: '', auth_mode: 'default', effort: 'default', initial_prompt: 'warp prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'junie-w', provider: 'junie', model: 'sonnet', auth_mode: 'default', effort: 'default', initial_prompt: 'junie prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'copilot-w', provider: 'copilot', model: 'auto', auth_mode: 'default', effort: 'default', initial_prompt: 'copilot prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'cursor-w', provider: 'cursor', model: 'gpt-5', auth_mode: 'default', effort: 'default', initial_prompt: 'cursor prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'rovo-w', provider: 'rovo', model: '', auth_mode: 'default', effort: 'default', initial_prompt: 'rovo prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
       ],
     })
     savePreset(tree)
     const loaded = loadPreset(testName)
-    expect(loaded?.workers).toHaveLength(9)
-    expect(loaded?.workers.map(w => w.provider)).toEqual(['cc', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider'])
-    expect(loaded?.workers.map(w => w.nickname_template)).toEqual(['claude-w', 'codex-w', 'opencode-w', 'hermes-w', 'kimi-w', 'deepseek-w', 'pi-w', 'qwen-w', 'aider-w'])
-    expect(loaded?.workers.map(w => w.initial_prompt)).toEqual(['cc prompt', 'codex prompt', 'opencode prompt', 'hermes prompt', 'kimi prompt', 'deepseek prompt', 'pi prompt', 'qwen prompt', 'aider prompt'])
-    expect(loaded?.workers.map(w => w.model)).toEqual(['sonnet', 'gpt-5', 'pro', 'haiku', 'kimi-code/kimi-for-coding', 'deepseek-coder:6.7b', 'sonnet', 'qwen3-coder-plus', 'deepseek/deepseek-chat'])
+    expect(loaded?.workers).toHaveLength(25)
+    expect(loaded?.workers.map(w => w.provider)).toEqual(['cc', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider', 'gemini', 'cline', 'crush', 'goose', 'kilo', 'letta', 'vibe', 'grok', 'kiro', 'droid', 'qoder', 'warp', 'junie', 'copilot', 'cursor', 'rovo'])
+    expect(loaded?.workers.map(w => w.nickname_template)).toEqual(['claude-w', 'codex-w', 'opencode-w', 'hermes-w', 'kimi-w', 'deepseek-w', 'pi-w', 'qwen-w', 'aider-w', 'gemini-w', 'cline-w', 'crush-w', 'goose-w', 'kilo-w', 'letta-w', 'vibe-w', 'grok-w', 'kiro-w', 'droid-w', 'qoder-w', 'warp-w', 'junie-w', 'copilot-w', 'cursor-w', 'rovo-w'])
+    expect(loaded?.workers.map(w => w.initial_prompt)).toEqual(['cc prompt', 'codex prompt', 'opencode prompt', 'hermes prompt', 'kimi prompt', 'deepseek prompt', 'pi prompt', 'qwen prompt', 'aider prompt', 'gemini prompt', 'cline prompt', 'crush prompt', 'goose prompt', 'kilo prompt', 'letta prompt', 'vibe prompt', 'grok prompt', 'kiro prompt', 'droid prompt', 'qoder prompt', 'warp prompt', 'junie prompt', 'copilot prompt', 'cursor prompt', 'rovo prompt'])
+    expect(loaded?.workers.map(w => w.model)).toEqual(['sonnet', 'gpt-5', 'pro', 'haiku', 'kimi-code/kimi-for-coding', 'deepseek-coder:6.7b', 'sonnet', 'qwen3-coder-plus', 'deepseek/deepseek-chat', 'gemini-3.5-flash', 'anthropic/claude-sonnet-4-6', '', 'claude-sonnet-4-6', 'kilo/~anthropic/claude-sonnet-latest', 'zai-org/GLM-5.3-max', '', 'grok-4.6', 'claude-sonnet-4.6', 'gpt-6-sol', 'auto', '', 'sonnet', 'auto', 'gpt-5', ''])
     // permissions/rc per-worker should not leak between slots
     expect(loaded?.workers[2]?.permissions).toBe('skip')
     expect(loaded?.workers[0]?.rc_enabled).toBe(true)

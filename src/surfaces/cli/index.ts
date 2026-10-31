@@ -10,10 +10,12 @@ import { prepareTuiColorEnv } from './color-env.js'
 import { writeTuiOpenToken } from '../tui/open-token.js'
 import { REEVESAGENTS_VERSION } from '../../version.js'
 import { openTuiSession } from './tui-launcher.js'
+import { shellQuote } from '../../core/provider-launch.js'
 import { registerSpawn, registerAdd, registerRuns, registerReap, registerOpen, registerStop } from './run.js'
 import { registerPeek, registerKill, registerSend, registerKey, registerInterrupt, registerDelete, registerAgents } from './agents.js'
 import { registerDeleteRun, registerHistory, registerDeleteHistory } from './history.js'
 import { registerProviders } from './providers.js'
+import { registerTools } from './tools.js'
 import { registerApprovals, registerApprove, registerDeny } from './approvals.js'
 import { registerSetup, registerSkills, registerDoctor } from './setup.js'
 import { registerHosts, registerAttach, registerDetach, registerMcp } from './hosts.js'
@@ -54,6 +56,7 @@ registerDeleteRun(program)
 registerHistory(program)
 registerDeleteHistory(program)
 registerProviders(program)
+registerTools(program)
 registerApprovals(program)
 registerApprove(program)
 registerDeny(program)
@@ -107,14 +110,18 @@ function runCli(): void {
     if (!process.env.TMUX && process.stdout.isTTY && !process.env.REEVES_NO_TMUX_WRAPPER) {
       const wrapperCmd = [process.argv[0], process.argv[1]]
         .filter((arg): arg is string => typeof arg === 'string')
-        .map(arg => `'${arg.replace(/'/g, "'\\''")}'`)
+        .map(shellQuote)
         .join(' ')
       try {
         writeTuiOpenToken()
         openTuiSession(wrapperCmd)
         process.exit(0)
       } catch (err) {
-        process.stderr.write('reevesagents requires tmux. Install tmux (brew install tmux / apt install tmux) or set REEVES_NO_TMUX_WRAPPER=1 to run without it.\n')
+        if (process.platform === 'win32') {
+          process.stderr.write('reevesagents could not start winmux (the built-in Windows multiplexer). Reinstall reevesagents so the optional @lydell/node-pty and @xterm/headless packages install.\n')
+        } else {
+          process.stderr.write('reevesagents requires tmux. Install tmux (brew install tmux / apt install tmux) or set REEVES_NO_TMUX_WRAPPER=1 to run without it.\n')
+        }
         process.stderr.write(`tmux launch error: ${err instanceof Error ? err.message : String(err)}\n`)
         process.exit(1)
       }

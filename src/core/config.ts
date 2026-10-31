@@ -18,6 +18,7 @@ const DEFAULT_GLOBAL: GlobalConfig = {
   max_lifetime_ms: 0,
   default_permissions: 'ask',
   language: DEFAULT_LANGUAGE,
+  web_theme: 'dark',
 }
 
 export function configPath(): string {
@@ -61,6 +62,7 @@ function mergeDefaults(raw: unknown): Config {
     if (typeof g.max_lifetime_ms === 'number' && g.max_lifetime_ms >= 0) merged.global.max_lifetime_ms = g.max_lifetime_ms
     if (g.default_permissions === 'skip' || g.default_permissions === 'ask') merged.global.default_permissions = g.default_permissions as Permissions
     if (isLanguageCode(g.language)) merged.global.language = g.language
+    if (g.web_theme === 'dark' || g.web_theme === 'light') merged.global.web_theme = g.web_theme
   }
 
   return merged
@@ -94,7 +96,7 @@ export function saveConfig(cfg: Config): string {
 // panel all read this list and route writes through setConfigValues, so the set of
 // settable fields and their validation can never drift between surfaces.
 
-export type ConfigFieldKind = 'posint' | 'nonneg-int' | 'permissions' | 'language'
+export type ConfigFieldKind = 'posint' | 'nonneg-int' | 'permissions' | 'language' | 'web-theme'
 
 export interface ConfigFieldSpec {
   key: keyof GlobalConfig
@@ -103,6 +105,7 @@ export interface ConfigFieldSpec {
 }
 
 export const CONFIG_FIELDS: readonly ConfigFieldSpec[] = [
+  { key: 'web_theme', kind: 'web-theme', label: 'web theme' },
   { key: 'peek_interval_ms', kind: 'posint', label: 'peek interval (ms)' },
   { key: 'peek_lines', kind: 'posint', label: 'peek lines' },
   { key: 'max_depth', kind: 'posint', label: 'max depth' },
@@ -145,6 +148,9 @@ function validateConfigField(spec: ConfigFieldSpec, value: unknown): number | st
       return value
     case 'language':
       if (!isLanguageCode(value)) throw new Error(`unknown language: ${String(value)}`)
+      return value
+    case 'web-theme':
+      if (value !== 'dark' && value !== 'light') throw new Error(`${spec.label} must be dark or light`)
       return value
   }
 }

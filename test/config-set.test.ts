@@ -22,7 +22,7 @@ describe('config editing', () => {
   it('CONFIG_FIELDS lists every editable global field in order', async () => {
     const { CONFIG_FIELDS } = await import('../src/core/config.js')
     expect(CONFIG_FIELDS.map(f => f.key)).toEqual([
-      'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms', 'max_lifetime_ms', 'default_permissions', 'language',
+      'web_theme', 'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms', 'max_lifetime_ms', 'default_permissions', 'language',
     ])
   })
 
@@ -43,6 +43,7 @@ describe('config editing', () => {
     expect(() => setConfigValues({ ready_delay_ms: -1 })).toThrow(/zero or a positive/)
     expect(() => setConfigValues({ default_permissions: 'maybe' })).toThrow(/ask or skip/)
     expect(() => setConfigValues({ language: 'xx' })).toThrow(/unknown language/)
+    expect(() => setConfigValues({ web_theme: 'sepia' })).toThrow(/dark or light/)
     expect(() => setConfigValues({ nonsense: 1 } as never)).toThrow(/unknown config field/)
     expect(loadConfig().global.max_agents).toBe(100)
   })
@@ -70,6 +71,7 @@ describe('config editing', () => {
     expect(parseConfigValue('max_agents', '15')).toBe(15)
     expect(parseConfigValue('default_permissions', 'skip')).toBe('skip')
     expect(parseConfigValue('language', 'de')).toBe('de')
+    expect(parseConfigValue('web_theme', 'light')).toBe('light')
     expect(() => parseConfigValue('max_agents', 'abc')).toThrow(/must be a number/)
     expect(() => parseConfigValue('bogus', '1')).toThrow(/unknown config field/)
   })

@@ -6,7 +6,7 @@ Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerin
 
 ## ReevesAgents nedir
 
-- AI kodlama agent'larınızın (Claude Code, Codex, Hermes, DeepSeek, Kimi ve daha fazlası) makinenizde yan yana çalıştığı ücretsiz, yerel bir çalışma alanı.
+- AI kodlama agent'larınızın (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI ve daha fazlası) makinenizde yan yana çalıştığı ücretsiz, yerel bir çalışma alanı.
 - Bir agent MCP üzerinden diğerlerini oluşturup yönetebilir. Örneğin bir Claude Code oturumu, ayrı görevlere atanmış Codex ve Claude Code agent'larını çalıştırabilir.
 - ReevesAgents'ı düz bir çalışma alanı olarak da kullanabilirsiniz: istediğiniz agent'ları oluşturun ve `reevesagents add` ile eklemeye devam edin. Yan yana dururlar; siz MCP'yi devreye alana kadar kimse kimseyi kontrol etmez.
 - Zaten elinizde olan CLI'lerin üstüne oturur, bu yüzden her giriş öteden beri durduğu yerde kalır. ReevesAgents hiçbir zaman API anahtarı tutmaz, model trafiğinize de elini sürmez.
@@ -15,9 +15,15 @@ Bu rehber sizi temiz bir kurulumdan alıp bir agent'ın diğerlerini sizin yerin
 ## Başlamadan önce
 
 - macOS, Linux veya WSL (yerel Windows hedef değildir; WSL kullanın).
-- Node.js 20.19 veya daha yenisi.
+- Node.js 22.12 veya daha yenisi.
 - tmux 3.0 veya daha yenisi.
-- Kurulu ve giriş yapılmış en az bir sağlayıcı CLI'si: Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen veya Aider.
+- Kurulu ve giriş yapılmış en az bir sağlayıcı CLI'si: Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI veya Rovo Dev CLI.
+
+## Araçlar
+
+- Kodlama CLI'lerinin yanında dört araç bulunur: Perplexity CLI (web araması), Google Colab CLI (CPU, GPU ve TPU çalışma ortamları), Hugging Face CLI (Hub üzerindeki modeller ve veri kümeleri) ve Ollama (yerel ve bulut modelleri). Agent'lar bunları kendi kabuklarından çalıştırır.
+- `reevesagents tools` hangilerinin kurulu olduğunu ve giriş yapıp yapmadığınızı (Ollama için: sunucunun yanıt verip vermediğini) her biri için amaç ve örnek komutla gösterir. Script'ler için `--json` ekleyin.
+- MCP'si bağlı bir agent aynı listeyi almak için `list_tools` aracını çağırır.
 
 ## Kurulum ve kontrol
 

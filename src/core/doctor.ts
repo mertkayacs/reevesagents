@@ -6,8 +6,9 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import type { CheckResult, Provider } from './types.js'
 import { detectAvailable, inspectProviderCompatibility } from './providers.js'
+import { detectToolStatuses } from './tool-registry.js'
 import { listRuns, runsDir, stateRoot } from './runs.js'
-import { tmuxVersion } from './tmux.js'
+import { tmuxVersion, tmuxAvailable } from './tmux.js'
 import { WEB_EXTRA_MODULES } from '../surfaces/webui/extras.js'
 import { providerDisplayName } from '../utils/display.js'
 import { resolveLaunchCmd } from '../surfaces/mcp/installer.js'
@@ -16,7 +17,7 @@ export interface DoctorResult {
   checks: CheckResult[]
 }
 
-const MIN_NODE_VERSION = [20, 19, 0] as const
+const MIN_NODE_VERSION = [22, 12, 0] as const
 
 function parseNodeVersion(version: string): [number, number, number] {
   const clean = version.startsWith('v') ? version.slice(1) : version
@@ -39,7 +40,7 @@ export function nodeVersionCheck(rawVersion = process.version): CheckResult {
   return {
     name: 'node',
     status: ok ? 'ok' : 'fail',
-    detail: ok ? version : `${version} (need >=20.19.0)`,
+    detail: ok ? version : `${version} (need >=22.12.0)`,
   }
 }
 
@@ -77,8 +78,8 @@ export function platformSupportCheck(
   if (platform === 'win32') {
     return {
       name: 'platform',
-      status: 'fail',
-      detail: 'native Windows unsupported; use WSL with tmux and provider CLIs installed inside WSL',
+      status: 'ok',
+      detail: 'Windows supported via the built-in winmux (ConPTY) multiplexer',
     }
   }
   return {
@@ -88,7 +89,23 @@ export function platformSupportCheck(
   }
 }
 
-export function checkTmux(): CheckResult {
+export function checkTmux(platform = process.platform): CheckResult {
+  if (platform === 'win32') {
+    const versionStr = tmuxVersion()
+    if (!versionStr || !tmuxAvailable(platform)) {
+      return {
+        name: 'tmux',
+        status: 'fail',
+        detail: 'winmux not found; reinstall reevesagents so the optional @lydell/node-pty and @xterm/headless packages install',
+      }
+    }
+    const match = versionStr.match(/tmux (\d+)\.(\d+)/)
+    return {
+      name: 'tmux',
+      status: 'ok',
+      detail: `winmux (tmux ${match ? `${match[1]}.${match[2]}` : '3.x'} compatible, ConPTY)`,
+    }
+  }
   const versionStr = tmuxVersion()
   if (!versionStr) return { name: 'tmux', status: 'fail', detail: 'not on PATH' }
   const match = versionStr.match(/tmux (\d+)\.(\d+)/)
@@ -132,6 +149,19 @@ function checkProviderCompatibility(): CheckResult {
     status: 'warn',
     detail: problems.slice(0, 3).join('; ') + (problems.length > 3 ? `; +${problems.length - 3} more` : ''),
   }
+}
+
+// Helper tool CLIs (search, runtimes, model hub, local models) an agent may run
+// from its own shell. Informational only: a missing tool never fails the run,
+// it just narrows what agents can reach.
+function checkTools(): CheckResult {
+  const statuses = detectToolStatuses()
+  const detail = statuses
+    .map(tool => tool.installed
+      ? `${tool.display_name}: installed, ${tool.state_means}: ${tool.state}`
+      : `${tool.display_name}: missing`)
+    .join('; ')
+  return { name: 'tools', status: 'ok', detail }
 }
 
 function checkPathAccess(name: string, path: string): CheckResult {
@@ -203,6 +233,7 @@ export function runDoctor(): DoctorResult {
       checkTmux(),
       checkProviders(),
       checkProviderCompatibility(),
+      checkTools(),
       checkPathAccess('state dir', stateRoot()),
       checkPathAccess('runs dir', runsDir()),
       checkPathAccess('presets dir', join(stateRoot(), 'presets')),

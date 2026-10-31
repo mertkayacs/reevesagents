@@ -67,6 +67,7 @@ import {
 } from '../../core/runs.js'
 import { detectAvailable, isProvider, coerceExtraArgs } from '../../core/providers.js'
 import { PROVIDER_DEFS } from '../../core/provider-registry.js'
+import { detectToolStatuses } from '../../core/tool-registry.js'
 import { sweepAgents, sweepAgentsThrottled, sweepOrphanSessions, sweepOrphanSessionsThrottled } from '../../core/reaper.js'
 import { runDoctor } from '../../core/doctor.js'
 import { hostStatus, attach, attachAll, detach } from './installer.js'
@@ -367,6 +368,12 @@ const TOOLS: ToolDef[] = [
     handler: () => ok(buildProviderCatalog()),
   },
   {
+    name: 'list_tools',
+    description: 'List the helper tool CLIs on this machine (Perplexity, Google Colab, Hugging Face, Ollama): what each is for, whether it is installed, and its state (signed in, or reachable for Ollama), plus an example command and a docs link. They are not spawn providers; run them from your own shell.',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => ok(detectToolStatuses()),
+  },
+  {
     name: 'request_approval',
     description: 'Ask for approval before a risky action. Creates a pending approval that a human or another agent clears with resolve_approval, and returns it with its approval_id.',
     inputSchema: {
@@ -534,6 +541,7 @@ const TOOLS: ToolDef[] = [
         max_lifetime_ms: { type: 'number', description: 'Auto-reap any agent older than this many ms on the next sweep. 0 disables lifetime reaping.' },
         default_permissions: { type: 'string', enum: ['ask', 'skip'], description: 'Permission mode used when a spawn omits one.' },
         language: { type: 'string', description: 'UI language code for the TUI and web UI, e.g. en, tr.' },
+        web_theme: { type: 'string', enum: ['dark', 'light'], description: 'Web UI appearance.' },
       },
     },
     handler: (a) => {

@@ -9,7 +9,10 @@ that lives in the [online user guide](https://reevesagents.mertkayacs.com/docs/)
 ## What ReevesAgents is
 
 - A free, local workspace where your AI coding agents (Claude Code, Codex,
-  Hermes, DeepSeek, Kimi, and more) work side by side on your machine.
+  Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code,
+  Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI,
+  Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI, and more) work
+  side by side on your machine.
 - One agent can create and drive the others through the MCP. For example, a
   Claude Code session can run Codex and Claude Code agents on separate tasks.
 - You can also use ReevesAgents as a plain workspace: spawn the agents you want
@@ -23,11 +26,25 @@ that lives in the [online user guide](https://reevesagents.mertkayacs.com/docs/)
 
 ## Before you start
 
-- macOS, Linux, or WSL (native Windows is not the target; use WSL).
-- Node.js 20.19 or newer.
-- tmux 3.0 or newer.
+- macOS, Linux, or Windows 10 1809+ (native Windows is supported through the built-in winmux (ConPTY) runtime; WSL also works).
+- Node.js 22.12 or newer.
+- tmux 3.0 or newer (not needed on native Windows; winmux ships with reevesagents).
 - At least one provider CLI installed and logged in: Claude Code, Codex,
-  OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, or Aider.
+  OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Cline CLI,
+  Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
+  Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, or
+  Rovo Dev CLI.
+
+## Tools
+
+- Four tools sit next to the coding CLIs: Perplexity CLI (web search),
+  Google Colab CLI (CPU, GPU and TPU runtimes), Hugging Face CLI (models and
+  datasets on the Hub) and Ollama (local and cloud models). Agents run them from
+  their own shell.
+- `reevesagents tools` shows which of them are installed and whether you are
+  signed in (for Ollama: whether the server answers), with a purpose and an
+  example command for each. Add `--json` for scripts.
+- An agent with the MCP attached calls `list_tools` to get the same list.
 
 ## Install and check
 

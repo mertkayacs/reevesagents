@@ -299,5 +299,30 @@ describe('handleAgentMcpTool', () => {
       expect(Array.isArray(cc.models)).toBe(true)
       expect(typeof cc.model_source).toBe('string')
     })
+
+    it('list_tools returns the helper tool catalogue with install and state', async () => {
+      const { MCP_TOOLS } = await import('../src/surfaces/mcp/server.js')
+      const { TOOLS } = await import('../src/core/tool-registry.js')
+
+      expect(MCP_TOOLS.map(tool => tool.name)).toContain('list_tools')
+
+      const result = await call('list_tools', {})
+      expect(result.isError).toBeUndefined()
+      const catalog = payload(result)
+
+      expect(Array.isArray(catalog)).toBe(true)
+      expect(catalog.map((entry: any) => entry.id)).toEqual([...TOOLS])
+
+      const hf = catalog.find((entry: any) => entry.id === 'hf')
+      expect(hf.display_name).toBe('Hugging Face CLI')
+      expect(typeof hf.installed).toBe('boolean')
+      expect(['yes', 'no', 'unknown']).toContain(hf.state)
+      expect(hf.state_means).toBe('signed in')
+      expect(hf.example).toMatch(/^hf /)
+      expect(hf.docs_url).toMatch(/^https:\/\//)
+
+      const ollama = catalog.find((entry: any) => entry.id === 'ollama')
+      expect(ollama.state_means).toBe('reachable') // server check, not sign-in
+    })
   })
 })

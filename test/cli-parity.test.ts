@@ -67,6 +67,21 @@ async function runCli(args: string[]): Promise<RunArgs> {
   }
 }
 
+// Command name from a mocked exec call: 'tmux X' on POSIX, 'node <winmux> X' on win32.
+function tmuxCmdName(call: unknown[]): string | undefined {
+  const [file, args] = call as [string, string[]]
+  if (file === 'tmux') return args?.[0]
+  if (file === process.execPath && args?.[0]?.includes('winmux')) return args?.[1]
+  return undefined
+}
+
+// Command args from a mocked exec call with the winmux prefix stripped.
+function tmuxCallArgs(call: unknown[]): string[] {
+  const [, args] = call as [string, string[]]
+  if ((call as [string])[0] === process.execPath && args?.[0]?.includes('winmux')) return args.slice(1)
+  return args ?? []
+}
+
 function makeRun(id: string, overrides: Partial<RunRecord> = {}): RunRecord {
   return {
     id,
@@ -118,7 +133,8 @@ function wireTmux(): void {
   const windows = new Set(['@0', '@1'])
   const panes = new Set(['%0', '%1'])
   execFileSync.mockImplementation((file: string, args: string[]) => {
-    if (file !== 'tmux') return Buffer.from('')
+      if (file === process.execPath && String(args?.[0] ?? '').includes('winmux')) { file = 'tmux'; args = args!.slice(1) }
+  if (file !== 'tmux') return Buffer.from('')
     if (args[0] === 'display-message') return '@0 %0'
     if (args[0] === 'new-window') {
       const id = next++
@@ -140,11 +156,12 @@ function wireTmuxWithMissing(missingBins: string[]): void {
   const windows = new Set(['@0', '@1'])
   const panes = new Set(['%0', '%1'])
   execFileSync.mockImplementation((file: string, args: string[]) => {
-    if (file === 'which') {
+    if ((file === 'which' || file === 'where')) {
       if (missingBins.includes(args[0] as string)) throw new Error(`which: no ${args[0]}`)
       return Buffer.from('')
     }
-    if (file !== 'tmux') return Buffer.from('')
+      if (file === process.execPath && String(args?.[0] ?? '').includes('winmux')) { file = 'tmux'; args = args!.slice(1) }
+  if (file !== 'tmux') return Buffer.from('')
     if (args[0] === 'display-message') return '@0 %0'
     if (args[0] === 'new-window') {
       const id = next++
@@ -270,7 +287,7 @@ describe('cli parity', () => {
       const { out } = await runCli(['send', 's1-a', 'hello', 'world'])
       expect(out).toMatch(/sent to/)
       // The real driver passes the pasted text as the execFileSync `input` option.
-      const load = execFileSync.mock.calls.find(c => c[0] === 'tmux' && c[1]?.[0] === 'load-buffer')
+      const load = execFileSync.mock.calls.find(c => tmuxCmdName(c) === 'load-buffer')
       expect((load?.[2] as { input?: string })?.input).toBe('hello world')
     })
 
@@ -282,8 +299,8 @@ describe('cli parity', () => {
 
       const { out } = await runCli(['key', 'k1-a', 'enter'])
       expect(out).toMatch(/sent enter to/)
-      const sent = execFileSync.mock.calls.find(c => c[0] === 'tmux' && c[1]?.[0] === 'send-keys')
-      expect(sent?.[1]).toEqual(['send-keys', '-t', '%1', 'Enter'])
+      const sent = execFileSync.mock.calls.find(c => tmuxCmdName(c) === 'send-keys')
+      expect(sent && tmuxCallArgs(sent)).toEqual(['send-keys', '-t', '%1', 'Enter'])
     })
 
     it('key rejects an unsupported key', async () => {
@@ -303,8 +320,8 @@ describe('cli parity', () => {
 
       const { out } = await runCli(['interrupt', 'i1-a'])
       expect(out).toMatch(/interrupted/)
-      const sent = execFileSync.mock.calls.find(c => c[0] === 'tmux' && c[1]?.[0] === 'send-keys')
-      expect(sent?.[1]).toEqual(['send-keys', '-t', '%1', 'C-c'])
+      const sent = execFileSync.mock.calls.find(c => tmuxCmdName(c) === 'send-keys')
+      expect(sent && tmuxCallArgs(sent)).toEqual(['send-keys', '-t', '%1', 'C-c'])
     })
   })
 
@@ -393,6 +410,82 @@ describe('cli parity', () => {
     })
   })
 
+  describe('tools', () => {
+    const toolKeys = ['PERPLEXITY_API_KEY', 'PPLX_SDK_BASE_URL', 'PPLX_SDK_API_KEY', 'XDG_CONFIG_HOME', 'HF_TOKEN', 'OLLAMA_API_KEY'] as const
+    const savedKeys = new Map<string, string | undefined>()
+    let savedHome: string | undefined
+    let tmpHome: string
+
+    beforeEach(() => {
+      for (const key of toolKeys) {
+        savedKeys.set(key, process.env[key])
+        delete process.env[key]
+      }
+      // Point home at an empty dir so the pplx credentials-file probe cannot
+      // pick up the real machine's state.
+      tmpHome = mkdtempSync(join(tmpdir(), 'reeves-cli-tools-'))
+      savedHome = process.env.HOME
+      process.env.HOME = tmpHome
+    })
+
+    afterEach(() => {
+      for (const [key, value] of savedKeys) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+      if (savedHome === undefined) delete process.env.HOME
+      else process.env.HOME = savedHome
+      rmSync(tmpHome, { recursive: true, force: true })
+    })
+
+    it('lists helper tools with install and state as JSON', async () => {
+      execFileSync.mockImplementation((file: string, args: string[]) => {
+        if ((file === 'which' || file === 'where') && args[0] === 'hf') return Buffer.from('/usr/local/bin/hf\n')
+        throw new Error(`absent: ${file}`)
+      })
+
+      const { out } = await runCli(['tools', '--json'])
+      const tools = JSON.parse(out) as Array<{ id: string; display_name: string; installed: boolean; state: string; state_means: string; example: string }>
+      expect(tools.map(tool => tool.id)).toEqual(['pplx', 'colab', 'hf', 'ollama'])
+
+      const hf = tools.find(tool => tool.id === 'hf')!
+      expect(hf.display_name).toBe('Hugging Face CLI')
+      expect(hf.installed).toBe(true)
+      expect(hf.state).toBe('no') // no HF_TOKEN, and the mocked probe exits 1
+      expect(hf.state_means).toBe('signed in')
+      expect(hf.example).toMatch(/^hf /)
+
+      const pplx = tools.find(tool => tool.id === 'pplx')!
+      expect(pplx.installed).toBe(false)
+      expect(pplx.state).toBe('no') // no key in the env, no credentials file under the temp home
+
+      const ollama = tools.find(tool => tool.id === 'ollama')!
+      expect(ollama.state_means).toBe('reachable')
+      expect(ollama.example).toMatch(/[-:]cloud/)
+    })
+
+    it('prints a text catalogue with purpose and example lines', async () => {
+      execFileSync.mockImplementation(() => { throw new Error('which: not found') })
+      const { out } = await runCli(['tools'])
+      expect(out).toMatch(/--\s+pplx\s+Perplexity CLI\s+not installed/)
+      expect(out).toMatch(/Web search and page snippets from Perplexity/)
+      expect(out).toMatch(/ollama run gemma4:31b-cloud/)
+      expect(out).toMatch(/Ollama\s+not installed/)
+    })
+
+    it('prints the sign-in state only for installed tools', async () => {
+      execFileSync.mockImplementation((file: string, args: string[]) => {
+        if ((file === 'which' || file === 'where') && args[0] === 'hf') return Buffer.from('/usr/local/bin/hf\n')
+        throw new Error(`absent: ${file}`)
+      })
+
+      const { out } = await runCli(['tools'])
+      expect(out).toMatch(/ok\s+hf\s+Hugging Face CLI\s+signed in: no/)
+      expect(out).toMatch(/--\s+pplx\s+Perplexity CLI\s+not installed/)
+      expect(out).not.toMatch(/Perplexity CLI\s+signed in/)
+    })
+  })
+
   describe('approvals', () => {
     it('lists pending approvals as JSON', async () => {
       const { writeRun, writeAgent } = await import('../src/core/runs.js')
@@ -436,7 +529,7 @@ describe('cli parity', () => {
   describe('mcp hosts', () => {
     it('hosts lists host CLIs with attach state as JSON', async () => {
       execFileSync.mockImplementation((file: string, args: string[]) => {
-        if (file === 'which' && args[0] === 'claude') return Buffer.from('/usr/bin/claude\n')
+        if ((file === 'which' || file === 'where') && args[0] === 'claude') return Buffer.from('/usr/bin/claude\n')
         if (file === 'claude' && args[1] === 'list') return 'reevesagents: reevesagents mcp - connected'
         throw new Error(`absent: ${file}`)
       })
@@ -449,7 +542,7 @@ describe('cli parity', () => {
 
     it('attach with a cli attaches one host', async () => {
       execFileSync.mockImplementation((file: string, args: string[]) => {
-        if (file === 'which' && args[0] === 'claude') return Buffer.from('/usr/bin/claude\n')
+        if ((file === 'which' || file === 'where') && args[0] === 'claude') return Buffer.from('/usr/bin/claude\n')
         if (file === 'claude' && args[1] === 'list') return ''
         if (file === 'claude' && args[1] === 'add') return ''
         throw new Error(`absent: ${file}`)
@@ -466,7 +559,7 @@ describe('cli parity', () => {
 
     it('attach without a cli attaches all installed drivable hosts', async () => {
       execFileSync.mockImplementation((file: string, args: string[]) => {
-        if (file === 'which') return args[0] === 'claude' ? Buffer.from('/usr/bin/claude\n') : (() => { throw new Error('absent') })()
+        if ((file === 'which' || file === 'where')) return args[0] === 'claude' ? Buffer.from('/usr/bin/claude\n') : (() => { throw new Error('absent') })()
         if (file === 'claude' && args[1] === 'list') return ''
         if (file === 'claude' && args[1] === 'add') return ''
         throw new Error(`absent: ${file}`)
@@ -478,7 +571,7 @@ describe('cli parity', () => {
 
     it('detach removes one host', async () => {
       execFileSync.mockImplementation((file: string, args: string[]) => {
-        if (file === 'which' && args[0] === 'claude') return Buffer.from('/usr/bin/claude\n')
+        if ((file === 'which' || file === 'where') && args[0] === 'claude') return Buffer.from('/usr/bin/claude\n')
         if (file === 'claude' && args[1] === 'remove') return ''
         throw new Error(`absent: ${file}`)
       })
@@ -495,7 +588,7 @@ describe('cli parity', () => {
       wireTmux()
       const { out } = await runCli(['spawn', 'cc', '--auth-mode', 'api-key', '--effort', 'high'])
       expect(out).toMatch(/started/)
-      const newWindow = execFileSync.mock.calls.find(c => c[0] === 'tmux' && c[1]?.[0] === 'new-window')!
+      const newWindow = execFileSync.mock.calls.find(c => tmuxCmdName(c) === 'new-window')!
       const shellCommand = String(newWindow[1]![newWindow[1]!.length - 1])
       expect(shellCommand).toContain('--effort')
       expect(shellCommand).toContain('high')

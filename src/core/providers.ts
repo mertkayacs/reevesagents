@@ -3,7 +3,7 @@
 // builders the rest of the app imports: BIN, PROVIDERS, the alias map, buildCommand,
 // and the --help compatibility checks.
 
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync, type SpawnSyncOptions } from 'node:child_process'
 import type { Provider, Permissions, AuthMode, Effort } from './types.js'
 import { PROVIDER_DEFS, PROVIDER_REGISTRY } from './provider-registry.js'
 
@@ -46,7 +46,9 @@ const PROVIDER_ALIASES: Record<string, Provider> = Object.fromEntries(
 )
 
 const HELP_INSPECT_TIMEOUT_MS = 3000
-const HELP_INSPECT_TOTAL_BUDGET_MS = 8000
+// The budget grows with the catalogue at 1.5s per provider (8s floor); once it
+// runs out, the providers left are reported as skipped.
+const HELP_INSPECT_TOTAL_BUDGET_MS = Math.max(8000, PROVIDERS.length * 1500)
 
 export interface ProviderCompatibility {
   provider: Provider
@@ -85,15 +87,21 @@ export function buildCommand(opts: BuildCommandOptions): string[] {
   return [def.bin, ...def.buildArgs({ permissions, model, auth_mode, effort }), ...extra_args]
 }
 
+// True when the binary resolves on PATH. Shared by the provider and the helper
+// tool catalogues so both availability reports use the same probe.
+export function binaryOnPath(bin: string, platform = process.platform): boolean {
+  try {
+    execFileSync(platform === 'win32' ? 'where' : 'which', [bin], { stdio: 'pipe' })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function detectAvailable(): Record<Provider, boolean> {
   const result = {} as Record<Provider, boolean>
   for (const provider of PROVIDERS) {
-    try {
-      execFileSync('which', [BIN[provider]], { stdio: 'pipe' })
-      result[provider] = true
-    } catch {
-      result[provider] = false
-    }
+    result[provider] = binaryOnPath(BIN[provider])
   }
   return result
 }
@@ -107,6 +115,52 @@ export function missingHelpFeatures(provider: Provider, helpText: string): strin
   return PROVIDER_REGISTRY[provider].helpRequirements
     .filter(req => req.tokens.some(token => !helpText.includes(token)))
     .map(req => req.feature)
+}
+
+// Full path of a CLI on PATH via where/which, or null when it is not found.
+// On Windows `where` may list several candidates (npm shims ship both an
+// extensionless stub and a .cmd); prefer the runnable extension.
+export function resolveCliPath(bin: string): string | null {
+  try {
+    const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [bin], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    const candidates = out.trim().split(/\r?\n/).filter(Boolean)
+    return (candidates.find(c => /\.(cmd|bat|exe)$/i.test(c)) ?? candidates[0]) ?? null
+  } catch {
+    return null
+  }
+}
+
+// Tokens that never need cmd.exe quoting (npm CLI help flags look like this).
+const isPlainToken = (token: string): boolean =>
+  /^[A-Za-z0-9_:@%+=,./\\-]+$/.test(token)
+
+export function spawnCliSync(
+  bin: string,
+  args: string[],
+  options: SpawnSyncOptions = {},
+  platform = process.platform,
+): ReturnType<typeof spawnSync> {
+  if (platform !== 'win32') return spawnSync(bin, args, options)
+  // npm-installed CLIs on Windows are .cmd shims, which a shell-less spawnSync
+  // cannot run. Resolve the real path; run shims through the shell with each
+  // argument safely quoted, real executables directly with no shell.
+  const resolved = resolveCliPath(bin)
+  if (!resolved) return spawnSync(bin, args, options) // ENOENT like a missing binary
+  if (/\.(cmd|bat)$/i.test(resolved)) {
+    // shell: true joins file+args verbatim, so quote anything cmd.exe would
+    // treat specially (help flags are plain, embedded double quotes are dropped)
+    return spawnCmdShim(resolved, args, options)
+  }
+  return spawnSync(resolved, args, options)
+}
+
+function spawnCmdShim(resolved: string, args: string[], options: SpawnSyncOptions): ReturnType<typeof spawnSync> {
+  const cmdSafe = (token: string): string =>
+    isPlainToken(token) ? token : '"' + token.replace(/["\\^&|<>()!%]/g, '').replace(/\s+/g, ' ') + '"'
+  return spawnSync(`"${resolved}"`, args.map(cmdSafe), { ...options, shell: true, windowsVerbatimArguments: true })
 }
 
 export function inspectProviderCompatibility(): Record<Provider, ProviderCompatibility> {
@@ -139,7 +193,7 @@ export function inspectProviderCompatibility(): Record<Provider, ProviderCompati
         continue
       }
       const [bin, ...args] = helpCommand(provider)
-      const inspected = spawnSync(bin, args, {
+      const inspected = spawnCliSync(bin, args, {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: Math.min(HELP_INSPECT_TIMEOUT_MS, remaining),

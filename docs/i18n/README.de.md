@@ -16,13 +16,53 @@
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
 </p>
 
+<p align="center">
+  <img src="../assets/providers/cc.svg" width="40" height="40" alt="Claude Code" title="Claude Code">
+  <img src="../assets/providers/codex.svg" width="40" height="40" alt="Codex CLI" title="Codex CLI">
+  <img src="../assets/providers/opencode.svg" width="40" height="40" alt="OpenCode" title="OpenCode">
+  <img src="../assets/providers/hermes.svg" width="40" height="40" alt="Hermes" title="Hermes">
+  <img src="../assets/providers/kimi.svg" width="40" height="40" alt="Kimi Code" title="Kimi Code">
+  <img src="../assets/providers/deepseek.svg" width="40" height="40" alt="DeepSeek CLI" title="DeepSeek CLI">
+  <img src="../assets/providers/pi.svg" width="40" height="40" alt="Pi" title="Pi">
+  <img src="../assets/providers/qwen.svg" width="40" height="40" alt="Qwen Code" title="Qwen Code">
+  <img src="../assets/providers/aider.svg" width="40" height="40" alt="Aider" title="Aider">
+</p>
+<p align="center">
+  <img src="../assets/providers/gemini.svg" width="40" height="40" alt="Gemini CLI" title="Gemini CLI">
+  <img src="../assets/providers/cline.svg" width="40" height="40" alt="Cline CLI" title="Cline CLI">
+  <img src="../assets/providers/crush.svg" width="40" height="40" alt="Crush" title="Crush">
+  <img src="../assets/providers/goose.svg" width="40" height="40" alt="Goose" title="Goose">
+  <img src="../assets/providers/kilo.svg" width="40" height="40" alt="Kilo Code" title="Kilo Code">
+  <img src="../assets/providers/letta.svg" width="40" height="40" alt="Letta Code" title="Letta Code">
+  <img src="../assets/providers/vibe.svg" width="40" height="40" alt="Mistral Vibe" title="Mistral Vibe">
+  <img src="../assets/providers/grok.svg" width="40" height="40" alt="Grok Build" title="Grok Build">
+  <img src="../assets/providers/kiro.svg" width="40" height="40" alt="Kiro CLI" title="Kiro CLI">
+</p>
+<p align="center">
+  <img src="../assets/providers/droid.svg" width="40" height="40" alt="Factory Droid" title="Factory Droid">
+  <img src="../assets/providers/qoder.svg" width="40" height="40" alt="Qoder CLI" title="Qoder CLI">
+  <img src="../assets/providers/warp.svg" width="40" height="40" alt="Warp" title="Warp">
+  <img src="../assets/providers/junie.svg" width="40" height="40" alt="Junie CLI" title="Junie CLI">
+  <img src="../assets/providers/copilot.svg" width="40" height="40" alt="GitHub Copilot CLI" title="GitHub Copilot CLI">
+  <img src="../assets/providers/cursor.svg" width="40" height="40" alt="Cursor CLI" title="Cursor CLI">
+  <img src="../assets/providers/rovo.svg" width="40" height="40" alt="Rovo Dev CLI" title="Rovo Dev CLI">
+</p>
+<p align="center">
+  <img src="../assets/providers/pplx.svg" width="40" height="40" alt="Perplexity" title="Perplexity">
+  <img src="../assets/providers/colab.svg" width="40" height="40" alt="Google Colab" title="Google Colab">
+  <img src="../assets/providers/hf.svg" width="40" height="40" alt="Hugging Face" title="Hugging Face">
+  <img src="../assets/providers/ollama.svg" width="40" height="40" alt="Ollama" title="Ollama">
+</p>
+
 [English](../../README.md) · **Deutsch** · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · [简体中文](README.zh-Hans.md) · [العربية](README.ar.md)
 
 ReevesAgents ist ein lokaler Workspace für KI-Coding-CLIs. Es lässt Claude Code,
-Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider und weitere
-Anbieter-CLIs nebeneinander in tmux laufen. Du kannst es als ganz normale
-CLI/TUI/Web UI nutzen oder seinen Opt-in-MCP anhängen, damit ein Agent die
-übrigen starten, auslesen, lenken und stoppen kann.
+Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider, Gemini CLI, Cline CLI,
+Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
+Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
+Rovo Dev CLI und weitere Anbieter-CLIs nebeneinander in tmux laufen. Du kannst
+es als ganz normale CLI/TUI/Web UI nutzen oder seinen Opt-in-MCP anhängen, damit
+ein Agent die übrigen starten, auslesen, lenken und stoppen kann.
 
 Das Login bleibt in der jeweiligen Anbieter-CLI. ReevesAgents legt seinen eigenen Zustand
 in ein paar einfachen JSON-Dateien unter `~/.reeves` ab und läuft nur, solange du oder eine
@@ -75,11 +115,23 @@ ReevesAgents ist bewusst lokal gebaut. Der State liegt als reines JSON unter
 `~/.reeves`, und die CLIs, die es startet, sind dieselben, die du sonst von Hand
 benutzt.
 
+## Tools
+
+Neben den Coding-CLIs kennt ReevesAgents vier Tools. Perplexity CLI durchsucht
+das Web, Google Colab CLI führt Skripte und Notebooks auf CPU-, GPU- und
+TPU-Runtimes aus, Hugging Face CLI lädt Modelle und Datensätze herunter und hoch
+und startet Jobs auf dem Hub, und Ollama führt lokale oder Cloud-Modelle im
+Terminal aus. Die Agenten rufen sie aus ihrer eigenen Shell auf.
+
+`reevesagents tools` listet die vier mit Zweck, Beispielbefehl und Status auf:
+installiert und angemeldet (bei Ollama: erreichbar). Für Skripte gibt es `--json`.
+Ein Agent mit angehängtem MCP bekommt dieselbe Liste über `list_tools`.
+
 <a id="install"></a>
 <details>
 <summary><strong>Installation</strong></summary>
 
-ReevesAgents braucht Node.js `20.19+`, tmux `3.0+` und mindestens eine
+ReevesAgents braucht Node.js `22.12+`, tmux `3.0+` und mindestens eine
 unterstützte Anbieter-CLI, die installiert und eingeloggt ist. Es läuft auf
 macOS, Linux und WSL.
 
@@ -154,6 +206,7 @@ Ohne Argumente startet die TUI.
 | `doctor` | Prüft Node, tmux, State und Anbieter-CLIs. |
 | `web` | Startet die Web UI, die nur auf Loopback lauscht. |
 | `providers` | Listet Anbieter-IDs, Aliasse, Modelle und Verfügbarkeit auf. |
+| `tools` | Listet Perplexity, Google Colab, Hugging Face und Ollama mit Zweck, Beispiel sowie Installations- und Anmeldestatus auf. |
 | `approvals` | Listet offene Freigabeanfragen auf. |
 | `approve` / `deny` | Entscheidet eine Freigabeanfrage. |
 | `hosts` | Zeigt, an welchen Host-CLIs ReevesAgents hängt. |

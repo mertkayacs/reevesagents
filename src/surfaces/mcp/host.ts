@@ -30,7 +30,34 @@ export function providerFromParent(comm: string, argv: string[]): Provider | nul
   return null
 }
 
+// cmd.exe-style CommandLineToArgvW tokenization (simplified: no backslash-gnu
+// escaping; quoted segments and whitespace splitting is all argv matching needs).
+export function splitWindowsCommandLine(line: string): string[] {
+  const out: string[] = []
+  let current = ''
+  let inQuotes = false
+  let started = false
+  for (const ch of line) {
+    if (ch === '"') {
+      inQuotes = !inQuotes
+      started = true
+      continue
+    }
+    if (!inQuotes && /\s/.test(ch)) {
+      if (started || current) out.push(current)
+      current = ''
+      started = false
+      continue
+    }
+    current += ch
+    started = true
+  }
+  if (started || current) out.push(current)
+  return out
+}
+
 function readParentComm(ppid: number): string {
+  if (process.platform === 'win32') return '' // no /proc; argv lookup covers it
   try {
     // Linux: cheap and dependency-free.
     return readFileSync(`/proc/${ppid}/comm`, 'utf8').trim()
@@ -41,6 +68,20 @@ function readParentComm(ppid: number): string {
 }
 
 function readParentArgv(ppid: number): string[] {
+  if (process.platform === 'win32') {
+    // The host may sit under "C:\Program Files" or a nested .cmd shim, so query
+    // the real CommandLine; PowerShell is the only built-in way without /proc.
+    try {
+      const raw = execFileSync('powershell.exe', [
+        '-NoProfile',
+        '-Command',
+        `(Get-CimInstance Win32_Process -Filter "ProcessId=${ppid}").CommandLine`,
+      ], { encoding: 'utf8', timeout: 5000 })
+      return splitWindowsCommandLine(raw.trim()).filter(Boolean)
+    } catch {
+      return []
+    }
+  }
   try {
     // Linux: NUL-separated argv with a trailing NUL.
     return readFileSync(`/proc/${ppid}/cmdline`, 'utf8').split('\0').filter(Boolean)

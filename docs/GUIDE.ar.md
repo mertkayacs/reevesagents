@@ -6,7 +6,7 @@
 
 ## ما هو ReevesAgents
 
-- مساحة عمل محلية مجانية يعمل فيها وكلاء البرمجة لديك (Claude Code وCodex وHermes وDeepSeek وKimi وغيرها) جنبًا إلى جنب على جهازك.
+- مساحة عمل محلية مجانية يعمل فيها وكلاء البرمجة لديك (Claude Code وCodex وHermes وDeepSeek وKimi وGemini CLI وCline CLI وCrush وGoose وKilo Code وLetta Code وMistral Vibe وGrok Build وKiro CLI وFactory Droid وQoder CLI وWarp وJunie CLI وGitHub Copilot CLI وCursor CLI وRovo Dev CLI وغيرها) جنبًا إلى جنب على جهازك.
 - يمكن لوكيل واحد إنشاء الآخرين وقيادتهم عبر MCP. على سبيل المثال، تستطيع جلسة Claude Code تشغيل وكلاء Codex وClaude Code على مهام منفصلة.
 - ويمكنك استخدام ReevesAgents أيضًا كمساحة عمل عادية: أنشئ الوكلاء الذين تريدهم وواصِل إضافة المزيد بـ `reevesagents add`. يعملون جنبًا إلى جنب، ولا يتحكم أحد في أحد حتى تختار تفعيل الـ MCP.
 - وهو يقوم فوق أدوات CLI الموجودة لديك أصلًا، فيبقى كل تسجيل دخول في مكانه المعهود. لا يحمل ReevesAgents مفتاح API أبدًا، ولا يمسّ حركة النماذج لديك.
@@ -15,9 +15,15 @@
 ## قبل أن تبدأ
 
 - macOS أو Linux أو WSL (نظام Windows الأصلي ليس الهدف؛ استخدم WSL).
-- Node.js 20.19 أو أحدث.
+- Node.js 22.12 أو أحدث.
 - tmux 3.0 أو أحدث.
-- أداة CLI واحدة على الأقل من مزوّد، مثبّتة وموثّقة: Claude Code أو Codex أو OpenCode أو Hermes أو Kimi أو DeepSeek أو Pi أو Qwen أو Aider.
+- أداة CLI واحدة على الأقل من مزوّد، مثبّتة وموثّقة: Claude Code أو Codex أو OpenCode أو Hermes أو Kimi أو DeepSeek أو Pi أو Qwen أو Aider أو Gemini CLI أو Cline CLI أو Crush أو Goose أو Kilo Code أو Letta Code أو Mistral Vibe أو Grok Build أو Kiro CLI أو Factory Droid أو Qoder CLI أو Warp أو Junie CLI أو GitHub Copilot CLI أو Cursor CLI أو Rovo Dev CLI.
+
+## الأدوات
+
+- تعمل أربع أدوات إلى جانب أدوات CLI للبرمجة: Perplexity CLI (بحث الويب) وGoogle Colab CLI (بيئات CPU وGPU وTPU) وHugging Face CLI (النماذج ومجموعات البيانات على Hub) وOllama (نماذج محلية وسحابية). يشغّلها الوكلاء من سطر الأوامر الخاص بهم.
+- يعرض `reevesagents tools` أيها مثبّت وهل سجّلت الدخول (وفي Ollama: هل يستجيب الخادم)، مع غرض كل أداة وأمر نموذجي لها. أضف `--json` للسكربتات.
+- الوكيل الذي رُبط به MCP يستدعي `list_tools` ليحصل على القائمة نفسها.
 
 ## التثبيت والتحقق
 

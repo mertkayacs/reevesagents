@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "ReevesAgents: Local tmux workspace for AI coding CLIs"
+version: 1.8.2
+date-released: 2026-10-10
+authors:
+  - family-names: Kaya
+    given-names: Mert
+    orcid: "https://orcid.org/0009-0006-7018-3027"
+repository-code: "https://github.com/mertkayacs/reevesagents"
+url: "https://reevesagents.mertkayacs.com"
+license: Apache-2.0

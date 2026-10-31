@@ -39,7 +39,9 @@ export function Reference() {
   const { rows } = useWindowSize()
   const bodyRows = frameBodyRows(rows, true, true)
   const compactBody = bodyRows <= 10
-  const visibleCount = Math.max(1, compactBody ? bodyRows - 3 : bodyRows - 5)
+  // Reserve the Actions block and a closing border for every visible section.
+  const sectionEndRows = CONTENT.filter(item => item.type === 'section').length
+  const visibleCount = Math.max(1, compactBody ? bodyRows - 3 : bodyRows - 3 - sectionEndRows)
   const maxScroll = Math.max(0, CONTENT.length - visibleCount)
   const [scroll, setScroll] = useState(0)
 

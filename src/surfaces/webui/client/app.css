@@ -55,6 +55,47 @@
   --topbar-h: 58px;
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f7fb;
+  --bg-raised: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f1f5f9;
+  --panel-3: #e6edf4;
+  --terminal: #f7f9fc;
+  --border: #c4d0dc;
+  --border-soft: #d8e1ea;
+  --border-faint: #e7edf3;
+  --text: #1b2835;
+  --dim: #46596a;
+  --muted: #5d7182;
+  --faint: #718393;
+  --accent: #1763aa;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcecfb;
+  --warm: #93630e;
+  --teal: #20776f;
+  --rose: #a83e68;
+  --violet: #694aa0;
+  --ok: #357343;
+  --warn: #93630e;
+  --error: #b43b37;
+  --shadow-soft: 0 16px 42px rgba(37, 57, 77, 0.12);
+  --shadow-tight: 0 8px 24px rgba(37, 57, 77, 0.1);
+}
+
+:root[data-theme="light"] .stage-head {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+:root[data-theme="light"] .stage-overlay {
+  background: linear-gradient(180deg, rgba(247, 249, 252, 0.96), rgba(247, 249, 252, 0.9));
+}
+
+:root[data-theme="light"] .mcp-host-row {
+  background: var(--panel-2);
+}
+
 * { box-sizing: border-box; }
 
 html,

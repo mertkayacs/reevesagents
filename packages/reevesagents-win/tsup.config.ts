@@ -7,7 +7,7 @@ export default defineConfig({
   format: ['esm'],
   dts: false,
   clean: true,
-  target: 'node20',
+  target: 'node22',
   platform: 'node',
   // Native ConPTY addon: never bundle it, resolve at runtime so the prebuilt
   // win32 binary loads on the target machine.

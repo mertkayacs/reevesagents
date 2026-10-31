@@ -12,7 +12,49 @@
 // lifetime; the remaining race is a server restart between check and use, which
 // tmux offers no way to close.
 
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync, type ExecFileSyncOptions, type SpawnSyncOptions } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, URL } from 'node:url'
+
+// winmux entry resolution (win32 only): the twin tmux-compatible multiplexer
+// runs as `node <winmux.js>`. Order: explicit env override, then the bundled
+// sibling (dist/cli.js, dist/index.js, dist/winmux.js are siblings), then the
+// dist/winmux.js under the nearest ancestor with a package.json.
+function winmuxEntry(platform = process.platform): string {
+  if (platform !== 'win32') throw new Error('winmuxEntry is only meaningful on win32')
+  const envEntry = process.env.REEVES_WINMUX_ENTRY
+  if (envEntry) return envEntry
+  const bundled = fileURLToPath(new URL('./winmux.js', import.meta.url))
+  if (existsSync(bundled)) return bundled
+  let dir = dirname(fileURLToPath(import.meta.url))
+  while (true) {
+    if (existsSync(join(dir, 'package.json'))) return join(dir, 'dist', 'winmux.js')
+    const parent = dirname(dir)
+    if (parent === dir) return bundled
+    dir = parent
+  }
+}
+
+// Single decision point for "which multiplexer binary do we exec". Non-Windows
+// stays plain `tmux`; win32 routes every invocation through winmux via node.
+export function tmuxCommand(platform = process.platform): { file: string; prefix: string[] } {
+  if (platform === 'win32') {
+    return { file: process.execPath, prefix: [winmuxEntry(platform)] }
+  }
+  return { file: 'tmux', prefix: [] }
+}
+
+export function execTmux(args: string[], options: Omit<ExecFileSyncOptions, 'encoding'> & { encoding?: 'utf8' } = {}): string {
+  const cmd = tmuxCommand()
+  return execFileSync(cmd.file, [...cmd.prefix, ...args], { encoding: 'utf8', ...options }) as string
+}
+
+export function spawnTmux(args: string[], options: SpawnSyncOptions = {}): ReturnType<typeof spawnSync> {
+  const cmd = tmuxCommand()
+  return spawnSync(cmd.file, [...cmd.prefix, ...args], options)
+}
 
 // Injectable seam for everything that shells out to tmux with pacing. Tests
 // substitute a fake; production uses realDriver.
@@ -23,8 +65,7 @@ export interface RuntimeDriver {
 
 export const realDriver: RuntimeDriver = {
   tmux(args, input) {
-    return execFileSync('tmux', args, {
-      encoding: 'utf8',
+    return execTmux(args, {
       input,
       stdio: input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
     }).trim()
@@ -43,9 +84,19 @@ export function exactSession(session: string): string {
   return `=${session}`
 }
 
-export function tmuxAvailable(): boolean {
+export function tmuxAvailable(platform = process.platform): boolean {
+  if (platform === 'win32') {
+    // winmux needs its PTY/terminal backends; without them it cannot run panes.
+    const entry = winmuxEntry(platform)
+    if (!existsSync(entry)) return false
+    const requireFrom = createRequire(import.meta.url)
+    try { requireFrom.resolve('@lydell/node-pty') } catch { return false }
+    try { requireFrom.resolve('@xterm/headless') } catch { return false }
+    return true
+  }
   try {
-    const result = spawnSync('tmux', ['-V'], { stdio: 'ignore' })
+    const cmd = tmuxCommand(platform)
+    const result = spawnSync(cmd.file, [...cmd.prefix, '-V'], { stdio: 'ignore' })
     return result.status === 0
   } catch {
     return false
@@ -55,7 +106,7 @@ export function tmuxAvailable(): boolean {
 // Raw `tmux -V` output (e.g. "tmux 3.4"), or null when tmux is missing.
 export function tmuxVersion(): string | null {
   try {
-    return execFileSync('tmux', ['-V'], { encoding: 'utf8' }).trim()
+    return execTmux(['-V']).trim()
   } catch {
     return null
   }
@@ -64,7 +115,7 @@ export function tmuxVersion(): string | null {
 export function sessionExists(session: string): boolean {
   if (!session) return false
   try {
-    const result = spawnSync('tmux', ['has-session', '-t', exactSession(session)], { stdio: 'ignore' })
+    const result = spawnTmux(['has-session', '-t', exactSession(session)], { stdio: 'ignore' })
     return result.status === 0
   } catch {
     return false
@@ -79,8 +130,9 @@ export function targetExists(target: string, session: string): boolean {
     const args = target.startsWith('%')
       ? ['list-panes', '-s', '-t', exactSession(session), '-F', '#{pane_id}']
       : ['list-windows', '-t', exactSession(session), '-F', '#{window_id}']
-    const result = spawnSync('tmux', args, { encoding: 'utf8' })
-    return result.status === 0 && result.stdout.split('\n').some(line => line.trim() === target)
+    const result = spawnTmux(args, { encoding: 'utf8' })
+    const stdout = typeof result.stdout === 'string' ? result.stdout : ''
+    return result.status === 0 && stdout.split('\n').some(line => line.trim() === target)
   } catch {
     return false
   }
@@ -97,7 +149,7 @@ export interface TmuxSessionInfo {
 // One enumeration call for the orphan sweep; a missing tmux server yields [].
 export function listSessions(): TmuxSessionInfo[] {
   try {
-    return execFileSync('tmux', ['list-sessions', '-F', '#{session_name}\t#{session_attached}\t#{session_group}\t#{session_group_list}\t#{session_created}'], { encoding: 'utf8' })
+    return execTmux(['list-sessions', '-F', '#{session_name}\t#{session_attached}\t#{session_group}\t#{session_group_list}\t#{session_created}'])
       .split('\n')
       .map(line => line.trim())
       .filter(Boolean)
@@ -120,7 +172,7 @@ export function listSessions(): TmuxSessionInfo[] {
 // before killing so a human who attached since the enumeration keeps the session.
 export function sessionAttached(session: string): boolean {
   try {
-    const out = execFileSync('tmux', ['display-message', '-p', '-t', exactSession(session), '#{session_attached}'], { encoding: 'utf8' }).trim()
+    const out = execTmux(['display-message', '-p', '-t', exactSession(session), '#{session_attached}']).trim()
     return out !== '0' && out !== ''
   } catch {
     return true // cannot probe: treat as attached, never kill blind
@@ -129,7 +181,7 @@ export function sessionAttached(session: string): boolean {
 
 export function killSession(session: string): void {
   try {
-    spawnSync('tmux', ['kill-session', '-t', exactSession(session)], { stdio: 'ignore' })
+    spawnTmux(['kill-session', '-t', exactSession(session)], { stdio: 'ignore' })
   } catch {
     // session already gone
   }
@@ -141,7 +193,7 @@ export function killSession(session: string): void {
 export function allWindowIds(): Set<string> {
   try {
     return new Set(
-      execFileSync('tmux', ['list-windows', '-a', '-F', '#{session_name}\t#{window_id}'], { encoding: 'utf8' })
+      execTmux(['list-windows', '-a', '-F', '#{session_name}\t#{window_id}'])
         .split('\n')
         .map(line => line.trim())
         .filter(Boolean)
@@ -174,7 +226,7 @@ export function killGroupedViewers(runSession: string): void {
 
 export function windowIds(session: string): string[] {
   try {
-    return execFileSync('tmux', ['list-windows', '-t', exactSession(session), '-F', '#{window_id}'], { encoding: 'utf8' })
+    return execTmux(['list-windows', '-t', exactSession(session), '-F', '#{window_id}'])
       .split('\n')
       .map(line => line.trim())
       .filter(Boolean)
@@ -190,7 +242,7 @@ export interface TmuxWindowInfo {
 
 export function windowByName(session: string, name: string): TmuxWindowInfo | null {
   try {
-    const rows = execFileSync('tmux', ['list-windows', '-t', exactSession(session), '-F', '#{window_id}\t#{window_name}\t#{pane_current_command}'], { encoding: 'utf8' })
+    const rows = execTmux(['list-windows', '-t', exactSession(session), '-F', '#{window_id}\t#{window_name}\t#{pane_current_command}'])
       .split('\n')
       .map(line => line.trim())
       .filter(Boolean)

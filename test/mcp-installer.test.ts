@@ -30,7 +30,7 @@ interface FakeEnv {
 
 function wireEnv(env: FakeEnv): void {
   execFileSync.mockImplementation((file: string, args: string[]) => {
-    if (file === 'which') {
+    if ((file === 'which' || file === 'where')) {
       const bin = args[0]!
       // Honor the { encoding: 'utf8' } callers use (resolveLaunchCmd trims this).
       if (env.installed.has(bin)) return `/usr/bin/${bin}\n`

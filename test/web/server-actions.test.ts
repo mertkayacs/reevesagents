@@ -19,6 +19,7 @@ let tmpDir: string
 let handles: WebServerHandle[]
 let originalPath: string | undefined
 let originalConfig: string | undefined
+let originalWinmuxEntry: string | undefined
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'reeves-web-actions-'))
@@ -27,6 +28,12 @@ beforeEach(() => {
   process.env.REEVES_REGISTRY = tmpDir
   process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
   handles = []
+  // On Windows the POSIX `tmux` shim below cannot execute; point tmuxAvailable()
+  // at a missing winmux entry so it reports unavailable exactly like no-tmux POSIX.
+  if (process.platform === 'win32') {
+    originalWinmuxEntry = process.env.REEVES_WINMUX_ENTRY
+    process.env.REEVES_WINMUX_ENTRY = join(tmpDir, 'no-winmux-here.js')
+  }
 })
 
 afterEach(async () => {
@@ -37,6 +44,10 @@ afterEach(async () => {
   if (originalPath === undefined) delete process.env.PATH
   else process.env.PATH = originalPath
   delete process.env.REEVES_FAKE_TMUX_COUNTER
+  if (process.platform === 'win32') {
+    if (originalWinmuxEntry === undefined) delete process.env.REEVES_WINMUX_ENTRY
+    else process.env.REEVES_WINMUX_ENTRY = originalWinmuxEntry
+  }
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -129,7 +140,7 @@ function installFakeRuntimeBins(): void {
     '',
   ].join('\n'))
 
-  for (const bin of ['claude', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider']) {
+  for (const bin of ['claude', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider', 'gemini', 'cline', 'crush', 'goose', 'kilo', 'letta', 'vibe', 'grok', 'kiro-cli', 'droid', 'qodercli', 'warp', 'junie', 'copilot', 'cursor-agent', 'acli']) {
     writeExecutable(join(binDir, bin), [
       '#!/bin/sh',
       'if [ "$1" = "--help" ]; then echo "--model"; exit 0; fi',
@@ -554,6 +565,7 @@ describe('static assets', () => {
   it('serves an allowlisted asset from the web root and 404s a missing one', async () => {
     writeFileSync(join(tmpDir, 'app.js'), '// fixture\n')
     writeFileSync(join(tmpDir, 'brand-duck.json'), '{"ok":true}\n')
+    writeFileSync(join(tmpDir, 'favicon.png'), Buffer.from([137, 80, 78, 71]))
     const handle = await start({ webRoot: tmpDir })
 
     const present = await get(handle.port, '/app.js')
@@ -564,6 +576,10 @@ describe('static assets', () => {
     expect(brandDuck.status).toBe(200)
     expect(brandDuck.contentType).toContain('application/json')
     expect(JSON.parse(brandDuck.body)).toEqual({ ok: true })
+
+    const favicon = await get(handle.port, '/favicon.png')
+    expect(favicon.status).toBe(200)
+    expect(favicon.contentType).toBe('image/png')
 
     const missing = await get(handle.port, '/xterm.js')
     expect(missing.status).toBe(404)
@@ -579,11 +595,21 @@ describe('config and presets web actions', () => {
     const readBody = JSON.parse(read.body) as { config: { max_agents: number }; fields: Array<{ key: string }> }
     expect(readBody.config.max_agents).toBe(100)
     expect(readBody.fields.map(f => f.key)).not.toContain('language')
+    expect(readBody.fields.map(f => f.key)).toContain('web_theme')
 
-    const updated = await post(handle.port, '/api/config', { max_agents: 25, default_permissions: 'skip' })
+    const updated = await post(handle.port, '/api/config', { max_agents: 25, default_permissions: 'skip', web_theme: 'light' })
     expect(updated.status).toBe(200)
     expect((JSON.parse(updated.body) as { config: { max_agents: number } }).config.max_agents).toBe(25)
+    expect((JSON.parse(updated.body) as { fields: Array<{ key: string }> }).fields.map(f => f.key)).toContain('web_theme')
     expect(loadConfig().global.max_agents).toBe(25)
+    expect(loadConfig().global.web_theme).toBe('light')
+
+    const state = await get(handle.port, '/api/state')
+    expect((JSON.parse(state.body) as { web_theme: string }).web_theme).toBe('light')
+
+    const badTheme = await post(handle.port, '/api/config', { web_theme: 'sepia' })
+    expect(badTheme.status).toBe(400)
+    expect(loadConfig().global.web_theme).toBe('light')
 
     const bad = await post(handle.port, '/api/config', { max_agents: 0 })
     expect(bad.status).toBe(400)

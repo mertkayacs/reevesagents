@@ -1,13 +1,17 @@
-<p align="center"><a href="https://reevesagents.mertkayacs.com/"><img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-banner.gif" width="800" alt="ReevesAgents: Run AI coding assistants together"></a></p>
+<p align="center"><a href="https://reevesagents.mertkayacs.com/"><img src="assets/banner.webp" width="1050" alt="ReevesAgents is free and open source under the Apache-2.0 license"></a></p>
 
 <p align="center">
+  <a href="https://github.com/mertkayacs/reevesagents"><img src="https://img.shields.io/github/stars/mertkayacs/reevesagents?style=flat&logo=github" alt="GitHub stars" /></a>
   <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/v/reevesagents.svg" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dt/reevesagents" alt="total npm downloads" /></a>
   <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dm/reevesagents" alt="monthly npm downloads" /></a>
+  <a href="https://www.npmjs.com/package/reevesagents"><img src="https://img.shields.io/npm/dt/reevesagents" alt="total npm downloads" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/reevesagents.svg" alt="node" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/reevesagents.svg" alt="license" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/free%20and%20open%20source-006d77" alt="free and open source" /></a>
   <a href="https://github.com/mertkayacs/reevesagents/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/mertkayacs/reevesagents/test.yml?branch=master&label=CI" alt="CI" /></a>
 </p>
+
+ReevesAgents is free and open source under the Apache-2.0 license.
 
 <p align="center">
   <a href="https://reevesagents.mertkayacs.com/demo/"><b>Demo</b></a> ·
@@ -16,12 +20,27 @@
   <a href="https://github.com/mertkayacs/reevesagents/issues"><b>Issues</b></a>
 </p>
 
+<p align="center">
+  <img src="docs/assets/providers/cc.svg" width="40" height="40" alt="Claude Code" title="Claude Code">
+  <img src="docs/assets/providers/codex.svg" width="40" height="40" alt="Codex CLI" title="Codex CLI">
+  <img src="docs/assets/providers/gemini.svg" width="40" height="40" alt="Gemini CLI" title="Gemini CLI">
+  <img src="docs/assets/providers/copilot.svg" width="40" height="40" alt="GitHub Copilot CLI" title="GitHub Copilot CLI">
+  <img src="docs/assets/providers/cursor.svg" width="40" height="40" alt="Cursor CLI" title="Cursor CLI">
+  <img src="docs/assets/providers/opencode.svg" width="40" height="40" alt="OpenCode" title="OpenCode">
+  <img src="docs/assets/providers/kimi.svg" width="40" height="40" alt="Kimi Code" title="Kimi Code">
+  <img src="docs/assets/providers/aider.svg" width="40" height="40" alt="Aider" title="Aider">
+</p>
+<p align="center"><b>25+ coding CLIs, one workspace.</b></p>
+
 **English** · [Deutsch](docs/i18n/README.de.md) · [Français](docs/i18n/README.fr.md) · [Español](docs/i18n/README.es.md) · [Português](docs/i18n/README.pt.md) · [Italiano](docs/i18n/README.it.md) · [Türkçe](docs/i18n/README.tr.md) · [Русский](docs/i18n/README.ru.md) · [简体中文](docs/i18n/README.zh-Hans.md) · [العربية](docs/i18n/README.ar.md)
 
 ReevesAgents is a local workspace for AI coding CLIs. It runs Claude Code,
-Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider, and other provider
-CLIs side by side in tmux. You can use it as a normal CLI/TUI/Web UI, or attach
-its opt-in MCP so one agent can spawn, read, steer, and stop the rest.
+Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider, Gemini CLI, Cline CLI,
+Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
+Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
+Rovo Dev CLI, and other provider CLIs side by side in tmux. You can use it as a
+normal CLI/TUI/Web UI, or attach its opt-in MCP so one agent can spawn, read,
+steer, and stop the rest.
 
 Provider logins stay inside each provider CLI. ReevesAgents keeps its own state
 as a few plain JSON files under `~/.reeves`, and it runs only while you or an
@@ -60,6 +79,14 @@ reevesagents hosts
 
 Restart that CLI after attach so it loads the MCP tools.
 
+## Windows
+
+Native Windows 10 1809+ needs no WSL: reevesagents ships a built-in, tmux-compatible
+multiplexer (winmux) that runs panes over ConPTY. Agents keep running after you close
+the UI because winmux runs as a background server, just like tmux. When you attach in
+the TUI or CLI, the usual prefix keys work: Ctrl-b d to detach, Ctrl-b n / p to move
+between agent windows, Ctrl-b 0-9 to jump to a window.
+
 ## What It Gives You
 
 | Surface | Use it for |
@@ -73,11 +100,24 @@ Restart that CLI after attach so it loads the MCP tools.
 ReevesAgents is local by design. State is plain JSON under `~/.reeves`, and the
 CLIs it starts are the same CLIs you already use by hand.
 
+## Tools
+
+Four tools sit next to the coding CLIs. Perplexity CLI searches the web,
+Google Colab CLI runs scripts and notebooks on CPU, GPU and TPU runtimes,
+Hugging Face CLI downloads and uploads models and datasets and runs jobs on the
+Hub, and Ollama runs local or cloud models from the terminal. Agents call them
+from their own shell.
+
+`reevesagents tools` lists the four with a purpose, an example command, and
+whether each is installed and signed in (for Ollama: reachable). Add `--json`
+for scripts. An agent with the MCP attached gets the same list from
+`list_tools`.
+
 <a id="install"></a>
 <details>
 <summary><strong>Install</strong></summary>
 
-ReevesAgents needs Node.js `20.19+`, tmux `3.0+`, and at least one supported
+ReevesAgents needs Node.js `22.12+`, tmux `3.0+`, and at least one supported
 provider CLI installed and authenticated. It supports macOS, Linux, and WSL.
 
 ```sh
@@ -151,6 +191,7 @@ No arguments launches the TUI.
 | `doctor` | Check Node, tmux, state, and provider CLIs. |
 | `web` | Start the loopback-only Web UI. |
 | `providers` | List provider ids, aliases, models, and availability. |
+| `tools` | List Perplexity, Google Colab, Hugging Face and Ollama with purpose, example, and install and sign-in state. |
 | `approvals` | List pending approval requests. |
 | `approve` / `deny` | Resolve one approval request. |
 | `hosts` | Show which host CLIs have ReevesAgents attached. |
@@ -241,11 +282,15 @@ Two environment variables override the default paths:
 - `REEVES_REGISTRY`: state root override for `runs/`, `history/`, and `presets/`.
 - `REEVES_CONFIG`: config file path override.
 
+In the Web UI, open **Config** and choose **Web theme → Light** or **Dark**, then
+save. The choice is stored in `config.json` and also applies to the embedded
+terminal. The default is Dark. From the CLI, use `reevesagents config web_theme light`.
+
 One registry per tmux server: the background orphan sweep judges session
 ownership against the current registry, so two registries must not share one
 tmux server.
 
-Anything that might contain a secret is scrubbed before it reaches a file.
+Agent tasks, task notes, inbox messages and approval text are redacted for known token patterns before their state files are written.
 
 </details>
 
@@ -332,11 +377,26 @@ TypeScript, tsup, Vitest, and ESLint from the repository.
 
 </details>
 
+## Cite this
+
+```bibtex
+@software{kaya2026reevesagents,
+  author = {Mert Kaya},
+  title = {ReevesAgents: Local tmux workspace for AI coding CLIs},
+  year = {2026},
+  license = {Apache-2.0},
+  url = {https://github.com/mertkayacs/reevesagents},
+  version = {1.8.2}
+}
+```
+
 ## Links
 
 - Website: https://reevesagents.mertkayacs.com
 - npm: https://www.npmjs.com/package/reevesagents
 - GitHub: https://github.com/mertkayacs/reevesagents
+- Eschatia Labs: https://eschatialabs.com
+- Mert Kaya: https://mertkayacs.com
 - Releases: https://github.com/mertkayacs/reevesagents/releases
 - Issues: https://github.com/mertkayacs/reevesagents/issues
 - Changelog: [CHANGELOG.md](CHANGELOG.md)

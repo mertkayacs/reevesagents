@@ -59,6 +59,7 @@ const STATIC_ROUTES: Record<string, { file: string; type: string }> = {
   '/xterm.js': { file: 'xterm.js', type: 'text/javascript; charset=utf-8' },
   '/addon-fit.js': { file: 'addon-fit.js', type: 'text/javascript; charset=utf-8' },
   '/brand-duck.json': { file: 'brand-duck.json', type: 'application/json; charset=utf-8' },
+  '/favicon.png': { file: 'favicon.png', type: 'image/png' },
 }
 
 export interface WebServerOptions {
@@ -333,7 +334,7 @@ async function attachAllMcpHostsAction(): Promise<unknown> {
 // Editable global settings. The config panel reads the field specs plus current
 // values, then posts a patch; setConfigValues validates each field the same way
 // the CLI, MCP, and TUI do. Language is handled by /api/language (it needs the
-// live language payload), so the panel edits only the numeric and permission fields.
+// live language payload), so it is excluded from this panel.
 function configPayload(): unknown {
   const config = loadConfig().global
   // Localize the field labels with the saved language so the panel reads in the user's language.
@@ -352,7 +353,8 @@ function updateConfigAction(body: Record<string, unknown>): unknown {
     if (body[field.key] !== undefined) patch[field.key] = body[field.key]
   }
   if (Object.keys(patch).length === 0) throw new Error('no config fields to set')
-  return { config: setConfigValues(patch).global }
+  setConfigValues(patch)
+  return configPayload()
 }
 
 // Saved presets: reusable agent-team templates shared with the CLI, MCP, and TUI.
@@ -444,6 +446,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       ...buildWebState(),
       providers: listWebProviders(),
       language: webLanguagePayload(),
+      web_theme: loadConfig().global.web_theme,
       version: REEVESAGENTS_VERSION,
     })
     return

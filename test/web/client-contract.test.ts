@@ -16,6 +16,7 @@ describe('web client create flow', () => {
     const lottie = JSON.parse(readClientFile('brand-duck.json')) as { nm?: string; layers?: unknown[]; assets?: unknown[] }
 
     expect(html).toContain('id="brand-duck"')
+    expect(html).toContain('rel="icon" type="image/png"')
     expect(html).not.toContain('<svg class="brand-duck"')
     expect(js).toContain("api('GET', '/brand-duck.json')")
     expect(js).toContain('window.requestAnimationFrame(tick)')

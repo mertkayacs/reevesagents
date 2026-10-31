@@ -3,8 +3,8 @@
 // only spawn/add consume it.
 
 import type { Command } from 'commander'
-import { execFileSync } from 'node:child_process'
-import { sessionExists, windowIds } from '../../core/tmux.js'
+import { sessionExists, windowIds, execTmux, spawnTmux, tmuxCommand } from '../../core/tmux.js'
+import { shellQuote } from '../../core/provider-launch.js'
 import { startRun, spawnWorker, stopRun } from '../../core/runtime.js'
 import { normalizeProvider, PROVIDERS, detectAvailable, coerceExtraArgs } from '../../core/providers.js'
 import {
@@ -38,13 +38,10 @@ function resolveOpenTarget(id: string): { run: RunRecord, session: string, windo
   }
 }
 
-function quoteShell(s: string): string {
-  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(s)) return s
-  return `'${s.replace(/'/g, "'\\''")}'`
-}
-
 function tmuxAttachCommand(session: string, windowId: string): string {
-  return `tmux select-window -t ${quoteShell(`${session}:${windowId}`)} && tmux attach -t ${quoteShell(session)}`
+  const cmd = tmuxCommand()
+  const bin = [cmd.file, ...cmd.prefix].map(shellQuote).join(' ')
+  return `${bin} select-window -t ${shellQuote(`${session}:${windowId}`)} && ${bin} attach -t ${shellQuote(session)}`
 }
 
 function openTarget(id: string): void {
@@ -60,19 +57,19 @@ function openTarget(id: string): void {
   }
   const tmuxTarget = `${target.session}:${target.windowId}`
   if (process.env.TMUX) {
-    execFileSync('tmux', ['switch-client', '-t', tmuxTarget], { stdio: 'ignore' })
-    execFileSync('tmux', ['select-window', '-t', tmuxTarget], { stdio: 'ignore' })
+    execTmux(['switch-client', '-t', tmuxTarget], { stdio: 'ignore' })
+    execTmux(['select-window', '-t', tmuxTarget], { stdio: 'ignore' })
     return
   }
 
   try {
-    execFileSync('tmux', ['select-window', '-t', tmuxTarget], { stdio: 'ignore' })
+    execTmux(['select-window', '-t', tmuxTarget], { stdio: 'ignore' })
   } catch {
     // selecting before attach is best effort
   }
 
   if (process.stdin.isTTY && process.stdout.isTTY) {
-    execFileSync('tmux', ['attach', '-t', target.session], { stdio: 'inherit' })
+    spawnTmux(['attach', '-t', target.session], { stdio: 'inherit' })
     return
   }
 

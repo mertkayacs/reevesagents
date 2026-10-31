@@ -30,7 +30,8 @@ beforeEach(() => {
   const windows = new Set(['@0', '@1', '@7'])
   const panes = new Set(['%0', '%1', '%7'])
   execFileSync.mockImplementation((file: string, args: string[]) => {
-    if (file === 'which') return `/usr/bin/${args[0]}\n`
+    if ((file === 'which' || file === 'where')) return `/usr/bin/${args[0]}\n`
+    if (file === process.execPath && String(args?.[0] ?? '').includes('winmux')) { file = 'tmux'; args = args!.slice(1) }
     if (file !== 'tmux') return ''
     if (args[0] === 'new-window') {
       windowSeq += 1
@@ -113,6 +114,21 @@ function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = 
   }
 }
 
+// Command name from a mocked exec call: 'tmux X' on POSIX, 'node <winmux> X' on win32.
+function tmuxCmdName(call: unknown[]): string | undefined {
+  const [file, args] = call as [string, string[]]
+  if (file === 'tmux') return args?.[0]
+  if (file === process.execPath && args?.[0]?.includes('winmux')) return args?.[1]
+  return undefined
+}
+
+// Command args from a mocked exec call with the winmux prefix stripped.
+function tmuxCallArgs(call: unknown[]): string[] {
+  const [file, args] = call as [string, string[]]
+  if (file === process.execPath && args?.[0]?.includes('winmux')) return args.slice(1)
+  return args ?? []
+}
+
 describe('mcp parity tools', () => {
   describe('spawn launch knobs', () => {
     it('honors permissions:skip on the spawned worker', async () => {
@@ -155,7 +171,7 @@ describe('mcp parity tools', () => {
 
       // The runtime builds the CLI command from these knobs and shells it via the
       // tmux new-window call, so the rendered shell command must carry both flags.
-      const newWindow = execFileSync.mock.calls.find(c => c[0] === 'tmux' && c[1]?.[0] === 'new-window')!
+      const newWindow = execFileSync.mock.calls.find(c => tmuxCmdName(c) === 'new-window')!
       const shellCommand = String(newWindow[1]![newWindow[1]!.length - 1])
       expect(shellCommand).toContain('--effort')
       expect(shellCommand).toContain('high')
@@ -252,8 +268,8 @@ describe('mcp parity tools', () => {
       expect(result.isError).toBeUndefined()
       expect(payload(result)).toEqual({ session: 'reeves_open-run', window: 'reeves', label: 'run-open-run' })
 
-      const switched = execFileSync.mock.calls.find(c => c[0] === 'tmux' && c[1]?.[0] === 'switch-client')!
-      expect(switched[1]).toEqual(['switch-client', '-t', 'reeves_open-run:reeves'])
+      const switched = execFileSync.mock.calls.find(c => tmuxCmdName(c) === 'switch-client')!
+      expect(tmuxCallArgs(switched)).toEqual(['switch-client', '-t', 'reeves_open-run:reeves'])
     })
 
     it('opens a specific agent window when given an agent id', async () => {
@@ -297,6 +313,14 @@ describe('mcp parity tools', () => {
       for (const name of ['doctor', 'get_config', 'set_config', 'list_presets', 'save_preset', 'start_preset', 'delete_preset', 'list_hosts', 'attach_host', 'detach_host', 'reap', 'install_skills']) {
         expect(names).toContain(name)
       }
+    })
+
+    it('advertises the read-only list_tools catalogue tool', async () => {
+      const { MCP_TOOLS } = await import('../src/surfaces/mcp/server.js')
+      const names = MCP_TOOLS.map(tool => tool.name)
+      expect(names).toContain('list_tools')
+      const listTools = MCP_TOOLS.find(tool => tool.name === 'list_tools')!
+      expect(listTools.inputSchema.properties).toEqual({})
     })
 
     it('reap returns a reaped array (empty when tmux is unavailable)', async () => {

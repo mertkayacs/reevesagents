@@ -28,7 +28,8 @@ interface FakeEnv {
 function wireEnv(env: FakeEnv): void {
   const listOutput = env.listOutput ?? {}
   execFileSync.mockImplementation((file: string, args: string[]) => {
-    if (file === 'which') {
+    if (file === process.execPath && String(args?.[0] ?? '').includes('winmux')) { file = 'tmux'; args = args!.slice(1) }
+    if ((file === 'which' || file === 'where')) {
       const bin = args[0]!
       if (env.installed.has(bin)) return Buffer.from(`/usr/bin/${bin}\n`)
       throw new Error(`which: ${bin} not found`)
@@ -54,11 +55,14 @@ beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'reeves-mcp-extra-'))
   process.env.REEVES_REGISTRY = tmpDir
   process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
+  // win32: keep the real winmux availability check out of this suite's seams.
+  process.env.REEVES_WINMUX_ENTRY = join(tmpDir, 'no-winmux-here.js')
 })
 
 afterEach(() => {
   delete process.env.REEVES_REGISTRY
   delete process.env.REEVES_CONFIG
+  delete process.env.REEVES_WINMUX_ENTRY
   rmSync(tmpDir, { recursive: true, force: true })
 })
 

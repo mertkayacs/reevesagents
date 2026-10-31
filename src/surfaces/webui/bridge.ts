@@ -5,14 +5,13 @@
 // client. Each connection gets an ephemeral grouped viewer session that is
 // disposed on disconnect; the provider's own window is never killed here.
 
-import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { URL } from 'node:url'
 import type { Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket, type RawData } from 'ws'
 import pty from '@lydell/node-pty'
-import { targetExists, tmuxAvailable } from '../../core/tmux.js'
+import { targetExists, tmuxAvailable, spawnTmux, tmuxCommand } from '../../core/tmux.js'
 import { findAgent, readRun } from '../../core/runs.js'
 import { isAllowedHostHeader, isAllowedOrigin } from './guards.js'
 
@@ -73,7 +72,7 @@ function send(ws: WebSocket, frame: Record<string, unknown>): void {
 function disposeBridge(bridge: Bridge): void {
   try { bridge.term.kill() } catch { /* already exited */ }
   try {
-    execFileSync('tmux', ['kill-session', '-t', `=${bridge.viewer}`], { stdio: 'ignore' })
+    spawnTmux(['kill-session', '-t', `=${bridge.viewer}`], { stdio: 'ignore' })
   } catch {
     // viewer session already gone; the shared provider window is untouched
   }
@@ -110,16 +109,17 @@ function openBridge(ws: WebSocket, id: string, bridges: Set<Bridge>): void {
   // terminal without disturbing the human's attached client.
   const viewer = `reevesweb_${randomBytes(4).toString('hex')}`
   try {
-    execFileSync('tmux', ['new-session', '-d', '-s', viewer, '-t', `=${target.session}`], { stdio: 'ignore' })
-    execFileSync('tmux', ['select-window', '-t', `${viewer}:${target.windowId}`], { stdio: 'ignore' })
+    spawnTmux(['new-session', '-d', '-s', viewer, '-t', `=${target.session}`], { stdio: 'ignore' })
+    spawnTmux(['select-window', '-t', `${viewer}:${target.windowId}`], { stdio: 'ignore' })
   } catch {
-    try { execFileSync('tmux', ['kill-session', '-t', `=${viewer}`], { stdio: 'ignore' }) } catch { /* nothing to clean */ }
+    try { spawnTmux(['kill-session', '-t', `=${viewer}`], { stdio: 'ignore' }) } catch { /* nothing to clean */ }
     send(ws, { t: 'e', m: 'could not open a tmux view for this agent' })
     ws.close()
     return
   }
 
-  const term = pty.spawn('tmux', ['attach-session', '-t', viewer], {
+  const cmd = tmuxCommand()
+  const term = pty.spawn(cmd.file, [...cmd.prefix, 'attach-session', '-t', viewer], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
