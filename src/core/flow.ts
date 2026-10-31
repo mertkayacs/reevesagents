@@ -41,6 +41,12 @@ export const REVIEW_TIMEOUT_SEC = 900
 // `flow status` shows the tail; the file stays bounded so a long-lived flow cannot grow forever.
 export const FLOW_LOG_LIMIT = 50
 
+// How long a dispatch claim may stay unsettled before a tick stops touching the flow (§2.4). The
+// claim is written before the paste and cleared when the paste settled, so an old one means the
+// process that took it died mid-send: nobody can tell whether the prompt landed, and a blind
+// re-send is the one answer that is certainly wrong.
+export const PENDING_TTL_SEC = 120
+
 export interface FlowClaim {
   // The commit the current review or fix is about. A verdict is only applied to this head.
   head: string
@@ -55,6 +61,21 @@ export interface FlowClaim {
 export interface FlowRoles {
   dev: string
   review: string
+}
+
+// The persisted intent of one dispatch — phase one of the claim -> act -> settle protocol (§2.4).
+// It exists so two tickers, or one ticker restarted after a crash, cannot paste the same prompt
+// twice: a claim on disk means "a send is in flight, do nothing".
+export interface FlowPendingDispatch {
+  // Identity of this attempt. The settle applies the transition only for its own op, which is what
+  // makes settling idempotent.
+  op_id: string
+  kind: FlowActionKind
+  target: keyof FlowRoles
+  head: string | null
+  spec_id: string | null
+  // When the claim was taken (epoch ms) — the only clock `PENDING_TTL_SEC` is measured against.
+  at: number
 }
 
 export interface FlowLogEntry {
@@ -83,6 +104,9 @@ export interface FlowState {
   // id is absent from `dispatched_specs`.
   specs: BlockSpec[]
   dispatched_specs: string[]
+  // The dispatch in flight, or null. Optional in the file: a flow written before the claim existed
+  // reads as "nothing in flight", which is the pre-claim behaviour and why the version stays 1.
+  pending: FlowPendingDispatch | null
   log: FlowLogEntry[]
   updated_at: string
 }
@@ -139,6 +163,8 @@ export type FlowReason =
   | 'review_timer_started'
   | 'rounds_exhausted'
   | 'review_timeout'
+  | 'dispatch_pending'
+  | 'dispatch_unresolved'
   | 'head_moved'
   | 'review_requested'
   | 'fix_dispatched'
@@ -209,6 +235,7 @@ export function createFlowState(init: FlowInit): FlowState {
     claim: { head: init.head ?? '', verdict: null, verdict_count: 0 },
     specs: init.specs ?? [],
     dispatched_specs: [],
+    pending: null,
     log: [],
     updated_at: init.at ?? isoNow(),
   }
@@ -252,6 +279,7 @@ export function parseFlowState(raw: unknown): FlowState {
     dispatched_specs: Array.isArray(record.dispatched_specs)
       ? record.dispatched_specs.map(text).filter(entry => entry !== '')
       : [],
+    pending: parsePendingDispatch(record.pending),
     log: Array.isArray(record.log)
       ? record.log
         .map(asRecord)
@@ -260,6 +288,36 @@ export function parseFlowState(raw: unknown): FlowState {
         .slice(-FLOW_LOG_LIMIT)
       : [],
     updated_at: text(record.updated_at) || isoNow(),
+  }
+}
+
+// A missing `pending` is "nothing in flight", which is what a flow written before the claim
+// existed means. A `pending` that is there but damaged is a read error: reading it as "no claim"
+// would let a second ticker paste a prompt whose first paste may already have landed.
+function parsePendingDispatch(raw: unknown): FlowPendingDispatch | null {
+  if (raw === undefined || raw === null) return null
+  const record = asRecord(raw)
+  if (!record) throw new FlowStateError('flow state has a damaged pending dispatch')
+  const opId = text(record.op_id)
+  if (!opId) throw new FlowStateError('flow state has a pending dispatch without an op id')
+  const kind = record.kind
+  if (kind !== 'request_review' && kind !== 'dispatch_fix' && kind !== 'dispatch_spec') {
+    throw new FlowStateError(`flow state has a pending dispatch of an unknown kind ${JSON.stringify(kind)}`)
+  }
+  const target = record.target
+  if (target !== 'dev' && target !== 'review') {
+    throw new FlowStateError(`flow state has a pending dispatch for an unknown role ${JSON.stringify(target)}`)
+  }
+  if (typeof record.at !== 'number' || !Number.isFinite(record.at)) {
+    throw new FlowStateError('flow state has a pending dispatch without a clock')
+  }
+  return {
+    op_id: opId,
+    kind,
+    target,
+    head: text(record.head) || null,
+    spec_id: text(record.spec_id) || null,
+    at: Math.floor(record.at),
   }
 }
 
@@ -534,6 +592,15 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
 // One step. Pure: it reads its arguments and returns a decision, never a pane, a file or a clock.
 export function flowTick(state: FlowState, observations: FlowObservations): FlowDecision {
   if (state.state === 'escalated' || state.state === 'done') return hold(state, 'flow_closed')
+  // A claimed dispatch owns the flow until it settles. This is the rule that makes a cron tick, a
+  // manual `flow tick` and a restart of the same process safe to run against one flow: the second
+  // caller sees the claim on disk, decides nothing, and pastes nothing.
+  if (state.pending) {
+    if (observations.now - state.pending.at < PENDING_TTL_SEC * 1000) return hold(state, 'dispatch_pending')
+    // Past the TTL the claim belongs to a process that is gone, and nobody can tell whether the
+    // paste landed. Re-sending blind is how one prompt becomes two, so a human decides.
+    return escalate(state, observations, 'dispatch_unresolved')
+  }
   // `reviewing` owns the unreadable-HEAD case itself: a review that was requested still has a
   // deadline, and a repository this tick cannot read must not be able to keep it waiting for ever.
   if (state.state === 'reviewing') return tickReviewing(state, observations)
@@ -588,6 +655,9 @@ function withDelta(
     // A dispatch that was not confirmed changes no status, so the review clock keeps running:
     // resetting it would hide a reviewer that never answered.
     review_started_at: options.advance ? decision.next_review_started_at : state.review_started_at,
+    // Every settled decision ends the dispatch in flight: the claim exists only for the window
+    // between the paste and this write.
+    pending: null,
     log: appendLog(state, { at, event: options.event, detail: options.detail ?? logDetail(decision) }),
     updated_at: at,
   }
@@ -609,4 +679,45 @@ export function applyUnconfirmedDispatch(state: FlowState, decision: FlowDecisio
     event: 'dispatch_unconfirmed',
     detail: `${reason} ${logDetail(decision)}`,
   })
+}
+
+export interface PendingClaimInit {
+  // Identity of this attempt, generated by the caller — this module never invents one.
+  op_id: string
+  // Epoch ms of the claim: the clock `PENDING_TTL_SEC` is measured against.
+  now: number
+  at?: string
+}
+
+// Phase one of the dispatch protocol: record the intent before anything is pasted. The caller
+// writes the result, so a ticker that dies between the write and the paste leaves a claim behind —
+// which the next tick reads as "a send is in flight" instead of repeating it.
+export function claimPendingDispatch(state: FlowState, decision: FlowDecision, init: PendingClaimInit): FlowState {
+  if (!decision.message || !decision.target) return state
+  const at = init.at ?? isoNow()
+  return {
+    ...state,
+    pending: {
+      op_id: init.op_id,
+      kind: decision.kind,
+      target: decision.target,
+      head: decision.head ?? null,
+      spec_id: decision.spec_id ?? null,
+      at: Math.floor(init.now),
+    },
+    log: appendLog(state, { at, event: 'dispatch_claimed', detail: logDetail(decision) }),
+    updated_at: at,
+  }
+}
+
+// Phase three, refused before anything was pasted: the decision is dropped and the claim released,
+// because nothing was sent and the next tick must be free to decide again. The pane guard re-reads
+// the pane on that tick, which is what makes the retry safe.
+export function releaseDispatch(state: FlowState, reason: string, at = isoNow()): FlowState {
+  return {
+    ...state,
+    pending: null,
+    log: appendLog(state, { at, event: 'dispatch_refused', detail: reason }),
+    updated_at: at,
+  }
 }

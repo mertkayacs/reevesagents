@@ -103,22 +103,27 @@ notes). Concretely:
 
 | Tick site | Reference | Add |
 | --- | --- | --- |
-| TUI Runs page refresh | `src/surfaces/tui/screens/Runs.tsx:77`–`:98` (already calls `sweepAgentsThrottled`, `sweepOrphanSessionsThrottled`, `autoCleanupRuns`) | `sweepFlowsThrottled()` next to them — **this is the primary driver** |
-| Web SSE snapshot + `/api/state` | `src/surfaces/webui/server.ts:153`–`:160`, `:439`–`:443` | the same call, so a dashboard-only session keeps a flow moving |
-| CLI | new `reevesagents flow tick [<id>]` | explicit, scriptable, cron-able, and the only way to tick when no UI is open |
+| TUI Runs page refresh | `src/surfaces/tui/screens/Runs.tsx:77`–`:98` (already calls `sweepAgentsThrottled`, `sweepOrphanSessionsThrottled`, `autoCleanupRuns`) | `sweepFlowsThrottled()` next to them — **not shipped**: the TUI renders the badge and ticks nothing |
+| Web SSE snapshot + `/api/state` | `src/surfaces/webui/server.ts:153`–`:160`, `:439`–`:443` | the same call — **not shipped** either; the Web UI renders the badge and nothing else |
+| CLI | `reevesagents flow tick --run <id>` | **shipped**: explicit, scriptable, cron-able, and **the only way to tick a flow today** |
 | MCP `list` | `src/surfaces/mcp/server.ts:334` | **deliberately not wired** — see §4.3 |
 
-`flow tick` itself must be idempotent and cheap when nothing changed: the TUI tick calls it
-every 2 s, the throttle (a proposal: 15 s, matching `sweepAgentsThrottled`'s default at
-`src/core/reaper.ts:179`) keeps `capture-pane` calls bounded.
+The two dashboard rows above are the plan, not the branch: nothing in `src/surfaces/tui` or
+`src/surfaces/webui` calls `stepFlow`, so neither surface can move a flow, and the guide says so
+(review round 4, MINOR on `docs/GUIDE.md`). Wiring a throttled sweep there is the next block's job;
+until then a flow that is not ticked from cron or by hand simply stands still.
+
+`flow tick` itself must be idempotent and cheap when nothing changed: a UI tick would call it
+every 2 s, so the throttle (a proposal: 15 s, matching `sweepAgentsThrottled`'s default at
+`src/core/reaper.ts:179`) keeps `capture-pane` calls bounded once that wiring exists.
 
 **No ticker, no movement.** The SSE hub only runs while a browser is connected
 (`src/surfaces/webui/server.ts:170`–`:175`), and the TUI tick only runs while the dashboard is
-open. With no UI and no cron, a flow simply stands still — it does not break, and `flow status`
-shows the last event and the timestamp. `docs/flows.md` must say this plainly and give the
-headless recipe (`*/1 * * * * reevesagents flow tick`), because "the pipeline stopped overnight"
-is otherwise indistinguishable from "the reviewer is slow". A background worker is a separate,
-later decision, not a hidden requirement of this design.
+open — and today neither drives a flow at all. With no cron, a flow simply stands still: it does
+not break, and `flow status` shows the last event and the timestamp. `docs/GUIDE.md` says this
+plainly and gives the headless recipe (`*/1 * * * * reevesagents flow tick`), because "the pipeline
+stopped overnight" is otherwise indistinguishable from "the reviewer is slow". A background worker
+is a separate, later decision, not a hidden requirement of this design.
 
 ### 2.4 Dispatch protocol — two phases, never a lock across a send
 
@@ -140,12 +145,15 @@ The dispatch is three steps with an explicit intent record in the flow file:
    write `dispatch_unconfirmed` / `busy_unknown` and clear `pending`.
 
 Recovery is by observation, never by a blind retry: a `pending` older than `PENDING_TTL`
-(proposal 120 s) is settled on the next tick — if the agent is visibly working, the dispatch is
-considered delivered; otherwise the flow records `dispatch_unconfirmed` and waits for
-`flow resume --retry` or a human. `op_id` makes the settle idempotent, and a concurrent ticker
-that finds an unexpired `pending` does nothing at all. This is the only concurrency rule the
-engine has, and it is what makes the TUI tick, the Web tick and a cron `flow tick` safe to run
-together.
+(**shipped as `PENDING_TTL_SEC` = 120 s**) stops the flow and escalates it with
+`dispatch_unresolved`, because the process that took the claim is gone and nobody can tell whether
+the paste landed; a human reads the flow and restarts it. The earlier proposal settled such a claim
+by looking at the pane ("working" = delivered, otherwise `dispatch_unconfirmed` + `flow resume
+--retry`) — that needs the whole decision delta stored in the record to rebuild the post-state, so it
+is not in this build: escalating is the answer that cannot send the same prompt twice.
+`op_id` makes the settle idempotent, and a concurrent ticker that finds an unexpired `pending` does
+nothing at all. This is the only concurrency rule the engine has, and it is what makes a cron
+`flow tick` safe to run next to a manual one.
 
 ---
 
@@ -343,12 +351,16 @@ verdict counter. The mapping to §3.4, so the next block does not have to guess:
 | `fixing` | `fixing` — a fix round was dispatched, waiting for the new HEAD |
 | `accepted` | `done` — ACCEPT and no queued block; nothing is sent, the flow stops |
 | `escalated` | `escalated` — the round budget is spent; an approval pickup is not wired yet |
-| `dispatching` / `dispatch_unconfirmed` / `paused` / `orphaned` | **not yet** — see below |
+| `dispatching` / `dispatch_unconfirmed` / `paused` / `orphaned` | **not yet** — a dispatch in flight is the `pending` claim on the state, not a status of its own (§2.4, shipped in review round 4) |
 
 What is deliberately *not* in this build, and must not be assumed by the next block:
 
-- no `pending`/`op_id` claim record, so two tickers are not yet mutually exclusive;
-  `dispatched_specs` and the verdict baseline are what stop a duplicate send today;
+- the `pending`/`op_id` claim (§2.4) **is** in the build: a tick writes the dispatch it is about
+  to send before it pastes, a tick that finds an unsettled claim does nothing, and a claim nobody
+  settled within `PENDING_TTL_SEC` escalates with `dispatch_unresolved` instead of being re-sent.
+  A status called `dispatching` would be a second way to say the same thing, so there is none;
+- `dispatched_specs` and the verdict baseline still stop a duplicate *block* dispatch after a
+  settle, which is what covers the case where the claim is already gone;
 - an ambiguous paste (the text landed, the submit was not confirmed) consumes the verdict and logs
   `dispatch_unconfirmed`, but has no status of its own: the next tick sees the consumed baseline
   and does not paste again, and a human reads the log;
@@ -381,15 +393,19 @@ moving target.
 Planned shape and what ships today (`shipped` = in this branch, `planned` = not written):
 
 ```
-reevesagents flow start --run <id> --dev <agent> --review <agent> --repo <dir> \   # planned
-    --review-prompt <file> [--max-rounds 6] [--review-timeout 900] [--json]
+reevesagents flow start  --run <id> --dev <agent> --review <agent>                # shipped (round 4)
+    [--repo <dir>] [--max-rounds 6] [--review-timeout 900] [--spec <file…>] [--replace] [--json]
 reevesagents flow status --run <id> [--json]                        # shipped
 reevesagents flow tick   --run <id> [--json] [--dry-run]            # shipped
-reevesagents flow add-spec <id> <spec.json…>                        # planned (MCP has it)
+reevesagents flow add-spec <id> <spec.json…>                        # planned (MCP has it; `start --spec` covers the first queue)
 reevesagents flow add-spec <id> --markdown <file>                   # planned
 reevesagents flow pause|resume|stop <id>                            # planned
 reevesagents flow logs <id> [--tail N] [--json]                     # planned
 ```
+
+`start` is the only way a flow is created (§4.6): it resolves the run and both agents, refuses an
+agent that belongs to another run, refuses a second flow on a run with an active one, and replaces a
+closed one only with `--replace`. It writes the file and sends nothing.
 
 `status` and `tick` take the run id (`--run`, unique prefix accepted) because a flow is keyed by
 its run; the flow file itself is `~/.reeves/flows/<run-id>.json`.
@@ -466,7 +482,7 @@ changes a written contract, so the change is deliberate and recorded:
 | --- | --- | --- |
 | `list_flows` | every flow with status, rounds, HEAD, queue depth | read-only |
 | `flow_status` | one flow plus its recent log | **shipped**, read-only |
-| `flow_start` | attach a flow to an existing run (`run_id`, `dev`, `review`, `repo`, `review_prompt`) | validates like the CLI; refuses a second flow on the same run (D6) |
+| `flow_start` | attach a flow to an existing run (`run_id`, `dev`, `review`, `repo`, `review_prompt`) | **shipped**; validates like the CLI; refuses a second flow on the same run (D6) |
 | `flow_add_spec` | queue a block spec file | **shipped**; same validator as §3.2, takes a JSON or markdown path |
 | `flow_step` | one engine step (the `flow tick` equivalent) | **not implemented** — deliberately deferred to its own block, because it sends into a pane and deserves a review focused on that |
 | `flow_control` | `action: pause \| resume \| stop` | one tool, three intents, so the surface does not grow three near-identical entries |
@@ -516,15 +532,17 @@ as everything else (§2.3).
 | Surface | State |
 | --- | --- |
 | Engine, store, CLI `flow status` / `flow tick` | **shipped** (`src/core/flow.ts`, `flow-store.ts`, `flow-runner.ts`, `src/surfaces/cli/flow.ts`) |
+| The `pending`/`op_id` dispatch claim (§2.4) | **shipped** (`flow.ts` claim/release, `flow-runner.ts` claim -> act -> settle); a claim nobody settled escalates with `dispatch_unresolved` |
+| CLI `flow start` | **shipped** (`src/core/flow-start.ts`, `src/surfaces/cli/flow.ts`) |
 | TUI runs-list badge + attention | **shipped** (`src/core/flow-view.ts`, `src/core/flow-label.ts`, `src/surfaces/tui/screens/Runs.tsx`) |
 | Web run-card badge + attention | **shipped** (`src/surfaces/webui/state.ts` `WebRun.flow`, `client/app.js`, `client/app.css`) |
-| MCP `flow_status`, `flow_add_spec` | **shipped** (`src/surfaces/mcp/server.ts`); no tool here ticks a flow |
+| MCP `flow_status`, `flow_add_spec`, `flow_start` | **shipped** (`src/surfaces/mcp/server.ts`); no tool here ticks a flow |
 | MCP `flow_step` | **not implemented** — separate block, send-safety review |
-| MCP `flow_start` / `flow_control` | **not implemented** |
-| CLI `flow start` / `add-spec` / `pause` / `resume` / `stop` / `logs` | **not implemented** |
+| MCP `flow_control` | **not implemented** |
+| CLI `flow add-spec` / `pause` / `resume` / `stop` / `logs` | **not implemented** (`start --spec` queues the first blocks) |
 | TUI Flow section on the run page (§4.2) | **not implemented** — the badge and attention exist, the detail section does not |
 | `flow-escalated` approval pickup (§4.5) | **not implemented** — an escalation is a state, a human sees it, nothing raises an approval yet |
-| `paused` / `orphaned` / one-active-flow-per-run validation | **not implemented** — a closed flow is `escalated`/`done`; a flow of an archived run is skipped, not marked `orphaned` |
+| `paused` / `orphaned` validation | **not implemented** — a closed flow is `escalated`/`done`; a flow of an archived run is skipped, not marked `orphaned`. `flow start` does refuse a second flow on a run that has an active one |
 | Review prompt template stored per flow | **not implemented** — the request is rendered by a fixed renderer with the same tokens |
 
 Nothing above is described as working elsewhere in this document: the tables and the sections it
@@ -668,3 +686,22 @@ internal contradictions, all of them fair:
 
 A name clash the review did not name but the rule implies was also removed: the pure detector in
 `activity.ts` is `detectPaneBusy`, the runtime method is `paneBusy`.
+
+---
+
+## Appendix D — review round 4 on the shipped branch (CHANGES_REQUESTED → resolved)
+
+The review of `0675780` (block 05) came back **CHANGES_REQUESTED** with two majors and one minor,
+all against the branch, none against the intent of this document. Each one is answered in code, and
+each is recorded here because the same design said so and the build had drifted from it:
+
+| Finding | Verdict | Where it is fixed |
+| --- | --- | --- |
+| MAJOR `src/core/flow-runner.ts:134` — two `flow tick` processes can paste the same prompt twice: the decision was saved only *after* the send finished, and nothing was written before it | Real, and it is exactly §2.4 | `pending`/`op_id` claim in the flow file, written under `withRunsLock` before the paste; `stepFlow` is now claim → act → settle, the act holds no lock, the settle applies only its own `op_id`. A tick that finds an unexpired claim holds (`dispatch_pending`); one past `PENDING_TTL_SEC` escalates (`dispatch_unresolved`) instead of re-sending |
+| MAJOR `src/surfaces/cli/flow.ts:98` — no supported way to create a flow: the CLI had only `status`/`tick` and the MCP only read-and-queue, so both required a file nobody could write | Real, and §4.1/§4.3 already planned it | `flow start` (CLI) and `flow_start` (MCP) share `src/core/flow-start.ts`: the run and both agents are resolved inside the run, the repo must carry a HEAD, one flow per run, `--replace` only for a closed one, `--spec` queues the first blocks |
+| MINOR `docs/GUIDE.md:135` — the guide told the operator to keep the TUI/Web UI open to keep a flow running, but those surfaces only render the badge | Real; §2.3 had it as a plan and the guide read it as shipped | the guide now says nothing ticks a flow except `flow tick`, §2.3 marks both dashboard tick sites **not shipped**, and `docs/mcp.md` stopped promising a TUI/Web tick |
+
+Two things the review did not name are also corrected here, because they were the same kind of drift:
+`docs/mcp.md` described the flow tools as read-and-queue only (there are three now, one of which
+writes) and the `flow status` field list did not mention `pending`, which is the field that explains
+why a flow is sitting still.

@@ -10,9 +10,9 @@
 // run_id reuses one run created on the first spawn, so a chain of spawns lands
 // together.
 //
-// The two flow tools are read-and-queue only: `flow_status` describes the pipeline
-// attached to a run and `flow_add_spec` queues a block. Neither ticks the flow or
-// sends anything, so the server keeps its "no implicit loops" contract — the flow
+// The flow tools are deliberate and explicit: `flow_start` attaches a pipeline to a run,
+// `flow_status` describes it and `flow_add_spec` queues a block. None of them ticks the flow or
+// sends anything into a pane, so the server keeps its "no implicit loops" contract — the flow
 // engine owns the loop and a host drives it by calling the engine, not this server.
 //
 // Each tool is one entry in TOOLS, colocating its schema and its handler so the
@@ -45,6 +45,7 @@ import {
 import { resolveFlowRunId, flowQueueSummary, flowStatusPayload } from '../../core/flow-view.js'
 import { flowPath, readFlow, saveFlow } from '../../core/flow-store.js'
 import { queueSpecFile } from '../../core/flow-queue.js'
+import { startFlow } from '../../core/flow-start.js'
 import { shortHomePath } from '../../utils/paths.js'
 import { redactSecrets } from '../../core/redact.js'
 import { detectHostProvider } from './host.js'
@@ -101,6 +102,13 @@ type ToolResult = ReturnType<typeof ok> | ReturnType<typeof fail>
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
+}
+
+// A numeric argument a host may send as a number or as a string; anything that is not a positive
+// number is left undefined so the engine's own default applies.
+function asPositiveNumber(value: unknown): number | undefined {
+  const parsed = typeof value === 'string' ? Number(value) : value
+  return typeof parsed === 'number' && Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
 function parseProvider(value: unknown): Provider {
@@ -627,6 +635,35 @@ const TOOLS: ToolDef[] = [
       },
     },
     handler: (a) => ok(a.status === true ? skillsStatus() : installSkills()),
+  },
+  {
+    name: 'flow_start',
+    description: 'Attach a dev -> review -> fix flow to an existing run: the dev agent commits, the review agent reviews it, and the engine moves the loop. Both agents must already belong to that run; `repo` defaults to the run working directory. Writes one flow file and sends nothing — a flow only moves when someone ticks it, which this server never does on its own. Refuses a second flow on the same run, and refuses to replace an active one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it. A flow is keyed by run id.' },
+        dev: { type: 'string', description: 'Dev agent id or nickname inside that run.' },
+        review: { type: 'string', description: 'Review agent id or nickname inside that run; must differ from dev.' },
+        repo: { type: 'string', description: 'Project directory the flow watches; defaults to the run working directory.' },
+        max_rounds: { type: 'number', description: 'Fix rounds the flow may spend before it escalates (default 6).' },
+        review_timeout_sec: { type: 'number', description: 'Seconds a requested review may stay unanswered before it escalates (default 900).' },
+        replace: { type: 'boolean', description: 'Start over on a run whose flow is closed (escalated or done). An active flow is never replaced.' },
+      },
+      required: ['run_id', 'dev', 'review'],
+    },
+    handler: (a) => {
+      const started = startFlow({
+        run_id: asString(a.run_id),
+        dev: asString(a.dev),
+        review: asString(a.review),
+        repo: asString(a.repo) || undefined,
+        max_rounds: asPositiveNumber(a.max_rounds),
+        review_timeout_sec: asPositiveNumber(a.review_timeout_sec),
+        replace: a.replace === true,
+      })
+      return ok(flowStatusPayload(started.state, started.path))
+    },
   },
   {
     name: 'flow_status',

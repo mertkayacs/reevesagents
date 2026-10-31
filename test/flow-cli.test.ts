@@ -2,20 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import type { AgentRecord, RunRecord } from '../src/core/types.js'
 import { createFlowState } from '../src/core/flow.js'
-import { saveFlow } from '../src/core/flow-store.js'
+import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { writeAgent, writeRun } from '../src/core/runs.js'
 
-// `flow status` and `flow tick` driven through the real commander program with a temp registry.
-// The tmux/git side is one mocked execFileSync, so no pane and no repository is touched.
+// `flow start`, `flow status` and `flow tick` driven through the real commander program with a temp
+// registry. The tmux/git side is one mocked execFileSync, so no pane and no repository is touched.
 
 const execFileSync = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ execFileSync, spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
 
 let tmpDir: string
 let savedTmux: string | undefined
+let savedRegistry: string | undefined
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'reeves-flow-cli-'))
+  savedRegistry = process.env.REEVES_REGISTRY
   process.env.REEVES_REGISTRY = tmpDir
   process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
   savedTmux = process.env.TMUX
@@ -30,7 +34,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  delete process.env.REEVES_REGISTRY
+  if (savedRegistry === undefined) delete process.env.REEVES_REGISTRY
+  else process.env.REEVES_REGISTRY = savedRegistry
   delete process.env.REEVES_CONFIG
   if (savedTmux === undefined) delete process.env.TMUX
   else process.env.TMUX = savedTmux
@@ -77,6 +82,165 @@ function seedFlow(runId = 'run-c1') {
   const path = saveFlow(state, { root: tmpDir })
   return { state, path }
 }
+
+function makeRun(id: string, overrides: Partial<RunRecord> = {}): RunRecord {
+  return {
+    id,
+    name: `run-${id}`,
+    status: 'running',
+    tmux_session: `reeves-${id}`,
+    reeves_window_id: '@0',
+    reeves_pane_id: '%0',
+    root_agent_id: `${id}-root`,
+    working_dir: tmpDir,
+    preset_name: null,
+    started_at: '2026-01-01T00:00:00.000Z',
+    ended_at: null,
+    ...overrides,
+  }
+}
+
+function makeAgent(id: string, runId: string, overrides: Partial<AgentRecord> = {}): AgentRecord {
+  return {
+    id,
+    run_id: runId,
+    nickname: `agent-${id}`,
+    provider: 'cc',
+    model: '',
+    role: 'worker',
+    working_dir: tmpDir,
+    task: 'do work',
+    task_status: 'working',
+    task_note: '',
+    tmux_session: `reeves-${runId}`,
+    tmux_window_id: '@1',
+    tmux_pane_id: '%1',
+    rc_enabled: false,
+    permissions: 'ask',
+    inbox: [],
+    last_seen: Date.now(),
+    started_at: '2026-01-01T00:00:01.000Z',
+    ended_at: null,
+    ...overrides,
+  }
+}
+
+// A run with a dev and a review agent, which is the minimum `flow start` accepts.
+function seedRun(id = 'run-c1') {
+  writeRun(makeRun(id))
+  writeAgent(makeAgent(`${id}-dev`, id, { nickname: 'dev' }))
+  writeAgent(makeAgent(`${id}-rev`, id, { nickname: 'review' }))
+}
+
+describe('flow start', () => {
+  it('attaches a flow to a run and starts from the current HEAD', async () => {
+    seedRun()
+
+    const { out } = await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review'])
+
+    expect(out).toContain('flow      run-c1')
+    expect(out).toContain('roles     dev run-c1-dev -> review run-c1-rev')
+    expect(out).toContain('head      bbb222')
+    const state = readFlow('run-c1')
+    expect(state.state).toBe('idle')
+    expect(state.claim.head).toBe('bbb222')
+    expect(state.roles).toEqual({ dev: 'run-c1-dev', review: 'run-c1-rev' })
+    expect(state.log.at(-1)?.event).toBe('flow_started')
+  })
+
+  it('--json prints the same payload flow status does', async () => {
+    seedRun()
+
+    const { out } = await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'run-c1-dev', '--review', 'run-c1-rev', '--json'])
+    const payload = JSON.parse(out)
+
+    expect(payload).toMatchObject({ run_id: 'run-c1', state: 'idle', head: 'bbb222', pending: null })
+    expect(payload.path).toContain('flows/run-c1.json')
+  })
+
+  it('queues block specs given at start', async () => {
+    seedRun()
+    const spec = join(tmpDir, 'block_01.json')
+    writeFileSync(spec, JSON.stringify({ id: 'block_01', title: 'One', goal: 'g', requirements: ['r'], checks: ['c'] }), 'utf-8')
+
+    await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review', '--spec', spec])
+
+    const state = readFlow('run-c1')
+    expect(state.specs.map(entry => entry.id)).toEqual(['block_01'])
+    expect(state.specs[0]!.source_path).toBe(spec)
+  })
+
+  it('refuses a flow on a run that is already running one', async () => {
+    seedRun()
+    await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review'])
+
+    const failure = await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+
+    expect(failure?.message).toMatch(/process\.exit\(1\)/)
+    expect(failure?.cli_err).toContain('already has a flow in state idle')
+    // Still one flow, unchanged.
+    expect(readFlow('run-c1').log.filter(entry => entry.event === 'flow_started')).toHaveLength(1)
+  })
+
+  it('refuses to replace an active flow, and replaces a closed one only with --replace', async () => {
+    seedRun()
+    saveFlow({ ...createFlowState({
+      run_id: 'run-c1',
+      repo: tmpDir,
+      roles: { dev: 'run-c1-dev', review: 'run-c1-rev' },
+      head: 'aaa111',
+      at: '2026-01-01T00:00:00.000Z',
+    }), state: 'escalated' })
+
+    const refused = await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+    expect(refused?.cli_err).toContain('has a closed flow (escalated)')
+
+    const { out } = await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review', '--replace'])
+    expect(out).toContain('(replaced the closed one)')
+    expect(readFlow('run-c1').state).toBe('idle')
+  })
+
+  it('refuses an agent that belongs to another run', async () => {
+    seedRun('run-c1')
+    writeRun(makeRun('run-c2'))
+    writeAgent(makeAgent('run-c2-dev', 'run-c2'))
+
+    const failure = await runCli([
+      'flow', 'start', '--run', 'run-c1', '--dev', 'run-c2-dev', '--review', 'review',
+    ]).then(() => null, (error: Error & { cli_err?: string }) => error)
+
+    expect(failure?.cli_err).toContain('no dev agent run-c2-dev in run run-c1')
+  })
+
+  it('refuses a run that does not exist', async () => {
+    const failure = await runCli(['flow', 'start', '--run', 'ghost', '--dev', 'dev', '--review', 'review']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+    expect(failure?.cli_err).toContain('run not found: ghost')
+  })
+
+  it('refuses a directory that is not a git repository', async () => {
+    seedRun()
+    execFileSync.mockImplementation((file: string, args: string[]) => {
+      if (file === 'git' && args.includes('rev-parse')) throw new Error('not a repository')
+      return ''
+    })
+
+    const failure = await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+    expect(failure?.cli_err).toContain('cannot read HEAD in')
+    expect(failure?.cli_err).not.toContain(tmpDir)
+  })
+})
 
 describe('flow status', () => {
   it('prints the flow as JSON, home-shortened, with the queue depth', async () => {

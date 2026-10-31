@@ -12,7 +12,7 @@
 // - **No silent reset.** A file with another schema_version, damaged JSON or a missing field is a
 //   read error naming the file, never "start fresh" — a reset would drop a pipeline mid-round.
 
-import { chmodSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { stateRoot } from './runs.js'
 import { shortHomePath } from '../utils/paths.js'
@@ -79,6 +79,16 @@ export function listFlowFiles(root = stateRoot()): { run_id: string, path: strin
 export function readFlow(runId: string, options: FlowStoreOptions = {}): FlowState {
   const path = flowPath(runId, options.root)
   return readFlowFile(path, runId)
+}
+
+// Does this run already have a flow? A damaged file counts as "there is one": whoever decides to
+// create a flow must not overwrite state a human may still need to read.
+export function flowExists(runId: string, options: FlowStoreOptions = {}): boolean {
+  try {
+    return existsSync(flowPath(runId, options.root))
+  } catch {
+    return false
+  }
 }
 
 export function readFlowFile(path: string, runId = ''): FlowState {

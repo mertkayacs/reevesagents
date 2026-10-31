@@ -79,6 +79,15 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
+// The lock's own timeout is the one failure a caller can treat as "someone else is working": it is
+// matched by a predicate instead of by the message, because the message carries the absolute lock
+// path and every surface here prints its errors home-shortened.
+export const RUNS_LOCK_TIMEOUT = 'Timed out waiting for runs lock:'
+
+export function isRunsLockTimeout(err: unknown): boolean {
+  return err instanceof Error && err.message.startsWith(RUNS_LOCK_TIMEOUT)
+}
+
 export function withRunsLock<T>(fn: () => T): T {
   mkdirSync(stateRoot(), { recursive: true })
   const lockPath = join(stateRoot(), '.runs.lock')
@@ -102,7 +111,7 @@ export function withRunsLock<T>(fn: () => T): T {
         // lock disappeared between attempts
       }
 
-      if (Date.now() > deadline) throw new Error(`Timed out waiting for runs lock: ${lockPath}`)
+      if (Date.now() > deadline) throw new Error(`${RUNS_LOCK_TIMEOUT} ${lockPath}`)
       sleepSync(25)
     }
   }

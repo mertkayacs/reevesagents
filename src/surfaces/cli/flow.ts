@@ -1,10 +1,11 @@
-// Flow commands: `flow status` and `flow tick`.
+// Flow commands: `flow start`, `flow status` and `flow tick`.
 //
-// `status` is read-only and is the one place a human reads the pipeline without opening a JSON
-// file. `tick` runs one engine step: it observes, decides, and — unless `--dry-run` — applies the
-// decision through the guarded send path. A payload never carries the review prompt or a raw
-// absolute home path (§4.1 of docs/flows-design.md): paths print home-shortened and the log detail
-// goes through the secret redactor.
+// `start` is the only way to create a flow (a run with a flow file is what `status` and `tick`
+// address); `status` is read-only and is the one place a human reads the pipeline without opening a
+// JSON file; `tick` runs one engine step: it observes, decides, and — unless `--dry-run` — claims,
+// sends and settles. A payload never carries the review prompt or a raw absolute home path (§4.1 of
+// docs/flows-design.md): paths print home-shortened and the log detail goes through the secret
+// redactor.
 
 import type { Command } from 'commander'
 import type { FlowState } from '../../core/flow.js'
@@ -12,10 +13,11 @@ import { flowPath, readFlow } from '../../core/flow-store.js'
 import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
 import type { FlowStepResult } from '../../core/flow-runner.js'
 import { stepFlow } from '../../core/flow-runner.js'
+import { startFlow } from '../../core/flow-start.js'
 import { redactSecrets } from '../../core/redact.js'
 import { shortHomePath } from '../../utils/paths.js'
 
-// The payload and the id resolution are shared with the MCP `flow_status` tool, so a host CLI and
+// The payload and the id resolution are shared with the MCP tools, so a host CLI and
 // `flow status --json` cannot show different things: both come from core/flow-view.ts.
 function pendingCount(state: FlowState): number {
   return state.specs.filter(spec => !state.dispatched_specs.includes(spec.id)).length
@@ -60,6 +62,9 @@ function printStatus(state: FlowState, path: string): void {
   console.log(`state     ${state.state}  round ${state.rounds}/${state.max_rounds}`)
   console.log(`head      ${head}`)
   console.log(`verdict   ${verdict}  (baseline ${state.claim.verdict_count} in the reviewer pane)`)
+  if (state.pending) {
+    console.log(`dispatch  ${state.pending.kind} -> ${state.pending.target} claimed, unsettled (${state.pending.op_id})`)
+  }
   const review = state.review_started_at === null
     ? 'not waiting'
     : `started ${new Date(state.review_started_at).toISOString()}, timeout ${state.review_timeout_sec}s`
@@ -85,6 +90,10 @@ function printTick(result: FlowStepResult, dryRun: boolean): void {
     console.log('dry run   nothing sent, nothing written')
     return
   }
+  if (result.status === 'locked') {
+    console.log('result    locked — another reevesagents process is writing the state directory; nothing was sent')
+    return
+  }
   console.log(`result    ${result.status}`)
   console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
   if (result.path) console.log(`file      ${shortHomePath(result.path)}`)
@@ -98,7 +107,57 @@ function fail(err: unknown): never {
 export function registerFlow(program: Command): void {
   const flow = program
     .command('flow')
-    .description('dev -> review -> fix pipeline for a run (status, tick)')
+    .description('dev -> review -> fix pipeline for a run (start, status, tick)')
+
+  flow
+    .command('start')
+    .description('attach a flow to an existing run: the dev agent, the review agent and the repo')
+    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .requiredOption('--dev <agent>', 'dev agent id or nickname inside that run')
+    .requiredOption('--review <agent>', 'review agent id or nickname inside that run')
+    .option('--repo <dir>', 'project directory (defaults to the run working directory)')
+    .option('--spec <file...>', 'block spec files to queue on the new flow')
+    .option('--max-rounds <n>', 'fix rounds before the flow escalates', (value: string) => Number(value))
+    .option('--review-timeout <sec>', 'seconds a requested review may stay unanswered', (value: string) => Number(value))
+    .option('--replace', 'start over on a run whose flow is escalated or done')
+    .option('--json', 'output JSON')
+    .action((opts: {
+      run: string
+      dev: string
+      review: string
+      repo?: string
+      spec?: string[]
+      maxRounds?: number
+      reviewTimeout?: number
+      replace?: boolean
+      json?: boolean
+    }) => {
+      try {
+        const started = startFlow({
+          run_id: opts.run,
+          dev: opts.dev,
+          review: opts.review,
+          repo: opts.repo,
+          specs: opts.spec,
+          max_rounds: opts.maxRounds,
+          review_timeout_sec: opts.reviewTimeout,
+          replace: opts.replace === true,
+        })
+        if (opts.json) {
+          console.log(JSON.stringify(flowStatusPayload(started.state, started.path), null, 2))
+          return
+        }
+        console.log(`flow      ${started.state.run_id}${started.replaced ? ' (replaced the closed one)' : ''}`)
+        console.log(`roles     dev ${started.state.roles.dev} -> review ${started.state.roles.review}`)
+        console.log(`head      ${started.state.claim.head.slice(0, 12)}  (a review is requested for the next commit)`)
+        console.log(`queue     ${pendingCount(started.state)} pending`)
+        console.log(`repo      ${shortHomePath(started.state.repo)}`)
+        console.log(`file      ${shortHomePath(started.path)}`)
+        console.log('next      `flow tick --run <id>` moves it; nothing ticks a flow on its own')
+      } catch (err) {
+        fail(err)
+      }
+    })
 
   flow
     .command('status')
@@ -122,16 +181,15 @@ export function registerFlow(program: Command): void {
 
   flow
     .command('tick')
-    .description('run one engine step: observe, decide, and apply unless --dry-run')
+    .description('run one engine step: observe, decide, claim, send and settle unless --dry-run')
     .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
     .option('--json', 'output JSON')
     .option('--dry-run', 'print the decision; send nothing and write nothing')
     .action((opts: { run: string, json?: boolean, dryRun?: boolean }) => {
       try {
         const runId = resolveFlowRunId(opts.run)
-        const state = readFlow(runId)
         const dryRun = opts.dryRun === true
-        const result = stepFlow(state, { dryRun })
+        const result = stepFlow(runId, { dryRun })
         if (opts.json) {
           console.log(JSON.stringify(tickPayload(result, dryRun), null, 2))
         } else {

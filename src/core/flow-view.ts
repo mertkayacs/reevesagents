@@ -41,6 +41,9 @@ export interface FlowStatusPayload {
   review_timeout_sec: number
   head: string
   claim: { head: string, verdict: string | null, verdict_count: number }
+  // The dispatch in flight: a claim written by a tick that has not settled it yet. This is why a
+  // flow can be sitting still while a send is in progress.
+  pending: { kind: string, target: string, at: number } | null
   queue: { id: string, title: string, source_path: string | null }[]
   dispatched_specs: string[]
   repo: string
@@ -93,6 +96,9 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
       verdict: state.claim.verdict,
       verdict_count: state.claim.verdict_count,
     },
+    pending: state.pending
+      ? { kind: state.pending.kind, target: state.pending.target, at: state.pending.at }
+      : null,
     queue,
     dispatched_specs: state.dispatched_specs,
     repo: shortHomePath(state.repo),

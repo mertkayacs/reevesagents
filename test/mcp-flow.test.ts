@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { writeAgent, writeRun } from '../src/core/runs.js'
 import { shortHomePath } from '../src/utils/paths.js'
 
 // The two flow tools through the real MCP dispatch. `flow_status` must be read-only and
@@ -174,5 +175,123 @@ describe('flow_add_spec', () => {
     const empty = await call('flow_add_spec', {})
     expect(empty.isError).toBe(true)
     expect(payload(empty).error).not.toContain('Unknown tool')
+  })
+})
+
+describe('flow_start', () => {
+  // `flow_start` is the only way a host can create a flow: `flow_status` and `flow_add_spec` both
+  // need a flow file to exist first.
+  const RUN = 'run-start-1'
+
+  function seedRun(id = RUN) {
+    writeRun({
+      id,
+      name: `run-${id}`,
+      status: 'running',
+      tmux_session: `reeves-${id}`,
+      reeves_window_id: '@0',
+      reeves_pane_id: '%0',
+      root_agent_id: `${id}-dev`,
+      working_dir: repo,
+      preset_name: null,
+      started_at: '2026-01-01T00:00:00.000Z',
+      ended_at: null,
+    })
+    writeAgent({
+      id: `${id}-dev`,
+      run_id: id,
+      nickname: 'dev',
+      provider: 'cc',
+      model: '',
+      role: 'worker',
+      working_dir: repo,
+      task: 'build',
+      task_status: 'working',
+      task_note: '',
+      tmux_session: `reeves-${id}`,
+      tmux_window_id: '@1',
+      tmux_pane_id: '%1',
+      rc_enabled: false,
+      permissions: 'ask',
+      inbox: [],
+      last_seen: Date.now(),
+      started_at: '2026-01-01T00:00:01.000Z',
+      ended_at: null,
+    })
+    writeAgent({
+      id: `${id}-rev`,
+      run_id: id,
+      nickname: 'review',
+      provider: 'codex',
+      model: '',
+      role: 'worker',
+      working_dir: repo,
+      task: 'review',
+      task_status: 'queued',
+      task_note: '',
+      tmux_session: `reeves-${id}`,
+      tmux_window_id: '@2',
+      tmux_pane_id: '%2',
+      rc_enabled: false,
+      permissions: 'ask',
+      inbox: [],
+      last_seen: Date.now(),
+      started_at: '2026-01-01T00:00:02.000Z',
+      ended_at: null,
+    })
+  }
+
+  beforeEach(() => {
+    execFileSync.mockImplementation((file: string, args?: string[]) => {
+      if (file === 'which') throw new Error('not found')
+      if (file === 'git' && args?.includes('rev-parse')) return 'abc1234\n'
+      return ''
+    })
+  })
+
+  afterEach(() => {
+    // Restore the file-level fake: every other tool in this suite expects git to fail.
+    execFileSync.mockImplementation((file: string) => {
+      if (file === 'which') throw new Error('not found')
+      return ''
+    })
+  })
+
+  it('creates the flow a host can then read and tick', async () => {
+    seedRun()
+
+    const result = await call('flow_start', { run_id: RUN, dev: 'dev', review: 'review' })
+    const body = payload(result)
+
+    expect(result.isError).toBeUndefined()
+    expect(body).toMatchObject({ run_id: RUN, state: 'idle', rounds: 0, max_rounds: 6, head: 'abc1234', pending: null })
+    expect(body.path).toBe(shortHomePath(join(registry, 'flows', `${RUN}.json`)))
+    expect(body.log.at(-1).event).toBe('flow_started')
+
+    const stored = readFlow(RUN, { root: registry })
+    expect(stored.roles).toEqual({ dev: `${RUN}-dev`, review: `${RUN}-rev` })
+    // Creating a flow sends nothing: it is `flow tick` that pastes.
+    expect(execFileSync.mock.calls.some(entry => entry[0] === 'tmux')).toBe(false)
+  })
+
+  it('refuses a second flow on the same run and an agent of another run', async () => {
+    seedRun()
+    await call('flow_start', { run_id: RUN, dev: 'dev', review: 'review' })
+
+    const second = await call('flow_start', { run_id: RUN, dev: 'dev', review: 'review' })
+    expect(second.isError).toBe(true)
+    expect(payload(second).error).toContain('already has a flow in state idle')
+
+    seedRun('run-start-2')
+    const foreign = await call('flow_start', { run_id: 'run-start-2', dev: 'dev', review: `${RUN}-rev` })
+    expect(foreign.isError).toBe(true)
+    expect(payload(foreign).error).toContain(`no review agent ${RUN}-rev in run run-start-2`)
+  })
+
+  it('rejects empty arguments through the handler, not through the unknown-tool path', async () => {
+    const empty = await call('flow_start', {})
+    expect(empty.isError).toBe(true)
+    expect(payload(empty).error).not.toContain('Unknown tool')
+    expect(payload(empty).error).toContain('run id is required')
   })
 })

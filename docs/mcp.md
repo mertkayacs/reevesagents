@@ -73,6 +73,7 @@ own CLI only if you explicitly want that worker to spawn more agents.
 - `attach_host`: attach ReevesAgents to a host CLI.
 - `detach_host`: detach ReevesAgents from a host CLI.
 - `install_skills`: install the ReevesAgents skill for skill-aware CLIs.
+- `flow_start`: attach a dev -> review -> fix flow to an existing run.
 - `flow_status`: read the dev -> review -> fix pipeline attached to one run.
 - `flow_add_spec`: queue a block spec file on that pipeline.
 
@@ -84,6 +85,23 @@ resource. The guide is available as `reevesagents://guide`.
 A flow attaches the dev -> review -> fix pipeline to one run: the dev commits, a
 reviewer answers with a verdict, the engine sends the findings back or queues the
 next block.
+
+### `flow_start { run_id, dev, review, repo?, max_rounds?, review_timeout_sec?, replace? }`
+
+Attaches a pipeline to a run that already exists. This is the only way to create a
+flow: `flow_status` and `flow_add_spec` both need a flow file, and neither of them
+creates one.
+
+- `dev` / `review`: agent ids or nicknames *inside that run*. An agent of another run
+  is refused, because the engine would otherwise paste into a pane nobody meant to
+  drive. A unique prefix is accepted; both must differ.
+- `repo`: the directory the flow watches, defaults to the run's working directory. It
+  must be a git repository with a commit, since every verdict is bound to a HEAD.
+- The flow starts from the current HEAD and waits for the *next* commit, so creating
+  one does not review the work that is already there.
+- One flow per run: an active flow is refused, and `replace: true` restarts only a
+  closed one (`escalated` or `done`).
+- Writes one file and sends nothing. Nothing in this server ticks a flow.
 
 ### `flow_status { run_id }`
 
@@ -109,6 +127,10 @@ What the fields mean when you are deciding whether to wait or to act:
   asked for and how long it may stay unanswered. A tick past the deadline
   escalates; the badge in the TUI and the Web UI shows the same condition.
 - `queue`: blocks queued and not yet dispatched, with their source file.
+- `pending`: the dispatch a tick has claimed but not settled yet (`kind`, `target`,
+  `at`), or `null`. A flow sitting on a claim is waiting for that paste to finish, not
+  stuck: the next tick after it settles moves the state, and one that never settles is
+  escalated to a human.
 - `last_decision` / `log`: the most recent events, which is where
   `dispatch_unconfirmed` shows up when a paste landed but the submit was not
   confirmed.
@@ -128,10 +150,11 @@ Paths and log text in both tools come back home-shortened and redacted: a tool
 answer is a transcript, so a spec title carrying a token is reported as
 `[REDACTED]` while the flow file keeps the author's text.
 
-The MCP never runs the pipeline by itself: no tool here starts a loop or a timer,
-and a flow step happens when the TUI or Web UI ticks it or when someone runs
-`reevesagents flow tick`. Every call is explicit, which keeps this server flat —
-it gives a host control, not an autonomous process.
+The MCP never runs the pipeline by itself: no tool here starts a loop or a timer.
+A step happens only when someone runs `reevesagents flow tick` — on a schedule or by
+hand; the TUI and the Web UI render the badge and tick nothing. Every call is
+explicit, which keeps this server flat — it gives a host control, not an autonomous
+process.
 
 ## Safety Model
 

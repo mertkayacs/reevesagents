@@ -3,12 +3,15 @@ import type { BlockSpec } from '../src/core/spec.js'
 import type { FlowObservations, FlowState } from '../src/core/flow.js'
 import {
   MAX_ROUNDS,
+  PENDING_TTL_SEC,
   REVIEW_TIMEOUT_SEC,
   applyDecisionToState,
+  claimPendingDispatch,
   createFlowState,
   decisionChangesState,
   flowTick,
   parseFlowState,
+  releaseDispatch,
 } from '../src/core/flow.js'
 
 // The engine is a pure function of (state, observations), so every claim the design makes about
@@ -447,5 +450,111 @@ describe('state serialisation', () => {
 
   it('refuses a flow that would send to itself', () => {
     expect(() => createFlowState({ run_id: 'r', repo: '/r', roles: { dev: 'a', review: 'a' } })).toThrow(/different agents/)
+  })
+
+  it('reads a file written before the claim existed as "nothing in flight"', () => {
+    // Backwards compatibility is a promise of this file format: an older flow must keep working, and
+    // the only honest meaning of a missing claim is that no dispatch is in flight.
+    const legacy = JSON.parse(JSON.stringify(makeState())) as Record<string, unknown>
+    delete legacy.pending
+    expect(parseFlowState(legacy).pending).toBeNull()
+  })
+
+  it('refuses a damaged claim instead of reading it as "nothing in flight"', () => {
+    // A claim that cannot be read is the one case where "no claim" is a lie: a paste may already
+    // have landed, so the file has to be looked at rather than silently unlocked.
+    const damaged = { ...JSON.parse(JSON.stringify(makeState())), pending: { op_id: '', target: 'review', kind: 'request_review', at: NOW } }
+    expect(() => parseFlowState(damaged)).toThrow(/pending dispatch without an op id/)
+    const noClock = { ...JSON.parse(JSON.stringify(makeState())), pending: { op_id: 'op', target: 'review', kind: 'request_review' } }
+    expect(() => parseFlowState(noClock)).toThrow(/pending dispatch without a clock/)
+    const badRole = { ...JSON.parse(JSON.stringify(makeState())), pending: { op_id: 'op', target: 'nobody', kind: 'request_review', at: NOW } }
+    expect(() => parseFlowState(badRole)).toThrow(/unknown role/)
+  })
+})
+
+describe('the dispatch claim', () => {
+  const claim = {
+    op_id: 'op-1',
+    kind: 'request_review',
+    target: 'review',
+    head: 'bbb222',
+    spec_id: null,
+    at: NOW,
+  } as const
+
+  it('holds a tick while a claim is younger than its TTL', () => {
+    const state = makeState({ pending: { ...claim } })
+    const decision = flowTick(state, makeObservations({ head: 'bbb222' }))
+
+    expect(decision.kind).toBe('none')
+    expect(decision.reason).toBe('dispatch_pending')
+    // Nothing changes, so a 2 s tick does not rewrite the file either.
+    expect(decisionChangesState(state, decision)).toBe(false)
+  })
+
+  it('escalates a claim nobody settled in time instead of sending it again', () => {
+    const state = makeState({ pending: { ...claim, at: NOW - (PENDING_TTL_SEC + 1) * 1000 } })
+    const decision = flowTick(state, makeObservations({ head: 'bbb222' }))
+
+    expect(decision.kind).toBe('escalate')
+    expect(decision.reason).toBe('dispatch_unresolved')
+    expect(decision.message).toBeUndefined()
+    expect(decision.next_state).toBe('escalated')
+    // The settled transition clears the claim, so the flow is not stuck on it afterwards.
+    const applied = applyDecisionToState(state, decision, AT)
+    expect(applied.pending).toBeNull()
+  })
+
+  it('writes the claim with the identity of its own op, and clears it on settle', () => {
+    const idle = makeState()
+    const decision = flowTick(idle, makeObservations({ head: 'bbb222', verdict_count: 3 }))
+    expect(decision.kind).toBe('request_review')
+
+    const claimed = claimPendingDispatch(idle, decision, { op_id: 'op-42', now: NOW, at: AT })
+    expect(claimed.pending).toEqual({
+      op_id: 'op-42',
+      kind: 'request_review',
+      target: 'review',
+      head: 'bbb222',
+      spec_id: null,
+      at: NOW,
+    })
+    expect(claimed.log.at(-1)?.event).toBe('dispatch_claimed')
+    // The claim itself changes nothing the engine acts on: the status moves when it settles.
+    expect(claimed.state).toBe('idle')
+    expect(claimed.review_started_at).toBeNull()
+
+    const settled = applyDecisionToState(claimed, decision, AT)
+    expect(settled.pending).toBeNull()
+    expect(settled.state).toBe('reviewing')
+  })
+
+  it('claims nothing for a decision that sends nothing', () => {
+    const idle = makeState()
+    const hold = flowTick(idle, makeObservations({ head: 'aaa111' }))
+    expect(claimPendingDispatch(idle, hold, { op_id: 'op-1', now: NOW, at: AT })).toBe(idle)
+
+    const escalation = flowTick(
+      makeState({ state: 'reviewing', rounds: 6, claim: { head: 'aaa111', verdict: null, verdict_count: 1 } }),
+      makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_count: 2 }),
+    )
+    expect(escalation.kind).toBe('escalate')
+    expect(claimPendingDispatch(idle, escalation, { op_id: 'op-2', now: NOW, at: AT })).toBe(idle)
+  })
+
+  it('releases a claim that never pasted anything, keeping the status', () => {
+    const state = makeState({ pending: { ...claim } })
+    const released = releaseDispatch(state, 'busy', AT)
+
+    expect(released.pending).toBeNull()
+    expect(released.state).toBe('idle')
+    expect(released.log.at(-1)).toMatchObject({ event: 'dispatch_refused', detail: 'busy' })
+  })
+
+  it('survives a save and parse round trip', () => {
+    const state = makeState({ pending: { ...claim } })
+    const parsed = parseFlowState(JSON.parse(JSON.stringify(state)))
+    expect(parsed).toEqual(state)
+    expect(parsed.pending).toEqual(claim)
   })
 })
