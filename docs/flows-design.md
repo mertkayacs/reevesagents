@@ -198,15 +198,23 @@ ever removed by someone who did not create it:
   exists. Between that check and its entry nobody can obtain a smaller ticket, which is the mutual
   exclusion the runner and the control commands need;
 - a participant that died leaves its files behind, and they are ignored and collected. "Died" is
-  decided on the **process instance**, not on the pid alone (round 13): a recycled pid answers "alive"
-  to `kill(pid, 0)`, so a dead contender's ticket could otherwise block the gate for ever and a stale
-  choosing marker could make every operation wait out its timeout. Each entry records the pid plus the
-  kernel's start time for it (`/proc/<pid>/stat`, field 22); a different start time means a different
-  process, so the predecessor's files are collectable. Where that probe is unavailable the pid is the
-  best answer available and the entry is treated as **alive** — the conservative direction, which can
-  stall a waiter but never admit two holders. Collecting a dead participant's file needs no
-  coordination (it can neither read nor be waited on again), so it is the only removal anybody
-  performs; a live contender's ticket and marker are never touched;
+  decided on the **process instance**, not on the pid alone (rounds 13–14): a recycled pid answers
+  "alive" to `kill(pid, 0)`, so a dead contender's ticket could otherwise block the gate for ever and
+  a stale choosing marker could make every operation wait out its timeout. Each entry records the pid
+  plus a value that never changes for a live process and cannot be repeated by a later one, tagged
+  with the probe that produced it: `linux:<starttime>` from `/proc/<pid>/stat` (field 22), or
+  `ps:<lstart>` from `ps -o lstart= -p <pid>` on a host without `/proc` (macOS, the BSDs). The tag is
+  part of the value, so an entry written under one probe is never read as a different process under
+  another — those are simply not comparable and count as alive. One probe per pid per acquisition is
+  cached, so a 25 ms poll loop does not spawn `ps` on every pass.
+- an entry that records **no** instance at all (written by a build that did not record one) cannot be
+  judged, and both guesses are wrong: alive blocks the gate for ever, dead admits a second holder. It
+  is reported instead — `gate file … records no process instance (written by an older reevesagents);
+  check that no dispatch is running, then remove …` — so the operator decides with the evidence in
+  front of them;
+- collecting a dead participant's file needs no coordination (it can neither read nor be waited on
+  again), so it is the only removal anybody performs; a live contender's ticket and marker are never
+  touched;
 - the field is only usable if it can be **read** (round 13). A state directory this process can write
   but not list is not an empty field: publishing a ticket into it would enter the gate blind, next to
   a contender it cannot see. The gate probes the directory before writing anything and refuses with a

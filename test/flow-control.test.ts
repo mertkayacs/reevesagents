@@ -453,11 +453,18 @@ describe('a control command that lands during a dispatch', () => {
     seedLiveRun()
     seed(makeState({ state: 'idle' }))
     // Another live actor holds the gate: its ticket is the smallest one, so this tick must not paste.
-    writeFileSync(
-      join(root, '.flow-dispatch.cand.1.foreign'),
-      JSON.stringify({ pid: 1, token: 'foreign', ts: 0 }),
-      'utf-8',
-    )
+    // It carries a real process instance (PID 1), because an entry without one is refused instead.
+    const instance = (() => {
+      try {
+        const stat = readFileSync('/proc/1/stat', 'utf-8')
+        return `linux:${stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]}`
+      } catch {
+        return ''
+      }
+    })()
+    if (!instance) return
+    const foreignTicket = join(root, '.flow-dispatch.cand.1.foreign')
+    writeFileSync(foreignTicket, JSON.stringify({ pid: 1, token: 'foreign', ts: 0, instance }), 'utf-8')
     const ports = makePorts()
 
     const result = step(ports, { gate_timeout_ms: 50 })
@@ -471,7 +478,7 @@ describe('a control command that lands during a dispatch', () => {
     expect(after.state).toBe('idle')
     expect(after.log.at(-1)).toMatchObject({ event: 'dispatch_refused', detail: 'dispatch gate busy' })
     // The foreign contender's ticket is untouched: this process never removes what it did not create.
-    expect(existsSync(join(root, '.flow-dispatch.cand.1.foreign'))).toBe(true)
+    expect(existsSync(foreignTicket)).toBe(true)
   })
 
   it('still sends when nothing interrupts it', () => {

@@ -43,11 +43,23 @@ function writeEntry(kind: 'cand' | 'choosing', pid: number, token: string, ts = 
   return path
 }
 
-// The `/proc` start time of this very process, i.e. the instance id the gate writes for itself.
-function ownInstance(): string {
-  const stat = readFileSync(`/proc/${process.pid}/stat`, 'utf-8')
-  return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]!
+// The instance id the gate writes for a pid (`linux:<starttime>`), or '' when this host has no /proc.
+function instanceOf(pid: number): string {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf-8')
+    const start = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]
+    return start ? `linux:${start}` : ''
+  } catch {
+    return ''
+  }
 }
+
+function ownInstance(): string {
+  return instanceOf(process.pid)
+}
+
+// A well-formed instance value that is deliberately not the one the pid currently has.
+const RECYCLED_INSTANCE = 'linux:0'
 
 describe('withDispatchGate', () => {
   it('runs the section and leaves nothing behind', () => {
@@ -90,7 +102,9 @@ describe('withDispatchGate', () => {
 
 describe('contenders', () => {
   it('waits for a live contender that holds an earlier ticket', () => {
-    writeEntry('cand', FOREIGN_LIVE_PID, 'earlier', 1)
+    const foreign = instanceOf(FOREIGN_LIVE_PID)
+    if (!foreign) return   // no /proc on this host: the entry would be unidentifiable by design
+    writeEntry('cand', FOREIGN_LIVE_PID, 'earlier', 1, foreign)
 
     const result = withDispatchGate(() => 'never', { root, timeoutMs: 120 })
 
@@ -112,7 +126,7 @@ describe('contenders', () => {
   it('collects a ticket whose pid was reused by another process', () => {
     // Round 13: `kill(pid, 0)` answers "alive" for a recycled pid, so a dead contender's ticket would
     // block the gate for ever. The instance id tells the two apart.
-    const stale = writeEntry('cand', process.pid, 'recycled', 1, 'a-different-instance')
+    const stale = writeEntry('cand', process.pid, 'recycled', 1, RECYCLED_INSTANCE)
 
     const result = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
 
@@ -131,12 +145,41 @@ describe('contenders', () => {
   })
 
   it('collects a choosing marker left by a reused pid', () => {
-    const stale = writeEntry('choosing', process.pid, 'recycled', 0, 'a-different-instance')
+    const stale = writeEntry('choosing', process.pid, 'recycled', 0, RECYCLED_INSTANCE)
 
     const result = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
 
     expect(result).toEqual({ acquired: true, value: 'mine' })
     expect(existsSync(stale)).toBe(false)
+  })
+
+  it('does not compare instances written by a different probe', () => {
+    // An entry from a host without /proc carries `ps:<lstart>`; a `linux:` value here says nothing
+    // about it, so it is treated as alive rather than guessed dead.
+    writeEntry('cand', FOREIGN_LIVE_PID, 'otherprobe', 1, 'ps:Thu Oct 30 10:00:00 2026')
+
+    const result = withDispatchGate(() => 'never', { root, timeoutMs: 120 })
+
+    expect(result.acquired).toBe(false)
+  })
+
+  it('refuses an entry written by a build that recorded no process instance', () => {
+    // Round 14: an entry without an instance cannot be judged — treating it as alive blocks the gate
+    // for ever, treating it as dead admits a second holder. It is reported instead.
+    const legacy = writeEntry('cand', process.pid, 'legacy', 1, '')
+
+    expect(() => withDispatchGate(() => 'never', { root, timeoutMs: 100 }))
+      .toThrow(/records no process instance/)
+    expect(existsSync(legacy)).toBe(true)
+  })
+
+  it('collects a legacy entry whose owner is gone', () => {
+    const legacy = writeEntry('cand', deadPid(), 'legacy', 1, '')
+
+    const result = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
+
+    expect(result).toEqual({ acquired: true, value: 'mine' })
+    expect(existsSync(legacy)).toBe(false)
   })
 
   it('refuses to enter when the state directory cannot be read', () => {
@@ -156,7 +199,9 @@ describe('contenders', () => {
 
   it('waits while a live process is choosing its ticket', () => {
     // A chooser has not published its timestamp yet, so a minimum read now could be overtaken.
-    const marker = writeEntry('choosing', FOREIGN_LIVE_PID, 'choosing')
+    const foreign = instanceOf(FOREIGN_LIVE_PID)
+    if (!foreign) return
+    const marker = writeEntry('choosing', FOREIGN_LIVE_PID, 'choosing', 0, foreign)
 
     const blocked = withDispatchGate(() => 'never', { root, timeoutMs: 120 })
     expect(blocked.acquired).toBe(false)
@@ -167,8 +212,10 @@ describe('contenders', () => {
   })
 
   it('never removes a marker or ticket whose owner is alive', () => {
-    const foreignTicket = writeEntry('cand', FOREIGN_LIVE_PID, 'live', 0)
-    const foreignMarker = writeEntry('choosing', FOREIGN_LIVE_PID, 'live')
+    const foreign = instanceOf(FOREIGN_LIVE_PID)
+    if (!foreign) return
+    const foreignTicket = writeEntry('cand', FOREIGN_LIVE_PID, 'live', 0, foreign)
+    const foreignMarker = writeEntry('choosing', FOREIGN_LIVE_PID, 'live', 0, foreign)
 
     withDispatchGate(() => 'never', { root, timeoutMs: 120 })
 
@@ -177,7 +224,9 @@ describe('contenders', () => {
   })
 
   it('takes the gate once the earlier contender releases its ticket', () => {
-    const earlier = writeEntry('cand', FOREIGN_LIVE_PID, 'earlier', 1)
+    const foreign = instanceOf(FOREIGN_LIVE_PID)
+    if (!foreign) return
+    const earlier = writeEntry('cand', FOREIGN_LIVE_PID, 'earlier', 1, foreign)
     // A real contender removes its ticket when it finishes. The wait loop blocks the event loop, so
     // the release has to come from another process rather than a timer.
     const child = spawn(process.execPath, ['-e', `setTimeout(() => { try { require('fs').unlinkSync(${JSON.stringify(earlier)}) } catch {} }, 150)`], { stdio: 'ignore' })

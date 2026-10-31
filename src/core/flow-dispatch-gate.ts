@@ -42,8 +42,9 @@
 // takes the gate first and the runs lock inside it.
 
 import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { stateRoot } from './state-path.js'
 import { displayPath } from '../utils/paths.js'
 
@@ -95,29 +96,66 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-// The identity of one process *instance*: `/proc/<pid>/stat` field 22 is the start time in clock
-// ticks since boot, which a recycled pid cannot repeat. `null` when the platform has no /proc (or the
-// process is already gone), in which case callers fall back to the pid alone.
-function processInstance(pid: number): string | null {
+// The identity of one process *instance*, so a recycled pid cannot pass for its predecessor. Two
+// probes, both of which answer with a value that never changes for a live process:
+// - `linux:<starttime>` from `/proc/<pid>/stat` field 22 (clock ticks since boot);
+// - `ps:<lstart>` from `ps -o lstart= -p <pid>`, which is what a host without `/proc` offers
+//   (macOS, the BSDs). The tag is part of the value, so an entry written on one platform and read on
+//   another is never mistaken for a different process — the tags simply do not compare.
+// `null` means "this host cannot tell", and a caller must then treat the participant as alive.
+const instanceCache = new Map<number, string | null>()
+
+function probeInstance(pid: number): string | null {
+  if (instanceCache.has(pid)) return instanceCache.get(pid) ?? null
+  let found: string | null = null
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf-8')
     // `comm` may contain spaces and parentheses, so everything after the last ')' is the field list
     // starting at field 3 (state); starttime is field 22, i.e. index 19 from there.
-    const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
-    const start = fields[19]
-    return start && /^\d+$/.test(start) ? start : null
+    const start = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]
+    if (start && /^\d+$/.test(start)) found = `linux:${start}`
   } catch {
-    return null
+    // No /proc here: fall through to `ps`.
   }
+  if (found === null) {
+    try {
+      const out = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 2000,
+      }).trim()
+      if (out) found = `ps:${out}`
+    } catch {
+      // Neither probe answered: the caller falls back to the conservative answer.
+    }
+  }
+  instanceCache.set(pid, found)
+  return found
+}
+
+function processInstance(pid: number): string | null {
+  return probeInstance(pid)
 }
 
 // Is the participant that wrote `record` still running? A reused pid answers "alive" to
-// `kill(pid, 0)` while its owner is long gone, so the instance has to match too.
-function participantAlive(record: { pid: number, instance: string }): boolean {
+// `kill(pid, 0)` while its owner is long gone, so the instance has to match as well.
+//
+// Three cases, and the unidentifiable one matters most: an entry with no instance at all — written by
+// a build that did not record one — cannot be judged, and guessing either way is wrong (treating it
+// as alive blocks the gate for ever, treating it as dead admits a second holder). It is reported to
+// the operator instead, who can see whether a dispatch is still running.
+function participantAlive(record: { pid: number, instance: string }, path: string): boolean {
   if (!pidAlive(record.pid)) return false
-  if (!record.instance) return true              // nothing recorded to compare against
+  if (!record.instance) {
+    throw new Error(
+      `gate file ${basename(path)} records no process instance (written by an older reevesagents);`
+      + ` check that no dispatch is running, then remove ${displayPath(path)}`,
+    )
+  }
   const current = processInstance(record.pid)
-  if (current === null) return true              // cannot verify here: assume alive
+  if (current === null) return true              // this host cannot tell: assume alive
+  const sameProbe = current.split(':')[0] === record.instance.split(':')[0]
+  if (!sameProbe) return true                    // different probe: nothing to compare
   return current === record.instance
 }
 
@@ -167,7 +205,7 @@ function entries(root: string, kind: 'cand' | 'choosing'): Ticket[] {
     const token = typeof record.token === 'string' ? record.token : ''
     const ts = typeof record.ts === 'number' && Number.isFinite(record.ts) ? record.ts : 0
     const instance = typeof record.instance === 'string' ? record.instance : ''
-    if (!participantAlive({ pid: record.pid, instance })) {
+    if (!participantAlive({ pid: record.pid, instance }, path)) {
       // The owner is gone: the entry can never be consulted again, so collecting it is safe.
       try { unlinkSync(path) } catch { /* another contender collected it first */ }
       continue
@@ -232,6 +270,9 @@ export function withDispatchGate<T>(fn: () => T, options: DispatchGateOptions = 
   const root = options.root ?? stateRoot()
   mkdirSync(dirname(gateCandidatesPath(root)), { recursive: true })
   const token = randomUUID()
+  // One probe per pid per acquisition: the answer is stable for a live process, and re-asking on
+  // every 25 ms poll would spawn `ps` forty times a second on hosts without /proc.
+  instanceCache.clear()
 
   if (!acquire(root, token, options.timeoutMs ?? DISPATCH_GATE_TIMEOUT_MS)) return { acquired: false }
 
