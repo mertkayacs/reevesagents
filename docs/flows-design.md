@@ -52,10 +52,10 @@ extended rather than re-invented:
 
 | File | Contents | Why a separate module |
 | --- | --- | --- |
-| `src/core/activity.ts` | `paneBusy(paneText, provider)` per-provider busy detectors, a `DETECTORS` map like `src/core/attention.ts:190` (same unmerged branch) | Busy detection is provider knowledge; it belongs next to the other pane reader, not in the caller |
+| `src/core/activity.ts` | `detectPaneBusy(paneText, provider)` per-provider busy detectors (the runtime method of the same name wraps this one), a `DETECTORS` map like `src/core/attention.ts:190` (same unmerged branch) | Busy detection is provider knowledge; it belongs next to the other pane reader, not in the caller |
 | `src/core/verdict.ts` | `parseVerdict(paneText)` → `{verdict, notes, count}` | Pure, unit-testable, no tmux |
 | `src/core/flow.ts` | `FlowState`, `FlowDefinition`, `tickFlow(flow, ports)` — a pure step | The whole state machine is testable without tmux, git or a clock |
-| `src/core/flow-store.ts` | `~/.reeves/flows/<id>.json` read/list/save/delete, atomic, versioned | Own store, own lock domain, own normalizer |
+| `src/core/flow-store.ts` | `~/.reeves/flows/<id>.json` read/list/save/delete, atomic, versioned | Own file set and normalizer; it adds **no** second lock — claim/settle use the existing `withRunsLock` (§2.4) |
 | `src/core/flow-runner.ts` | `FlowPorts` implemented over `runtime.ts` + git, `sweepFlows()`, `sweepFlowsThrottled()` | The only place that knows both the engine and the runtime |
 | `src/core/spec.ts` | Block-spec model and validation, plus the deterministic dispatch-prompt renderer | A spec is data the owner authors; it is validated once at add time, never re-parsed at dispatch |
 
@@ -65,10 +65,18 @@ extended rather than re-invented:
 `peekAgent`, `killAgent`, `stopRun`). The missing capability — **"write only when the pane is
 free"** — must land here, not in the flow caller:
 
+```ts
+type PaneBusyState = 'busy' | 'idle' | 'unknown'   // unknown = no verified detector for this provider
+type SendOutcome =
+  | { sent: true }
+  | { sent: false; reason: 'busy' | 'unknown' | 'stale_pane' | 'unconfirmed' }
+
+runtime.paneBusy(agentId): PaneBusyState        // reads via the injected driver
+runtime.sendWhenIdle(agentId, text): SendOutcome // paste → Enter → confirm; never writes when busy or unknown
 ```
-runtime.paneBusy(agentId): boolean            // reads via the injected driver
-runtime.sendWhenIdle(agentId, text): SendResult // paste → Enter → confirm; refuses a busy pane
-```
+
+The tri-state is the whole point: a boolean would force the caller to guess what "not busy"
+means for a provider nobody has verified, and the guess would be "free".
 
 Rationale: today any caller (CLI `send`, MCP `send_text`, a future flow) can paste into a
 working agent, and the paste lands in the provider's *queued input*, which the CLI will then
@@ -114,8 +122,10 @@ later decision, not a hidden requirement of this design.
 
 ### 2.4 Dispatch protocol — two phases, never a lock across a send
 
-`withRunsLock` (`src/core/runs.ts:82`) is **not reentrant**: it creates a lock file, a nested
-acquisition spins, and after 5 s (`staleMs`, `runs.ts:85`) it breaks the lock as stale. `sendText`
+The lock is the **existing** one, `withRunsLock` (`src/core/runs.ts:82`) — the flow store adds no
+second lock implementation, because two locks over the same state tree is how ordering bugs are
+born. It is **not reentrant**: it creates a lock file, a nested acquisition spins, and after 5 s
+(`staleMs`, `runs.ts:85`) it breaks the lock as stale. `sendText`
 (`src/core/runtime.ts:598`) calls `updateAgent` (`:605` → `src/core/runs.ts:386`), which takes
 that very lock. So "lock the flow → send → save" deadlocks and then resolves by stealing the
 lock from itself. It also loses work: a crash between the paste and the save either forgets a
@@ -332,12 +342,19 @@ prefix matching (`src/surfaces/cli/helpers.ts:7`, `:17`), `requireDestructiveCon
 anything irreversible (`:31`), `console.error(message)` + `process.exit(1)` for a clean
 failure (`src/surfaces/cli/agents.ts:54`–`:55`), and stable `--json` payloads (`:117`).
 
-`--json` output is a published surface, so it follows the record rules: secret-looking values
-pass through `redactSecrets` (`src/core/redact.ts`, already applied to agent tasks at
-`src/core/runs.ts:222`), the review prompt template is summarised rather than dumped verbatim
-(its text can carry a repository's private instructions), and paths are printed as given
-(`~/…` when the caller used it) instead of being expanded into absolute home paths. The same
-payload shape feeds the MCP tools, so both surfaces obey one redaction rule.
+`--json` output is a published surface, so it follows the record rules:
+
+- secret-looking values pass through `redactSecrets` (`src/core/redact.ts`, already applied to
+  agent tasks at `src/core/runs.ts:222`);
+- the review prompt template is **summarised** (length + whether the `{{HEAD}}`/`{{COMMITS}}`
+  tokens are present), never dumped: its text is repository-authored and may carry private
+  instructions;
+- paths: the flow file stores absolute paths because git needs them, but **every payload renders
+  them home-shortened** — anything under `$HOME` prints as `~/…`, so a transcript never carries
+  `/home/<user>/…`. A path the caller passed is echoed the way the caller wrote it (a relative
+  argument stays relative), never silently expanded.
+
+The same payload shape feeds the MCP tools, so both surfaces obey one redaction rule.
 
 ### 4.2 TUI
 
@@ -536,3 +553,17 @@ code, none about this document.
 The prototype was dropped instead of patched: every one of its blockers is a *design* decision
 that this document now makes explicitly, and rewriting the prototype to match would be block 02's
 job, done once, against the reviewed design.
+
+### Round 3 — the fixes above, verified
+
+The first patch after round 2 was itself reviewed and came back **CHANGES_REQUESTED** with three
+internal contradictions, all of them fair:
+
+| Open item | Fix |
+| --- | --- |
+| §2.2 mandates a tri-state gate, but the documented signature still returned `boolean` | §2.2 now declares `PaneBusyState` and `SendOutcome` (`busy`/`idle`/`unknown`, and a refusal reason), so no caller can collapse "unknown" into "free" |
+| §2.1 said the store has its own lock domain while §2.4 used the shared `withRunsLock` | One lock, named once: the flow store adds no second lock; claim/settle use `withRunsLock` for short sections (§2.1, §2.4) |
+| Paths: the rule only covered "as the caller wrote it", so an absolute argument still leaked an absolute home path | §4.1 now states the full rule: absolute paths are stored, every payload renders them `~/…`-shortened, a caller's relative argument stays relative |
+
+A name clash the review did not name but the rule implies was also removed: the pure detector in
+`activity.ts` is `detectPaneBusy`, the runtime method is `paneBusy`.
