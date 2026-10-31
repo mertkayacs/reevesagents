@@ -10,10 +10,11 @@
 // autoCleanupRuns knows nothing about.
 
 import { loadConfig } from './config.js'
+import { logDiagnostic } from './diagnostics.js'
 import { listAgents, listRuns, nowMs } from './runs.js'
 import {
-  allWindowIds as tmuxAllWindowIds,
-  listSessions as tmuxListSessions,
+  tryAllWindowIds as tmuxTryAllWindowIds,
+  tryListSessions as tmuxTryListSessions,
   killSession as tmuxKillSession,
   sessionAttached as tmuxSessionAttached,
   RUN_SESSION_PATTERN,
@@ -39,6 +40,9 @@ export interface ReapedAgent {
 export interface SweepOptions {
   driver?: RuntimeDriver
   targetExists?: (_windowId: string, _session: string) => boolean
+  // Test seam: the server-wide window enumeration. `null` means "tmux could not answer";
+  // the sweep then stands down instead of reading it as "every window is gone".
+  windowIds?: () => Set<string> | null
   tmuxAvailable?: () => boolean
   now?: () => number
   maxLifetimeMs?: number
@@ -63,9 +67,20 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
   // Batch path (no injected probe): one server-wide window enumeration instead
   // of a tmux spawn per agent per sweep. A miss is confirmed with a fresh probe
   // so a window born after the enumeration is never misjudged as gone.
-  const batchWindows = !options.targetExists && candidates.some(agent => agent.tmux_window_id)
-    ? tmuxAllWindowIds()
-    : null
+  //
+  // The enumeration is failure-aware on purpose: `null` means tmux could not answer, and
+  // acting on "no windows at all" would kill every live agent on one bad command — that is
+  // exactly how a whole fleet was archived while its sessions were still running. Stand
+  // down, leave a line in the diagnostics journal, and let the next tick retry.
+  const needsBatch = !options.targetExists && candidates.some(agent => agent.tmux_window_id)
+  const batchWindows = needsBatch ? (options.windowIds ?? tmuxTryAllWindowIds)() : null
+  if (needsBatch && batchWindows === null) {
+    logDiagnostic('sweep-agents-skipped', {
+      reason: 'tmux-enumeration-failed',
+      candidates: candidates.length,
+    })
+    return { reaped: [] }
+  }
   const probe = batchWindows
     ? (id: string, session: string): boolean => batchWindows.has(`${session}\0${id}`) || targetExists(id, session)
     : targetExists
@@ -93,6 +108,12 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
       // The agent or its run was archived out from under us mid-sweep; nothing to reap.
     }
   }
+  if (reaped.length > 0) {
+    logDiagnostic('agents-reaped', {
+      count: reaped.length,
+      agents: reaped.map(item => `${item.nickname}:${item.reason}`),
+    })
+  }
   return { reaped }
 }
 
@@ -110,7 +131,9 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
 //   registries sharing one tmux server is unsupported — a sweep would see the
 //   other registry's sessions as orphans.
 export interface OrphanSweepOptions {
-  listSessions?: () => TmuxSessionInfo[]
+  // `null` means "tmux could not answer": the sweep then stands down rather than
+  // treating an unknown server as an empty one.
+  listSessions?: () => TmuxSessionInfo[] | null
   killSession?: (_session: string) => void
   sessionAttached?: (_session: string) => boolean
   tmuxAvailable?: () => boolean
@@ -126,7 +149,12 @@ const ORPHAN_MIN_AGE_SEC = 60
 export function sweepOrphanSessions(options: OrphanSweepOptions = {}): { killed: string[] } {
   const haveTmux = options.listSessions ? true : (options.tmuxAvailable ?? tmuxAvailable)()
   if (!haveTmux) return { killed: [] }
-  const sessions = (options.listSessions ?? tmuxListSessions)()
+  const sessions = (options.listSessions ?? tmuxTryListSessions)()
+  // Same rule as sweepAgents: no answer is not "no sessions".
+  if (sessions === null) {
+    logDiagnostic('orphan-sweep-skipped', { reason: 'tmux-enumeration-failed' })
+    return { killed: [] }
+  }
   const killSession = options.killSession ?? tmuxKillSession
   const sessionAttached = options.sessionAttached ?? tmuxSessionAttached
   const nowSec = ((options.now ?? nowMs)()) / 1000
@@ -150,6 +178,9 @@ export function sweepOrphanSessions(options: OrphanSweepOptions = {}): { killed:
     } catch {
       // session disappeared mid-sweep
     }
+  }
+  if (killed.length > 0) {
+    logDiagnostic('orphan-sessions-killed', { sessions: killed })
   }
   return { killed }
 }

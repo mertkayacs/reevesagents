@@ -32,6 +32,7 @@ import type {
 import { redactSecrets } from './redact.js'
 import { isProvider } from './providers.js'
 import { reapPaneProcess } from './process.js'
+import { logDiagnostic } from './diagnostics.js'
 import * as tmux from './tmux.js'
 
 export function stateRoot(): string {
@@ -493,21 +494,27 @@ export function readAgentInbox(runId: string, agentId: string): Message[] {
 }
 
 export interface AutoCleanupOptions {
-  sessionExists?: (_session: string) => boolean
-  targetExists?: (_target: string, _session: string) => boolean
+  // A probe may answer `null` = "unknown" (tmux could not answer). Cleanup treats unknown
+  // as alive: archiving a run on an unanswered probe is how a live fleet disappears.
+  sessionExists?: (_session: string) => boolean | null
+  targetExists?: (_target: string, _session: string) => boolean | null
   killSession?: (_session: string) => void
   killViewers?: (_runSession: string) => void
+  // Test seams for the batch enumeration: `null` = tmux could not answer.
+  windowIds?: () => Set<string> | null
+  sessions?: () => { name: string }[] | null
   tmuxAvailable?: () => boolean
   cleanStale?: boolean
 }
 
 export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions = {}): boolean {
-  const targetExists = options.targetExists ?? tmux.targetExists
-  const sessionExists = options.sessionExists ?? tmux.sessionExists
+  const targetExists = options.targetExists ?? tmux.tryTargetExists
+  const sessionExists = options.sessionExists ?? tmux.trySessionExists
   const agents = listAgents(run.id).filter(agent => !agent.ended_at)
   const windowedAgents = agents.filter(agent => !agent.headless && agent.tmux_window_id)
-  if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id, agent.tmux_session))
-  return sessionExists(run.tmux_session)
+  // `!== false` on purpose: only a confident "it is not there" counts as dead.
+  if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id, agent.tmux_session) !== false)
+  return sessionExists(run.tmux_session) !== false
 }
 
 // Removes state directories for runs whose status is 'ended' or whose tmux
@@ -519,8 +526,8 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
 // and its grouped web viewers are killed before archiving, so record removal
 // never leaves tmux state behind.
 export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: string[]; archived: string[] } {
-  const sessionExists = options.sessionExists ?? tmux.sessionExists
-  const targetExists = options.targetExists ?? tmux.targetExists
+  const sessionExists = options.sessionExists ?? tmux.trySessionExists
+  const targetExists = options.targetExists ?? tmux.tryTargetExists
   const killSession = options.killSession ?? tmux.killSession
   const killViewers = options.killViewers ?? tmux.killGroupedViewers
   // If the caller injected tmux checks (test drivers), treat tmux as available and skip the real probe.
@@ -536,10 +543,22 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
   // tmux spawn per run per tick. A stale verdict is always confirmed with fresh
   // per-run probes, so a window born after the enumeration is never misjudged.
   const useBatch = haveTmux && !options.sessionExists && !options.targetExists && runs.length > 0
-  const batchWindows = useBatch ? tmux.allWindowIds() : null
-  const batchSessions = useBatch ? new Set(tmux.listSessions().map(info => info.name)) : null
+  const batchWindows = useBatch ? (options.windowIds ?? tmux.tryAllWindowIds)() : null
+  const batchSessionList = useBatch ? (options.sessions ?? tmux.tryListSessions)() : null
+  // A failed enumeration is not "nothing is running": stand down and leave a trace, or the
+  // next tick — with a working tmux — would archive a fleet that was alive all along.
+  if (useBatch && (batchWindows === null || batchSessionList === null)) {
+    logDiagnostic('run-cleanup-skipped', {
+      reason: 'tmux-enumeration-failed',
+      runs: runs.length,
+      windows: batchWindows === null ? 'unknown' : batchWindows.size,
+      sessions: batchSessionList === null ? 'unknown' : batchSessionList.length,
+    })
+    return { removed: [], archived: [] }
+  }
+  const batchSessions = batchSessionList ? new Set(batchSessionList.map(info => info.name)) : null
   const batchTargetExists = batchWindows
-    ? (target: string, session: string): boolean => batchWindows.has(`${session}\0${target}`)
+    ? (target: string, session: string): boolean | null => batchWindows.has(`${session}\0${target}`) || tmux.tryTargetExists(target, session)
     : undefined
   const batchSessionExists = batchSessions
     ? (session: string): boolean => batchSessions.has(session)
@@ -561,7 +580,9 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
         // Viewers stay identifiable by group name even after the run session is
         // gone, so kill them unconditionally; the session kill needs it to exist.
         killViewers(run.tmux_session)
-        if (sessionExists(run.tmux_session)) {
+        // Only a confident "yes, it is there" authorises a kill: an unanswered probe means
+        // the record gets archived without touching tmux, never a live session torn down.
+        if (sessionExists(run.tmux_session) === true) {
           killSession(run.tmux_session)
           // The session was confirmed present seconds ago, so its recorded pane
           // pids are safe to escalate on: SIGHUP-resistant CLIs must not outlive
@@ -574,6 +595,12 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
       const record = archiveAndRemoveRun(run.id, isStale ? 'stale' : 'ended')
       removed.push(run.id)
       archived.push(record.id)
+      logDiagnostic('run-archived', {
+        run: record.name,
+        id: record.id,
+        reason: isStale ? 'stale' : 'ended',
+        agents: record.agent_count,
+      })
     } catch {
       // try again next refresh
     }

@@ -113,28 +113,46 @@ export function tmuxVersion(): string | null {
 }
 
 export function sessionExists(session: string): boolean {
+  return trySessionExists(session) === true
+}
+
+// `null` means the probe failed (no tmux, no socket, a fork error); `false` means tmux
+// answered and the session is not there. Sweeps that archive on a miss must treat
+// `null` as "unknown".
+export function trySessionExists(session: string): boolean | null {
   if (!session) return false
   try {
     const result = spawnTmux(['has-session', '-t', exactSession(session)], { stdio: 'ignore' })
-    return result.status === 0
+    if (result.status === 0) return true
+    // has-session reports a real absence and a connection failure with the same code, so
+    // confirm the server is reachable before calling the session gone.
+    return tryListSessions() === null ? null : false
   } catch {
-    return false
+    return null
   }
 }
 
 // Membership probe for the (session name, id) identity pair; see the doctrine
 // comment above for why listing the session is the only sound check.
 export function targetExists(target: string, session: string): boolean {
+  return tryTargetExists(target, session) === true
+}
+
+// `null` means the probe itself failed; `false` means tmux answered and the target is not
+// there. A decision that kills something must treat `null` as "unknown, leave it alone":
+// a fork error or an unreachable server is not evidence that an agent's window is gone.
+export function tryTargetExists(target: string, session: string): boolean | null {
   if (!target || !session) return false
   try {
     const args = target.startsWith('%')
       ? ['list-panes', '-s', '-t', exactSession(session), '-F', '#{pane_id}']
       : ['list-windows', '-t', exactSession(session), '-F', '#{window_id}']
     const result = spawnTmux(args, { encoding: 'utf8' })
+    if (result.status !== 0) return null
     const stdout = typeof result.stdout === 'string' ? result.stdout : ''
-    return result.status === 0 && stdout.split('\n').some(line => line.trim() === target)
+    return stdout.split('\n').some(line => line.trim() === target)
   } catch {
-    return false
+    return null
   }
 }
 
@@ -148,6 +166,12 @@ export interface TmuxSessionInfo {
 
 // One enumeration call for the orphan sweep; a missing tmux server yields [].
 export function listSessions(): TmuxSessionInfo[] {
+  return tryListSessions() ?? []
+}
+
+// `null` means "tmux could not answer", not "there are no sessions". Sweeps that kill
+// unowned sessions must use this and stand down on `null`.
+export function tryListSessions(): TmuxSessionInfo[] | null {
   try {
     return execTmux(['list-sessions', '-F', '#{session_name}\t#{session_attached}\t#{session_group}\t#{session_group_list}\t#{session_created}'])
       .split('\n')
@@ -164,7 +188,7 @@ export function listSessions(): TmuxSessionInfo[] {
         }
       })
   } catch {
-    return []
+    return null
   }
 }
 
@@ -190,7 +214,12 @@ export function killSession(session: string): void {
 // All window ids across the server in one call, keyed "session\0windowId", for
 // batch membership checks. Callers must confirm a miss with a fresh targetExists
 // probe before acting on it: a window born after the enumeration is invisible here.
-export function allWindowIds(): Set<string> {
+//
+// Failure-aware variant: `null` means "tmux could not answer", which is NOT the same
+// as "there are no windows". Anything that kills on a miss (the reaper, orphan sweep,
+// run cleanup) must use this one, because an empty set reads as "every agent is dead"
+// and takes the whole fleet down on a single failed command.
+export function tryAllWindowIds(): Set<string> | null {
   try {
     return new Set(
       execTmux(['list-windows', '-a', '-F', '#{session_name}\t#{window_id}'])
@@ -203,8 +232,12 @@ export function allWindowIds(): Set<string> {
         }),
     )
   } catch {
-    return new Set()
+    return null
   }
+}
+
+export function allWindowIds(): Set<string> {
+  return tryAllWindowIds() ?? new Set()
 }
 
 export const RUN_SESSION_PATTERN = /^reeves-.+-[0-9a-f]{8}$/
