@@ -450,7 +450,10 @@ the whole reason `source` is a first-class field instead of a debug detail.
 
 `<state>/notifications.jsonl` where `<state> = stateRoot()` (`src/core/state-path.ts:12`), i.e.
 `~/.reeves/notifications.jsonl` in production and `<tmp>/notifications.jsonl` in tests. One
-compact JSON object per line, `\n`-terminated, no pretty printing, no index file.
+compact JSON object per line, `\n`-terminated, no pretty printing. The log itself is append-only and
+never indexed for reads (the ring is small enough to scan); the two sidecars below are the only extra
+state, and neither is an index *of* the log — one is the read watermark, the other the bounded key index
+of §3.5.
 
 `<state>/notifications-read.json` = `{ "read_seq": 0, "updated_at": "…" }` (atomic temp+rename,
 `chmod 0600` like `atomicWriteJson` `runs.ts:127-133`).
@@ -573,16 +576,22 @@ that a process-local counter could lag when a second process appends, which woul
 was not actually guaranteed. That is not acceptable, so the count is derived from the file itself at
 the moment the cap is evaluated, inside the critical section:
 
-- the module caches `{ size, count }` after its own append;
-- on the next append it compares the cached `size + len(line)` with `statSync(path).size`;
-- equal → nobody else touched the file, so `count += 1` (O(1), the normal path);
-- different → another process (or a rotation) wrote since, so the line count is recomputed by
-  scanning the file for `\n` **before** the cap check (O(file size), only on the foreign-write path).
+- the module caches `{ dev, ino, size, mtimeMs, count }` after its own append;
+- on the next append it compares the cached `size + len(line)` with `statSync(path).size` **and** the
+  cached `{ dev, ino }` with the ones it just stat'ed;
+- equal size, same inode → nobody replaced the file, so `count += 1` (O(1), the normal path);
+- anything else → another process (or a rotation) wrote since, so the line count is recomputed by
+  scanning the file for `\n` **before** the cap check (O(file size), only on the foreign-write path),
+  and — in the same pass — the dedupe index is merged with the keys the file holds (§3.5).
 
-Every append adds at least one byte, so `size` is a sound cache key: it can only match after this
-process's own write, and it cannot match after a foreign append or a rotation. Both caps are
-therefore exact at the moment they are evaluated, for one writer and for several, and no wording in
-this document claims otherwise.
+**Size alone is not a cache key**, and the previous revision was wrong to say it was: a rotation
+rewrites the file to a smaller prefix, and the appends that follow can bring it back to exactly the
+size the cache remembers while the line count and the key set have changed underneath. What makes the
+check sound is the **inode**: rotation publishes through `rename`, so the file the cache described is
+replaced by a new one, and `{ dev, ino }` changes even when the byte count comes back. A foreign append
+always adds at least one byte, so it cannot hide behind an unchanged size either. With both parts
+compared, the count and the key set are exact at the moment they are evaluated, for one writer and for
+several.
 
 The byte cap needs no such care — one `statSync` is already exact and cross-process safe.
 
@@ -657,8 +666,9 @@ keeps a **bounded key index on disk**:
   rotation the log no longer mentions keys that the index legitimately still holds, and rebuilding the
   index from the log alone would forget them and let a retry duplicate an event that the bound of 500
   was supposed to keep covered. So:
-  - the append path re-scans the log when its cached `{ size, count }` does not match
-    `statSync(file).size` (a cold cache after a restart matches nothing) and collects the `dedupe_key`
+  - the append path re-scans the log when its cache is stale — a different `{ dev, ino }` or a size
+    that does not match, which is how a rotation (new inode) and a foreign append (new bytes) are both
+    caught, and how a cold cache after a restart matches nothing (§3.3) — and collects the `dedupe_key`
     values it finds — the same scan §3.3 already performs for the exact count, so the cost is the one
     that path already pays;
   - the result is **merged** with the index already on disk: entries are unioned by `key`, sorted by
@@ -1244,7 +1254,9 @@ through `translatePhrase`.
      window and the non-monotonic watermark this design closes;
    - *counters*: `MAX_EVENTS` is derived from the file inside the lock, never from a process-local
      increment that a second process can invalidate (§3.3). Any future caching must keep that
-     property, or the guarantee silently degrades to "usually true". The same rule covers `seq`
+     property, or the guarantee silently degrades to "usually true" — and the cache key must include
+     the inode, because a rotation followed by appends can restore the byte count the cache remembers
+     while the line count and the key set have changed. The same rule covers `seq`
      allocation, which must stay in the append critical section or two processes can issue
      duplicate ids.
 
