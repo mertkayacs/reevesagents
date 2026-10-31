@@ -4,6 +4,9 @@
 // one place: a spec is validated once, when it is queued, and a bad file is refused with its
 // reason instead of being stored and discovered at dispatch time (§3.2 of docs/flows-design.md).
 //
+// Paths in these messages are home-shortened: an MCP host quotes the error verbatim into its own
+// transcript, and that transcript must not carry the account layout.
+//
 // The file is the source of truth for its own text; the record stored on the flow is the
 // structured spec, so a dispatch is reproducible from the flow file alone and the dev's brief does
 // not depend on a path still existing.
@@ -13,6 +16,7 @@ import { isAbsolute, extname, relative, resolve } from 'node:path'
 import type { FlowState } from './flow.js'
 import type { BlockSpec } from './spec.js'
 import { formatSpecIssues, parseSpecJson, specFromMarkdown } from './spec.js'
+import { shortHomePath } from '../utils/paths.js'
 
 // A spec is text a human wrote; anything this large is not a block brief, and reading it into a
 // flow file would make the document unusable.
@@ -57,23 +61,23 @@ export function readSpecFile(path: string, options: SpecFileOptions): BlockSpec 
   let size: number
   try {
     const stats = statSync(absolute)
-    if (!stats.isFile()) throw new FlowSpecError(`spec path is not a file: ${absolute}`)
+    if (!stats.isFile()) throw new FlowSpecError(`spec path is not a file: ${shortHomePath(absolute)}`)
     size = stats.size
   } catch (err) {
     if (err instanceof FlowSpecError) throw err
-    throw new FlowSpecError(`spec file not found: ${absolute}`)
+    throw new FlowSpecError(`spec file not found: ${shortHomePath(absolute)}`)
   }
   if (size > SPEC_FILE_MAX_BYTES) {
-    throw new FlowSpecError(`spec file is larger than ${SPEC_FILE_MAX_BYTES} bytes: ${absolute}`)
+    throw new FlowSpecError(`spec file is larger than ${SPEC_FILE_MAX_BYTES} bytes: ${shortHomePath(absolute)}`)
   }
 
   let text: string
   try {
     text = readFileSync(absolute, 'utf-8')
   } catch {
-    throw new FlowSpecError(`spec file could not be read: ${absolute}`)
+    throw new FlowSpecError(`spec file could not be read: ${shortHomePath(absolute)}`)
   }
-  if (!text.trim()) throw new FlowSpecError(`spec file is empty: ${absolute}`)
+  if (!text.trim()) throw new FlowSpecError(`spec file is empty: ${shortHomePath(absolute)}`)
 
   // A JSON spec is the structured contract; anything else is markdown and is downgraded to an
   // unstructured block explicitly, with its heading as the id and title.

@@ -397,14 +397,18 @@ failure (`src/surfaces/cli/agents.ts:54`–`:55`), and stable `--json` payloads 
 `--json` output is a published surface, so it follows the record rules:
 
 - secret-looking values pass through `redactSecrets` (`src/core/redact.ts`, already applied to
-  agent tasks at `src/core/runs.ts:222`);
+  agent tasks at `src/core/runs.ts:222`). That covers more than the log: a queued block's **title**
+  is user text and goes through the same redactor in the payload and in the MCP answer, while the
+  flow file keeps the author's text — the payload is a view, the document is the record;
 - the review prompt template is **summarised** (length + whether the `{{HEAD}}`/`{{COMMITS}}`
   tokens are present), never dumped: its text is repository-authored and may carry private
   instructions;
 - paths: the flow file stores absolute paths because git needs them, but **every payload renders
   them home-shortened** — anything under `$HOME` prints as `~/…`, so a transcript never carries
   `/home/<user>/…`. A path the caller passed is echoed the way the caller wrote it (a relative
-  argument stays relative), never silently expanded. The rule covers **error messages** as well as
+  argument stays relative), never silently expanded. Errors are covered by the same rule: a spec
+  file that cannot be read is named `~/…` in the message, because an MCP host quotes that message
+  into its own transcript. The rule covers **error messages** as well as
   payloads: `flow status` on a damaged file names it as `~/.reeves/flows/<id>.json`, and
   `src/utils/paths.ts` is the single implementation both sides use, so the shorthand cannot drift
   between the store that knows the path and the command that prints it. An fs failure is reported

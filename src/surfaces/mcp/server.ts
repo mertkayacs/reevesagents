@@ -42,10 +42,11 @@ import {
   stopRun,
   type AllowedKey,
 } from '../../core/runtime.js'
-import { resolveFlowRunId, flowStatusPayload } from '../../core/flow-view.js'
+import { resolveFlowRunId, flowQueueSummary, flowStatusPayload } from '../../core/flow-view.js'
 import { flowPath, readFlow, saveFlow } from '../../core/flow-store.js'
 import { queueSpecFile } from '../../core/flow-queue.js'
 import { shortHomePath } from '../../utils/paths.js'
+import { redactSecrets } from '../../core/redact.js'
 import { detectHostProvider } from './host.js'
 import {
   archiveAndRemoveRun,
@@ -665,11 +666,12 @@ const TOOLS: ToolDef[] = [
           run_id: runId,
           block: {
             id: queued.spec.id,
-            title: queued.spec.title,
+            // The title is user text: the answer is a transcript, so it is redacted here too.
+            title: redactSecrets(queued.spec.title),
             unstructured: queued.spec.unstructured === true,
             source_path: shortHomePath(queued.spec.source_path ?? ''),
           },
-          queue: flowStatusPayload(queued.state, flowPath(runId)).queue,
+          queue: flowQueueSummary(queued.state),
         })
       })
     },

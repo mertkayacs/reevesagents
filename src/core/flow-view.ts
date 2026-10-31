@@ -50,16 +50,30 @@ export interface FlowStatusPayload {
   path: string
 }
 
-// A queued block is summarised, never dumped: `body` is repository-authored text and the payload
-// is a log line in a transcript. Its id, title and origin are enough to recognise it.
-export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id)): FlowStatusPayload {
-  const queue = state.specs
+export interface FlowQueueEntry {
+  id: string
+  title: string
+  source_path: string | null
+}
+
+// A queued block is summarised, never dumped: `body` is repository-authored text and the payload is
+// a log line in a transcript. Its id, title and origin are enough to recognise it.
+//
+// The title is user text, so it goes through the redactor like the log does — a block heading is as
+// capable of quoting a token as a reviewer remark. The flow file keeps the original; only the
+// rendered view is redacted.
+export function flowQueueSummary(state: FlowState): FlowQueueEntry[] {
+  return state.specs
     .filter(spec => !state.dispatched_specs.includes(spec.id))
     .map(spec => ({
       id: spec.id,
-      title: spec.title,
+      title: redactSecrets(spec.title),
       source_path: spec.source_path ? shortHomePath(spec.source_path) : null,
     }))
+}
+
+export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id)): FlowStatusPayload {
+  const queue = flowQueueSummary(state)
   const log = state.log.slice(-5).map(entry => ({
     at: entry.at,
     event: entry.event,

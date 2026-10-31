@@ -11,12 +11,19 @@ import { flowStatusPayload, resolveFlowRunId } from '../src/core/flow-view.js'
 // a host CLI and a terminal cannot be told different things about the same flow.
 
 let root: string
+let savedHome: string | undefined
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'reeves-flow-view-'))
+  // HOME is pinned to the test root: the shorthand applies to paths under $HOME, and where the
+  // system puts its temp directory (TMPDIR may be /tmp) must not decide whether this test passes.
+  savedHome = process.env.HOME
+  process.env.HOME = root
 })
 
 afterEach(() => {
+  if (savedHome === undefined) delete process.env.HOME
+  else process.env.HOME = savedHome
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -79,17 +86,30 @@ describe('flowStatusPayload', () => {
     // Built from parts: a literal secret in the source is rewritten by the workspace secret
     // scanner, which makes the assertion impossible to read.
     const secret = ['sk', 'ant', 'abcdefghijklmnopqrstuvwxyz012345'].join('-')
+    const path = join(root, 'flows', 'run-p.json')
     const payload = flowStatusPayload(makeState('run-p', {
       log: [{ at: '2026-01-01T00:01:00.000Z', event: 'fix_dispatched', detail: `round 1 token ${secret}` }],
-    }))
+    }), path)
 
     expect(payload.repo).toBe('~/projects/demo')
-    // The registry in a test is a temp dir, but it is still under $HOME: the shorthand applies.
-    expect(payload.path.startsWith('~')).toBe(true)
-    expect(payload.path).not.toContain(homedir())
+    expect(payload.path).toBe('~/flows/run-p.json')
+    expect(JSON.stringify(payload)).not.toContain(root)
     expect(payload.log[0]!.detail).toContain('[REDACTED]')
     expect(payload.log[0]!.detail).not.toContain(secret)
     expect(payload.last_decision?.event).toBe('fix_dispatched')
+  })
+
+  it('redacts a block title in the queue summary, which the flow file keeps verbatim', () => {
+    const secret = ['sk', 'ant', 'abcdefghijklmnopqrstuvwxyz012345'].join('-')
+    const state = makeState('run-t', {
+      specs: [{ id: 'block_06', title: `leaked ${secret}`, goal: '', requirements: ['r'], checks: ['c'], report: [] }],
+    })
+    const payload = flowStatusPayload(state)
+
+    expect(payload.queue[0]!.title).toContain('[REDACTED]')
+    expect(payload.queue[0]!.title).not.toContain(secret)
+    // The payload is a view; the queued spec itself is untouched.
+    expect(state.specs[0]!.title).toContain(secret)
   })
 
   it('carries the review deadline and the round budget a host needs to reason about a stall', () => {

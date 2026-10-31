@@ -11,14 +11,20 @@ import { FlowSpecError, queueSpecFile, readSpecFile } from '../src/core/flow-que
 
 let root: string
 let repo: string
+let savedHome: string | undefined
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'reeves-flow-queue-'))
   repo = join(root, 'project')
   mkdirSync(repo, { recursive: true })
+  // Pinned so a path assertion is about the shorthand, not about where TMPDIR points.
+  savedHome = process.env.HOME
+  process.env.HOME = root
 })
 
 afterEach(() => {
+  if (savedHome === undefined) delete process.env.HOME
+  else process.env.HOME = savedHome
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -81,13 +87,20 @@ describe('readSpecFile', () => {
     expect(spec.body).toContain('Do the thing.')
   })
 
-  it('refuses a missing, empty, oversized or non-file path', () => {
-    expect(message(() => readSpecFile(join(repo, 'ghost.json'), { repo }))).toContain('spec file not found')
+  it('refuses a missing, empty, oversized or non-file path, naming it home-shortened', () => {
+    // An MCP host quotes the message verbatim, so the path in it must not carry the account layout.
+    const missing = message(() => readSpecFile(join(repo, 'ghost.json'), { repo }))
+    expect(missing).toContain('spec file not found')
+    expect(missing).toContain('~/project/ghost.json')
+    expect(missing).not.toContain(root)
+
     expect(message(() => readSpecFile(writeFile('empty.json', '   \n'), { repo }))).toContain('is empty')
     expect(message(() => readSpecFile(writeFile('big.json', 'x'.repeat(70 * 1024)), { repo }))).toContain('larger than')
     const dir = join(repo, 'a-directory')
     mkdirSync(dir, { recursive: true })
-    expect(message(() => readSpecFile(dir, { repo }))).toContain('not a file')
+    const notFile = message(() => readSpecFile(dir, { repo }))
+    expect(notFile).toContain('not a file')
+    expect(notFile).not.toContain(root)
   })
 
   it('refuses a structured spec without requirements or checks, and reports every field', () => {

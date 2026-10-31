@@ -132,6 +132,26 @@ describe('flow_add_spec', () => {
     expect(readFlow('run-flow-1', { root: registry }).specs[0]!.source_path).toBe(join(repo, 'block_05.json'))
   })
 
+  it('redacts a token that a spec title carries, in the answer and in the queue', async () => {
+    seedFlow()
+    const secret = ['sk', 'ant', 'abcdefghijklmnopqrstuvwxyz012345'].join('-')
+    const path = writeSpec('block_07.json', JSON.stringify({
+      id: 'block_07',
+      title: `Leaked ${secret}`,
+      goal: '',
+      requirements: ['r'],
+      checks: ['c'],
+    }))
+
+    const body = payload(await call('flow_add_spec', { run_id: 'run-flow-1', path }))
+
+    expect(body.block.title).toContain('[REDACTED]')
+    expect(body.block.title).not.toContain(secret)
+    expect(JSON.stringify(body.queue)).not.toContain(secret)
+    // The queued record keeps the author's text: only the transcript is redacted.
+    expect(readFlow('run-flow-1', { root: registry }).specs[0]!.title).toContain(secret)
+  })
+
   it('refuses a missing file, a duplicate block and a closed flow without writing anything', async () => {
     seedFlow()
     const missing = await call('flow_add_spec', { run_id: 'run-flow-1', path: join(repo, 'ghost.json') })
