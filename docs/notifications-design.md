@@ -407,10 +407,30 @@ Rules for the two flow kinds, because they differ from the ingest kinds:
 - `severity: 'warn'`, `source: 'product'`, and the detail carries the machine reason
   (`rounds exhausted`, `review timeout`) plus the round counter — never the prompt text and never a
   path.
-- they are emitted **once per transition**, from the same short lock that writes the flow state
-  (§2.4 of `docs/flows-design.md`), so a tick that holds on `flow_escalated` cannot re-emit every two
-  seconds. The flow's own `log` already records the transition; the notification is its counterpart in
-  the log the human reads.
+- they are emitted **at most once per attention episode, and never lost silently**. The flow state and
+  the notification log are two files with two locks (§3.3), so no sequence of two writes can be atomic;
+  claiming "exactly once" would be a promise the filesystem cannot keep. The design is therefore
+  *at-least-once with a stable key*, plus a marker in the flow state:
+
+  1. the tick writes the flow state — including `notify: { key, kind, emitted_at: null }` — in its own
+     atomic write, as part of the transition that made the attention true;
+  2. immediately after, it appends the notification with `dedupe_key = "<run-id>:<head>:<kind>"`
+     (`flow.escalated` / `flow.review_timeout`) and, on success, records the returned `seq` in the same
+     flow file (`notify.seq`);
+  3. a crash between 1 and 2 leaves `notify.seq === null`, and the next tick — which still sees the same
+     attention — retries the append. The key is stable, so a retry after a *successful* append is
+     collapsed by the dedupe rule instead of duplicating the row;
+  4. a stale tick cannot re-emit for ever: `notify.key` equals the current episode, so a tick that
+     already has `notify.seq` does nothing, and a new episode (new head, new escalation) gets a new key.
+
+  The dedupe window on the ingest path is 60 s (§4.2); for these two kinds the key is durable instead —
+  the flow file itself is the memory, so a retry an hour later still collapses. The cost of the
+  residual — a duplicate row when the append succeeded and the state write then failed *and* the
+  process restarted before the retry — is one repeated line in a log, which is why this is the right
+  trade against losing an escalation entirely.
+- the notification is the counterpart of the flow's own `log` entry in the log the human reads; the
+  flow `log` stays the authority on *what the engine decided*, the notification log on *what the human
+  was told*.
 
 **Honest gap:** "agent finished its turn" is not observable in 2.1.0. `task_status` only moves
 `queued → working` when the startup task is pasted (`runtime.ts:272-273`) and `→ done` when the
@@ -775,22 +795,38 @@ The supervisor is **not** modified in this cycle; this is the contract it will u
 
 ```sh
 post_event() { # post_event <kind> <severity> <title> <detail>
-  local state="${REEVES_REGISTRY:-$HOME/.reeves}" f url
+  local state="${REEVES_REGISTRY:-$HOME/.reeves}" f url body code
   f="$state/web.json"
   [ -r "$f" ] || return 0
   url=$(sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f")
   [ -n "$url" ] || return 0
-  printf '{"kind":"%s","severity":"%s","project":"%s","run_id":"%s","agent_id":"%s","title":"%s","detail":"%s","source":"external"}\n' \
-    "$1" "$2" "$PROJ" "${RUN_ID:-}" "${AGENT_ID:-}" "$3" "$4" |
-    curl -sS -m 2 -o /dev/null -X POST "$url/api/notifications" \
+  # Serialise with a real JSON encoder: printf cannot escape a quote, a backslash or a newline, and a
+  # title with an apostrophe would silently produce an invalid body.
+  body=$(python3 -c 'import json,sys
+kind,severity,project,run_id,agent_id,title,detail = sys.argv[1:8]
+print(json.dumps({"kind": kind, "severity": severity, "project": project,
+                  "run_id": run_id, "agent_id": agent_id, "title": title,
+                  "detail": detail, "source": "external"}))' \
+    "$1" "$2" "$PROJ" "${RUN_ID:-}" "${AGENT_ID:-}" "$3" "$4") || return 0
+  # -w captures the status: curl exits 0 on an HTTP 400, so it has to be checked explicitly.
+  code=$(curl -sS -m 2 -o /dev/null -w '%{http_code}' -X POST "$url/api/notifications" \
       -H "Origin: $url" -H 'content-type: application/json' \
-      --data-binary @- || true
+      --data-binary "$body" || echo 000)
+  case "$code" in 2*) return 0 ;; *) printf 'notify: HTTP %s from %s\n' "$code" "$url" >&2; return 0 ;; esac
 }
 ```
 
-The `-H "Origin: $url"` header is mandatory — without it the existing origin guard answers
-`403 forbidden origin` (`server.ts:424-427`, `guards.ts:37-48`). `-m 2` and `|| true` keep a dead
-or hung Web UI from stalling the loop.
+Three things in that snippet are load-bearing:
+
+- the `-H "Origin: $url"` header is mandatory — without it the existing origin guard answers
+  `403 forbidden origin` (`server.ts:424-427`, `guards.ts:37-48`);
+- the body goes through a JSON encoder (`python3 -c 'json.dumps…'`, argv — not string interpolation), so
+  a quote, a backslash or a newline in a title cannot break the request. The previous revision used
+  `printf` with `%s` placeholders, which produces invalid JSON the moment a title contains `"`;
+- the HTTP status is checked, not curl's exit code: `curl` exits 0 for `400 Bad Request`, and
+  `-o /dev/null` hides the body, so a broken request would have looked exactly like a delivered one.
+  The function still returns 0 on any failure — a dead or hung Web UI must never stall the fleet loop —
+  but it says so on stderr instead of swallowing it. `-m 2` keeps a hung server from blocking.
 
 ## 5. UI: the Logs dialog
 
@@ -1253,21 +1289,47 @@ The owner's decision: **notes become history**, and the file is the primary chan
 
 | # | Decision | Why |
 | --- | --- | --- |
-| N1 | The review prompt asks the reviewer to write its findings to `~/.reeves/flows/<run-id>/notes/<head>-r<N>.md` and the engine reads that file **first** | a file survives scrollback, survives a parser change, and can be read by a human and by `flow notes` without touching tmux |
+| N1 | The review prompt asks the reviewer to write its findings to a **staging** file (`~/.reeves/flows/<run-id>/notes/inbox/<head>-r<N>.md`); the engine reads it first, sanitises it, and only then publishes the durable `<head>-r<N>.md` | a file survives scrollback, survives a parser change, and can be read by a human and by `flow notes` without touching tmux — but a file the *model* writes must never become the durable record unread (see N7) |
 | N2 | The pane stays as **fallback**, and the raw pane capture is stored too (`<head>-r<N>.pane.txt`) | a model can answer in a shape the parser does not expect; the raw capture is the evidence that survives that |
 | N3 | The journal entry carries `notes_ref` and counters, not the text | `flow logs` can say "round 2 → notes/<head>-r2.md · 2 MAJOR, 1 MINOR" while the journal stays bounded and path-free |
 | N4 | A new command `flow notes` prints one round | the reviewer, the operator and a later block all need the same read path; a command is testable and scriptable |
 | N5 | History is keyed by **head and round**, never a single rewritten file | the flow's whole model is "a verdict belongs to a commit"; a `last_notes.txt` would collide the moment two rounds ran back to back |
 | N6 | Caps by heads, rounds and bytes, cleaned when the flow closes | the state tree is not a document store; an unbounded notes directory is the same mistake as an unbounded journal |
-| N7 | Everything printed is home-shortened and redacted; `flow status --json` carries the reference and counters only | same rule as §8.5 — a payload is a transcript |
+| N7 | **The engine is the only writer of a durable notes file.** The reviewer's staging file is read once, passed through `redactSecrets` and the path shorthand, and republished atomically (`temp` + `rename`, `0600`); the staging copy is removed, and the durable file is what the journal references. Reading is sanitised again before printing | same rule as §8.5 — a payload is a transcript — and a model-written file is untrusted input: it can carry a token or `/home/<user>/…`, and the engine must never let either reach the record or the transcript |
 
 ### 11.2 File layout and validity
 
 ```text
 ~/.reeves/flows/<run-id>/notes/
-  <head>-r<N>.md          # the findings the reviewer wrote, primary source
-  <head>-r<N>.pane.txt    # raw capture of the reviewer pane at that round, fallback
+  inbox/<head>-r<N>.md    # staging: what the reviewer wrote. Untrusted, engine-readable, short-lived
+  <head>-r<N>.md          # durable record: engine-written, sanitised, what the journal references
+  <head>-r<N>.pane.txt    # durable fallback: the pane capture, engine-written and sanitised too
 ```
+
+**Who writes what, in order (the sanitising pipeline).** The reviewer's file is an *input*, never a
+record:
+
+1. the reviewer writes `inbox/<head>-r<N>.md` (the prompt gives it the exact path);
+2. the tick that observes the round reads it with the size and symlink checks below, and if it passes
+   the format checks it **sanitises the text**: `redactSecrets` (`src/core/redact.ts:14`) over the whole
+   body, and every absolute path replaced by its home-shortened form (`displayPath`,
+   `src/utils/paths.ts:21`) — a `/home/<user>/…` outside the home directory collapses to its last
+   component, exactly like an error message;
+3. the engine writes the result to `<head>-r<N>.md` with `temp` + `rename` and mode `0600`, and deletes
+   the staging file. From that moment the durable file, the journal reference and `flow notes` all
+   point at sanitised text;
+4. the same pass writes `<head>-r<N>.pane.txt` from the reviewer's pane — **also sanitised**, because
+   the pane is model output too: the capture exists to survive a parser mismatch, not to smuggle a
+   secret onto disk;
+5. if any step fails, the staging file is kept (so a retry can read it) and the journal records
+   `notes_invalid <reason>`; a staging file older than a day is removed by the next tick.
+
+That ordering is the whole answer to "the engine cannot control what the model writes": it does not
+have to. The model writes a scratch file inside a directory the engine owns, and the engine copies it
+through the sanitiser before anything durable exists. A file that appears directly in `notes/` and was
+not written by the engine (an older build, a human, a hand-copied round) is treated as untrusted on
+read: `flow notes` and the UI pass it through `redactSecrets` and the path shorthand at print time, and
+the journal never references it.
 
 `<head>` is the 40-char commit the review was requested for (the `claim.head` of that round) and `<N>`
 is the 1-based round number, so the pair is unique and never rewritten. Caps:
@@ -1326,9 +1388,12 @@ is still recorded (`claim.verdict_count`) so the counter baseline keeps working.
 ### 11.4 Block 09 (backend) and block 10 (UI)
 
 - **Block 09** implements N1–N5, N7: `renderReviewPrompt` instruction, `notes.ts`
-  (`writeNotes`, `readNotes`, `pruneNotes`, `notesRef`), the journal fields, the read order in
-  `flow-runner.ts`, `flow notes`, the pruning rule, and the sanitizing (paths shortened with
-  `displayPath`, text through `redactSecrets` at write time). Definition of done: a round with a valid
+  (`readStaging`, `publishNotes` — the sanitiser from step 2 above, `readNotes`, `pruneNotes`,
+  `notesRef`), the journal fields, the read order in `flow-runner.ts`, `flow notes`, the pruning rule,
+  and the print-time sanitiser for files the engine did not write. The pipeline order (staging →
+  sanitise → publish → reference) is part of the definition of done, not an implementation detail: a
+  test must feed a staging file containing a key and an absolute path and assert that the durable file
+  and the `flow notes` output carry neither. Definition of done: a round with a valid
   file reads from the file (pane ignored); a round with a broken file falls back to the pane and logs
   `notes_invalid`; `flow notes` prints both a valid and a missing round in the documented shapes; the
   caps and the pruning are asserted with a synthetic 21-round fixture.

@@ -304,6 +304,13 @@ above plus `schema_version`, `repo`, `roles`, `state`, `rounds`, `max_rounds`, `
 the bounded `log`. Every field added after the first release is optional on read, which is why
 `schema_version` is still 1.
 
+Two fields belong to the notification work and are **planned** (blocks 09–10 of
+`docs/notifications-design.md`), not in this build: `notify: { key, kind, emitted_at, seq } | null`,
+the marker that makes a flow-attention notification at-least-once and idempotent (that document, §2.2),
+and the `notes_ref` / `notes_counts` fields on a `log` entry, which point at the sanitised notes file of
+a review round (§11 there). Both are optional on read, like every other field added after the first
+release.
+
 ### 3.2 Block spec — structured from day one (D2)
 
 A block is not a file path; it is a record on the flow, so a dispatch is reproducible and the
@@ -692,7 +699,7 @@ as everything else (§2.3).
 | Journal (`flow logs`) | **shipped** (block 07) — the bounded `log` array (`FLOW_LOG_LIMIT` = 50) is the journal: event, time, head, short reason, never a prompt body |
 | Review prompt template stored per flow | **not implemented** — the request is rendered by a fixed renderer with the same tokens |
 | Review notes as files (`notes/<head>-r<N>.md`, `notes_ref` in the journal, `flow notes`) | **planned** — block 09; designed in `docs/notifications-design.md` §11, together with the rule that the file is the primary channel and the pane scan is the fallback |
-| Notification log + agent pulse badge | **planned** — blocks 02–03 of `docs/notifications-design.md`; the two flow kinds (`flow.escalated`, `flow.review_timeout`) are emitted from this engine's `FlowAttention`, not from a second model of "needs a human" |
+| Notification log + agent pulse badge | **planned** — blocks 02–03 of `docs/notifications-design.md`; the two flow kinds (`flow.escalated`, `flow.review_timeout`) are emitted from this engine's `FlowAttention`, not from a second model of "needs a human", and the `notify` marker in the state (§3.1) is what makes that emission at-least-once and idempotent |
 
 Nothing above is described as working elsewhere in this document: the tables and the sections it
 cites keep `planned` marking, so the next block starts from the truth.
