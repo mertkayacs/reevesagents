@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'ink-testing-library'
 import stripAnsi from 'strip-ansi'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Router } from '../../src/surfaces/tui/router.js'
@@ -168,6 +168,18 @@ describe('flow badge', () => {
       expect(rendered.length).toBeLessThanOrEqual(80)
     }
     expect(frame.split('\n').length).toBeLessThanOrEqual(24)
+  })
+})
+
+describe('flow badge copy', () => {
+  it('renders from translation keys, not from an English literal in the component', () => {
+    // The language comes from the config file, which the test setup writes per test.
+    writeFileSync(process.env.REEVES_CONFIG!, JSON.stringify({ version: 2, global: { language: 'ru' } }), 'utf8')
+    seedFlow({ state: 'reviewing', rounds: 2 })
+    const frame = frameAt(120, 24)
+
+    expect(stripAnsi(runLine(frame))).toContain('поток: ревью (2/6)')
+    expect(frame).not.toContain('flow: review')
   })
 })
 
