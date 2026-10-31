@@ -1,6 +1,9 @@
 # Notification log and agent pulse badge — design
 
 Status: design only. No production code is changed by this document.
+Revision 2 (after review): append and rotation now share one lock protocol (§3.2, §3.3); rotation
+trims by a hard byte budget instead of a line count (§3.3); the pulse window is driven by the
+server-stamped `received_at`, never by a producer-supplied `ts` (§2.1, §4.1, §4.2, §6.2).
 Base: `upstream/master` = `99c2d80`, version 2.1.0.
 Scope: Web UI notification history ("Logs") plus a pulse badge on the agent card.
 
@@ -9,8 +12,8 @@ Scope: Web UI notification history ("Logs") plus a pulse badge on the agent card
 | Question | Decision |
 | --- | --- |
 | Where events come from | One contract, two producers. The product emits what it can already observe in-process (run lifecycle, approvals, reaper, stale-run sweep); everything else — including "agent finished its turn", which 2.1.0 cannot detect at all — arrives through `POST /api/notifications` from the fleet supervisor as `source: "external"`. |
-| How events are stored | Append-only `~/.reeves/notifications.jsonl` (one JSON object per line, `O_APPEND`), ring-capped by count **and** size with rewrite-on-rotate under the existing `withRunsLock`; a separate `~/.reeves/notifications-read.json` holds a single read watermark. The server is the source of truth for both the log and unread state, not `localStorage`. |
-| How the badge behaves | The badge is pure derived state: `last unread event of that agent` → `ts + agent_pulse_ms`. The client computes the remaining time from the wall clock on every render, so F5 mid-pulse shows the correct remainder. One `setTimeout` at the earliest expiry, no polling timer. |
+| How events are stored | Append-only `~/.reeves/notifications.jsonl` (one JSON object per line, `O_APPEND`), ring-capped by count **and** size, trimmed to the newest lines that fit a hard byte budget; append and rotation share one lock acquisition (`.notifications.lock`) and one synchronous critical section. A separate `~/.reeves/notifications-read.json` holds a single read watermark. The server is the source of truth for both the log and unread state, not `localStorage`. |
+| How the badge behaves | The badge is pure derived state: `last unread event of that agent` → `received_at + agent_pulse_ms`, where `received_at` is stamped by the server, so a producer-supplied future `ts` cannot stretch the window. The client computes the remaining time on every render from `received_at` corrected by the `server_now` offset, so F5 mid-pulse shows the correct remainder. One `setTimeout` at the earliest expiry, no polling timer. |
 
 Verified premise for all of this — the product has no notification or attention mechanism at all in 2.1.0:
 
@@ -301,7 +304,8 @@ type NotificationSeverity = 'info' | 'warn' | 'error'
 interface NotificationEvent {
   seq: number            // server-assigned, monotonically increasing, never reused
   id: string             // stable id, `n_<seq>_<rand6>`; used as a DOM key / dedupe guard
-  ts: string             // ISO-8601 UTC, producer clock
+  ts: string             // ISO-8601 UTC, PRODUCER clock — display only, never drives a timer
+  received_at: string    // ISO-8601 UTC, SERVER clock at append — authoritative for pulse windows
   run_id: string         // '' when the event is not run-scoped
   run_name: string       // display label, redacted, <= 80 chars
   project: string        // basename(working_dir), <= 64 chars; never a full path
@@ -316,7 +320,16 @@ interface NotificationEvent {
 ```
 
 `seq` is assigned by the server, not the producer: the read watermark and the badge both need a
-total order that survives process restarts, duplicate POSTs and out-of-order `ts`.
+total order that survives process restarts, duplicate POSTs and out-of-order `ts`. Ordering is
+always by `seq`; `ts` is never used to sort, filter or time anything.
+
+`received_at` exists because the producer's clock is not trustworthy, and the badge is a timer. The
+supervisor is a bash loop on the same machine, but it can be restarted with a skewed clock, and the
+ingest route is a network surface — a `ts` one hour in the future would otherwise hold a badge on
+screen for an hour. So the server stamps `received_at` from its own clock on append, and
+**every time-derived behaviour (pulse window, "3 min ago" labels, ordering of equal `seq`) uses
+`received_at`**. `ts` is kept only as context ("the producer says it happened at …") and is
+clamped on ingest (§4.2 step 5).
 
 `project` is derived server-side as `basename(working_dir)` on the product path and accepted
 verbatim (validated, no `/`) on the ingest path. Rationale: the fleet supervisor knows the
@@ -377,14 +390,15 @@ compact JSON object per line, `\n`-terminated, no pretty printing, no index file
 Reasoning, stated explicitly because the obvious choice is the wrong one:
 
 - temp+rename (`atomicWriteJson`) requires read-modify-write of the whole file for every event and
-  renames a new inode each time; with an external producer posting a few events per minute that is
-  wasteful but tolerable — the real problem is that two concurrent writers (product process +
-  ingest handler inside the same process is fine, but the fleet supervisor writes through a
-  second process) would each rewrite from a snapshot and silently drop the other's lines.
+  renames a new inode each time. The ingest caller is not a second writer — it posts over HTTP into
+  the same process — so the objection is different: a rewrite per event makes the append path
+  O(file size), and if a second `reevesagents web` instance ever runs against the same state dir,
+  two rewrites from the same snapshot silently drop each other's lines.
 - `O_APPEND` makes the kernel place every `write()` at the end of the file atomically; on Linux
-  and macOS a single small write (< 4096 bytes, i.e. `PIPE_BUF`) to a local filesystem is not
-  interleaved with another appender's write. One event line is bounded to ~1.4 KB by the field
-  caps in §4.2, so the guarantee holds.
+  and macOS a single small write below `PIPE_BUF` (4096 bytes) to a local filesystem is not
+  interleaved with another appender's write. That is why the per-line hard cap in §4.2 step 4 is
+  4000 bytes and not "about 4 KiB": staying strictly under `PIPE_BUF` is what makes this guarantee
+  hold, and a typical line is ~1.4 KB anyway.
 - Torn lines are survivable: the reader skips any line that is not valid JSON (and any line
   missing `seq`/`kind`), so a crash mid-write costs at most the last event, never the file.
 
@@ -392,21 +406,89 @@ Reasoning, stated explicitly because the obvious choice is the wrong one:
 power failure is not worth an fsync per notification. The read watermark file *is* written
 atomically.
 
+What `O_APPEND` does **not** solve is rotation, which is a read-modify-rename of the whole file: an
+append that lands between rotation's read and its `rename` goes to the old inode and is lost. That
+is why append and rotation share one lock protocol instead of only rotation taking a lock (§3.3).
+
 ### 3.3 Ring: cap by count **and** size, rotate by rewrite
 
-- `MAX_EVENTS = 2000`
-- `MAX_BYTES = 2 * 1024 * 1024`
-- after an append, if either cap is exceeded, rewrite keeping the newest `KEEP_EVENTS = 1500`
-  (75 %, so rotation is amortized instead of happening on every append).
+Caps:
 
-Rotation procedure: take `withRunsLock()` (`runs.ts:82-115`, already used for run state, 5 s stale
-takeover, `wx` lock file), read the current file, keep the last `KEEP_EVENTS` valid lines, write
-`notifications.jsonl.tmp`, `rename` over the original, release the lock. The rewrite goes through
-rename so a concurrent reader either sees the old inode or the new one, never a half-file.
-`seq` is **not** reset by rotation: it is stored in the read file / derived as
-`max(seq of kept events)`, and the next id is `max(seq_in_file, read_seq, seq_file) + 1` — tracked
-in `<state>/notifications-seq` (single integer, atomic write) so that after a rotation that drops
-every old event, ids keep increasing and the watermark stays meaningful.
+| constant | value | role |
+| --- | --- | --- |
+| `MAX_EVENTS` | 2000 | rotation trigger |
+| `MAX_BYTES` | 2 MiB | rotation trigger |
+| `KEEP_EVENTS` | 1500 | post-rotation count target |
+| `KEEP_BYTES` | 1.5 MiB (75 % of `MAX_BYTES`) | post-rotation hard byte bound |
+
+**One lock protocol for append and rotation.** Both run inside `withNotificationsLock(fn)`, using
+the same recipe as `withRunsLock` (`runs.ts:82-115`): `openSync(<state>/.notifications.lock, 'wx',
+0o600)` holding `{ pid, created_at }`, 5 s stale takeover, 25 ms sync retry, `unlink` in `finally`.
+It is a separate lock file from `.runs.lock` so notification traffic never contends with run-state
+writers.
+
+`appendNotification()` acquires that lock **once** and performs the whole unit of work inside the
+single acquisition:
+
+1. `writeSync` of the line on the `O_APPEND` fd — short, and still atomic for readers;
+2. `statSync` for the current size, plus the in-memory event counter (below);
+3. if `size > MAX_BYTES` or `count > MAX_EVENTS`, call the **internal** `rotateUnlocked()`;
+4. release.
+
+Two rules make this correct rather than merely locked:
+
+- nothing inside steps 1–3 may `await`, yield, or call back into `appendNotification`: the critical
+  section is fully synchronous, so no other append can interleave between the size check and the
+  rename. This is exactly what the naive "rotation takes a lock, appends do not" design gets wrong:
+  the rotation is locked against itself, but not against the writer that makes it necessary;
+- `rotateUnlocked()` is not exported and never acquires the lock itself. A nested `wx` acquire would
+  fail on its own lock file, then wait out the 5 s stale timeout and delete a *live* lock. Rotation
+  has exactly one entry point: the append critical section.
+
+**Rotation trims by count AND by bytes.** Trimming to `KEEP_EVENTS` lines alone cannot honour a
+byte cap: with the per-event ceiling from §4.2 step 4 (4000 bytes) 1500 lines can reach ~6 MiB, and even
+a typical ~1.4 KiB line puts 1500 lines at ~2.1 MiB — already over `MAX_BYTES`. So rotation walks
+the file **from the end** and keeps the newest lines while both budgets hold:
+
+```text
+kept = []; bytes = 0
+for line in reverse(lines_of(current_file)):
+    if len(kept) == KEEP_EVENTS: break
+    if bytes + len(line) + 1 > KEEP_BYTES and len(kept) > 0: break
+    kept.append(line); bytes += len(line) + 1
+write notifications.jsonl.tmp = join(reverse(kept), "\n") + "\n"
+rename(notifications.jsonl.tmp, notifications.jsonl)
+```
+
+Properties, all of them unit-testable:
+
+- after any rotation `size <= KEEP_BYTES = 1.5 MiB < MAX_BYTES`, so the size bound is guaranteed
+  rather than "usually true";
+- the 25 % headroom under `MAX_BYTES` means the next rotation happens ~500 KiB later instead of on
+  the very next append — the amortization the count-only trim was aiming for;
+- between rotations the file can exceed `MAX_BYTES` by at most one line (≤ 4000 bytes, the §4.2
+  ceiling); that overrun is precisely what triggers the next rotation;
+- at least one line is always kept (`len(kept) > 0` guard), and the file always ends on a line
+  boundary with a trailing `\n`, so a reader never sees a half line produced by rotation;
+- the trim only drops the oldest lines and never rewrites the survivors, so redaction and `seq` are
+  untouched by it.
+
+**Event counting.** The byte cap is exact and cross-process safe (one `statSync`). The count cap is
+tracked in memory as `kept_at_last_rotation + appends_since`, and is recomputed exactly during the
+read that rotation already performs. With the normal single-writer case (one `reevesagents web`
+process) it is exact; if a second process appends to the same state dir, the counter can lag, and in
+that case the byte cap is the bound that still holds. Stated explicitly so nobody assumes a
+two-process setup gets both caps exactly.
+
+Crash safety: a process dying inside the critical section leaves a stale lock file that is taken
+over after 5 s (`runs.ts:85-101` uses the same policy). An orphan `notifications.jsonl.tmp` is
+harmless, because rotation always truncates that path and the original file is untouched until
+`rename`. Readers take no lock at all: `rename` swaps the inode, so a reader sees either the old
+file or the new one, never a half-written one.
+
+`seq` is **not** reset by rotation: the next id is `max(seq_in_file, read_seq, seq_file) + 1` —
+tracked in `<state>/notifications-seq` (single integer, atomic write) — so after a rotation that
+drops every old event, ids keep increasing and the watermark stays meaningful.
 
 ### 3.4 Unread state and why the server owns it
 
@@ -448,20 +530,33 @@ Response:
   "read_seq": 41,
   "latest_seq": 57,
   "unread_count": 3,
+  "server_now": "2026-10-31T18:40:09.900Z",
   "pulse_ms": 5000,
-  "pulse": { "agent-abc": { "seq": 57, "ts": "2026-10-31T18:40:02.113Z", "count": 2 } }
+  "pulse": { "agent-abc": { "seq": 57, "pulse_ts": "2026-10-31T18:40:05.400Z", "count": 2 } }
 }
 ```
 
 `pulse` is precomputed by the server: for every agent with at least one unread event, the latest
 one. That is the entire data the badge needs, and it keeps the client from scanning the list.
 
+`pulse_ts` is the **`received_at`** of that event (§2.1), i.e. server clock — never the producer's
+`ts`. This is the fix for an unbounded badge: whatever the supervisor puts in `ts`, the window it
+can open starts at the moment the server accepted the event.
+
+`server_now` is the server's clock at response time. It is sent because the badge compares a
+server-stamped timestamp against the browser's `Date.now()`, and the two clocks may differ; with
+`server_now` the client derives the offset once per frame (§6.2) instead of assuming the browser
+agrees with the server.
+
 `pulse_ms` is sent along with the data so the client never has to know the config key name.
 
 Also added to the SSE summary and to `GET /api/state` (see §4.4) — a **summary only**:
 
 ```json
-"notifications": { "latest_seq": 57, "read_seq": 41, "unread_count": 3, "pulse": { … } }
+"notifications": {
+  "latest_seq": 57, "read_seq": 41, "unread_count": 3,
+  "server_now": "2026-10-31T18:40:09.900Z", "pulse": { … }
+}
 ```
 
 `pulse` is small by construction (one entry per agent with unread events, at most `max_agents`),
@@ -506,18 +601,28 @@ Guard chain, in order (each returns a distinct status so the caller can see whic
 4. Body: `readJsonBody` (`server.ts:205-218`) enforces `MAX_BODY` = 64 KiB while streaming
    (`:211`). Per-event caps are tighter and validated separately, so a single event cannot be
    64 KiB: `title <= 200`, `detail <= 1000`, `run_name <= 80`, `project <= 64`, `run_id/agent_id/
-   agent_nickname <= 64`, total serialized line `< 4 KiB`. Fail → `400 { error }`.
-5. Schema: `kind` must be one of §2.2; `severity` one of `info|warn|error`; `ts` must parse as an
-   ISO date (invalid → server stamps `nowIso()`); `project` must not contain `/` or `\`;
-   unknown top-level keys are ignored, not rejected (forward compatibility for the supervisor).
+   agent_nickname <= 64`, and the total serialized line **<= 4000 bytes** — deliberately under
+   `PIPE_BUF` (4096) so the `O_APPEND` atomicity claimed in §3.2 still holds. Fail → `400 { error }`.
+5. Schema: `kind` must be one of §2.2; `severity` one of `info|warn|error`; `project` must not
+   contain `/` or `\`; unknown top-level keys are ignored, not rejected (forward compatibility
+   for the supervisor).
+   `ts` is **optional and display-only**: it is kept when it parses as an ISO date *and* falls
+   inside `[server_now - 5 min, server_now + 5 min]`; anything else (unparsable, future beyond the
+   window, absurd age) is replaced by the server's own time and the event is still accepted —
+   a bad producer clock must not be able to reject or stall a notification. `received_at` is
+   always stamped by the server from its own clock and is **not** accepted from the request body
+   (a supplied `received_at` is ignored like any other unknown key). Because the badge window is
+   computed from `received_at` and never from `ts` (§2.1, §6.2), a future `ts` cannot extend it.
    Fail → `400 { error: "<field> <reason>" }`.
 6. Rate limit: in-memory token bucket per peer address, capacity 30, refill 1/s. Fail → `429
    { error: "rate limited" }` with `retry-after: 1`.
 7. Redaction: `redactSecrets` (`redact.ts:14-18`) applied to `title`, `detail`, `run_name`,
    `agent_nickname` before the line is written. Not optional, and not applied on read: the log on
    disk must never contain a key.
-8. Append (§3.2), assign `seq`, update `latest_seq`.
-   Success → `201 { id, seq, unread: true }`.
+8. Append inside `appendNotification()`'s single lock acquisition (§3.3): assign `seq`, stamp
+   `received_at = nowIso()` from the server clock, update `latest_seq`, rotate if a cap is
+   exceeded.
+   Success → `201 { id, seq, received_at, unread: true }`.
 
 No authentication token is added. The threat model is unchanged from the rest of the server
 (`server.ts:2-5`: loopback only, no login); a token would have to be shared with a bash script,
@@ -610,8 +715,9 @@ and a dialog after `presets-dialog` (which closes at `index.html:302`, just befo
 
 Per event, a `.logs-row` with `role="listitem"` and `tabindex="-1"`:
 
-- `.logs-time` — `shortIso(event.ts)` (`app.js:2179`) plus a relative hint ("3 min") recomputed on
-  open only;
+- `.logs-time` — `shortIso(event.received_at)` (`app.js:2179`) plus a relative hint ("3 min")
+  recomputed on open only; when the producer `ts` differs from `received_at`, the row's `title`
+  shows both, because the server receipt time is the one that is trustworthy (§2.1);
 - `.logs-project` — `event.project`, with `event.run_name` as `.logs-run` next to it;
 - `.logs-agent` — `event.agent_nickname || event.agent_id`;
 - `.logs-title` — `translate(kind)` badge + `event.title`;
@@ -680,23 +786,32 @@ on top. No information is carried by motion alone, and no JS timer is skipped.
 
 ### 6.1 Data it lives on
 
-`pulse[agent_id] = { seq, ts, count }` from the notification summary (§4.1) — the latest **unread**
-event for that agent. The card needs nothing else; it does not read the log list.
+`pulse[agent_id] = { seq, pulse_ts, count }` from the notification summary (§4.1) — the latest
+**unread** event for that agent, where `pulse_ts` is that event's `received_at` (server clock), not
+its producer `ts`. The card needs nothing else; it does not read the log list.
 
 ### 6.2 Remaining time is computed, not counted
 
 ```js
-const remaining = pulse.ts + pulse_ms - Date.now()
+// server_now ships with every frame; it converts server clock into browser clock once.
+const skew = Date.parse(serverNow) - Date.now()
+const remaining = Date.parse(pulse.pulse_ts) + pulse_ms - (Date.now() + skew)
 if (remaining > 0) showBadge(agent.id, pulse.count)
 ```
 
-Consequences, all three are the reason for this choice:
+Four reasons for exactly this shape:
 
-- F5 mid-pulse: the same wall-clock arithmetic yields the correct remainder, so the badge either
-  survives with less time left or is gone — exactly as if the tab had never closed;
+- F5 mid-pulse: the same arithmetic yields the correct remainder, so the badge either survives with
+  less time left or is gone — exactly as if the tab had never closed;
 - two tabs agree without coordination: no per-tab timer state exists;
 - no drift: a `setTimeout` chain would accumulate error and would restart the full window on every
-  re-render.
+  re-render;
+- the window is **bounded by the server's own clock**. `pulse_ts` is `received_at`, so a producer
+  (or an ingest caller) cannot open an arbitrarily long badge by sending a future `ts` — the worst
+  case a caller can achieve is a window that starts *now*, i.e. exactly `pulse_ms`. The `skew` term
+  exists so that this holds even when the browser's clock disagrees with the server's: without it,
+  the comparison would mix two clocks and a browser running an hour ahead would simply never show a
+  badge, while one running behind would show it too long.
 
 `pulse_ms` comes from the server payload (default 5000, §7), so tuning the interval is a config
 change with no client rebuild.
@@ -706,8 +821,9 @@ Scheduling: exactly one timer, armed for the earliest future expiry:
 ```js
 function schedulePulseExpiry() {
   if (pulseTimer) clearTimeout(pulseTimer)
-  const now = Date.now()
-  const next = Math.min(...Object.values(pulse).map(p => p.ts + pulseMs).filter(t => t > now))
+  const skew = Date.parse(serverNow) - Date.now()
+  const now = Date.now() + skew           // "server now" in this browser
+  const next = Math.min(...Object.values(pulse).map(p => Date.parse(p.pulse_ts) + pulseMs).filter(t => t > now))
   if (!Number.isFinite(next)) return
   pulseTimer = setTimeout(() => { pulseTimer = null; renderSidebar() }, next - now + 20)
 }
@@ -739,11 +855,15 @@ Inside `renderCard` (`app.js:1103-1187`), appended to the avatar wrapper (`:1116
 
 ### 6.4 Several events in a row
 
-- `pulse[agent_id].ts` is the **latest** unread event by construction (server takes `max(seq)`), so
-  the window restarts on each new event: the dot never blinks off between two events;
+- `pulse[agent_id].pulse_ts` is the **latest** unread event by construction (the server takes the
+  highest `seq` and reports its `received_at`), so the window restarts on each new event: the dot
+  never blinks off between two events;
 - `count` accumulates all unread events for that agent and shows as a number when `>= 2`;
 - "mark all read" clears `pulse` entirely (all `seq <= read_seq`), so the badge cannot outlive the
   user's acknowledgement;
+- a burst of `N` events within one second still yields exactly one window of `pulse_ms` measured
+  from the **last** one — there is no per-event queue and therefore no way for a burst to multiply
+  the badge lifetime;
 - the badge is not a per-event animation queue: one dot, one window, one count. Anything fancier
   becomes noise at fleet scale (5 runs × 3 agents).
 
@@ -857,6 +977,19 @@ through `translatePhrase`.
    that is a separate project with pane-content heuristics, and it should not be smuggled into
    block 02.
 
+9. **Time authority, and write-path atomicity.** Two invariants that are cheap now and expensive to
+   retrofit, so they belong to block 02 from the first line of code:
+
+   - *time*: `received_at` is the only server-stamped, trusted timestamp. Anything that compares a
+     stored time against "now" — the pulse window, relative labels, the `since` cursor's human
+     display — must read `received_at`, and the client must convert it through the `server_now`
+     offset (§6.2). A producer `ts` may only label an event, never gate a timer or a filter. Note
+     that `nowIso()` (`runs.ts:69-71`) already exists and is what the append path should use;
+   - *writes*: `appendNotification()` owns exactly one lock acquisition and one synchronous
+     critical section covering append + cap check + rotation (§3.3). A future refactor that makes
+     that path `async`, or that calls rotation from anywhere else, silently reintroduces the
+     lost-append window this design closes.
+
 ## 9. Blocks 02–03
 
 ### Block 02 — backend (journal, routes, config key, product hooks)
@@ -866,8 +999,10 @@ Code:
 - new `src/core/notifications.ts`:
   `appendNotification(input)`, `readNotifications({ limit, run, since, unread })`,
   `markNotificationsRead(seq)`, `notificationSummary()`, `normalizeNotificationInput(raw)`,
-  internal `rotateIfNeeded()`, `nextSeq()`. Uses `stateRoot()` (`runs.ts:37`), `withRunsLock()`
-  (`runs.ts:82`) and `redactSecrets` (`redact.ts:14`). No new dependency.
+  internal `rotateUnlocked()`, `withNotificationsLock(fn)`, `nextSeq()`. Uses `stateRoot()`
+  (`runs.ts:37`), the `withRunsLock` recipe (`runs.ts:82-115`) for its own lock file, `nowIso()`
+  (`runs.ts:69-71`) for `received_at`, and `redactSecrets` (`redact.ts:14`). No new dependency.
+  `appendNotification` is synchronous and owns the single lock acquisition described in §3.3.
 - `src/surfaces/webui/server.ts`: `GET /api/notifications` (after `/api/presets`, `:478`, before
   `/api/events`, `:486`), `POST /api/notifications` (peer check + rate limiter + validator),
   `notifications` summary inside the SSE snapshot (`createSseHub`'s `snapshot()`, `:154-161`) and
@@ -889,13 +1024,19 @@ Verification:
 | schema/validation | `test/notifications.test.ts`: reject unknown `kind`, unknown `severity`, `project` containing `/`, oversize `title` (201 chars); accept a minimal event and stamp `ts` when missing |
 | round-trip + ordering | append 3 events in a temp `REEVES_REGISTRY`, read back newest-first, `seq` strictly increasing |
 | ring by count | set the count cap low via the module's exported constants in the test build; append cap+1 → oldest dropped, `seq` continues |
-| ring by size | append events with long `detail` until > size cap → rewrites to the newest `KEEP_EVENTS` |
+| ring by size — **byte bound** | append events with long `detail` until > `MAX_BYTES` → after rotation assert `statSync(file).size <= KEEP_BYTES` **and** `<= MAX_BYTES`, and assert the byte walk stopped before `KEEP_EVENTS` lines (so the two budgets are independent) |
+| ring by size — worst case | fill with lines at the §4.2 ceiling (4000 bytes) → 1500 lines would be ~6 MiB; assert the resulting file is still ≤ `KEEP_BYTES`, proving the count target cannot override the byte cap |
+| rotation preserves survivors | after rotation every kept line parses, ends with `\n`, redaction markers intact, `seq` values unchanged, and `next seq` is greater than the last kept one |
+| **lock protocol** | `test/notifications-lock.test.ts`: (a) one `appendNotification()` acquires the lock exactly once and removes it (assert via an injectable counter — no nested acquire); (b) `rotateUnlocked` is not exported and `appendNotification` is synchronous (no `await` inside the critical section — assert the returned type is not a Promise); (c) cross-process: `child_process.spawn` a second node process appending M events to the same temp `REEVES_REGISTRY` while the parent appends M and forces rotation, then assert `2M` valid lines (none lost) and no torn line — this is the case the previous design lost writes on |
+| stale lock takeover | create `.notifications.lock` by hand with an old mtime → the next append proceeds within ~5 s and the lock is replaced, not obeyed |
+| **received_at authority** | append with `ts` one hour in the future → stored `received_at` is within a second of now, and the pulse summary for that agent reports `pulse_ts` = `received_at` (not the future `ts`); repeat with `ts` unparsable and with `ts` two days old |
+| future `ts` cannot extend the badge | `pulse_ms = 5000`, event with `ts = now + 1h` → `pulse.pulse_ts + pulse_ms <= server_now + 5000 + ε` |
 | filters | `since`, `run`, `unread` and `limit` clamping (`limit=9999` → 500) |
 | redaction | append a title containing `sk-ant-…` → stored line contains `[REDACTED]` and not the key |
 | watermark | `markNotificationsRead` is monotonic; a smaller value never lowers it |
 | route guards | `test/web/notifications-route.test.ts`: POST without `Origin` → 403; POST with `Origin: http://evil.com` → 403; POST with the matching loopback `Origin` → 201 then visible in GET |
 | body/rate limits | POST > 64 KiB → 400; 31 rapid events → 429 then recovers after refill |
-| SSE summary | extend `test/web/server-actions.test.ts:423` (the existing first-frame test) to assert `notifications.latest_seq` is present |
+| SSE summary | extend `test/web/server-actions.test.ts:423` (the existing first-frame test) to assert `notifications.latest_seq` and `notifications.server_now` are present |
 | config | extend `test/config-set.test.ts` for the new array entry and for `agent_pulse_ms: -1` / `1.5` rejection |
 | gates | `npx --yes pnpm@10.34.7 run typecheck`, `run lint`, `run test`, and `npx --yes pnpm@10.34.7 --dir packages/reevesagents-win run test` |
 
@@ -925,7 +1066,7 @@ Verification:
 | client contract | extend `test/web/client-contract.test.ts` with `id="logs-btn"`, `id="logs-dialog"`, `id="logs-list"`, `id="logs-filter-run"`, `id="logs-unread"`, `id="logs-mark-read"`, `function openLogsDialog()`, `function renderLogs(`, `.card-pulse`, `class="logs-row"` |
 | i18n | extend `test/i18n.test.ts` so every new `web.*`/`common.*` key resolves in `en` (§8.1) |
 | unit | `npx --yes pnpm@10.34.7 run test` |
-| manual browser run (private pair only) | `REEVES_REGISTRY=$(mktemp -d) REEVES_CONFIG=<tmp>/config.json TMUX_TMPDIR=<tmp> env -u TMUX node dist/cli.js web --port 8123 --no-open`, then: (1) open Logs on an empty registry → empty state, no console errors; (2) `curl` two events with a fake agent id → both appear without reload; (3) filter by run and "unread only"; (4) Mark all read → badge and unread filter clear; (5) badge pulses ≈ 5 s and disappears; (6) F5 mid-pulse → badge still there with the remaining time; (7) set `agent_pulse_ms` to 15000 via the Config panel → pulse lasts 15 s without a rebuild; (8) DevTools "Emulate prefers-reduced-motion" → dot is static but visible; (9) Tab/Arrow/Escape through the dialog → focus lands correctly and returns to `#logs-btn`; (10) narrow the window to < 520 px → dot stays, count hides |
+| manual browser run (private pair only) | `REEVES_REGISTRY=$(mktemp -d) REEVES_CONFIG=<tmp>/config.json TMUX_TMPDIR=<tmp> env -u TMUX node dist/cli.js web --port 8123 --no-open`, then: (1) open Logs on an empty registry → empty state, no console errors; (2) `curl` two events with a fake agent id → both appear without reload; (3) filter by run and "unread only"; (4) Mark all read → badge and unread filter clear; (5) badge pulses ≈ 5 s and disappears; (6) F5 mid-pulse → badge still there with the remaining time; (7) set `agent_pulse_ms` to 15000 via the Config panel → pulse lasts 15 s without a rebuild; (8) DevTools "Emulate prefers-reduced-motion" → dot is static but visible; (9) Tab/Arrow/Escape through the dialog → focus lands correctly and returns to `#logs-btn`; (10) narrow the window to < 520 px → dot stays, count hides; (11) `curl` an event with `ts` set one hour in the future → badge still disappears after ≈ 5 s and the row's time shows the *server receipt* time, not the future one |
 | fleet safety | count `reeves-*` tmux sessions before and after the manual run; they must be equal |
 
 Ready when: unit tests pass, the client contract test covers every new id, the manual run above is
@@ -946,6 +1087,6 @@ in (reviewed by hand, no gate exists).
 3. **Badge scope.** Pulse on every notification, or only on `severity != 'info'`? Recommendation:
    every unread event, with `agent_pulse_ms: 0` as the escape hatch — that is what the current
    design assumes.
-4. **Retention numbers.** 2000 events / 2 MiB / keep 1500 on rotation. At the current fleet volume
-   (5 runs, a few events per minute) that is days of history; say if you want more or less before
-   it is written into the constants.
+4. **Retention numbers.** 2000 events / 2 MiB trigger, trim to 1500 events with a hard 1.5 MiB
+   bound (§3.3). At the current fleet volume (5 runs, a few events per minute) that is days of
+   history; say if you want more or less before it is written into the constants.
