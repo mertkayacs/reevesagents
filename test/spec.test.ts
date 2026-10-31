@@ -82,6 +82,22 @@ describe('validateSpec', () => {
     })))).toContain('requirements')
   })
 
+  it('treats an explicit null as a wrong type, not as a missing field', () => {
+    // JSON has no undefined: a present key is deliberate, so null must not read as "absent".
+    const result = validateSpec(validSpec({ goal: null, requirements: null }))
+    expect(issueFields(result)).toEqual(expect.arrayContaining(['goal', 'requirements']))
+    expect(result.spec).toBeNull()
+
+    // A missing key stays fine.
+    const sparse = validSpec()
+    delete sparse.goal
+    delete sparse.report
+    const accepted = validateSpec(sparse)
+    expect(accepted.issues).toEqual([])
+    expect(accepted.spec?.goal).toBe('')
+    expect(accepted.spec?.report).toEqual([])
+  })
+
   it('reports wrong types instead of silently coercing them', () => {
     const bad = validateSpec(validSpec({
       goal: 42,

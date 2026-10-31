@@ -62,9 +62,11 @@ function asRecord(raw: unknown): Record<string, unknown> | null {
   return typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? raw as Record<string, unknown> : null
 }
 
-// A scalar text field: absent is empty, but a wrong type is an issue, never a silent ''.
+// A scalar text field: a missing key is empty, an explicit value must be a string.
+// JSON has no `undefined`, so a present key is deliberate — `"goal": null` is a wrong type,
+// not an omission, and reporting it is the only way to keep "we never coerce" true.
 function readText(value: unknown, field: string, issues: SpecIssue[]): string {
-  if (value === undefined || value === null) return ''
+  if (value === undefined) return ''
   if (typeof value !== 'string') {
     issues.push({ field, message: `${field} must be a string` })
     return ''
@@ -79,7 +81,7 @@ function normalizeList(
   limit: number,
   issues: SpecIssue[],
 ): string[] {
-  if (value === undefined || value === null) return []
+  if (value === undefined) return []
   if (!Array.isArray(value)) {
     issues.push({ field, message: `${field} must be a list of strings` })
     return []
