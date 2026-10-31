@@ -212,6 +212,13 @@ ever removed by someone who did not create it:
   is reported instead — `gate file … records no process instance (written by an older reevesagents);
   check that no dispatch is running, then remove …` — so the operator decides with the evidence in
   front of them;
+- a host that cannot identify **its own** process instance does not bid at all (round 15). Publishing
+  a ticket with an empty instance would leave exactly the file the previous rule refuses, so the
+  process would break the gate for itself on the next scan; it refuses up front instead — `cannot
+  identify this process instance (no /proc and no working ps), so the dispatch gate cannot tell a dead
+  contender from a live one; nothing was dispatched`. Every failure inside an attempt — this one or an
+  entry it cannot judge — withdraws the marker and the ticket, so a failed bid never becomes tomorrow's
+  blocker;
 - collecting a dead participant's file needs no coordination (it can neither read nor be waited on
   again), so it is the only removal anybody performs; a live contender's ticket and marker are never
   touched;

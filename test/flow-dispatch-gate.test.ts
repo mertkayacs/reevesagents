@@ -163,6 +163,29 @@ describe('contenders', () => {
     expect(result.acquired).toBe(false)
   })
 
+  it('does not bid at all when the host cannot identify its own process instance', () => {
+    // Round 15: publishing a ticket with an empty instance would leave a file the next scan refuses
+    // as "written by an older reevesagents" — a sticky breakage this process caused itself. A host
+    // that cannot identify itself therefore bids nothing and says why.
+    expect(() => withDispatchGate(() => 'never', { root, timeoutMs: 100, instanceProbe: () => null }))
+      .toThrow(/cannot identify this process instance/)
+    expect(gateFiles()).toEqual([])
+  })
+
+  it('withdraws its own bid when the field cannot be judged mid-attempt', () => {
+    // The probe works for this process but not for a legacy entry: the error is raised inside the
+    // attempt, and it must not leave our own ticket behind for every later call to trip over.
+    const foreign = instanceOf(FOREIGN_LIVE_PID)
+    if (!foreign) return
+    const legacy = writeEntry('cand', FOREIGN_LIVE_PID, 'legacy', 0, '')
+    const probe = (pid: number) => (pid === process.pid ? 'test:1' : null)
+
+    expect(() => withDispatchGate(() => 'never', { root, timeoutMs: 200, instanceProbe: probe }))
+      .toThrow(/records no process instance/)
+    expect(gateFiles()).toEqual([legacy.split('/').pop()])
+    expect(existsSync(join(root, `.flow-dispatch.cand.${process.pid}.`))).toBe(false)
+  })
+
   it('refuses an entry written by a build that recorded no process instance', () => {
     // Round 14: an entry without an instance cannot be judged — treating it as alive blocks the gate
     // for ever, treating it as dead admits a second holder. It is reported instead.

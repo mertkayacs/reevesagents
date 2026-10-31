@@ -69,6 +69,8 @@ export interface DispatchGateOptions {
   root?: string
   // Injected by tests and by a caller that would rather fail fast.
   timeoutMs?: number
+  // The process-instance probe. A test uses it to describe a host where the probe gives nothing.
+  instanceProbe?: InstanceProbe
 }
 
 interface Ticket {
@@ -105,8 +107,9 @@ function pidAlive(pid: number): boolean {
 // `null` means "this host cannot tell", and a caller must then treat the participant as alive.
 const instanceCache = new Map<number, string | null>()
 
-function probeInstance(pid: number): string | null {
-  if (instanceCache.has(pid)) return instanceCache.get(pid) ?? null
+export type InstanceProbe = (_pid: number) => string | null
+
+const defaultProbe: InstanceProbe = (pid) => {
   let found: string | null = null
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf-8')
@@ -129,12 +132,14 @@ function probeInstance(pid: number): string | null {
       // Neither probe answered: the caller falls back to the conservative answer.
     }
   }
-  instanceCache.set(pid, found)
   return found
 }
 
-function processInstance(pid: number): string | null {
-  return probeInstance(pid)
+function probeInstance(pid: number, probe: InstanceProbe): string | null {
+  if (instanceCache.has(pid)) return instanceCache.get(pid) ?? null
+  const found = probe(pid)
+  instanceCache.set(pid, found)
+  return found
 }
 
 // Is the participant that wrote `record` still running? A reused pid answers "alive" to
@@ -144,7 +149,7 @@ function processInstance(pid: number): string | null {
 // a build that did not record one — cannot be judged, and guessing either way is wrong (treating it
 // as alive blocks the gate for ever, treating it as dead admits a second holder). It is reported to
 // the operator instead, who can see whether a dispatch is still running.
-function participantAlive(record: { pid: number, instance: string }, path: string): boolean {
+function participantAlive(record: { pid: number, instance: string }, path: string, probe: InstanceProbe): boolean {
   if (!pidAlive(record.pid)) return false
   if (!record.instance) {
     throw new Error(
@@ -152,7 +157,7 @@ function participantAlive(record: { pid: number, instance: string }, path: strin
       + ` check that no dispatch is running, then remove ${displayPath(path)}`,
     )
   }
-  const current = processInstance(record.pid)
+  const current = probeInstance(record.pid, probe)
   if (current === null) return true              // this host cannot tell: assume alive
   const sameProbe = current.split(':')[0] === record.instance.split(':')[0]
   if (!sameProbe) return true                    // different probe: nothing to compare
@@ -178,7 +183,7 @@ function pathFor(root: string, kind: 'cand' | 'choosing', pid: number, token: st
 // Every readable entry of one kind. A file that cannot be parsed is skipped: tickets and markers are
 // published with a rename, so a half-written one is not something this process wrote. Entries whose
 // owner is gone are collected here — see the header for why that removal needs no coordination.
-function entries(root: string, kind: 'cand' | 'choosing'): Ticket[] {
+function entries(root: string, kind: 'cand' | 'choosing', probe: InstanceProbe): Ticket[] {
   let names: string[]
   try {
     names = readdirSync(root)
@@ -205,7 +210,7 @@ function entries(root: string, kind: 'cand' | 'choosing'): Ticket[] {
     const token = typeof record.token === 'string' ? record.token : ''
     const ts = typeof record.ts === 'number' && Number.isFinite(record.ts) ? record.ts : 0
     const instance = typeof record.instance === 'string' ? record.instance : ''
-    if (!participantAlive({ pid: record.pid, instance }, path)) {
+    if (!participantAlive({ pid: record.pid, instance }, path, probe)) {
       // The owner is gone: the entry can never be consulted again, so collecting it is safe.
       try { unlinkSync(path) } catch { /* another contender collected it first */ }
       continue
@@ -215,47 +220,64 @@ function entries(root: string, kind: 'cand' | 'choosing'): Ticket[] {
   return found
 }
 
-function liveTickets(root: string): Ticket[] {
-  return entries(root, 'cand').sort((a, b) => a.ts - b.ts || a.pid - b.pid || a.token.localeCompare(b.token))
+function liveTickets(root: string, probe: InstanceProbe): Ticket[] {
+  return entries(root, 'cand', probe).sort((a, b) => a.ts - b.ts || a.pid - b.pid || a.token.localeCompare(b.token))
 }
 
 // Take the gate: publish a ticket, then wait until it is the smallest live one. Returns false when
 // the deadline passes first — the ticket is withdrawn in that case, so a waiter never leaves a
 // phantom contender behind.
-function acquire(root: string, token: string, timeoutMs: number): boolean {
+function acquire(root: string, token: string, timeoutMs: number, probe: InstanceProbe): boolean {
   const deadline = Date.now() + timeoutMs
   const choosing = pathFor(root, 'choosing', process.pid, token)
   const ticket = pathFor(root, 'cand', process.pid, token)
 
-  const instance = processInstance(process.pid) ?? ''
   // Prove the field is readable before publishing anything into it: a directory this process cannot
   // list is not an empty field, and a marker written into one would be a leak nobody can read away.
-  entries(root, 'cand')
+  entries(root, 'cand', probe)
 
-  try {
-    publish(choosing, { pid: process.pid, token, instance })
-    const maxTs = liveTickets(root).reduce((max, entry) => Math.max(max, entry.ts), 0)
-    publish(ticket, { pid: process.pid, token, ts: maxTs + 1, instance })
-    try { unlinkSync(choosing) } catch { /* the marker is ours; someone collected a stale one */ }
-  } catch (err) {
-    // Never leave our own half-finished bid behind: the caller gets the error, the field stays clean.
-    try { unlinkSync(choosing) } catch { /* nothing to remove */ }
-    try { unlinkSync(ticket) } catch { /* nothing to remove */ }
-    throw err
+  // A bid has to carry an identity this host can verify later. Publishing an empty one would leave a
+  // file that the next scan refuses as "written by an older reevesagents" — a self-inflicted, sticky
+  // breakage (round 15) — so a host that cannot identify its own process instance does not bid at all.
+  const instance = probeInstance(process.pid, probe)
+  if (!instance) {
+    throw new Error(
+      'cannot identify this process instance (no /proc and no working ps), so the dispatch gate'
+      + ' cannot tell a dead contender from a live one; nothing was dispatched',
+    )
   }
 
-  while (true) {
-    // A live chooser means "the ticket set is in flux": its ts is not visible yet, so any minimum
-    // read now could be overtaken. Wait for it to publish or vanish.
-    if (entries(root, 'choosing').length > 0) {
+  let held = false
+  try {
+    publish(choosing, { pid: process.pid, token, instance })
+    const maxTs = liveTickets(root, probe).reduce((max, entry) => Math.max(max, entry.ts), 0)
+    publish(ticket, { pid: process.pid, token, ts: maxTs + 1, instance })
+    try { unlinkSync(choosing) } catch { /* the marker is ours; someone collected a stale one */ }
+
+    while (true) {
+      // A live chooser means "the ticket set is in flux": its ts is not visible yet, so any minimum
+      // read now could be overtaken. Wait for it to publish or vanish.
+      if (entries(root, 'choosing', probe).length > 0) {
+        if (Date.now() > deadline) return withdraw(ticket)
+        sleepSync(GATE_POLL_MS)
+        continue
+      }
+      const tickets = liveTickets(root, probe)
+      if (tickets.length === 0 || tickets[0]!.token === token) {
+        held = true
+        return true
+      }
       if (Date.now() > deadline) return withdraw(ticket)
       sleepSync(GATE_POLL_MS)
-      continue
     }
-    const tickets = liveTickets(root)
-    if (tickets.length === 0 || tickets[0]!.token === token) return true
-    if (Date.now() > deadline) return withdraw(ticket)
-    sleepSync(GATE_POLL_MS)
+  } catch (err) {
+    // Any failure — ours or one this process cannot judge — must not leave our own bid behind: a
+    // leftover ticket would be the next scan's problem, for ever.
+    if (!held) {
+      try { unlinkSync(choosing) } catch { /* nothing to remove */ }
+      try { unlinkSync(ticket) } catch { /* nothing to remove */ }
+    }
+    throw err
   }
 }
 
@@ -270,11 +292,12 @@ export function withDispatchGate<T>(fn: () => T, options: DispatchGateOptions = 
   const root = options.root ?? stateRoot()
   mkdirSync(dirname(gateCandidatesPath(root)), { recursive: true })
   const token = randomUUID()
+  const probe = options.instanceProbe ?? defaultProbe
   // One probe per pid per acquisition: the answer is stable for a live process, and re-asking on
   // every 25 ms poll would spawn `ps` forty times a second on hosts without /proc.
   instanceCache.clear()
 
-  if (!acquire(root, token, options.timeoutMs ?? DISPATCH_GATE_TIMEOUT_MS)) return { acquired: false }
+  if (!acquire(root, token, options.timeoutMs ?? DISPATCH_GATE_TIMEOUT_MS, probe)) return { acquired: false }
 
   try {
     return { acquired: true, value: fn() }
