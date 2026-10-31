@@ -66,7 +66,21 @@ function recycledInstance(): string | null {
   return own ? foreignInstanceFor(own) : null
 }
 
+// An instance the *other* probe would have written, whatever this host runs. The gate refuses to
+// compare across tags, so this must always look incomparable — and on macOS the host's own values are
+// `ps:`, which a hard-coded `ps:` fixture would silently make comparable instead.
+function otherProbeInstanceFor(own: string): string {
+  const tag = own.includes(':') ? own.slice(0, own.indexOf(':') + 1) : 'linux:'
+  return tag === 'ps:' ? 'linux:0' : 'ps:Thu Jan  1 00:00:00 1970'
+}
+
 describe('test fixtures', () => {
+  it('builds an other-probe instance with the tag this host does not use', () => {
+    // The mirror of the fixture above: the mismatched-tag test has to stay mismatched on both hosts.
+    expect(otherProbeInstanceFor('linux:123456')).toBe('ps:Thu Jan  1 00:00:00 1970')
+    expect(otherProbeInstanceFor('ps:Thu Oct 30 10:00:00 2026')).toBe('linux:0')
+  })
+
   it('builds a foreign instance with the running probe\'s tag', () => {
     // The gate compares only same-tag values; a hard-coded `linux:` fixture would turn every recycled
     // pid test into a no-op on a host whose probe answers `ps:`.
@@ -199,13 +213,29 @@ describe('contenders', () => {
   })
 
   it('does not compare instances written by a different probe', () => {
-    // An entry from a host without /proc carries `ps:<lstart>`; a `linux:` value here says nothing
-    // about it, so it is treated as alive rather than guessed dead.
-    writeEntry('cand', FOREIGN_LIVE_PID, 'otherprobe', 1, 'ps:Thu Oct 30 10:00:00 2026')
+    // An entry from the other probe says nothing about this host's process instances, so it is treated
+    // as alive rather than guessed dead. The fixture picks the tag the host does *not* use: writing a
+    // fixed `ps:` value would be comparable on macOS, where the host's own probe answers `ps:`.
+    const own = ownInstance()
+    if (!own) return
+    const entry = writeEntry('cand', FOREIGN_LIVE_PID, 'otherprobe', 1, otherProbeInstanceFor(own))
 
     const result = withDispatchGate(() => 'never', { root, timeoutMs: 120 })
 
     expect(result.acquired).toBe(false)
+    expect(existsSync(entry)).toBe(true)
+  })
+
+  it('keeps a cross-probe entry alive on a host whose own probe answers ps', () => {
+    // The macOS shape, driven through the injectable probe: this host answers `ps:`, the entry was
+    // written by a `linux:` host, so the two are not comparable and the entry must not be collected.
+    const own = 'ps:Thu Oct 30 10:00:00 2026'
+    const entry = writeEntry('cand', process.pid, 'otherprobe', 1, 'linux:0')
+
+    const result = withDispatchGate(() => 'never', { root, timeoutMs: 120, instanceProbe: () => own })
+
+    expect(result.acquired).toBe(false)
+    expect(existsSync(entry)).toBe(true)
   })
 
   it('does not bid at all when the host cannot identify its own process instance', () => {
