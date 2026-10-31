@@ -188,8 +188,8 @@ flow whose agents died is exactly a stale run.
 - It is a **child of the run**, not a peer: `run_id` + two agent ids are the foreign keys. A
   flow without live agents is parked, never ticked.
 - Cost accepted: the flow dies with the **history record**, not with the run directory. The one
-  cascade hook lives in `deleteRunHistory` (`src/core/runs.ts:367`); run archival
-  (`src/core/runs.ts:437`) and `autoCleanupRuns` (`:521`) only make the flow `orphaned` (§3.3).
+  cascade hook lives in `deleteRunHistory` (`src/core/runs.ts:377`); run archival
+  (`src/core/runs.ts:451`) and `autoCleanupRuns` (`:535`) only make the flow `orphaned` (§3.3).
 
 ### 3.1 Shape (draft)
 
@@ -214,9 +214,20 @@ flow whose agents died is exactly a stale run.
     "pending": { "op_id": "…", "target": "dev", "kind": "fix", "head": "abc1234", "at": 1730000000000 },
     "status": "dispatching"
   },
+  // Operator lifecycle (shipped in block 07). Null unless the flow is parked or was stopped by hand.
+  "paused_from": "idle",              // where `flow resume` returns to
+  "paused_at": 1730000000000,         // epoch ms, so `flow status` can say since when
+  "orphan_reason": "the run is no longer in the registry (archived, stopped or swept)",
+  "close_reason": "stopped by the operator",
   "log": [{ "at": "…", "event": "fix_dispatched", "detail": "abc1234 round 1" }]
 }
 ```
+
+The shape as this branch writes it is the flat one in `src/core/flow.ts` (`FlowState`): the fields
+above plus `schema_version`, `repo`, `roles`, `state`, `rounds`, `max_rounds`, `review_timeout_sec`,
+`review_started_at`, `claim`, `specs`, `dispatched_specs`, `pending`, the four lifecycle fields and
+the bounded `log`. Every field added after the first release is optional on read, which is why
+`schema_version` is still 1.
 
 ### 3.2 Block spec — structured from day one (D2)
 
@@ -276,27 +287,38 @@ for.
 
 The run lifecycle here is stricter than it looks: `stop` (`src/core/runtime.ts:715`–`:717`) and
 `delete-run` (`src/surfaces/cli/history.ts:19`) both call `archiveAndRemoveRun`
-(`src/core/runs.ts:437`), which **deletes the run directory** and leaves only a compact record
+(`src/core/runs.ts:451`), which **deletes the run directory** and leaves only a compact record
 `~/.reeves/history/runs/<id>.json` (`src/core/types.ts:49`). The panel's "delete archived run"
 calls `deleteRunHistory` directly (`src/surfaces/tui/screens/RunHistory.tsx:132` →
-`src/core/runs.ts:367`).
+`src/core/runs.ts:377`).
 
 So "keep the flow until the run is deleted" resolves to:
 
 | Event | Flow file | Flow status |
 | --- | --- | --- |
 | run is live | present | normal states |
-| run ended / stopped / swept as stale — run dir gone, **history record kept** (`stop`: `runtime.ts:715`–`:717`, `delete-run`: `src/surfaces/cli/history.ts:19`, `delete_run`: `src/surfaces/mcp/server.ts:450`, Web `deleteWebRun`: `src/surfaces/webui/server.ts:396`–`:401`, sweep `autoCleanupRuns`: `runs.ts:521`) | **kept** | `orphaned` — listed, never ticked; `flow status` / `flow stop` only |
-| **history record** deleted (`delete-history`: `src/surfaces/cli/history.ts:54`, `delete_history`: `src/surfaces/mcp/server.ts:465`, Web `deleteHistoryRecord`: `src/surfaces/webui/server.ts:402`–`:406`, TUI panel: `src/surfaces/tui/screens/RunHistory.tsx:132`) | **deleted** | cascade hook in `deleteRunHistory` (`src/core/runs.ts:367`) — the single function all four paths funnel into |
-| `flow stop <id>` | deleted explicitly | gone |
+| run ended / stopped / swept as stale — run dir gone, **history record kept** (`stop`: `runtime.ts:800`, archives at `:835`, `delete-run`: `src/surfaces/cli/history.ts:10`, `delete_run`: `src/surfaces/mcp/server.ts:463`, Web `deleteWebRun`: `src/surfaces/webui/server.ts:396`–`:401`, sweep `autoCleanupRuns`: `runs.ts:535`) | **kept** | `orphaned` — listed, never ticked; `flow status` / `flow stop` only |
+| **history record** deleted (`delete-history`: `src/surfaces/cli/history.ts:48`, `delete_history`: `src/surfaces/mcp/server.ts:478`, Web `deleteHistoryRecord`: `src/surfaces/webui/server.ts:402`–`:406`, TUI panel: `src/surfaces/tui/screens/RunHistory.tsx:132`) | **deleted** | cascade hook in `deleteRunHistory` (`src/core/runs.ts:377`) — the single function all four paths funnel into |
+| `flow stop --run <id>` | **kept** (block 07) | `done` + `close_reason: stopped by the operator`; a tick sends nothing, `flow status`/`flow logs` still explain it, and `delete-history` is what removes the file |
 
 Note what is *not* in the second row: `delete-run` / `delete_run` / the panel's "delete run" do
 **not** delete a history record — they archive the run (the record is written, not removed). A
 first draft of this table said otherwise; the review caught it, and the code agrees with the
-review (`archiveAndRemoveRun` writes the record at `src/core/runs.ts:441`).
+review (`archiveAndRemoveRun` writes the record at `src/core/runs.ts:455`).
 
 `orphaned` is a status, not an error: `flow status` prints it with the reason (agents gone), the
 TUI/Web badge shows it muted, and a tick logs one line and parks instead of throwing every 2 s.
+
+Shipped in block 07 exactly as written here: `flow-runner.ts` reports `run_present` /
+`agents_present` from the registry (an unreadable registry reports "not seen", never "gone"), the
+engine returns an `orphan` decision, and `applyDecisionToState` writes `orphaned` plus
+`orphan_reason` **once** — the next tick holds on `flow_orphaned` and writes nothing. The cascade
+is `deleteFlowFileForRun` called from `deleteRunHistory` (`src/core/runs.ts:377`), inside the runs
+lock it already holds; no other path deletes a flow file.
+
+Because the run registry imports the flow store for that cascade, `stateRoot()` moved to
+`src/core/state-path.ts` (re-exported from `runs.ts`), so `runs.ts` and `flow-store.ts` are not a
+module cycle.
 
 ### 3.4 State automaton (what a tick may do in each state)
 
@@ -315,6 +337,21 @@ TUI/Web badge shows it muted, and a tick logs one line and parks instead of thro
 Two invariants make the table safe: a transition is written only inside a short lock
 (§2.4), and no state re-sends the same text for the same `(head, verdict, spec_id)` — the
 `dispatched_*` keys are the memory that survives a crash.
+
+**The table is code, not prose (block 07).** `FLOW_TRANSITIONS` in `src/core/flow.ts` lists the
+allowed target of every state, `assertTransition` refuses anything else with the state named
+(`cannot pause a flow in state done (this flow is closed; start a new one with \`flow start
+--replace\`)`), and both the operator commands (`applyOperatorTransition`) and the engine's own
+writes (`applyDecisionToState`) go through it. `done` is terminal: no pair leaves it. A paused flow
+records `paused_from` and `paused_at`, and `resume` returns it there — never to "the beginning".
+Pausing drops an unsettled claim, so a resume cannot inherit a send that would later escalate.
+
+**The journal.** The `log` array *is* the journal `flow logs` prints: a ring buffer capped at
+`FLOW_LOG_LIMIT` (50) entries, each `{ at, event, detail }` where `detail` is the reason, the HEAD
+prefix, the block id or a short refusal — never a prompt body and never an absolute path. Events a
+reader will meet: `flow_started`, `flow_paused`, `flow_resumed`, `flow_stopped`, `flow_orphaned`,
+`dispatch_claimed`, `dispatch_refused`, `dispatch_unconfirmed`, `request_review`, `dispatch_fix`,
+`dispatch_spec`, `spec_queued`, `escalate`.
 
 **Rules that make the store safe (3.1–3.4):**
 
@@ -407,15 +444,24 @@ reevesagents flow start  --run <id> --dev <agent> --review <agent>              
     [--repo <dir>] [--max-rounds 6] [--review-timeout 900] [--spec <file…>] [--replace] [--json]
 reevesagents flow status --run <id> [--json]                        # shipped
 reevesagents flow tick   --run <id> [--json] [--dry-run]            # shipped
-reevesagents flow add-spec <id> <spec.json…>                        # planned (MCP has it; `start --spec` covers the first queue)
-reevesagents flow add-spec <id> --markdown <file>                   # planned
-reevesagents flow pause|resume|stop <id>                            # planned
-reevesagents flow logs <id> [--tail N] [--json]                     # planned
+reevesagents flow add-spec --run <id> [--file <spec.json…>] [--markdown <file…>] [--json]  # shipped
+reevesagents flow pause  --run <id> [--json]                        # shipped
+reevesagents flow resume --run <id> [--json]                        # shipped
+reevesagents flow stop   --run <id> [--yes] [--json]                # shipped
+reevesagents flow logs   --run <id> [-n N] [--json]                 # shipped
 ```
 
 `start` is the only way a flow is created (§4.6): it resolves the run and both agents, refuses an
 agent that belongs to another run, refuses a second flow on a run with an active one, and replaces a
 closed one only with `--replace`. It writes the file and sends nothing.
+
+`add-spec`, `pause`, `resume`, `stop` and `logs` are the operator's controls (block 07), and all of
+them live in `src/core/flow-control.ts` so the CLI and the MCP cannot drift: `add-spec` validates
+every file before it takes the lock (one bad path queues nothing), `--markdown` is the explicit
+unstructured downgrade and prints a warning, `pause` parks the flow and drops an unsettled claim,
+`resume` returns it to the state it was paused from (an escalated flow gets a fresh budget, logged),
+`stop` needs `--yes` and closes the flow as `done` with a reason, and `logs` prints the bounded
+journal tail. None of them sends into a pane.
 
 `status` and `tick` take the run id (`--run`, unique prefix accepted) because a flow is keyed by
 its run; the flow file itself is `~/.reeves/flows/<run-id>.json`.
@@ -498,8 +544,8 @@ changes a written contract, so the change is deliberate and recorded:
 | `flow_status` | one flow plus its recent log | **shipped**, read-only |
 | `flow_start` | attach a flow to an existing run (`run_id`, `dev`, `review`, `repo`, `review_prompt`) | **shipped**; validates like the CLI; refuses a second flow on the same run (D6) |
 | `flow_add_spec` | queue a block spec file | **shipped**; same validator as §3.2, takes a JSON or markdown path |
-| `flow_step` | one engine step (the `flow tick` equivalent) | **not implemented** — deliberately deferred to its own block, because it sends into a pane and deserves a review focused on that |
-| `flow_control` | `action: pause \| resume \| stop` | one tool, three intents, so the surface does not grow three near-identical entries |
+| `flow_step` | one engine step (the `flow tick` equivalent) | **shipped** (block 07); shares the claim protocol, so an MCP step and a cron tick cannot paste twice |
+| `flow_control` | `action: pause \| resume \| stop \| add_spec` | **shipped** (block 07); one tool, four intents, so the surface does not grow four near-identical entries. `stop` needs `confirm: true` |
 
 - Guardrails, because a host holding these tools can spend money: `flow_step` answers
   `{changed: false, events: []}` when nothing happened, so an agent polling it in a loop is cheap
@@ -550,13 +596,14 @@ as everything else (§2.3).
 | CLI `flow start` | **shipped** (`src/core/flow-start.ts`, `src/surfaces/cli/flow.ts`) |
 | TUI runs-list badge + attention | **shipped** (`src/core/flow-view.ts`, `src/core/flow-label.ts`, `src/surfaces/tui/screens/Runs.tsx`) |
 | Web run-card badge + attention | **shipped** (`src/surfaces/webui/state.ts` `WebRun.flow`, `client/app.js`, `client/app.css`) |
-| MCP `flow_status`, `flow_add_spec`, `flow_start` | **shipped** (`src/surfaces/mcp/server.ts`); no tool here ticks a flow |
-| MCP `flow_step` | **not implemented** — separate block, send-safety review |
-| MCP `flow_control` | **not implemented** |
-| CLI `flow add-spec` / `pause` / `resume` / `stop` / `logs` | **not implemented** (`start --spec` queues the first blocks) |
+| MCP `flow_status`, `flow_add_spec`, `flow_start` | **shipped** (`src/surfaces/mcp/server.ts`); no tool here ticks a flow on its own |
+| MCP `flow_step` | **shipped** (block 07) — one explicit step per call, same claim protocol as `flow tick`, answers `{changed:false, reason}` on a hold |
+| MCP `flow_control` | **shipped** (block 07) — `pause` / `resume` / `stop` (needs `confirm`) / `add_spec`, answers the status payload |
+| CLI `flow add-spec` / `pause` / `resume` / `stop` / `logs` | **shipped** (block 07) |
 | TUI Flow section on the run page (§4.2) | **not implemented** — the badge and attention exist, the detail section does not |
 | `flow-escalated` approval pickup (§4.5) | **not implemented** — an escalation is a state, a human sees it, nothing raises an approval yet |
-| `paused` / `orphaned` validation | **not implemented** — a closed flow is `escalated`/`done`; a flow of an archived run is skipped, not marked `orphaned`. `flow start` does refuse a second flow on a run that has an active one |
+| `paused` / `orphaned` + the transition table | **shipped** (block 07) — `FLOW_TRANSITIONS` gates every operator and engine transition; `paused` is inert (a tick observes nothing and sends nothing), `orphaned` is written once with its reason, and the only automatic deletion is the cascade in `deleteRunHistory` |
+| Journal (`flow logs`) | **shipped** (block 07) — the bounded `log` array (`FLOW_LOG_LIMIT` = 50) is the journal: event, time, head, short reason, never a prompt body |
 | Review prompt template stored per flow | **not implemented** — the request is rendered by a fixed renderer with the same tokens |
 
 Nothing above is described as working elsewhere in this document: the tables and the sections it
@@ -613,7 +660,7 @@ nothing is pushed to the fork without an explicit go-ahead.
 | D4 | Escalation surface | **Reuse `RunApproval`** (recommendation accepted) | `flow-escalated` approval: `approve` resumes, `deny` parks (§4.5) |
 | D5 | Second Enter | **Forbidden** (recommendation accepted) | paste → one Enter → confirm; an unconfirmed dispatch is logged, never re-sent (§5) |
 | D6 | Several flows per run | **One dev/review pair per run in v1** (recommendation accepted) | `flow_start` refuses a second active flow on the same run |
-| D7 | Retention | **Keep while the run record exists; delete when the run is deleted** | `orphaned` after archival, cascade in `deleteRunHistory` (`src/core/runs.ts:367`) (§3.3) |
+| D7 | Retention | **Keep while the run record exists; delete when the run is deleted** | `orphaned` after archival, cascade in `deleteRunHistory` (`src/core/runs.ts:377`) (§3.3) |
 
 Work these decisions create:
 
@@ -742,3 +789,23 @@ those messages now goes through `displayPath`, and three tests pin it with `HOME
 from both the project and the registry — the previous tests pinned `HOME` *around* the temp tree, which
 is the arrangement that let the leak through twice. The same review caught a `git diff --check`
 failure (a blank line at the end of this document); it is removed, not configured away.
+
+---
+
+## Appendix F — block 07: control and lifecycle (shipped)
+
+Block 07 implemented the first slice of "full control": the lifecycle states, the operator commands
+and the MCP tools that drive a flow. What it changed against the plan above, and why:
+
+| Item | Shipped as | Why this shape |
+| --- | --- | --- |
+| `paused` | `flow pause`, `flow_control { action: "pause" }`; `paused_from` + `paused_at` in the state | `resume` must return to the state the flow was paused *in* (§3.4); recording the origin is the only way to do that without guessing. A paused flow's tick short-circuits before `observeFlow` — no git call, no pane capture, no verdict scan — and `flowTick` holds with reason `flow_paused` |
+| `orphaned` | `run_present` / `agents_present` observations, an `orphan` decision, `orphan_reason` written once | Parked is a status, not an error: one journal line, then the tick holds. The registry probe reports "not seen" when it cannot answer, so a broken probe can never archive a live pipeline; only an explicit `false` parks a flow |
+| Transition validation | `FLOW_TRANSITIONS` + `assertTransition` + `applyOperatorTransition` | One table for operator and engine writes; `done` is terminal, `orphaned` leaves only through `stop`, and a refusal names the state and the alternatives |
+| Claim vs operator | `pause` and `stop` clear `pending` | A human decision outranks an unsettled claim; leaving it behind would make `resume` wait out `PENDING_TTL_SEC` and then escalate a flow nobody is driving. The claim still outranks the orphan check, so an in-flight send settles or expires before the flow is parked |
+| `flow stop` | keeps the file (`done` + `close_reason`) | The plan's table said "deleted explicitly"; keeping it is more useful and equally safe — the tick holds on `flow_closed`, `flow status`/`flow logs` still explain what happened, and `delete-history` is the only deletion. Recorded here because it changes a written line |
+| `--markdown` | the explicit unstructured downgrade, with a warning line | §3.2 named an `--allow-unstructured` flag; `add-spec --markdown` *is* that opt-in, per file group, and the CLI prints the warning and the badge shows `(unstructured)` |
+| Journal | the existing bounded `log` (50 entries) | It already carried event + short reason and never a prompt body, so `flow logs` reads it instead of a second file. `-n` bounds the tail, `--json` makes it scriptable |
+| `stateRoot` | moved to `src/core/state-path.ts`, re-exported from `runs.ts` | `deleteRunHistory` owns the flow cascade, and the flow store needs the state path: sharing the path module keeps `runs.ts` and `flow-store.ts` acyclic instead of relying on import order |
+| MCP `flow_step` | one step per call, same claim protocol | The tool adds no rule of its own: rounds, deadline, pane guard and the claim live in the engine, and a second concurrent call answers `{changed: false, reason: "dispatch_pending"}` with one paste for both |
+| MCP `flow_control` | `pause` / `resume` / `stop` (needs `confirm`) / `add_spec` | One tool with an explicit action, as §4.3 planned; mutating actions answer the `flow_status` payload, refusals answer the reason (never `ok: true`) |

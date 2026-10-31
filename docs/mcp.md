@@ -76,6 +76,8 @@ own CLI only if you explicitly want that worker to spawn more agents.
 - `flow_start`: attach a dev -> review -> fix flow to an existing run.
 - `flow_status`: read the dev -> review -> fix pipeline attached to one run.
 - `flow_add_spec`: queue a block spec file on that pipeline.
+- `flow_step`: run one engine step (the `flow tick` equivalent) — the only flow tool that can send.
+- `flow_control`: pause, resume, stop or queue a block, with an explicit `action`.
 
 The provider catalog is also available as the `reevesagents://providers` MCP
 resource. The guide is available as `reevesagents://guide`.
@@ -147,15 +149,59 @@ absolute path is taken as written. Refused without touching the flow file: a
 missing or empty file, a spec without requirements or checks, a block id already
 queued or dispatched, and a closed flow (`escalated` or `done`).
 
-Paths and log text in both tools come back home-shortened and redacted: a tool
+### `flow_step { run_id, dry_run? }`
+
+One engine step: observe, decide, claim, send and settle — the same code path as
+`reevesagents flow tick`, and the only flow tool that can type into a pane. It sends
+at most one prompt, and only into a pane that is positively idle; the rules (round
+budget, review deadline, escalation, pane guard) stay in the engine, so no surface can
+talk its way past them.
+
+The answer tells a polling host whether anything happened:
+
+- `changed: false` with `reason` for a hold — `head_unchanged`, `dev_pane_unknown`,
+  `dispatch_pending`, `flow_paused`, `flow_closed`, … Polling it is cheap and writes
+  nothing.
+- `changed: true` when the step moved the flow; `flow` is the same payload
+  `flow_status` returns.
+- `send: { sent, reason }` names the paste outcome: `sent: false` with `pane_changed`
+  or `unconfirmed` is the one case a human should look at.
+
+Two concurrent calls cannot paste twice. The first writes a `pending` claim into the
+flow before the paste; the second reads that claim, answers
+`{changed: false, reason: "dispatch_pending"}` and sends nothing. The same claim is
+what makes an MCP step, a cron `flow tick` and a manual tick mutually exclusive.
+
+### `flow_control { run_id, action, file?, markdown?, confirm? }`
+
+One tool, four explicit actions — no implicit anything:
+
+- `pause` parks the flow. A paused flow is never ticked: no git call, no pane capture,
+  no send. It also drops an unsettled dispatch claim, so a later resume cannot inherit
+  a stuck send.
+- `resume` returns the flow to the state it was paused *from* (a paused `fixing` flow
+  resumes into `fixing`). On an `escalated` flow it grants a fresh round budget and
+  logs that it did.
+- `stop` closes the flow for good and requires `confirm: true`; without it the answer
+  is an error, never `ok: true`. The file is kept so `flow status`/`flow logs` still
+  explain what happened, and nothing is sent afterwards.
+- `add_spec` queues one block file per call: `file` for a structured JSON spec
+  (`requirements`/`checks` are mandatory), `markdown` for an explicit unstructured
+  ingest with the same containment rules as `flow_add_spec`.
+
+Every accepted action answers with the `flow_status` payload; a refused one answers the
+reason (`cannot resume a flow in state done (…)`, `stop closes the flow for good; pass
+confirm: true`, …).
+
+Paths and log text in every flow tool come back home-shortened and redacted: a tool
 answer is a transcript, so a spec title carrying a token is reported as
 `[REDACTED]` while the flow file keeps the author's text.
 
-The MCP never runs the pipeline by itself: no tool here starts a loop or a timer.
-A step happens only when someone runs `reevesagents flow tick` — on a schedule or by
-hand; the TUI and the Web UI render the badge and tick nothing. Every call is
-explicit, which keeps this server flat — it gives a host control, not an autonomous
-process.
+The MCP never runs the pipeline by itself: no tool here starts a loop or a timer. A
+step happens only when the host calls `flow_step`, or when someone runs
+`reevesagents flow tick` on a schedule; the TUI and the Web UI render the badge and
+tick nothing. Every call is explicit, which keeps this server flat — it gives a host
+control, not an autonomous process.
 
 ## Safety Model
 

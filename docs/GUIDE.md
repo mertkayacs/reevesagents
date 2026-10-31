@@ -137,6 +137,21 @@ human is highlighted with the same warning colour as a stale run.
   next without sending anything or writing the flow file. Drop `--dry-run` to
   apply it; the engine then pastes through its idle check and refuses a pane that
   is not positively free.
+- `reevesagents flow add-spec --run <run> --file <spec.json…>` — queue more work after
+  the flow started. A structured spec must carry `requirements` and `checks`; a block
+  without them is refused. `--markdown <file…>` queues a brief as an *unstructured*
+  block on purpose: the CLI warns, and `flow status` shows it, because the reviewer has
+  no acceptance criteria to check.
+- `reevesagents flow pause --run <run>` / `reevesagents flow resume --run <run>` —
+  park the flow and put it back. A paused flow is never ticked and never sends, and it
+  keeps no half-finished dispatch. `resume` returns it to the state it was paused from;
+  on an escalated flow it grants a fresh round budget.
+- `reevesagents flow stop --run <run> --yes` — close the flow for good. Nothing is sent
+  afterwards, and the file is kept so `flow status`/`flow logs` still explain what
+  happened. Without `--yes` the command refuses.
+- `reevesagents flow logs --run <run> [-n 20] [--json]` — the flow's own journal:
+  transitions, dispatches, verdicts, refusals and escalations, newest last. It never
+  holds a prompt body.
 - **Nothing ticks a flow on its own — opening the TUI or the Web UI does not either:**
   those two only render the badge. Run `flow tick` on a schedule (cron every minute is
   the usual setup; `--run` accepts a unique prefix) or call it by hand.
@@ -144,6 +159,10 @@ human is highlighted with the same warning colour as a stale run.
   send into the flow file, and the second finds that claim and sends nothing. If a
   tick dies mid-send, the claim is escalated to a human after two minutes instead of
   being pasted again.
+- A flow whose run was stopped, deleted or swept is parked as `orphaned`: `flow status`
+  prints the reason, nothing is ticked, and `flow stop` is how you close it. Deleting
+  the run's history record deletes the flow file too — that is the only automatic
+  deletion.
 
 ## Keeping cost down
 
