@@ -605,6 +605,23 @@ export function peekAgent(agentId: string, lines = 10, options: RuntimeOptions =
   }
 }
 
+// The same capture without redaction, for parsers only (the verdict scan). Redaction replaces
+// secret-shaped strings in place, so a parser fed `peekAgent` can silently misread a line; the
+// flow engine therefore reads here and redacts whatever it stores. Never print this, never put it
+// in a payload: everything that leaves the process goes through `peekAgent`/`redactSecrets`.
+export function peekAgentRaw(agentId: string, lines = 10, options: RuntimeOptions = {}): string {
+  const driver = options.driver ?? realDriver
+  const n = Number.isFinite(lines) && lines > 0 ? Math.floor(lines) : 10
+  try {
+    const agent = findAgent(agentId)
+    if (agent.headless || !agent.tmux_pane_id) return ''
+    if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return ''
+    return stripAnsi(capturePaneRaw(driver, agent, n))
+  } catch {
+    return ''
+  }
+}
+
 // Is this agent still working? Fail-closed: a pane we cannot observe, an agent with no pane,
 // and a provider without a verified busy marker all answer 'unknown', which every automated
 // write must treat as busy (see core/activity.ts).

@@ -244,6 +244,16 @@ dispatch prompt starts with an explicit "this block has no structured acceptance
 line, and `flow status` flags it. `report` is a requirement addressed to the reviewer (the dev
 must produce it), not something the engine validates — the reviewer is the gate.
 
+**Explicit `null` is a wrong type** (review `d9f66c6`, resolved in `src/core/spec.ts`). JSON has
+no `undefined`, so a key that is present was written deliberately: `"goal": null` is not "the field
+was omitted", it is a value of the wrong type, and it is reported as
+`goal must be a string` exactly like a number or a list where a string belongs. A missing key stays
+valid and reads as empty — that is the only "absent" this contract knows, and `readText()`
+therefore distinguishes `undefined` from `null` instead of collapsing both into `''`. Silently
+reading `null` as empty would make the add-time validator the one place that coerces, which is what
+§3.2 forbids everywhere else. `test/spec.test.ts` pins both halves: a present `null` is refused with
+its field name, an omitted key is accepted.
+
 ### 3.3 Lifecycle against run archival (D7)
 
 The run lifecycle here is stricter than it looks: `stop` (`src/core/runtime.ts:715`–`:717`) and
@@ -319,6 +329,37 @@ Two invariants make the table safe: a transition is written only inside a short 
   live (a second `flow start` is refused), and `orphaned` flows never block a fresh start on a
   *new* run. Two flows over the same run would write into the same panes and both claim the
   HEAD.
+
+### 3.5 What block 03 ships, stated against the table above
+
+The engine landed first as the smallest honest subset: **five** statuses
+(`idle`, `reviewing`, `fixing`, `escalated`, `done`), the cumulative budget, the claim and the
+verdict counter. The mapping to §3.4, so the next block does not have to guess:
+
+| §3.4 status | this build |
+| --- | --- |
+| `idle` | `idle` — waiting for the dev's next HEAD |
+| `reviewing` | `reviewing` |
+| `fixing` | `fixing` — a fix round was dispatched, waiting for the new HEAD |
+| `accepted` | `done` — ACCEPT and no queued block; nothing is sent, the flow stops |
+| `escalated` | `escalated` — the round budget is spent; an approval pickup is not wired yet |
+| `dispatching` / `dispatch_unconfirmed` / `paused` / `orphaned` | **not yet** — see below |
+
+What is deliberately *not* in this build, and must not be assumed by the next block:
+
+- no `pending`/`op_id` claim record, so two tickers are not yet mutually exclusive;
+  `dispatched_specs` and the verdict baseline are what stop a duplicate send today;
+- an ambiguous paste (the text landed, the submit was not confirmed) consumes the verdict and logs
+  `dispatch_unconfirmed`, but has no status of its own: the next tick sees the consumed baseline
+  and does not paste again, and a human reads the log;
+- `paused`, `orphaned`, the `flow-escalated` approval and the `add-spec` CLI arrive with the
+  surfaces and the approval pickup, so a flow file is written by the engine's tests and by the
+  next block, not by a command yet.
+
+One consequence worth stating plainly: a fix or a block is dispatched **only** into a pane the
+gate classified as `idle` on this tick, and a review is requested only when the dev's own pane is
+idle and the tree is clean — reviewing a commit the dev is still building on spends a round on a
+moving target.
 
 ---
 

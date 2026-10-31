@@ -19,6 +19,7 @@ import { registerSetup, registerSkills, registerDoctor } from './setup.js'
 import { registerHosts, registerAttach, registerDetach, registerMcp } from './hosts.js'
 import { registerConfig } from './config.js'
 import { registerPresets, registerSavePreset, registerDeletePreset, registerStartPreset } from './presets.js'
+import { registerFlow } from './flow.js'
 import { registerWeb } from './web.js'
 
 const program = new Command()
@@ -68,6 +69,7 @@ registerPresets(program)
 registerSavePreset(program)
 registerDeletePreset(program)
 registerStartPreset(program)
+registerFlow(program)
 registerWeb(program)
 registerMcp(program)
 
