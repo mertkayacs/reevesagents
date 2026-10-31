@@ -519,8 +519,9 @@ writers.
 single acquisition:
 
 1. `statSync` for the current size, resolve the exact line count from it (below) and, if the process's
-   cached size does not match, reconcile the dedupe index from the file (§3.5) — the same scan that
-   recomputes the count also collects the `dedupe_key` values, so the two never disagree;
+   cached size does not match, merge the dedupe index with what the file says (§3.5 — a merge, not a
+   rebuild: rotation removes rows whose keys the index must keep) — the same scan that recomputes the
+   count also collects the `dedupe_key` values, so the two never disagree;
 2. if the input carries a `dedupe_key` that the reconciled index already holds, return that entry with
    `duplicate: true` and write nothing (§3.5);
 3. `writeSync` of the line on the `O_APPEND` fd (short; readers may see a partial tail and skip it,
@@ -644,19 +645,30 @@ a retry after a failed state write can legitimately arrive an hour later, and a 
 process-local map would either duplicate the row or forget the key on restart. The store therefore
 keeps a **bounded key index on disk**:
 
-- `<state>/notifications-dedupe.json` = `{ "keys": [{ "key": "…", "seq": 57, "at": "…" }, …] }`,
-  newest last, capped at `DEDUPE_MAX_KEYS` = 500 entries (each key is ≤ 120 chars, so the file stays
-  under ~80 KiB);
-- **the log is the authority and the index is a cache.** Every event stores its `dedupe_key` (§2.1), so
-  the index can always be rebuilt from the file. That is what closes the window between "the line was
-  appended" and "the key is in the index": a crash in between leaves the index one key short, and the
-  next append rebuilds it before consulting it — the key is found, `duplicate: true` is returned, and
-  the retry does not duplicate the row;
-- the rebuild condition is the one §3.3 already computes: the process's cached `{ size, count }` does
-  not match `statSync(file).size` (a cold cache after a restart matches nothing), so the append path
-  re-scans the file for lines — and, in the same pass, for `dedupe_key` values. The scan is bounded by
-  the ring (≤ 2000 lines, ≤ 2 MiB), i.e. it is the same cost as the count recomputation that path
-  already pays;
+- `<state>/notifications-dedupe.json` =
+  `{ "keys": [{ "key": "…", "id": "n_57_a1b2c3", "seq": 57, "at": "…" }, …] }`, newest last, capped at
+  `DEDUPE_MAX_KEYS` = 500 entries (key ≤ 120 chars, id = `n_<seq>_<rand6>`, so the file stays under
+  ~100 KiB). The **id is stored, not derived**: it carries a random suffix, so it cannot be
+  reconstructed from `seq`, and the duplicate answer must return the original one even after rotation
+  has removed the row;
+- **the two stores are authoritative for different things, and the reconciliation is a merge, not a
+  rebuild.** The log is authoritative for *content* (and for keys that are still in it); the index is
+  authoritative for keys whose **rows have been rotated away** — ring rotation deletes lines, so after a
+  rotation the log no longer mentions keys that the index legitimately still holds, and rebuilding the
+  index from the log alone would forget them and let a retry duplicate an event that the bound of 500
+  was supposed to keep covered. So:
+  - the append path re-scans the log when its cached `{ size, count }` does not match
+    `statSync(file).size` (a cold cache after a restart matches nothing) and collects the `dedupe_key`
+    values it finds — the same scan §3.3 already performs for the exact count, so the cost is the one
+    that path already pays;
+  - the result is **merged** with the index already on disk: entries are unioned by `key`, sorted by
+    `seq`, and only then truncated to the newest `DEDUPE_MAX_KEYS`. An entry that the log no longer
+    contains survives the reconciliation; an entry that the log has and the index lacks (the crash
+    window) is added;
+  - that merge closes both windows at once: a crash between the append and the index write is healed
+    (the key comes from the log), and a rotation cannot silently drop a key that still belongs to the
+    kept 500 (the key comes from the index). Neither store is a cache of the other; the merge is the
+    rule;
 - `appendNotification(input)` consults the index **inside the same `withNotificationsLock` critical
   section** as the append and the rotation (§3.3), in this order: reconcile-if-stale → present? return
   `{ id, seq, duplicate: true }` → else append the line → push the key (evicting the oldest) → write the
@@ -752,7 +764,8 @@ Request body (all other fields are server-derived):
 product. `dedupe_key`, when present, suppresses a duplicate **for good**: the store keeps a bounded
 on-disk key index (§3.5) inside the append critical section, so a retrying supervisor loop cannot flood
 the log even across restarts, and the answer to a suppressed call is `200 { id, seq, duplicate: true }`
-with the original id.
+with the original id — read from the index entry, which is why the id is stored there (§3.5): the row
+itself may already have been rotated out, and the caller still gets the identity it was first given.
 
 Guard chain, in order (each returns a distinct status so the caller can see which rule fired):
 
@@ -1204,9 +1217,12 @@ through `translatePhrase`.
    timeout on the same commit after a resume; keying by `(run, kind, episode)` collides across
    `flow start --replace`, whose new flow counts its episodes from one again — so the key carries
    `flow_id` and `episode` (§2.2); and treating the index as authoritative loses the key of an event
-   that was appended just before a crash — so the index is a *cache* reconciled from the log whenever
-   the size check says it is stale (§3.5). Any future "simplification" of any of the three breaks the
-   at-least-once promise §2.2 makes.
+   that was appended just before a crash — so the two stores are reconciled by a **merge** whenever the
+   size check says it is stale: keys come from the log *and* from the index on disk, because rotation
+   deletes rows the index still needs to remember, and the id of a rotated-out event can only come from
+   the index entry itself (§3.5). Replacing the index with "whatever the log says" is the tempting
+   simplification and it silently drops eviction-resistant keys. Any future "simplification" of any of
+   these breaks the at-least-once promise §2.2 makes.
 
 9. **`agent.finished` is ingest-only.** Anyone reading the kind list may assume the product
    detects turn completion. It does not (§2.2). If the owner wants product-side turn detection,
