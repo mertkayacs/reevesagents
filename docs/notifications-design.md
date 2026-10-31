@@ -462,6 +462,23 @@ of §3.5.
 with the same atomicity. Two small JSON files, both `0600`, both derived state: losing either costs
 badges or one duplicate row, never an event.
 
+**A missing file is a first run, not an error.** All four paths above are created lazily, and every
+reader and writer treats "not there" as its empty value — otherwise the very first notification on a
+fresh state directory would fail with `ENOENT`, and so would the first `GET /api/notifications`:
+
+| path | absent means | who creates it |
+| --- | --- | --- |
+| `notifications.jsonl` | zero events (`[]`, `size 0`, `count 0`) | the `openSync(path, 'a')` of the first append, which creates the file (step 3 below) |
+| `notifications-read.json` | `read_seq: 0` | the first `markNotificationsRead` |
+| `notifications-dedupe.json` | an empty index (nothing to merge) | the first append that carries a `dedupe_key` |
+| `notifications-seq` | `0`, so the first id is `n_1_<rand6>` | the first append |
+
+Reads never create a file: `readNotifications`, the summary and the SSE snapshot return the empty
+value for a missing log, so a dashboard served from a clean state dir shows an empty dialog rather than
+an error. `ENOENT` from `statSync` is therefore an ordinary branch of the append path, not an
+exception — one `try`/`catch` for that one code, and every other `statSync` failure is still a real
+error.
+
 ### 3.2 Append path: `O_APPEND` inside the lock, not temp+rename
 
 `openSync(path, 'a', 0o600)` + a single `writeSync(fd, line)`, always inside the lock of §3.3.
@@ -522,15 +539,19 @@ writers.
 single acquisition:
 
 1. `statSync` once, **before this line is written**, and compare the result with the cache the previous
-   append left behind (`{ dev, ino, size, count }`, below). This yields `size_before` and
-   `count_before`; on a mismatch the exact line count is recomputed and the dedupe index merged with
+   append left behind (`{ dev, ino, size, count }`, below). `ENOENT` is the first-run branch: the log is
+   empty, so `size_before = 0`, `count_before = 0`, there is no inode to compare and nothing to merge
+   from the log (§3.1); every other `statSync` failure is a real error and fails the append. This yields
+   `size_before` and `count_before`; on a mismatch the exact line count is recomputed and the dedupe index merged with
    what the file says (§3.5 — a merge, not a rebuild: rotation removes rows whose keys the index must
    keep). The same scan that recomputes the count collects the `dedupe_key` values, so the two never
    disagree;
 2. if the input carries a `dedupe_key` that the reconciled index already holds, return that entry with
    `duplicate: true` and write nothing (§3.5);
 3. `writeSync` of the line on the `O_APPEND` fd (short; readers may see a partial tail and skip it,
-   §3.2);
+   §3.2). The `openSync(path, 'a')` here is also what creates the log on the first append of a fresh
+   state directory — the path is never created by the `statSync` of step 1, which is why that stat has
+   an `ENOENT` branch;
 4. **update the size and the count to their post-write values** — `size_after = size_before +
    byteLength(line)`, `count_after = count_before + 1` — and store them, with the current
    `{ dev, ino }`, as the new cache. A cache that still described the pre-write file would make the
