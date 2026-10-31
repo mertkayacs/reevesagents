@@ -33,6 +33,7 @@ import {
 } from '../../core/runs.js'
 import { sweepAgentsThrottled, sweepOrphanSessionsThrottled } from '../../core/reaper.js'
 import { resolveRunApproval } from '../../core/approvals.js'
+import { sweepAttentionThrottled } from '../../core/attention.js'
 import { runDoctor } from '../../core/doctor.js'
 import { REEVESAGENTS_VERSION } from '../../version.js'
 import {
@@ -47,6 +48,9 @@ const HOST = '127.0.0.1'
 const DEFAULT_PORT = 8080
 const DEFAULT_RANGE = 10
 const POLL_MS = 1500
+// Pane scan for "this agent is waiting for a human". Slower than the UI tick: detection
+// only needs to beat a human's patience, not a render frame.
+const ATTENTION_SWEEP_MS = 2500
 const MAX_BODY = 64 * 1024
 const DEFAULT_WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), 'web')
 
@@ -697,6 +701,19 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
   })
   const bridge = attachTerminalBridge(server, () => boundPort)
 
+  // Attention sweep: the point of the badge is to alert an operator who is NOT looking at
+  // that tab, so it must run whether or not a browser is connected. One `tmux capture-pane`
+  // per live agent every ATTENTION_SWEEP_MS; detection is a pure read, the write happens
+  // only when the state changes.
+  const attentionTimer = setInterval(() => {
+    try {
+      sweepAttentionThrottled()
+    } catch {
+      // A missing tmux server must never take the dashboard down.
+    }
+  }, ATTENTION_SWEEP_MS)
+  attentionTimer.unref()
+
   boundPort = await listenWithFallback(server, basePort, range)
   const url = `http://${HOST}:${boundPort}`
 
@@ -709,6 +726,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
     url,
     port: boundPort,
     close: async () => {
+      clearInterval(attentionTimer)
       sse.close()
       await bridge.close()
       await new Promise<void>(resolve => {

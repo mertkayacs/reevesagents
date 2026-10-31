@@ -141,6 +141,10 @@
     'web.statusEnded': 'ended',
     'web.statusStale': 'stale',
     'web.statusRunning': 'running',
+    'web.needsAttention': 'needs attention',
+    'web.needsApproval': 'approval needed',
+    'web.needsAnswer': 'answer needed',
+    'web.hasQuestion': 'question waiting',
     'web.unknown': 'unknown',
     'web.useProvider': 'use {{name}}',
     'web.agentControl': 'Agent control',
@@ -905,6 +909,9 @@
   function renderSidebar() {
     const runsWithAgents = runs.filter(r => r.status !== 'ended' && r.terminals.length > 0)
     const agentCount = runsWithAgents.reduce((sum, run) => sum + run.terminals.length, 0)
+    const attentionCount = runsWithAgents.reduce(
+      (sum, run) => sum + run.terminals.filter(agent => agent.attention).length, 0)
+    updateAttentionTitle(attentionCount)
     el.sidebarCount.textContent = String(agentCount)
     el.sidebarEmpty.hidden = runsWithAgents.length > 0
     if (!el.sidebarEmpty.hidden) {
@@ -1149,10 +1156,25 @@
     const dot = document.createElement('span')
     dot.className = 'dot'
     dot.dataset.status = agent.status
+    if (agent.attention) dot.dataset.attention = agent.attention.reason
     tail.appendChild(dot)
     const status = document.createElement('span')
     status.className = 'card-status'
-    status.textContent = statusLabel(agent.status)
+    // Attention takes over this slot instead of sitting next to it: two indicators on one
+    // card read as two different states. The lifecycle value is not lost: it moves into
+    // the tooltip and comes back by itself when the prompt is resolved.
+    if (agent.attention) {
+      const label = attentionLabel(agent.attention.reason)
+      status.dataset.attention = agent.attention.reason
+      status.textContent = label
+      status.title = agent.attention.detail
+        ? `${label} · ${statusLabel(agent.status)} · ${agent.attention.detail}`
+        : `${label} · ${statusLabel(agent.status)}`
+      card.dataset.attention = agent.attention.reason
+    } else {
+      status.textContent = statusLabel(agent.status)
+      status.title = statusLabel(agent.status)
+    }
     tail.appendChild(status)
     const availability = document.createElement('span')
     availability.className = 'card-open-hint'
@@ -2174,6 +2196,21 @@
     if (status === 'stale') return t('web.statusStale')
     if (status === 'running') return t('web.statusRunning')
     return status
+  }
+
+  function attentionLabel(reason) {
+    if (reason === 'approval') return t('web.needsApproval')
+    if (reason === 'input') return t('web.needsAnswer')
+    if (reason === 'question') return t('web.hasQuestion')
+    return t('web.needsAttention')
+  }
+
+  // An inactive tab keeps its title: "(!2) ReevesAgents web" is the only signal that
+  // survives when the browser chrome hides the badge. The prefix is stripped from the
+  // live title instead of a captured one, so brand/theme changes to the title survive.
+  function updateAttentionTitle(count) {
+    const raw = document.title.replace(/^\(\d+\)\s*/, '')
+    document.title = count > 0 ? `(${count}) ${raw}` : raw
   }
 
   function shortIso(value) {

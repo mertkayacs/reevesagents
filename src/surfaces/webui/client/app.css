@@ -1078,6 +1078,44 @@ button { letter-spacing: 0; }
   padding-left: calc(38px + var(--s-3));
 }
 
+/* Operator attention: "this agent is blocked on a human". It takes over the status slot
+   on the card (the dot pulses and the label replaces the lifecycle word) because this
+   is the one signal that must reach someone looking at another tab. */
+.dot[data-status][data-attention="approval"] {
+  background: var(--error);
+  box-shadow: 0 0 0 3px rgba(213, 106, 96, 0.16);
+  animation: attention-pulse 1.1s ease-in-out infinite;
+}
+.dot[data-status][data-attention="input"],
+.dot[data-status][data-attention="question"] {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(215, 168, 79, 0.16);
+  animation: attention-pulse 1.1s ease-in-out infinite;
+}
+.card-status[data-attention] {
+  max-width: none;
+  font-weight: 600;
+}
+.card-status[data-attention="approval"] { color: var(--error); }
+.card-status[data-attention="input"],
+.card-status[data-attention="question"] { color: var(--warn); }
+
+@keyframes attention-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.78); }
+}
+
+.card[data-attention] {
+  box-shadow: inset 2px 0 0 var(--warn);
+}
+.card[data-attention="approval"] {
+  box-shadow: inset 2px 0 0 var(--error);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot[data-status][data-attention] { animation: none; }
+}
+
 .dot {
   width: 8px;
   height: 8px;

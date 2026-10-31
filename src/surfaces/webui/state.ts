@@ -14,10 +14,17 @@ import { PROVIDERS, detectAvailable, providerSupportsAuthMode, providerSupportsE
 import { modelValuesForProvider } from '../../core/model-catalog.js'
 import { providerColor, providerDisplayName } from '../../utils/display.js'
 import { listRunApprovals, type ApprovalRisk } from '../../core/approvals.js'
-import type { Provider, RunRecord, RunViewStatus, TaskStatus } from '../../core/types.js'
+import type { AttentionReason, Provider, RunRecord, RunViewStatus, TaskStatus } from '../../core/types.js'
 
 export interface WebStateOptions {
   liveTmuxTarget?: (_run: RunRecord) => boolean
+}
+
+export interface WebAttention {
+  reason: AttentionReason
+  detail: string
+  since: string
+  source: 'agent' | 'approval'
 }
 
 export interface WebTerminal {
@@ -28,6 +35,7 @@ export interface WebTerminal {
   model: string
   role: 'root' | 'worker'
   status: TaskStatus | 'ended'
+  attention: WebAttention | null
   headless: boolean
   hasWindow: boolean
   canAttach: boolean
@@ -102,6 +110,12 @@ function monogram(nickname: string, provider: string): string {
 export function buildWebState(options: WebStateOptions = {}): WebState {
   const agentIndex = new Map<string, { nickname: string; provider: Provider }>()
   const runNameById = new Map<string, string>()
+  const pendingApprovals = listRunApprovals(undefined, 'pending')
+  const pendingByAgent = new Map<string, (typeof pendingApprovals)[number]>()
+  for (const approval of pendingApprovals) {
+    // One tile, one badge: the oldest pending request per agent wins.
+    if (!pendingByAgent.has(approval.agent_id)) pendingByAgent.set(approval.agent_id, approval)
+  }
   const runs = listRuns().map<WebRun>(run => {
     runNameById.set(run.id, run.name)
     const live = options.liveTmuxTarget ? options.liveTmuxTarget(run) : runHasLiveTmuxTarget(run)
@@ -109,6 +123,14 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
     const terminals = listAgents(run.id).map<WebTerminal>(agent => {
       agentIndex.set(agent.id, { nickname: agent.nickname, provider: agent.provider })
       const status = agent.ended_at ? 'ended' : agent.task_status
+      const pending = pendingByAgent.get(agent.id)
+      const attention: WebAttention | null = agent.ended_at
+        ? null
+        : agent.attention
+        ? { reason: agent.attention.reason, detail: agent.attention.detail, since: agent.attention.since, source: 'agent' }
+        : pending
+        ? { reason: 'approval', detail: pending.action, since: pending.requested_at, source: 'approval' }
+        : null
       const hasWindow = !agent.headless && !!agent.tmux_window_id
       const canAttach = live && hasWindow && status !== 'ended'
       const canKill = live && status !== 'ended' && hasWindow
@@ -121,6 +143,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
         model: agent.model,
         role: agent.role,
         status,
+        attention,
         headless: !!agent.headless,
         hasWindow,
         canAttach,
@@ -160,7 +183,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
     root_provider: record.root_provider,
     root_provider_label: record.root_provider ? providerDisplayName(record.root_provider) : null,
   }))
-  const approvals = listRunApprovals(undefined, 'pending').map<WebApproval>(approval => {
+  const approvals = pendingApprovals.map<WebApproval>(approval => {
     const info = agentIndex.get(approval.agent_id)
     return {
       id: approval.id,

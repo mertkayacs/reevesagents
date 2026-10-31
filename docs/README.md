@@ -37,6 +37,7 @@ Published output stays stable: the npm package still exposes `dist/cli.js`,
 
 - [Contributing guide](../.github/CONTRIBUTING.md): how to propose a change.
 - [Agent Control MCP](mcp.md): the public control surface and tool list.
+- [Agent attention](attention.md): how a blocked-on-a-human agent is detected and shown.
 - [Branching model](branching.md): `master`, the stable release line, and short-lived work branches.
 - [Testing](testing.md): isolation rules and how to run the suites.
 - [Releasing](releasing.md): convention-driven releases from commit history.

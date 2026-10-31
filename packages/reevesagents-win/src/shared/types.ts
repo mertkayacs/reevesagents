@@ -9,6 +9,16 @@ export type Permissions = 'skip' | 'ask'
 
 export type TaskStatus = 'queued' | 'working' | 'done' | 'failed' | 'blocked'
 
+// Why an agent needs a human: a blocking approval/sudo modal, a clarify picker, or a
+// finished turn whose last line is an unanswered question.
+export type AttentionReason = 'approval' | 'input' | 'question'
+
+export interface AttentionState {
+  reason: AttentionReason
+  detail: string   // the command or question, already truncated for display
+  since: string    // ISO 8601, first moment this exact prompt was seen
+}
+
 export type AuthMode = 'default' | 'api-key'
 
 export type Effort = 'default' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -78,6 +88,7 @@ export interface AgentRecord {
   permissions: Permissions
   headless?: boolean        // true for add-on caller records with no tmux window
   inbox: Message[]
+  attention?: AttentionState | null  // set by core/attention while the agent waits on a human
   last_seen: number
   started_at: string
   ended_at: string | null

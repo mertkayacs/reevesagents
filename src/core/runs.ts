@@ -21,6 +21,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type {
   AgentRecord,
+  AttentionState,
   Message,
   Permissions,
   RunHistoryRecord,
@@ -192,6 +193,18 @@ function normalizeRunHistory(raw: Record<string, unknown>): RunHistoryRecord {
   }
 }
 
+function normalizeAttention(value: unknown): AttentionState | null {
+  if (typeof value !== 'object' || value === null) return null
+  const raw = value as Record<string, unknown>
+  const reason = raw.reason
+  if (reason !== 'approval' && reason !== 'input' && reason !== 'question') return null
+  return {
+    reason,
+    detail: asString(raw.detail),
+    since: asString(raw.since, nowIso()),
+  }
+}
+
 function normalizeAgent(raw: Record<string, unknown>): AgentRecord {
   const id = asString(raw.id)
   return {
@@ -213,6 +226,7 @@ function normalizeAgent(raw: Record<string, unknown>): AgentRecord {
     permissions: normalizePermissions(raw.permissions),
     headless: raw.headless === true,
     inbox: normalizeInbox(raw.inbox),
+    attention: normalizeAttention(raw.attention),
     last_seen: typeof raw.last_seen === 'number' ? raw.last_seen : 0,
     started_at: asString(raw.started_at, nowIso()),
     ended_at: asNullableString(raw.ended_at),
@@ -225,6 +239,11 @@ function redactAgent(agent: AgentRecord): AgentRecord {
     task: redactSecrets(agent.task),
     task_note: redactSecrets(agent.task_note),
     inbox: agent.inbox.map(message => ({ ...message, text: redactSecrets(message.text) })),
+    // The attention detail is captured pane text: an approval prompt carries the command
+    // line, so it can hold a key pasted into the agent's own prompt.
+    attention: agent.attention
+      ? { ...agent.attention, detail: redactSecrets(agent.attention.detail) }
+      : agent.attention,
   }
 }
 
