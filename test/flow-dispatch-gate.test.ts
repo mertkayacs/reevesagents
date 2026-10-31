@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { DISPATCH_GATE_STALE_MS, dispatchGatePath, withDispatchGate } from '../src/core/flow-dispatch-gate.js'
+import { withDispatchGate } from '../src/core/flow-dispatch-gate.js'
 
-// The dispatch gate is the lock that keeps "the operator paused the flow" and "a prompt is being
-// typed" mutually exclusive. It is a file lock, so these tests check what the runner and the control
-// commands rely on: exclusion, a bounded wait, a released lock, and a takeover that can never remove
-// a gate somebody else now holds.
+// The gate keeps "the operator paused the flow" and "a prompt is being typed" mutually exclusive.
+// It is Lamport's bakery over files, so these tests check what the runner and the control commands
+// rely on: exclusion, a bounded wait, a released gate, dead contenders being ignored — and that a
+// contender never removes a file it did not create.
 
 let root: string
 
@@ -20,60 +20,51 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-function lockPath(): string {
-  return dispatchGatePath(root)
-}
-
-function owner(): { pid: number, token: string, created_at: string } {
-  return JSON.parse(readFileSync(lockPath(), 'utf-8'))
-}
-
 // A pid that is definitely not running: a child that has already exited. A hard-coded pid could be
-// alive on the machine running the suite, and then the lock would (correctly) never be reclaimed.
+// alive on the machine running the suite, and then the entry would (correctly) still count.
 function deadPid(): number {
   const child = spawnSync(process.execPath, ['-e', 'process.exit(0)'])
   expect(child.pid).toBeTypeOf('number')
   return child.pid as number
 }
 
-// Write a gate file with a chosen owner and move its mtime into the past, the way a process that died
-// mid-paste leaves it.
-function writeGate(mtimeAgoMs: number, ownerPid: number, token = 'foreign'): void {
-  writeFileSync(lockPath(), JSON.stringify({ pid: ownerPid, token, created_at: new Date().toISOString() }), 'utf-8')
-  const when = new Date(Date.now() - mtimeAgoMs)
-  utimesSync(lockPath(), when, when)
+// Alive as far as the probe is concerned, but not ours: `kill(pid, 0)` answers EPERM for a process
+// owned by another user, which counts as alive. PID 1 is always there.
+const FOREIGN_LIVE_PID = 1
+
+function gateFiles(): string[] {
+  return readdirSync(root).filter(name => name.startsWith('.flow-dispatch'))
 }
 
-// Every file the gate may leave behind besides the gate itself: a publisher's temp, a reclaimer's
-// inode token, or the round-8 rename artefact. A clean run leaves none of them.
-function strays(): string[] {
-  return readdirSync(root).filter(name => /\.(dead|owner|reclaim)\./.test(name))
+function writeEntry(kind: 'cand' | 'choosing', pid: number, token: string, ts = 0): string {
+  const path = join(root, `.flow-dispatch.${kind}.${pid}.${token}`)
+  writeFileSync(path, JSON.stringify(kind === 'cand' ? { pid, token, ts } : { pid, token }), 'utf-8')
+  return path
 }
 
 describe('withDispatchGate', () => {
-  it('runs the section and releases the lock afterwards', () => {
+  it('runs the section and leaves nothing behind', () => {
     const result = withDispatchGate(() => 'done', { root })
 
     expect(result).toEqual({ acquired: true, value: 'done' })
-    expect(existsSync(lockPath())).toBe(false)
+    expect(gateFiles()).toEqual([])
   })
 
   it('excludes a second holder and gives up after the timeout', () => {
-    const second = withDispatchGate(() => {
-      // Nested acquisition is what a second process would look like: the lock file is already there,
-      // so this one waits, then reports that it never got in.
-      const inner = withDispatchGate(() => 'inner', { root, timeoutMs: 50 })
+    const outer = withDispatchGate(() => {
+      // The nested call publishes its own ticket, sees the outer one is smaller, and waits.
+      const inner = withDispatchGate(() => 'inner', { root, timeoutMs: 80 })
       expect(inner.acquired).toBe(false)
       return 'outer'
     }, { root })
 
-    expect(second).toEqual({ acquired: true, value: 'outer' })
-    expect(existsSync(lockPath())).toBe(false)
+    expect(outer).toEqual({ acquired: true, value: 'outer' })
+    expect(gateFiles()).toEqual([])
   })
 
-  it('releases the lock even when the section throws', () => {
+  it('releases the gate even when the section throws', () => {
     expect(() => withDispatchGate(() => { throw new Error('boom') }, { root })).toThrow('boom')
-    expect(existsSync(lockPath())).toBe(false)
+    expect(gateFiles()).toEqual([])
   })
 
   it('creates the state directory when it does not exist yet', () => {
@@ -84,119 +75,67 @@ describe('withDispatchGate', () => {
 
     expect(result.acquired).toBe(true)
     expect(spy).toHaveBeenCalledTimes(1)
-    expect(existsSync(dispatchGatePath(nested))).toBe(false)
+    // The gate's directory is the state dir itself; nothing is left in it after the section.
+    expect(existsSync(nested)).toBe(true)
+    expect(readdirSync(nested).filter(name => name.startsWith('.flow-dispatch'))).toEqual([])
   })
 })
 
-describe('reclaiming a gate left behind by a dead process', () => {
-  it('takes over a lock whose owner is gone and whose file is old', () => {
-    writeGate(10 * 60 * 1000, deadPid())
+describe('contenders', () => {
+  it('waits for a live contender that holds an earlier ticket', () => {
+    writeEntry('cand', FOREIGN_LIVE_PID, 'earlier', 1)
 
-    const result = withDispatchGate(() => 'taken over', { root, timeoutMs: 500 })
-
-    expect(result).toEqual({ acquired: true, value: 'taken over' })
-    // Nothing left over: the reclaimed file was removed, not merely renamed.
-    expect(strays()).toEqual([])
-  })
-
-  it('never reclaims a live holder, however old its file is', () => {
-    // The round-8 finding: an expired mtime used to be enough to unlink the gate, so a second waiter
-    // could remove the fresh gate of the process that had just acquired it. A live pid now wins over
-    // any age.
-    const before = process.pid
-    writeGate(10 * 60 * 1000, before, 'live-holder')
-
-    const result = withDispatchGate(() => 'never', { root, timeoutMs: 100 })
+    const result = withDispatchGate(() => 'never', { root, timeoutMs: 120 })
 
     expect(result.acquired).toBe(false)
-    expect(owner()).toMatchObject({ pid: before, token: 'live-holder' })
+    // The losing ticket is withdrawn, so it cannot block the next attempt.
+    expect(gateFiles().filter(name => name.includes(`.cand.${process.pid}.`))).toEqual([])
   })
 
-  it('never touches a gate that exists without its content yet', () => {
-    // Round 9: a gate created but not yet written cannot be attributed to anybody. Removing it would
-    // delete the file a publisher is about to complete, so it is left alone like a damaged lock.
-    writeFileSync(lockPath(), '', 'utf-8')
-    const when = new Date(Date.now() - 10 * DISPATCH_GATE_STALE_MS)
-    utimesSync(lockPath(), when, when)
+  it('ignores and collects a ticket whose owner is gone', () => {
+    const stale = writeEntry('cand', deadPid(), 'dead', 1)
 
-    const result = withDispatchGate(() => 'never', { root, timeoutMs: 150 })
+    const result = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
 
-    expect(result.acquired).toBe(false)
-    expect(existsSync(lockPath())).toBe(true)
+    expect(result).toEqual({ acquired: true, value: 'mine' })
+    expect(existsSync(stale)).toBe(false)
+    expect(gateFiles()).toEqual([])
   })
 
-  it('does not reclaim while the runs lock is held, and does once it is free', () => {
-    // Reclamation is serialised by the runs lock (round 11): while somebody is writing the state tree
-    // a takeover must not happen, because the judgement and the removal have to be one decision.
-    const dead = deadPid()
-    writeGate(10 * DISPATCH_GATE_STALE_MS, dead)
-    const runsLock = join(root, '.runs.lock')
-    writeFileSync(runsLock, JSON.stringify({ pid: process.pid }), 'utf-8')
+  it('waits while a live process is choosing its ticket', () => {
+    // A chooser has not published its timestamp yet, so a minimum read now could be overtaken.
+    const marker = writeEntry('choosing', FOREIGN_LIVE_PID, 'choosing')
 
-    const blocked = withDispatchGate(() => 'never', { root, timeoutMs: 150 })
-
+    const blocked = withDispatchGate(() => 'never', { root, timeoutMs: 120 })
     expect(blocked.acquired).toBe(false)
-    expect(owner().pid).toBe(dead)
 
-    // The runs lock is free again: the same attempt now reclaims the gate.
-    rmSync(runsLock, { force: true })
-    const taken = withDispatchGate(() => 'taken over', { root, timeoutMs: 500 })
-    expect(taken).toEqual({ acquired: true, value: 'taken over' })
-    expect(strays()).toEqual([])
+    rmSync(marker)
+    const taken = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
+    expect(taken).toEqual({ acquired: true, value: 'mine' })
   })
 
-  it('never reclaims a lock younger than the stale window, even when its owner is gone', () => {
-    writeGate(1000, deadPid())
+  it('never removes a marker or ticket whose owner is alive', () => {
+    const foreignTicket = writeEntry('cand', FOREIGN_LIVE_PID, 'live', 0)
+    const foreignMarker = writeEntry('choosing', FOREIGN_LIVE_PID, 'live')
 
-    const result = withDispatchGate(() => 'never', { root, timeoutMs: 100 })
+    withDispatchGate(() => 'never', { root, timeoutMs: 120 })
 
-    expect(result.acquired).toBe(false)
-    expect(owner().token).toBe('foreign')
+    expect(existsSync(foreignTicket)).toBe(true)
+    expect(existsSync(foreignMarker)).toBe(true)
   })
 
-  it('never reclaims a lock it cannot identify', () => {
-    // A damaged gate cannot be attributed to a dead process, so it is left for a human to remove
-    // instead of risking two holders.
-    writeFileSync(lockPath(), 'not json', 'utf-8')
-    const when = new Date(Date.now() - 10 * DISPATCH_GATE_STALE_MS)
-    utimesSync(lockPath(), when, when)
+  it('takes the gate once the earlier contender releases its ticket', () => {
+    const earlier = writeEntry('cand', FOREIGN_LIVE_PID, 'earlier', 1)
+    // A real contender removes its ticket when it finishes. The wait loop blocks the event loop, so
+    // the release has to come from another process rather than a timer.
+    const child = spawn(process.execPath, ['-e', `setTimeout(() => { try { require('fs').unlinkSync(${JSON.stringify(earlier)}) } catch {} }, 150)`], { stdio: 'ignore' })
 
-    const result = withDispatchGate(() => 'never', { root, timeoutMs: 100 })
-
-    expect(result.acquired).toBe(false)
-    expect(readFileSync(lockPath(), 'utf-8')).toBe('not json')
-  })
-
-  it('does not remove the fresh gate of the waiter that won the reclaim', () => {
-    // Two waiters see the same dead lock. This test is the second one: it must fail to enter, and it
-    // must leave the winner's gate exactly where it is.
-    writeGate(10 * 60 * 1000, deadPid())
-
-    const outer = withDispatchGate(() => {
-      const held = owner()
-      const inner = withDispatchGate(() => 'never', { root, timeoutMs: 100 })
-
-      expect(inner.acquired).toBe(false)
-      // The winner's gate is still there, unchanged, and the loser left no strays.
-      expect(owner()).toMatchObject({ pid: held.pid, token: held.token, created_at: held.created_at })
-      expect(strays()).toEqual([])
-      return 'winner'
-    }, { root, timeoutMs: 500 })
-
-    expect(outer).toEqual({ acquired: true, value: 'winner' })
-    expect(existsSync(lockPath())).toBe(false)
-  })
-
-  it('does not release a gate it no longer owns', () => {
-    // A process that was reclaimed while it believed it held the gate must not delete the new
-    // holder's file on the way out.
-    const outer = withDispatchGate(() => {
-      const takeoverToken = 'somebody-else'
-      writeFileSync(lockPath(), JSON.stringify({ pid: process.pid, token: takeoverToken, created_at: new Date().toISOString() }), 'utf-8')
-      return 'done'
-    }, { root })
-
-    expect(outer.acquired).toBe(true)
-    expect(owner().token).toBe('somebody-else')
+    try {
+      const result = withDispatchGate(() => 'mine', { root, timeoutMs: 5000 })
+      expect(result).toEqual({ acquired: true, value: 'mine' })
+    } finally {
+      child.kill()
+      try { rmSync(earlier) } catch { /* already gone */ }
+    }
   })
 })

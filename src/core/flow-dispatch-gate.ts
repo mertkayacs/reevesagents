@@ -1,13 +1,13 @@
-// The dispatch gate: one lock held for the whole act — verify, paste, settle.
+// The dispatch gate: the mutual exclusion held for the whole act — verify, paste, settle.
 //
 // Why a second lock at all. The `pending` claim (`pending`/`op_id`, §2.4) keeps two tickers from
 // pasting the same prompt, but it says nothing about an operator: `flow pause` and `flow stop` drop
 // the claim on purpose, and a check-then-paste without mutual exclusion still lets one of them land
 // between the check and the paste, so a flow the operator just stopped receives one more prompt.
 //
-// The runs lock cannot close that window either: `sendWhenIdle` takes the runs lock itself
+// The runs lock cannot do this job either: `sendWhenIdle` takes the runs lock itself
 // (`sendText` → `updateAgent`), and `withRunsLock` is not reentrant, so holding it across the send
-// deadlocks and then steals the lock from the same process. So the act gets a lock of its own:
+// deadlocks and then steals the lock from the same process. So the act gets a gate of its own:
 //
 // - the runner takes the gate, re-checks its claim, pastes, settles, releases the gate;
 // - `pause` and `stop` take the same gate before touching the flow, so they either land before the
@@ -16,61 +16,47 @@
 // - nobody needs to wait long: a control command waits up to `DISPATCH_GATE_TIMEOUT_MS` for a paste
 //   to finish, and answers a clear "a dispatch is in flight" instead of hanging when it cannot.
 //
-// Lock ordering, and the only rule that keeps this deadlock-free: **the gate first, the runs lock
-// second**. No path here takes the runs lock and then waits for the gate — the runner writes the
-// claim under the runs lock, releases it, and only then takes the gate, and reclamation takes the
-// runs lock for a moment *before* the gate exists.
+// Why it is not "one lock file plus a takeover" (rounds 8–12). A single file has to be removed to be
+// taken over, and POSIX has no conditional removal: every takeover — stat-then-unlink, rename the
+// stale file aside, a token keyed by inode, an age-cleared or pid-checked token, a takeover
+// serialised by another lock that itself expires by age — leaves the same defect one level down. A
+// check that a second process can invalidate before the removal. The gate therefore never removes
+// anybody else's file: it uses Lamport's bakery.
 //
-// Three properties make the file safe, and each one closes a failure a review named:
+// - Every contender publishes a **ticket** (`<state>/.flow-dispatch.cand.<pid>.<token>`, written to a
+//   temp file and renamed into place, so a reader never sees half of it) whose `ts` is one more than
+//   the largest ticket it can see.
+// - Before that it raises a **choosing** marker (`<state>/.flow-dispatch.choosing.<pid>.<token>`), so
+//   nobody computes "the minimum" while a ticket is being selected. Waiters treat a live marker as
+//   "come back in a moment".
+// - A contender enters when it is the smallest live `(ts, pid, token)` and no live marker exists.
+//   Between that check and its entry nobody can obtain a smaller ticket: a chooser would pick a
+//   larger `ts`, and a plain contender would see this ticket and wait.
+// - A participant that dies leaves its files behind; they are ignored the moment its pid is gone
+//   (`process.kill(pid, 0)` → `ESRCH`), and any contender may delete them — a dead participant can
+//   neither read nor be waited on again, so collecting its file is the one removal that needs no
+//   coordination. Nothing else is ever deleted by someone who did not create it.
 //
-// 1. **A gate is never visible without its content** (round 9). Acquisition writes the owner to a
-//    unique temp file and publishes it with `link`, which is atomic and fails with `EEXIST` when a
-//    gate is already there. `open('wx')` followed by a write leaves a window in which the gate exists
-//    and cannot be attributed to anybody — exactly the state a reclaimer must never see.
-// 2. **A live holder is never reclaimed, whatever the file's age** (round 8). The recorded pid is
-//    probed with `process.kill(pid, 0)`; only a definite `ESRCH` counts as gone, and the file must
-//    also be older than `DISPATCH_GATE_STALE_MS`, so a recycled pid cannot make an old lock look dead.
-//    A gate whose owner cannot be read at all is left for a human instead of guessed at.
-// 3. **Reclamation is serialised by the runs lock, not by a lock of its own** (rounds 10–11). Every
-//    attempt to write a second exclusion (a reclaim token, an identity tag, a rename-and-restore)
-//    produced the same defect one level down: a check that a second waiter could invalidate before
-//    the removal. The runs lock already exists, is already trusted for the state tree, and gives what
-//    the takeover needs — one reclaimer at a time, so the judgement and the removal become a single
-//    decision. While a reclaimer holds it, nobody else can judge or remove that gate, and no
-//    publisher can put a fresh gate in its place: publication needs the name to be free, and only a
-//    reclaimer frees it. An attempt that cannot get the runs lock simply skips this round.
-//
-// Release verifies its own token first, so a process that was reclaimed while it believed it held the
-// gate cannot delete somebody else's file.
+// Lock ordering stays one-way: **nothing waits for the gate while holding the runs lock.** The runner
+// writes its claim under the runs lock, releases it, and only then takes the gate; a control command
+// takes the gate first and the runs lock inside it.
 
-import { linkSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { stateRoot } from './state-path.js'
-import { isRunsLockTimeout, withRunsLock } from './runs.js'
 
 // How long a control command (or a runner) waits for the gate before giving up. A send is a paste
 // plus a submit confirmation, so a few seconds; 15 s is generous without hiding a stuck process.
 export const DISPATCH_GATE_TIMEOUT_MS = 15_000
 
-// How old a lock must be before it may be reclaimed, *in addition* to its owner being gone. The age
-// guard covers a recycled pid: a lock younger than this belongs to a process that has just started
-// pasting, and waiting is always cheaper than taking a live gate away.
-export const DISPATCH_GATE_STALE_MS = 60_000
+// Poll interval while waiting for the gate. Small enough to be invisible next to a paste.
+const GATE_POLL_MS = 25
 
-// Mirrors the stale window `withRunsLock` applies to its own lock file. It is only used to skip a
-// reclaim attempt cheaply instead of blocking inside `withRunsLock` for its whole deadline; the
-// authoritative check stays inside that lock.
-const RUNS_LOCK_WINDOW_MS = 5_000
+const PREFIX = '.flow-dispatch'
 
-export function dispatchGatePath(root = stateRoot()): string {
-  return join(root, '.flow-dispatch.lock')
-}
-
-export interface GateOwner {
-  pid: number
-  token: string
-  created_at: string
+export function gateCandidatesPath(root = stateRoot()): string {
+  return join(root, PREFIX)
 }
 
 export type DispatchGateOutcome<T> =
@@ -83,28 +69,20 @@ export interface DispatchGateOptions {
   timeoutMs?: number
 }
 
+interface Ticket {
+  path: string
+  pid: number
+  token: string
+  ts: number
+}
+
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
-function readOwner(path: string): GateOwner | null {
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<GateOwner>
-    if (typeof parsed.pid !== 'number' || !Number.isFinite(parsed.pid)) return null
-    return {
-      pid: parsed.pid,
-      token: typeof parsed.token === 'string' ? parsed.token : '',
-      created_at: typeof parsed.created_at === 'string' ? parsed.created_at : '',
-    }
-  } catch {
-    // Unreadable or not JSON: the owner cannot be identified, so it is treated as alive and the lock
-    // is left alone. A human removes a damaged gate; guessing is how two holders appear.
-    return null
-  }
-}
-
-// Is the recorded pid still running? `kill(pid, 0)` is the only portable probe: `ESRCH` means gone,
-// `EPERM` means alive but owned by another user, and an unparseable answer means "assume alive".
+// `kill(pid, 0)` is the only portable liveness probe: `ESRCH` means gone, `EPERM` means alive but
+// owned by another user, and an unparseable answer means "assume alive" — a contender is never
+// dropped on a guess.
 function pidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
@@ -114,88 +92,106 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-function ageOf(path: string): number | null {
+// Publish `data` under `path` with a rename, so a reader never observes a partially written file.
+function publish(path: string, data: Record<string, unknown>): void {
+  const temp = `${path}.tmp.${randomUUID()}`
+  writeFileSync(temp, JSON.stringify(data), { encoding: 'utf-8', mode: 0o600 })
   try {
-    return Date.now() - statSync(path).mtimeMs
-  } catch {
-    return null
-  }
-}
-
-// Publish `mine` at `path` without ever exposing a gate that has no content: write a unique temp file
-// holding the whole payload, then `link` it into place. `link` is atomic and fails with `EEXIST` when
-// another process owns the gate, so exactly one publisher wins and the winner's file is complete.
-function publish(path: string, mine: GateOwner): boolean {
-  const temp = `${path}.owner.${process.pid}.${mine.token}`
-  try {
-    writeFileSync(temp, JSON.stringify(mine), { encoding: 'utf-8', mode: 0o600 })
-    linkSync(temp, path)
-    return true
+    renameSync(temp, path)
   } catch (err) {
-    const code = (err as { code?: string }).code
-    if (code === 'EEXIST') return false
+    try { unlinkSync(temp) } catch { /* the temp file is already gone */ }
     throw err
-  } finally {
-    try { unlinkSync(temp) } catch { /* the temp file was never created */ }
   }
 }
 
-// Can this lock be taken over? Both conditions, never one: a dead owner **and** an old file.
-function reclaimable(path: string): boolean {
-  const owner = readOwner(path)
-  if (!owner || pidAlive(owner.pid)) return false
-  const age = ageOf(path)
-  return age !== null && age > DISPATCH_GATE_STALE_MS
+function pathFor(root: string, kind: 'cand' | 'choosing', pid: number, token: string): string {
+  return join(root, `${PREFIX}.${kind}.${pid}.${token}`)
 }
 
-// Is the runs lock currently held? A cheap peek that keeps the wait loop from spending five seconds
-// inside `withRunsLock` on every spin; the decision itself is re-made under that lock.
-function runsLockBusy(path: string): boolean {
-  const age = ageOf(join(dirname(path), '.runs.lock'))
-  return age !== null && age < RUNS_LOCK_WINDOW_MS
-}
-
-// Take over a gate whose owner is gone, serialised by the runs lock. Inside it the judgement and the
-// removal are one decision: no second reclaimer can be here, and no publisher can fill the path while
-// the dead file still occupies it.
-function reclaim(path: string): void {
-  if (runsLockBusy(path)) return
+// Every readable entry of one kind. A file that cannot be parsed is skipped: tickets and markers are
+// published with a rename, so a half-written one is not something this process wrote. Entries whose
+// owner is gone are collected here — see the header for why that removal needs no coordination.
+function entries(root: string, kind: 'cand' | 'choosing'): Ticket[] {
+  let names: string[]
   try {
-    withRunsLock(() => {
-      if (!reclaimable(path)) return
-      try { unlinkSync(path) } catch { /* another reclaimer already freed it */ }
-    })
-  } catch (err) {
-    // Somebody is writing the state tree right now: skip this attempt, the next one will do it.
-    if (!isRunsLockTimeout(err)) throw err
+    names = readdirSync(root)
+  } catch {
+    return []
   }
+  const found: Ticket[] = []
+  for (const name of names) {
+    if (!name.startsWith(`${PREFIX}.${kind}.`)) continue
+    const path = join(root, name)
+    let record: { pid?: unknown, token?: unknown, ts?: unknown }
+    try {
+      record = JSON.parse(readFileSync(path, 'utf-8')) as typeof record
+    } catch {
+      continue
+    }
+    if (typeof record.pid !== 'number' || !Number.isFinite(record.pid)) continue
+    const token = typeof record.token === 'string' ? record.token : ''
+    const ts = typeof record.ts === 'number' && Number.isFinite(record.ts) ? record.ts : 0
+    if (!pidAlive(record.pid)) {
+      // The owner is gone: the entry can never be consulted again, so collecting it is safe.
+      try { unlinkSync(path) } catch { /* another contender collected it first */ }
+      continue
+    }
+    found.push({ path, pid: record.pid, token, ts })
+  }
+  return found
+}
+
+function liveTickets(root: string): Ticket[] {
+  return entries(root, 'cand').sort((a, b) => a.ts - b.ts || a.pid - b.pid || a.token.localeCompare(b.token))
+}
+
+// Take the gate: publish a ticket, then wait until it is the smallest live one. Returns false when
+// the deadline passes first — the ticket is withdrawn in that case, so a waiter never leaves a
+// phantom contender behind.
+function acquire(root: string, token: string, timeoutMs: number): boolean {
+  const deadline = Date.now() + timeoutMs
+  const choosing = pathFor(root, 'choosing', process.pid, token)
+  const ticket = pathFor(root, 'cand', process.pid, token)
+
+  publish(choosing, { pid: process.pid, token })
+  const maxTs = liveTickets(root).reduce((max, entry) => Math.max(max, entry.ts), 0)
+  publish(ticket, { pid: process.pid, token, ts: maxTs + 1 })
+  try { unlinkSync(choosing) } catch { /* the marker is ours; someone collected a stale one */ }
+
+  while (true) {
+    // A live chooser means "the ticket set is in flux": its ts is not visible yet, so any minimum
+    // read now could be overtaken. Wait for it to publish or vanish.
+    if (entries(root, 'choosing').length > 0) {
+      if (Date.now() > deadline) return withdraw(ticket)
+      sleepSync(GATE_POLL_MS)
+      continue
+    }
+    const tickets = liveTickets(root)
+    if (tickets.length === 0 || tickets[0]!.token === token) return true
+    if (Date.now() > deadline) return withdraw(ticket)
+    sleepSync(GATE_POLL_MS)
+  }
+}
+
+function withdraw(ticket: string): boolean {
+  try { unlinkSync(ticket) } catch { /* already gone */ }
+  return false
 }
 
 // Run `fn` with the gate held. `acquired: false` means someone else held it for the whole timeout:
 // the caller changed nothing and can answer "busy" honestly.
 export function withDispatchGate<T>(fn: () => T, options: DispatchGateOptions = {}): DispatchGateOutcome<T> {
-  const path = dispatchGatePath(options.root)
-  const timeoutMs = options.timeoutMs ?? DISPATCH_GATE_TIMEOUT_MS
-  mkdirSync(dirname(path), { recursive: true })
-  const deadline = Date.now() + timeoutMs
-  const mine: GateOwner = { pid: process.pid, token: randomUUID(), created_at: new Date().toISOString() }
+  const root = options.root ?? stateRoot()
+  mkdirSync(dirname(gateCandidatesPath(root)), { recursive: true })
+  const token = randomUUID()
 
-  while (!publish(path, mine)) {
-    // The path is taken: reclaim only a lock whose owner is provably gone and whose file is old,
-    // then try to publish again.
-    if (reclaimable(path)) reclaim(path)
-    if (Date.now() > deadline) return { acquired: false }
-    sleepSync(25)
-  }
+  if (!acquire(root, token, options.timeoutMs ?? DISPATCH_GATE_TIMEOUT_MS)) return { acquired: false }
 
   try {
     return { acquired: true, value: fn() }
   } finally {
-    // Only our own gate: if this process was reclaimed while it believed it held the lock, the file
-    // at the path belongs to somebody else and deleting it would let a third process in.
-    const owner = readOwner(path)
-    if (owner?.token === mine.token) {
-      try { unlinkSync(path) } catch { /* the gate is already gone */ }
-    }
+    // Only our own ticket: it is the one name this call created, so releasing cannot touch anybody
+    // else's claim to the gate.
+    try { unlinkSync(pathFor(root, 'cand', process.pid, token)) } catch { /* already collected */ }
   }
 }

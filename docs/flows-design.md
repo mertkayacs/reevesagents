@@ -181,31 +181,29 @@ runner writes its claim under the runs lock, releases it, and only then takes th
 command takes the gate and then the runs lock inside it. A tick that cannot take the gate pastes
 nothing, releases its claim and answers `locked`.
 
-A gate left behind by a process that died mid-paste has to be taken over, and the takeover itself is a
-lock in miniature (review rounds 8–9). Four rules make it safe, and none is optional:
+**The gate is not a lock file with a takeover — it is Lamport's bakery over files** (rounds 8–12).
+Every form of takeover produced the same defect one level down, because POSIX has no *conditional*
+removal: stat-then-unlink, renaming the stale file aside, a token keyed by inode, an age-cleared token,
+a pid-checked token, and a takeover serialised by a lock that itself expires by age all leave a check
+that a second process can invalidate before the removal. So nothing is ever taken over and nothing is
+ever removed by someone who did not create it:
 
-- **A gate is published with its content, never before it.** Acquisition writes the owner to a unique
-  temp file and `link`s it into place; `link` is atomic and fails `EEXIST` when a gate exists. A gate
-  created empty and written afterwards has a window in which it cannot be attributed to anybody, and
-  a reclaimer that treats "no owner" as "reclaimable" deletes a live process's lock.
-- **A live holder is never reclaimed, whatever the file's age.** The owner's pid is probed with
-  `process.kill(pid, 0)` and only a definite `ESRCH` counts as gone; the file must also be older than
-  `DISPATCH_GATE_STALE_MS` (60 s), which covers a recycled pid. Age alone would take a live gate away
-  from a slow paste, and a gate whose owner cannot be read at all is left for a human.
-- **The takeover is serialised by the runs lock, not by a lock of its own** (rounds 10–11). Every
-  bespoke exclusion for the reclaimer — an age-cleared token, a token keyed by inode, a re-read before
-  the removal — reproduced the same defect one level down: a check that a second waiter could
-  invalidate before the removal. The runs lock already exists and is already trusted for the state
-  tree, so the reclaimer takes it for the length of one judgement and one `unlink`. Inside it, judge
-  and remove are a single decision: no other reclaimer can be there, and no publisher can put a fresh
-  gate in place, because publication needs the name to be free and only a reclaimer frees it. An
-  attempt that cannot get the runs lock skips that round and lets its own deadline decide. Ordering
-  stays one-way: nothing *waits for the gate while holding the runs lock* — the reclaimer releases the
-  runs lock before it tries to publish, and a control command takes the gate first and the runs lock
-  inside it.
+- every contender publishes a **ticket** (`<state>/.flow-dispatch.cand.<pid>.<token>`, written to a
+  temp file and renamed into place, so no reader sees half of it) whose `ts` is one more than the
+  largest ticket it can see;
+- before that it raises a live **choosing** marker
+  (`<state>/.flow-dispatch.choosing.<pid>.<token>`), so nobody computes "the minimum" while a ticket
+  is being selected — without it two contenders could each pick a `ts` the other never saw;
+- a contender enters when its own ticket is the smallest live `(ts, pid, token)` and no live marker
+  exists. Between that check and its entry nobody can obtain a smaller ticket, which is the mutual
+  exclusion the runner and the control commands need;
+- a participant that died leaves its files behind, and they are ignored the moment its pid is gone
+  (`process.kill(pid, 0)` → `ESRCH`). Collecting a dead participant's file is the one removal that
+  needs no coordination — it can neither read nor be waited on again — so it is the only one anybody
+  performs. A live contender's ticket and marker are never touched.
 
-Release checks the gate's token before unlinking, so a process that was reclaimed while it believed it
-held the lock cannot delete the new holder's file.
+Release removes this call's own ticket, which is why no token check is needed: the name is unique to
+the call and nobody else can own it.
 
 ---
 

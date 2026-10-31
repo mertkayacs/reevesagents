@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FlowState } from '../src/core/flow.js'
@@ -13,7 +13,7 @@ import {
 } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../src/core/flow-control.js'
-import { dispatchGatePath } from '../src/core/flow-dispatch-gate.js'
+
 import type { FlowPorts } from '../src/core/flow-runner.js'
 import { stepFlow } from '../src/core/flow-runner.js'
 import { deleteRunHistory, runPath, writeAgent, writeRun } from '../src/core/runs.js'
@@ -445,15 +445,19 @@ describe('a control command that lands during a dispatch', () => {
     // The flow moved, and the pause changed nothing: it landed before the claim check or not at all.
     expect(readFlow('run-1', { root }).state).toBe('reviewing')
     // The gate is free again, so the operator can pause now.
-    expect(existsSync(dispatchGatePath(root))).toBe(false)
+    expect(readdirSync(root).filter(name => name.startsWith('.flow-dispatch'))).toEqual([])
     expect(pauseFlow('run-1', { at: AT, now: NOW }).state.state).toBe('paused')
   })
 
   it('does not paste when someone else holds the gate, and releases its claim', () => {
     seedLiveRun()
     seed(makeState({ state: 'idle' }))
-    // Another actor holds the gate (a control command mid-transition, or a stuck sender).
-    writeFileSync(dispatchGatePath(root), JSON.stringify({ pid: 4242 }), 'utf-8')
+    // Another live actor holds the gate: its ticket is the smallest one, so this tick must not paste.
+    writeFileSync(
+      join(root, '.flow-dispatch.cand.1.foreign'),
+      JSON.stringify({ pid: 1, token: 'foreign', ts: 0 }),
+      'utf-8',
+    )
     const ports = makePorts()
 
     const result = step(ports, { gate_timeout_ms: 50 })
@@ -466,7 +470,8 @@ describe('a control command that lands during a dispatch', () => {
     expect(after.pending).toBeNull()
     expect(after.state).toBe('idle')
     expect(after.log.at(-1)).toMatchObject({ event: 'dispatch_refused', detail: 'dispatch gate busy' })
-    expect(existsSync(dispatchGatePath(root))).toBe(true)
+    // The foreign contender's ticket is untouched: this process never removes what it did not create.
+    expect(existsSync(join(root, '.flow-dispatch.cand.1.foreign'))).toBe(true)
   })
 
   it('still sends when nothing interrupts it', () => {
