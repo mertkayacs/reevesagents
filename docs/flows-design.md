@@ -305,8 +305,11 @@ the bounded `log`. Every field added after the first release is optional on read
 `schema_version` is still 1.
 
 Two fields belong to the notification work and are **planned** (blocks 09–10 of
-`docs/notifications-design.md`), not in this build: `notify: { key, kind, emitted_at, seq } | null`,
-the marker that makes a flow-attention notification at-least-once and idempotent (that document, §2.2),
+`docs/notifications-design.md`), not in this build: `notify: { episode, key, kind, emitted_at, seq } | null`,
+the marker that makes a flow-attention notification at-least-once and idempotent (that document, §2.2):
+`episode` is a per-flow counter incremented on every transition into an attention state, so a second
+escalation or timeout on the same commit after a `resume` is a new key rather than a suppressed
+duplicate,
 and the `notes_ref` / `notes_counts` fields on a `log` entry, which point at the sanitised notes file of
 a review round (§11 there). Both are optional on read, like every other field added after the first
 release.

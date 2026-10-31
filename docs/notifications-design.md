@@ -332,6 +332,7 @@ interface NotificationEvent {
   title: string          // <= 200 chars, redacted, single line
   detail: string         // <= 1000 chars, redacted, newlines collapsed to ' · '
   source: NotificationSource
+  dedupe_key?: string    // stored when the producer supplied one (product kinds always do); see §3.5
 }
 ```
 
@@ -412,22 +413,22 @@ Rules for the two flow kinds, because they differ from the ingest kinds:
   claiming "exactly once" would be a promise the filesystem cannot keep. The design is therefore
   *at-least-once with a stable key*, plus a marker in the flow state:
 
-  1. the tick writes the flow state — including `notify: { key, kind, emitted_at: null }` — in its own
-     atomic write, as part of the transition that made the attention true;
-  2. immediately after, it appends the notification with `dedupe_key = "<run-id>:<head>:<kind>"`
-     (`flow.escalated` / `flow.review_timeout`) and, on success, records the returned `seq` in the same
-     flow file (`notify.seq`);
+  1. the tick writes the flow state — including `notify: { episode, key, kind, emitted_at: null, seq:
+     null }` — in its own atomic write, as part of the transition that made the attention true. The
+     **episode** is a counter in the flow file, incremented on every transition *into* an attention
+     state, because `(run, head, kind)` is not unique: a `review_timeout` that the operator resumes and
+     the next review that also times out happen on the same head, and so do two escalations on the same
+     commit after two `flow resume` calls;
+  2. immediately after, it appends the notification with
+     `dedupe_key = "<run-id>:<kind>:<episode>"` (`flow.escalated` / `flow.review_timeout`) and, on
+     success, records the returned `seq` in the same flow file (`notify.seq`);
   3. a crash between 1 and 2 leaves `notify.seq === null`, and the next tick — which still sees the same
-     attention — retries the append. The key is stable, so a retry after a *successful* append is
-     collapsed by the dedupe rule instead of duplicating the row;
-  4. a stale tick cannot re-emit for ever: `notify.key` equals the current episode, so a tick that
-     already has `notify.seq` does nothing, and a new episode (new head, new escalation) gets a new key.
-
-  The dedupe window on the ingest path is 60 s (§4.2); for these two kinds the key is durable instead —
-  the flow file itself is the memory, so a retry an hour later still collapses. The cost of the
-  residual — a duplicate row when the append succeeded and the state write then failed *and* the
-  process restarted before the retry — is one repeated line in a log, which is why this is the right
-  trade against losing an escalation entirely.
+     attention and the same episode — retries the append. The key is stable *and durable*, so a retry
+     after a successful append is collapsed by the store's key index (§3.5) instead of duplicating the
+     row, no matter how much later it happens;
+  4. a stale tick cannot re-emit for ever: `notify.seq !== null` means this episode is already told, and
+     a new episode always gets a new number, hence a new key. `key` is stored only for `flow logs` and
+     for debugging — the identity that matters is `episode`.
 - the notification is the counterpart of the flow's own `log` entry in the log the human reads; the
   flow `log` stays the authority on *what the engine decided*, the notification log on *what the human
   was told*.
@@ -448,6 +449,10 @@ compact JSON object per line, `\n`-terminated, no pretty printing, no index file
 
 `<state>/notifications-read.json` = `{ "read_seq": 0, "updated_at": "…" }` (atomic temp+rename,
 `chmod 0600` like `atomicWriteJson` `runs.ts:127-133`).
+
+`<state>/notifications-dedupe.json` = the bounded key index of §3.5, written under the same lock and
+with the same atomicity. Two small JSON files, both `0600`, both derived state: losing either costs
+badges or one duplicate row, never an event.
 
 ### 3.2 Append path: `O_APPEND` inside the lock, not temp+rename
 
@@ -622,6 +627,33 @@ Why the server and not `localStorage`:
 - the owner explicitly wants F5 to preserve badge behaviour, and a server watermark makes that
   structural rather than accidental.
 
+### 3.5 Duplicate suppression is durable, not a 60-second window
+
+The earlier revisions suppressed duplicates "within 60 s", which cannot carry the promise §2.2 makes:
+a retry after a failed state write can legitimately arrive an hour later, and a time window plus a
+process-local map would either duplicate the row or forget the key on restart. The store therefore
+keeps a **bounded key index on disk**:
+
+- `<state>/notifications-dedupe.json` = `{ "keys": [{ "key": "…", "seq": 57, "at": "…" }, …] }`,
+  newest last, capped at `DEDUPE_MAX_KEYS` = 500 entries (each key is ≤ 120 chars, so the file stays
+  under ~80 KiB);
+- `appendNotification(input)` consults it **inside the same `withNotificationsLock` critical section**
+  as the append and the rotation (§3.3): a key that is present returns the existing `{ id, seq,
+  duplicate: true }` and writes nothing, a key that is absent is appended and then pushed onto the
+  index, evicting the oldest entry;
+- the index is written with `temp` + `rename` under that lock, like the read watermark (§3.4), so a
+  crash cannot leave it half-written and two processes cannot both decide "not present";
+- cleanup: the index is bounded by construction, and the whole file goes with the state tree — there is
+  no separate history to prune;
+- the event stores its own `dedupe_key` (§2.1), so the log alone explains why a row exists, and a
+  human can grep for the key that suppressed a second one.
+
+Consequences worth stating: the guarantee is per **key**, not per event — an event appended without a
+`dedupe_key` (a plain supervisor message) is never suppressed; and eviction is a real limit, so a key
+older than the last 500 is forgotten and would be appended again. 500 is chosen so that the two product
+kinds — at most a few per run per day — are never evicted before the flow is closed, and the ingest
+path gets the same durable behaviour for free when it sends a key.
+
 ## 4. HTTP
 
 ### 4.1 Read: `GET /api/notifications?limit&run&since&unread`
@@ -694,8 +726,10 @@ Request body (all other fields are server-derived):
 ```
 
 `source` is forced to `"external"` by the server — an ingest caller cannot claim to be the
-product. `dedupe_key`, when present, suppresses a duplicate (`same dedupe_key` within 60 s) so a
-retrying supervisor loop cannot flood the log.
+product. `dedupe_key`, when present, suppresses a duplicate **for good**: the store keeps a bounded
+on-disk key index (§3.5) inside the append critical section, so a retrying supervisor loop cannot flood
+the log even across restarts, and the answer to a suppressed call is `200 { id, seq, duplicate: true }`
+with the original id.
 
 Guard chain, in order (each returns a distinct status so the caller can see which rule fired):
 
@@ -1142,7 +1176,14 @@ through `translatePhrase`.
    `REEVES_CONFIG` + `TMUX_TMPDIR` with `unset TMUX`, and count `reeves-*` sessions before and
    after (§1.11). The branch has no guard `651b5a6`.
 
-8. **`agent.finished` is ingest-only.** Anyone reading the kind list may assume the product
+8. **A dedupe key must name an episode, and the index must outlive the process.** Two failure modes
+   are easy to reintroduce: keying by `(run, head, kind)` suppresses a *second* escalation or timeout
+   on the same commit after a resume — so the key carries the flow's `episode` counter (§2.2); and
+   treating dedupe as a time window or a process-local map silently duplicates (or loses) a retry that
+   arrives after a restart — so the index is a bounded file written inside the append critical section
+   (§3.5). Any future "simplification" of either half breaks the at-least-once promise §2.2 makes.
+
+9. **`agent.finished` is ingest-only.** Anyone reading the kind list may assume the product
    detects turn completion. It does not (§2.2). If the owner wants product-side turn detection,
    that is a separate project with pane-content heuristics, and it should not be smuggled into
    block 02.
@@ -1175,6 +1216,7 @@ Code:
 - new `src/core/notifications.ts`:
   `appendNotification(input)`, `readNotifications({ limit, run, since, unread })`,
   `markNotificationsRead(upTo)` (read-max-write under the lock, §3.4), `notificationSummary()`,
+  the dedupe index (§3.5: consult inside the append section, push after a successful write),
   `normalizeNotificationInput(raw)`, internal `rotateUnlocked()`, `withNotificationsLock(fn)`,
   `nextSeq()`. Uses `stateRoot()` (`runs.ts:37`), the `withRunsLock` recipe (`runs.ts:82-115`) for
   its own lock file, `nowIso()` (`runs.ts:70-72`) for `received_at`, `redactSecrets`
