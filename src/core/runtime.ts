@@ -37,10 +37,12 @@ import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { paneInSession, realDriver, sessionInGroup, STALE_WINDOW_ERROR, VIEWER_SESSION_PATTERN, windowInSession, type RuntimeDriver } from './tmux.js'
 import { reapPaneProcess } from './process.js'
+import { BUSY_SCAN_LINES, detectPaneBusy, type PaneBusyState } from './activity.js'
 import { redactSecrets } from './redact.js'
 import { providerDisplayName } from '../utils/display.js'
 
 export type { RuntimeDriver } from './tmux.js'
+export type { PaneBusyState } from './activity.js'
 
 export interface AgentLaunchConfig {
   nickname?: string
@@ -576,6 +578,18 @@ export function openAgent(agentId: string, options: RuntimeOptions = {}): void {
   driver.tmux(['select-window', '-t', target])
 }
 
+// Raw capture of an agent's pane. The parsers (busy detection, verdict scanning) need the
+// text before redaction; anything that leaves the runtime for a human still goes through it.
+function capturePaneRaw(driver: RuntimeDriver, agent: AgentRecord, lines: number): string {
+  const target = agent.tmux_pane_id
+  let output = driver.tmux(['capture-pane', '-p', '-e', '-S', String(-lines), '-t', target])
+  if (!output.trim()) {
+    // A provider that renders on the alternate screen prints nothing on the primary one.
+    try { output = driver.tmux(['capture-pane', '-p', '-e', '-a', '-S', String(-lines), '-t', target]) } catch { /* no alternate screen */ }
+  }
+  return output
+}
+
 export function peekAgent(agentId: string, lines = 10, options: RuntimeOptions = {}): string {
   const driver = options.driver ?? realDriver
   // Coerce to a positive integer: a zero/negative/NaN count would otherwise read
@@ -585,14 +599,89 @@ export function peekAgent(agentId: string, lines = 10, options: RuntimeOptions =
     const agent = findAgent(agentId)
     if (agent.headless || !agent.tmux_pane_id) return '(headless agent - no output)'
     if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return ''
-    let output = driver.tmux(['capture-pane', '-p', '-e', '-S', String(-n), '-t', agent.tmux_pane_id])
-    if (!output.trim()) {
-      try { output = driver.tmux(['capture-pane', '-p', '-e', '-a', '-S', String(-n), '-t', agent.tmux_pane_id]) } catch { /* no alternate screen */ }
-    }
-    return redactSecrets(stripAnsi(output).trim())
+    return redactSecrets(stripAnsi(capturePaneRaw(driver, agent, n)).trim())
   } catch {
     return ''
   }
+}
+
+// Is this agent still working? Fail-closed: a pane we cannot observe, an agent with no pane,
+// and a provider without a verified busy marker all answer 'unknown', which every automated
+// write must treat as busy (see core/activity.ts).
+export function paneBusy(agentId: string, options: RuntimeOptions = {}): PaneBusyState {
+  const driver = options.driver ?? realDriver
+  try {
+    const agent = findAgent(agentId)
+    if (agent.headless || !agent.tmux_pane_id) return 'unknown'
+    if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return 'unknown'
+    return detectPaneBusy(capturePaneRaw(driver, agent, BUSY_SCAN_LINES), agent.provider)
+  } catch {
+    return 'unknown'
+  }
+}
+
+export interface IdleSendTimings {
+  // A provider prompt appears seconds after the paste, so the confirm window is generous.
+  pasteSettleMs: number
+  submitWaitMs: number
+}
+
+export const DEFAULT_IDLE_SEND_TIMINGS: IdleSendTimings = { pasteSettleMs: 9000, submitWaitMs: 6000 }
+
+export type SendRefusal = 'busy' | 'unknown' | 'stale_pane' | 'headless' | 'unconfirmed'
+export type SendOutcome = { sent: true } | { sent: false; reason: SendRefusal }
+
+export interface IdleSendOptions extends RuntimeOptions {
+  timings?: Partial<IdleSendTimings>
+}
+
+// Blocking wait that obeys the injected driver: the real driver sleeps for real, a test driver
+// resolves immediately (same convention as waitAfterPaste).
+function waitBlocking(driver: RuntimeDriver, ms: number): void {
+  if (ms <= 0) return
+  if (driver === realDriver) sleepSync(ms)
+  else driver.delay(() => {}, ms)
+}
+
+// The only write path an automated caller (the flow engine) may use: paste, one Enter, then
+// confirm that the pane went busy. It never writes into a pane it observed as busy or as
+// unknown, and it never sends a second Enter — a queued Enter answers whatever prompt appears
+// next, including an approval an operator was about to read. A dispatch it cannot confirm is
+// reported as 'unconfirmed' so the caller can record it and wait for a human.
+export function sendWhenIdle(agentId: string, text: string, options: IdleSendOptions = {}): SendOutcome {
+  const driver = options.driver ?? realDriver
+  const timings: IdleSendTimings = { ...DEFAULT_IDLE_SEND_TIMINGS, ...options.timings }
+  let agent: AgentRecord
+  try {
+    agent = findAgent(agentId)
+  } catch {
+    return { sent: false, reason: 'stale_pane' }
+  }
+  if (agent.headless || !agent.tmux_pane_id) return { sent: false, reason: 'headless' }
+  // A window that no longer belongs to the run is its own refusal: paneBusy would call it
+  // 'unknown', and "the window is gone" is the more useful thing to report.
+  if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return { sent: false, reason: 'stale_pane' }
+
+  const gate = paneBusy(agent.id, options)
+  if (gate === 'busy') return { sent: false, reason: 'busy' }
+  if (gate === 'unknown') return { sent: false, reason: 'unknown' }
+
+  try {
+    pasteTextToPane(driver, agent.tmux_pane_id, text)
+  } catch {
+    return { sent: false, reason: 'stale_pane' }
+  }
+  lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
+  if (!agent.ended_at && agent.task_status === 'queued') updateAgent(agent.run_id, agent.id, { task_status: 'working' })
+
+  waitBlocking(driver, timings.pasteSettleMs)
+  try {
+    driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])
+  } catch {
+    return { sent: false, reason: 'stale_pane' }
+  }
+  waitBlocking(driver, timings.submitWaitMs)
+  return paneBusy(agent.id, options) === 'busy' ? { sent: true } : { sent: false, reason: 'unconfirmed' }
 }
 
 export function sendText(agentId: string, text: string, options: RuntimeOptions = {}): void {
