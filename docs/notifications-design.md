@@ -420,8 +420,13 @@ Rules for the two flow kinds, because they differ from the ingest kinds:
      the next review that also times out happen on the same head, and so do two escalations on the same
      commit after two `flow resume` calls;
   2. immediately after, it appends the notification with
-     `dedupe_key = "<run-id>:<kind>:<episode>"` (`flow.escalated` / `flow.review_timeout`) and, on
-     success, records the returned `seq` in the same flow file (`notify.seq`);
+     `dedupe_key = "<flow_id>:<kind>:<episode>"` (`flow.escalated` / `flow.review_timeout`) and, on
+     success, records the returned `seq` in the same flow file (`notify.seq`). The first component is
+     the flow's own `flow_id` (a uuid written once by `createFlowState`, `src/core/flow.ts:279`), **not**
+     the run id: `flow start --replace` on the same run writes a new flow file whose episode counter
+     starts again at 1, so a run-scoped key would collide with the closed flow's key and the durable
+     index would suppress a genuinely new escalation. A replaced flow is a new flow, and its key says
+     so;
   3. a crash between 1 and 2 leaves `notify.seq === null`, and the next tick — which still sees the same
      attention and the same episode — retries the append. The key is stable *and durable*, so a retry
      after a successful append is collapsed by the store's key index (§3.5) instead of duplicating the
@@ -513,11 +518,16 @@ writers.
 `appendNotification()` acquires that lock **once** and performs the whole unit of work inside the
 single acquisition:
 
-1. `writeSync` of the line on the `O_APPEND` fd (short; readers may see a partial tail and skip it,
+1. `statSync` for the current size, resolve the exact line count from it (below) and, if the process's
+   cached size does not match, reconcile the dedupe index from the file (§3.5) — the same scan that
+   recomputes the count also collects the `dedupe_key` values, so the two never disagree;
+2. if the input carries a `dedupe_key` that the reconciled index already holds, return that entry with
+   `duplicate: true` and write nothing (§3.5);
+3. `writeSync` of the line on the `O_APPEND` fd (short; readers may see a partial tail and skip it,
    §3.2);
-2. `statSync` for the current size, and resolve the exact line count from it (below);
-3. if `size > MAX_BYTES` or `count > MAX_EVENTS`, call the **internal** `rotateUnlocked()`;
-4. release.
+4. push the key onto the index and write `notifications-dedupe.json` (temp + rename);
+5. if `size > MAX_BYTES` or `count > MAX_EVENTS`, call the **internal** `rotateUnlocked()`;
+6. release.
 
 Two rules make this correct rather than merely locked:
 
@@ -637,12 +647,25 @@ keeps a **bounded key index on disk**:
 - `<state>/notifications-dedupe.json` = `{ "keys": [{ "key": "…", "seq": 57, "at": "…" }, …] }`,
   newest last, capped at `DEDUPE_MAX_KEYS` = 500 entries (each key is ≤ 120 chars, so the file stays
   under ~80 KiB);
-- `appendNotification(input)` consults it **inside the same `withNotificationsLock` critical section**
-  as the append and the rotation (§3.3): a key that is present returns the existing `{ id, seq,
-  duplicate: true }` and writes nothing, a key that is absent is appended and then pushed onto the
-  index, evicting the oldest entry;
+- **the log is the authority and the index is a cache.** Every event stores its `dedupe_key` (§2.1), so
+  the index can always be rebuilt from the file. That is what closes the window between "the line was
+  appended" and "the key is in the index": a crash in between leaves the index one key short, and the
+  next append rebuilds it before consulting it — the key is found, `duplicate: true` is returned, and
+  the retry does not duplicate the row;
+- the rebuild condition is the one §3.3 already computes: the process's cached `{ size, count }` does
+  not match `statSync(file).size` (a cold cache after a restart matches nothing), so the append path
+  re-scans the file for lines — and, in the same pass, for `dedupe_key` values. The scan is bounded by
+  the ring (≤ 2000 lines, ≤ 2 MiB), i.e. it is the same cost as the count recomputation that path
+  already pays;
+- `appendNotification(input)` consults the index **inside the same `withNotificationsLock` critical
+  section** as the append and the rotation (§3.3), in this order: reconcile-if-stale → present? return
+  `{ id, seq, duplicate: true }` → else append the line → push the key (evicting the oldest) → write the
+  index with `temp` + `rename` → rotate if a cap is exceeded. A crash after the append and before the
+  index write is therefore healed by the next append, and a crash *before* the append leaves nothing
+  behind at all;
 - the index is written with `temp` + `rename` under that lock, like the read watermark (§3.4), so a
-  crash cannot leave it half-written and two processes cannot both decide "not present";
+  crash cannot leave it half-written and two processes cannot both decide "not present" — and if the
+  file *is* lost or truncated, the next append rebuilds it from the log instead of trusting it;
 - cleanup: the index is bounded by construction, and the whole file goes with the state tree — there is
   no separate history to prune;
 - the event stores its own `dedupe_key` (§2.1), so the log alone explains why a row exists, and a
@@ -1176,12 +1199,14 @@ through `translatePhrase`.
    `REEVES_CONFIG` + `TMUX_TMPDIR` with `unset TMUX`, and count `reeves-*` sessions before and
    after (§1.11). The branch has no guard `651b5a6`.
 
-8. **A dedupe key must name an episode, and the index must outlive the process.** Two failure modes
-   are easy to reintroduce: keying by `(run, head, kind)` suppresses a *second* escalation or timeout
-   on the same commit after a resume — so the key carries the flow's `episode` counter (§2.2); and
-   treating dedupe as a time window or a process-local map silently duplicates (or loses) a retry that
-   arrives after a restart — so the index is a bounded file written inside the append critical section
-   (§3.5). Any future "simplification" of either half breaks the at-least-once promise §2.2 makes.
+8. **A dedupe key must name one flow's episode, and the index must be recoverable.** Three failure
+   modes are easy to reintroduce: keying by `(run, head, kind)` suppresses a *second* escalation or
+   timeout on the same commit after a resume; keying by `(run, kind, episode)` collides across
+   `flow start --replace`, whose new flow counts its episodes from one again — so the key carries
+   `flow_id` and `episode` (§2.2); and treating the index as authoritative loses the key of an event
+   that was appended just before a crash — so the index is a *cache* reconciled from the log whenever
+   the size check says it is stale (§3.5). Any future "simplification" of any of the three breaks the
+   at-least-once promise §2.2 makes.
 
 9. **`agent.finished` is ingest-only.** Anyone reading the kind list may assume the product
    detects turn completion. It does not (§2.2). If the owner wants product-side turn detection,
