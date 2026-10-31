@@ -11,6 +11,7 @@
 
 import { loadConfig } from './config.js'
 import { listAgents, listRuns, nowMs } from './runs.js'
+import type { RunRecord } from './types.js'
 import {
   allWindowIds as tmuxAllWindowIds,
   listSessions as tmuxListSessions,
@@ -109,28 +110,53 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
 // - Ownership is judged against this process's registry only (stateRoot()); two
 //   registries sharing one tmux server is unsupported — a sweep would see the
 //   other registry's sessions as orphans.
+// - So a registry that owns *nothing* while the server carries run sessions is
+//   treated as a foreign registry and the sweep refuses to run at all: that is the
+//   shape of a Web UI started with REEVES_REGISTRY pointing at a temp dir, a gate
+//   script, or a second profile sharing this tmux server. Skipping leaves a stale
+//   session behind (cheap, and the owning registry reaps it); guessing wrong kills
+//   every live run of another registry (an operator's whole fleet).
 export interface OrphanSweepOptions {
   listSessions?: () => TmuxSessionInfo[]
   killSession?: (_session: string) => void
   sessionAttached?: (_session: string) => boolean
   tmuxAvailable?: () => boolean
   now?: () => number
+  // Which runs this registry owns. Defaults to the on-disk registry; injected by
+  // tests and by callers that already hold the list.
+  runs?: () => RunRecord[]
   // Manual sweeps (CLI/MCP reap) set this: the grace exists to protect runs
   // mid-start from *background* sweeps; an explicit user sweep may ignore it.
   ignoreGrace?: boolean
 }
 
+export type OrphanSweepSkip = 'foreign-registry'
+
 // Sessions younger than this are still being set up by their owning process.
 const ORPHAN_MIN_AGE_SEC = 60
 
-export function sweepOrphanSessions(options: OrphanSweepOptions = {}): { killed: string[] } {
+// A session name that only reeves itself produces: a run session or a web viewer.
+// Used to recognise "this tmux server carries somebody's fleet" without trusting
+// a registry we may not own.
+function isReevesOwnedName(name: string): boolean {
+  return RUN_SESSION_PATTERN.test(name) || VIEWER_SESSION_PATTERN.test(name)
+}
+
+export function sweepOrphanSessions(
+  options: OrphanSweepOptions = {},
+): { killed: string[], skipped?: OrphanSweepSkip } {
   const haveTmux = options.listSessions ? true : (options.tmuxAvailable ?? tmuxAvailable)()
   if (!haveTmux) return { killed: [] }
   const sessions = (options.listSessions ?? tmuxListSessions)()
   const killSession = options.killSession ?? tmuxKillSession
   const sessionAttached = options.sessionAttached ?? tmuxSessionAttached
   const nowSec = ((options.now ?? nowMs)()) / 1000
-  const liveRunSessions = new Set(listRuns().map(run => run.tmux_session))
+  const runs = (options.runs ?? listRuns)()
+  const liveRunSessions = new Set(runs.map(run => run.tmux_session))
+  // Fail closed on a foreign registry before any kill decision is made.
+  if (runs.length === 0 && sessions.some(session => isReevesOwnedName(session.name))) {
+    return { killed: [], skipped: 'foreign-registry' }
+  }
   const killed: string[] = []
   for (const info of sessions) {
     if (info.attached) continue

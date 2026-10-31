@@ -333,12 +333,12 @@ export function registerReap(program: Command): void {
   program
     .command('reap')
     .description('reap zombie agents and orphan tmux sessions no live record owns')
-    .option('--json', 'output JSON object: { reaped, killed_sessions }')
+    .option('--json', 'output JSON object: { reaped, killed_sessions, orphan_sweep_skipped }')
     .action((opts) => {
       const { reaped } = sweepAgents()
-      const { killed } = sweepOrphanSessions({ ignoreGrace: true })
+      const { killed, skipped } = sweepOrphanSessions({ ignoreGrace: true })
       if (opts.json) {
-        console.log(JSON.stringify({ reaped, killed_sessions: killed }, null, 2))
+        console.log(JSON.stringify({ reaped, killed_sessions: killed, orphan_sweep_skipped: skipped ?? null }, null, 2))
         return
       }
       for (const r of reaped) {
@@ -347,7 +347,10 @@ export function registerReap(program: Command): void {
       for (const name of killed) {
         console.log(`killed orphan session ${name}`)
       }
-      if (reaped.length === 0 && killed.length === 0) {
+      if (skipped === 'foreign-registry') {
+        console.log('orphan sweep skipped: this registry owns no runs, so the tmux server belongs to another state dir')
+      }
+      if (reaped.length === 0 && killed.length === 0 && skipped === undefined) {
         console.log('no zombie agents or orphan sessions')
         return
       }

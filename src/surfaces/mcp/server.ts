@@ -493,9 +493,16 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'reap',
-    description: 'Sweep for zombie agents and orphan tmux sessions: ends any agent whose tmux window has died or that is older than max_lifetime_ms when that is set above 0 (see get_config), and kills reeves-*/reevesweb_* sessions no live record owns. Returns each reaped agent with the reason (window-gone or lifetime-exceeded) and its age, plus the killed orphan session names. This runs on its own in the background; call it to force an immediate sweep, e.g. after a crash or before relying on list.',
+    description: 'Sweep for zombie agents and orphan tmux sessions: ends any agent whose tmux window has died or that is older than max_lifetime_ms when that is set above 0 (see get_config), and kills reeves-*/reevesweb_* sessions no live record owns. Returns each reaped agent with the reason (window-gone or lifetime-exceeded) and its age, plus the killed orphan session names. When this state dir owns no runs at all but the tmux server carries reeves sessions, the orphan sweep is skipped (orphan_sweep_skipped = "foreign-registry") instead of treating another registry live fleet as orphans. This runs on its own in the background; call it to force an immediate sweep, e.g. after a crash or before relying on list.',
     inputSchema: { type: 'object', properties: {} },
-    handler: () => ok({ ...sweepAgents(), killed_sessions: sweepOrphanSessions({ ignoreGrace: true }).killed }),
+    handler: () => {
+      const orphans = sweepOrphanSessions({ ignoreGrace: true })
+      return ok({
+        ...sweepAgents(),
+        killed_sessions: orphans.killed,
+        orphan_sweep_skipped: orphans.skipped ?? null,
+      })
+    },
   },
   {
     name: 'get_config',

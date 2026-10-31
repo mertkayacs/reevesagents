@@ -86,13 +86,20 @@ async function main() {
   const binDir = join(tmpDir, 'bin')
   const registry = join(tmpDir, 'registry')
   const config = join(tmpDir, 'config.json')
+  // tmux needs TMUX_TMPDIR to exist before it will create its socket subdirectory.
+  mkdirSync(join(tmpDir, 'tmux'), { recursive: true })
   const env = {
     ...process.env,
     PATH: `${binDir}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
     REEVES_REGISTRY: registry,
     REEVES_CONFIG: config,
     REEVES_DOCTOR_SKIP_PROVIDER_COMPAT: '0',
+    // Never let a smoke run probe the developer's real tmux server: a command that
+    // reaches a sweep would kill the fleet of the state dir this process does not own.
+    TMUX_TMPDIR: join(tmpDir, 'tmux'),
   }
+  // An inherited TMUX beats TMUX_TMPDIR when the socket is chosen.
+  delete env.TMUX
 
   try {
     mkdirSync(binDir, { recursive: true })
