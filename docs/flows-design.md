@@ -691,6 +691,8 @@ as everything else (§2.3).
 | `paused` / `orphaned` + the transition table | **shipped** (block 07) — `FLOW_TRANSITIONS` gates every operator and engine transition; `paused` is inert (a tick observes nothing and sends nothing), `orphaned` is written once with its reason, and the only automatic deletion is the cascade in `deleteRunHistory` |
 | Journal (`flow logs`) | **shipped** (block 07) — the bounded `log` array (`FLOW_LOG_LIMIT` = 50) is the journal: event, time, head, short reason, never a prompt body |
 | Review prompt template stored per flow | **not implemented** — the request is rendered by a fixed renderer with the same tokens |
+| Review notes as files (`notes/<head>-r<N>.md`, `notes_ref` in the journal, `flow notes`) | **planned** — block 09; designed in `docs/notifications-design.md` §11, together with the rule that the file is the primary channel and the pane scan is the fallback |
+| Notification log + agent pulse badge | **planned** — blocks 02–03 of `docs/notifications-design.md`; the two flow kinds (`flow.escalated`, `flow.review_timeout`) are emitted from this engine's `FlowAttention`, not from a second model of "needs a human" |
 
 Nothing above is described as working elsewhere in this document: the tables and the sections it
 cites keep `planned` marking, so the next block starts from the truth.

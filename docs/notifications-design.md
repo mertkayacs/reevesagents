@@ -1,6 +1,16 @@
 # Notification log and agent pulse badge — design
 
 Status: design only. No production code is changed by this document.
+
+Revision 4 (base refresh + flow integration): the branch merged `upstream/master` (`99c2d80`,
+version 2.1.0) and every `file:line` anchor in this document was re-derived against the merge commit —
+the earlier numbers pointed at the 1.8.2 layout and had drifted by tens of lines. Two things were
+added rather than corrected: the two flow kinds in §2.2 (`flow.escalated`, `flow.review_timeout`,
+emitted by the product from the flow engine's own attention source) and §11, the review-notes channel
+by which a reviewer's findings become files on disk instead of pane text that only the next prompt
+sees. `stateRoot()` no longer lives in `runs.ts`: it moved to `src/core/state-path.ts:12` (re-exported
+by `runs.ts:37`) when the flow store needed the path without importing the run registry.
+
 Revision 3 (after review round 2): added the missing mark-read route (§4.3); the watermark's
 read-max-write now runs under the append/rotation lock (§3.4); `MAX_EVENTS` is derived from the file
 inside the lock instead of a drift-prone counter (§3.3); the `PIPE_BUF` justification is replaced by
@@ -81,7 +91,7 @@ action row. The Logs dialog follows it exactly (`.mcp-panel`, `.dialog-header`, 
 
 Element references are collected once in the `el` map (`app.js:207` onwards, e.g. `aboutBtn`,
 `aboutDialog`, `aboutList`, `aboutClose`), and the open/close handlers are registered together at
-`app.js:2098-2118` (About is `app.js:2106-2107`). New handlers belong in that block.
+`app.js:2118-2140` (About is `app.js:2118-2119`). New handlers belong in that block.
 
 ### 1.3 HTTP server
 
@@ -138,14 +148,14 @@ into `400 { error }`.
 
 ### 1.4 SSE stream
 
-`createSseHub` (`server.ts:141-203`):
+`createSseHub` (`server.ts:149-215`):
 
-- `snapshot()` (`:154-161`) calls `sweepAgentsThrottled()`, `sweepOrphanSessionsThrottled()`,
+- `snapshot()` (`:154-160`) calls `sweepAgentsThrottled()`, `sweepOrphanSessionsThrottled()`,
   `autoCleanupRuns()` and then `JSON.stringify(buildWebState())`;
-- `tick()` (`:165-170`) compares the serialized string with the previous one and sends only on
+- `tick()` (`:166-171`) compares the serialized string with the previous one and sends only on
   change; identical frames are dropped;
-- the poller is connection-scoped: it starts on the first client (`:191`) and stops on the last
-  (`:192-195`), interval `POLL_MS` = 1500 ms, `unref()`'d (`:174-175`).
+- the poller is connection-scoped: it starts on the first client (`:172`) and stops on the last
+  (`:176-177`), interval `POLL_MS` = 1500 ms, `unref()`'d (`:174-175`).
 
 Consequence for the design: whatever goes into `buildWebState()` is re-serialized on **every**
 tick and re-sent on **every** change. Adding the whole notification history there would mean
@@ -155,34 +165,35 @@ re-sending megabytes per tick at a few hundred events. So SSE carries only a sum
 
 `src/surfaces/webui/state.ts`:
 
-- `WebTerminal` `:23-40` (`id`, `nickname`, `provider`, `model`, `role`, `status`,
+- `WebTerminal` `:45-63` (`id`, `nickname`, `provider`, `model`, `role`, `status`,
   `headless`, `hasWindow`, `canAttach`, `canKill`, `canDelete`, `disabledReason`, `monogram`,
   `color`, `task`);
-- `WebRun` `:42-50`; `WebRunHistory` `:52-63`; `WebApproval` `:65-78`; `WebState` `:80-84`
+- `WebRunFlow` `:35-44`, `WebRun` `:64-75`, `WebRunHistory` `:76-88`, `WebApproval` `:89-103`, `WebState` `:104-108`
   (`runs`, `history`, `approvals` only — no notification field today);
-- `buildWebState()` `:102-181`: run name index `:104`, agent index `:103`/`:110`, terminals
-  `:109-140`, approvals `:163-179`.
+- `buildWebState()` `:138` builds the whole payload (run/agent indexes, terminals, approvals); the
+  inner line numbers move whenever the flow badge is touched, so block 02 should re-anchor them from
+  the function rather than from this document.
 
 Client rendering (`src/surfaces/webui/client/app.js`):
 
 | what | line |
 | --- | --- |
-| client state vars (`runs`, `approvals`, `messages`, …) | `:300-316` |
+| client state vars (`runs`, `approvals`, `messages`, …) | `:298-316` |
 | `api()` fetch helper | `:320-334` |
 | `applyState()` (from `/api/state`) | `:348-361` |
 | `subscribe()` (EventSource, applies SSE frames) | `:363-380` |
 | `t()` translation lookup | `:387-393` |
 | `applyLanguage()` | `:395` |
-| `applyTheme()` | `:1235-1239` |
-| `renderSidebar()` | `:905-1010` (runs loop `:934`, `renderCard` call `:987`) |
-| **`renderCard(run, agent)` — the agent card builder** | **`:1103-1187`** |
-| avatar element (where the badge attaches) | `:1116-1119` |
-| card tail (status dot, open hint, stop/delete) | `:1147-1176` |
-| `renderHistoryRecord()` | `:1069-1101` |
-| `disabledReasonLabel()` | `:1189-1195` |
-| `statusLabel()` | `:2167-2177` |
-| `shortIso()` (compact timestamp helper) | `:2179-2182` |
-| WEB_EN fallback map | `:34-205` |
+| `applyTheme()` | `:1247-1251` |
+| `renderSidebar()` | `:905-1017` (runs loop `:934`, `renderCard` call `:999`) |
+| **`renderCard(run, agent)` — the agent card builder** | **`:1115-1199`** |
+| avatar element (where the badge attaches) | `:1128-1131` |
+| card tail (status dot, open hint, stop/delete) | `:1155-1199` |
+| `renderHistoryRecord()` | `:1081-1113` |
+| `disabledReasonLabel()` | `:1201-1207` |
+| `statusLabel()` | `:2179-2189` |
+| `shortIso()` (compact timestamp helper) | `:2191-2194` |
+| WEB_EN fallback map | `:34-206` |
 
 `renderCard` is called only from `renderSidebar`, and `renderSidebar` rebuilds the list from
 scratch (`el.sidebarList.innerHTML = ''` at `:914`, then `createElement` for every node). So a
@@ -202,7 +213,7 @@ badge that expires needs `renderSidebar()` to be called again — there is no in
 Sources: `src/i18n/locales/en.ts` (328 keys, of which 171 are `web.*`), plus `de, fr, es, pt, it,
 tr, ru, zh-Hans, ar` which list only entries that differ from English.
 
-The enforced rule (`test/i18n.test.ts:48-59`): scan `app.js` for object-literal keys matching
+The enforced rule (`test/i18n.test.ts:66-80`): scan `app.js` for object-literal keys matching
 `/'((?:web|common)\.[^']+)'\s*:/g` and assert `translate('en', key) !== key`. Two consequences
 worth writing down before anyone touches the client:
 
@@ -222,7 +233,7 @@ Language is delivered to the client in two places: `GET /api/state` → `languag
 
 - `DEFAULT_GLOBAL` `:12-22` (`peek_interval_ms: 5000`, `ready_delay_ms: 5000`,
   `max_lifetime_ms: 0`, `web_theme: 'dark'`, …);
-- `mergeDefaults()` `:46-69` — lenient load: bad values are silently dropped, each field has its
+- `mergeDefaults()` `:46-67` — lenient load: bad values are silently dropped, each field has its
   own validity check (`:57-65`);
 - `CONFIG_FIELDS` `:107-117` — the single list every surface reads (CLI `config`
   `src/surfaces/cli/config.ts:4,9`, MCP `set_config` `src/surfaces/mcp/server.ts:59,525`, TUI
@@ -248,16 +259,16 @@ Pinning test: `test/config-set.test.ts:22-27` asserts the exact key order of `CO
 
 | helper | line | path |
 | --- | --- | --- |
-| `stateRoot()` | `:37-39` | `$REEVES_REGISTRY` or `~/.reeves` |
-| `runsDir()` | `:41-43` | `<state>/runs` |
-| `historyDir()` | `:45-47` | `<state>/history/runs` |
-| `runPath()` | `:57-59` | `<state>/runs/<id>/run.json` |
-| `withRunsLock()` | `:82-115` | `<state>/.runs.lock`, `wx` create, 5 s stale takeover, sync retry loop |
-| `atomicWriteJson()` | `:117-123` | write `.tmp`, `chmod 0600`, `rename` |
-| `redactAgent()` | `:222-229` | applies `redactSecrets` to `task`, `task_note`, `inbox[].text` |
-| `archiveAndRemoveRun()` | `:437` | run → history |
-| `autoCleanupRuns()` | `:521` | archive stale/ended runs |
-| `runHasLiveTmuxTarget()` | `:504` | liveness probe |
+| `stateRoot()` | `state-path.ts:12` | `$REEVES_REGISTRY` or `~/.reeves` |
+| `runsDir()` | `:42` | `<state>/runs` |
+| `historyDir()` | `:46` | `<state>/history/runs` |
+| `runPath()` | `:58` | `<state>/runs/<id>/run.json` |
+| `withRunsLock()` | `:92-125` | `<state>/.runs.lock`, `wx` create, 5 s stale takeover, sync retry loop |
+| `atomicWriteJson()` | `:127-133` | write `.tmp`, `chmod 0600`, `rename` |
+| `redactAgent()` | `:232-239` | applies `redactSecrets` to `task`, `task_note`, `inbox[].text` |
+| `archiveAndRemoveRun()` | `:481` | run → history |
+| `autoCleanupRuns()` | `:565` | archive stale/ended runs |
+| `runHasLiveTmuxTarget()` | `:548` | liveness probe |
 
 There is also a precedent for small runtime metadata files next to the state root:
 `src/surfaces/tui/open-token.ts:7-22` writes `<state>/tui-open-token` (this is how the CLI resets a
@@ -288,7 +299,7 @@ root gate. It runs only under `pnpm --dir packages/reevesagents-win verify`.
 
 ### 1.11 Isolating probes (why no Web UI probe is safe in this branch)
 
-`server.ts:674-720` starts the loopback server; `createSseHub`'s snapshot calls
+`server.ts:674-730` starts the loopback server; `createSseHub`'s snapshot calls
 `autoCleanupRuns()`/`sweepOrphanSessionsThrottled()` on every tick (`:157-159` and again in
 `GET /api/state` at `:442-444`). Those sweeps read the **live** registry from `stateRoot()`
 and can archive runs and kill tmux sessions. On 2.1.0 there is no guard commit `651b5a6`, so any
@@ -343,17 +354,19 @@ history. Note that no `displayPath` helper exists in 2.1.0 — `grep -rn "displa
 packages/reevesagents-win/src docs` returns nothing, so this basename rule is the whole privacy
 story for paths and it has to be implemented, not reused.
 
-### 2.2 Kinds, and why exactly these eight
+### 2.2 Kinds, and why exactly these ten
 
 | kind | severity default | producer in 2.1.0 | observable hook |
 | --- | --- | --- | --- |
-| `run.created` | `info` | product | `startRun` `runtime.ts:365`, `startRunFromPreset` `:431`, `startRunWithHead` `:483`, `spawnWorker` `:533` |
-| `run.stopped` | `info` | product | `stopRun` `runtime.ts:684` |
-| `run.archived` | `info` | product | `archiveAndRemoveRun` `runs.ts:437` (called from `killAgent` `runtime.ts:679`, `autoCleanupRuns` `runs.ts:521`) |
+| `run.created` | `info` | product | `startRun` `runtime.ts:367`, `startRunFromPreset` `:433`, `startRunWithHead` `:485`, `spawnWorker` `:535` |
+| `run.stopped` | `info` | product | `stopRun` `runtime.ts:802` |
+| `run.archived` | `info` | product | `archiveAndRemoveRun` `runs.ts:481` (called from `killAgent` `runtime.ts:763`, `autoCleanupRuns` `runs.ts:565`) |
 | `agent.needs_human` | `warn` | product + external | `createRunApproval` `approvals.ts:141` (the MCP `request_approval` path); the fleet's own "waiting for the user" cases come from ingest |
 | `agent.failed` | `error` | product + external | `sweepAgents` reaped list (`reaper.ts:31-37`, `ReapReason = 'window-gone' | 'lifetime-exceeded'`) |
-| `probe.failed` | `warn` | product + external | `runHasLiveTmuxTarget()===false` for a run still marked `running`, i.e. the sweep at `server.ts:442-444` / `autoCleanupRuns` `runs.ts:521` |
+| `probe.failed` | `warn` | product + external | `runHasLiveTmuxTarget()===false` for a run still marked `running`, i.e. the sweep at `server.ts:442-444` / `autoCleanupRuns` `runs.ts:565` |
 | `agent.finished` | `info` | **external only** | none in 2.1.0 — see below |
+| `flow.escalated` | `warn` | **product** | the flow engine: `FlowAttention === 'escalated'` (`flow-view.ts`), i.e. the round budget is spent or a claim could not be resolved |
+| `flow.review_timeout` | `warn` | **product** | the flow engine: `FlowAttention === 'review_timeout'`, i.e. the reviewer did not answer within `review_timeout_sec` |
 | `external` | `info` | external | generic carrier for a supervisor message that fits no other kind |
 
 Why this is the minimal set and no smaller:
@@ -362,7 +375,7 @@ Why this is the minimal set and no smaller:
   (`RunStatus` is `running | ended`, `types.ts:18`);
 - `agent.needs_human` is the owner's actual pain ("что там требовалось"), and the product has
   exactly one first-class signal for it: a pending approval (`approvals.ts:141-160`, surfaced to
-  the Web UI as `WebApproval`, `state.ts:65-78`);
+  the Web UI as `WebApproval`, `state.ts:89-103`);
 - `agent.failed` vs `agent.finished` must be separate: one is an error the user should see, the
   other is routine progress, and collapsing them would force either noise or silence;
 - `probe.failed` is separate from `agent.failed` because it describes the *observation* failing
@@ -371,9 +384,37 @@ Why this is the minimal set and no smaller:
 - `external` exists so a future supervisor message never needs a code change in the product to be
   visible. Without it, every new fleet event would need a release.
 
+**The two flow kinds are the flow engine's attention, not a second model of it.** `FlowAttention`
+(`src/core/flow-view.ts:129`) already decides when a flow needs a human — `escalated` when the round
+budget is spent or a claim nobody settled expired, `review_timeout` when a requested review passed
+`review_timeout_sec` — and the TUI/Web badge already renders exactly those two. The notification log
+consumes the *same* value: the emit point is the tick that writes the state and observes that
+attention, so a flow event exists iff the badge would show a warning, and block 09's escalation
+approval pickup raises its approval from the same field. Three surfaces, one source: no surface may
+compute "needs a human" on its own, or they will disagree the first time the timeout arithmetic
+changes.
+
+Rules for the two flow kinds, because they differ from the ingest kinds:
+
+- **produced by the product only.** They are never accepted from `POST /api/notifications`: an ingest
+  caller that could write `flow.escalated` would be able to fake a human-required state. The route
+  rejects them with `400 kind is produced by the product` (§4.2 step 5).
+- `run_id` comes from the flow state; `agent_id` is the role the attention is about (`review` for a
+  timeout, the flow's dev/review pair for an escalation is *not* guessed — an escalation is run-scoped,
+  so `agent_id` is `''` and only the run is marked); the badge therefore pulses on the run's card, not
+  on a guessed agent.
+- `project` is `basename(repo)` of the flow.
+- `severity: 'warn'`, `source: 'product'`, and the detail carries the machine reason
+  (`rounds exhausted`, `review timeout`) plus the round counter — never the prompt text and never a
+  path.
+- they are emitted **once per transition**, from the same short lock that writes the flow state
+  (§2.4 of `docs/flows-design.md`), so a tick that holds on `flow_escalated` cannot re-emit every two
+  seconds. The flow's own `log` already records the transition; the notification is its counterpart in
+  the log the human reads.
+
 **Honest gap:** "agent finished its turn" is not observable in 2.1.0. `task_status` only moves
-`queued → working` when the startup task is pasted (`runtime.ts:269-271`) and `→ done` when the
-agent is killed (`runtime.ts:665`). Nothing parses pane output for idleness, and adding such a
+`queued → working` when the startup task is pasted (`runtime.ts:272-273`) and `→ done` when the
+agent is killed (`runtime.ts:783`). Nothing parses pane output for idleness, and adding such a
 detector is a different project. So `agent.finished` is only ever produced by ingest, and that is
 the whole reason `source` is a first-class field instead of a debug detail.
 
@@ -381,12 +422,12 @@ the whole reason `source` is a first-class field instead of a debug detail.
 
 ### 3.1 File and format
 
-`<state>/notifications.jsonl` where `<state> = stateRoot()` (`runs.ts:37-39`), i.e.
+`<state>/notifications.jsonl` where `<state> = stateRoot()` (`src/core/state-path.ts:12`), i.e.
 `~/.reeves/notifications.jsonl` in production and `<tmp>/notifications.jsonl` in tests. One
 compact JSON object per line, `\n`-terminated, no pretty printing, no index file.
 
 `<state>/notifications-read.json` = `{ "read_seq": 0, "updated_at": "…" }` (atomic temp+rename,
-`chmod 0600` like `atomicWriteJson` `runs.ts:117-123`).
+`chmod 0600` like `atomicWriteJson` `runs.ts:127-133`).
 
 ### 3.2 Append path: `O_APPEND` inside the lock, not temp+rename
 
@@ -439,7 +480,7 @@ Caps:
 | `KEEP_BYTES` | 1.5 MiB (75 % of `MAX_BYTES`) | post-rotation hard byte bound |
 
 **One lock protocol for append and rotation.** Both run inside `withNotificationsLock(fn)`, using
-the same recipe as `withRunsLock` (`runs.ts:82-115`): `openSync(<state>/.notifications.lock, 'wx',
+the same recipe as `withRunsLock` (`runs.ts:92-125`): `openSync(<state>/.notifications.lock, 'wx',
 0o600)` holding `{ pid, created_at }`, 5 s stale takeover, 25 ms sync retry, `unlink` in `finally`.
 It is a separate lock file from `.runs.lock` so notification traffic never contends with run-state
 writers.
@@ -694,7 +735,7 @@ button can only clear the local view, and the next SSE frame or F5 resurrects ev
 | response `200` | the same summary object as §4.1: `{ read_seq, latest_seq, unread_count, server_now, pulse }` |
 | `400` | `up_to_seq` present but not a non-negative integer → `{ error: "up_to_seq must be a non-negative integer" }` |
 | `403` | `forbidden host` / `forbidden origin` / `forbidden peer` — the identical guard chain as §4.2 |
-| `500` | lock timeout (`Timed out waiting for notifications lock`, same shape as `runs.ts:105`) |
+| `500` | lock timeout (`Timed out waiting for notifications lock`, same shape as `runs.ts:118`) |
 
 Properties:
 
@@ -800,7 +841,7 @@ and a dialog after `presets-dialog` (which closes at `index.html:302`, just befo
 
 Per event, a `.logs-row` with `role="listitem"` and `tabindex="-1"`:
 
-- `.logs-time` — `shortIso(event.received_at)` (`app.js:2179`) plus a relative hint ("3 min")
+- `.logs-time` — `shortIso(event.received_at)` (`app.js:2191`) plus a relative hint ("3 min")
   recomputed on open only; when the producer `ts` differs from `received_at`, the row's `title`
   shows both, because the server receipt time is the one that is trustworthy (§2.1);
 - `.logs-project` — `event.project`, with `event.run_name` as `.logs-run` next to it;
@@ -855,7 +896,7 @@ events cheap.
 - `dialog.showModal()` gives focus trap + Escape for free (same as every other dialog here);
 - on open, focus goes to `#logs-list`'s first row (or `#logs-close` when empty);
 - `ArrowDown`/`ArrowUp` move focus between rows (roving `tabindex`), `Home`/`End` jump,
-  `Enter` on a row opens that agent (`attach(agent_id)`, `app.js:1241`) when the agent still
+  `Enter` on a row opens that agent (`attach(agent_id)`, `app.js:1253`) when the agent still
   exists;
 - Escape closes and returns focus to `#logs-btn` (the button that opened it);
 - `role="list"` + `role="listitem"`, `aria-label` on the list, unread rows carry
@@ -869,7 +910,7 @@ src/surfaces/webui/client/app.css` returns nothing), so block 03 must add one
 
 ### 5.6 `prefers-reduced-motion`
 
-`app.css:2129-2138` already collapses every transition/animation to 0.001 ms and one iteration
+`app.css:2150-2159` already collapses every transition/animation to 0.001 ms and one iteration
 when reduced motion is requested. The badge must therefore be **visible without** its animation:
 it is a solid 8 px dot with a static box-shadow, and `@keyframes pulseDot` only adds scale/opacity
 on top. No information is carried by motion alone, and no JS timer is skipped.
@@ -921,14 +962,14 @@ function schedulePulseExpiry() {
 }
 ```
 
-`renderSidebar()` rebuilds the list (`app.js:905-1010`), which is how the badge disappears —
+`renderSidebar()` rebuilds the list (`app.js:905-1017`), which is how the badge disappears —
 there is no per-node update path, and adding one would duplicate `renderCard`. With ≤ `max_agents`
 (default 100, `config.ts:16`) entries, one full re-render at expiry is negligible; it happens at
 most once per event burst, not per tick.
 
 ### 6.3 Where it renders
 
-Inside `renderCard` (`app.js:1103-1187`), appended to the avatar wrapper (`:1116-1119`):
+Inside `renderCard` (`app.js:1115-1199`), appended to the avatar wrapper (`:1128-1131`):
 
 ```html
 <span class="avatar">DM<span class="card-pulse" data-count="2" title="…"></span></span>
@@ -938,7 +979,7 @@ Inside `renderCard` (`app.js:1103-1187`), appended to the avatar wrapper (`:1116
   contrasting ring, so it works in both themes (`:root` `app.css:3`, light overrides
   `app.css:58`) and for every provider color (`providerColor`, `display.ts:31`);
 - the avatar box itself must gain `position: relative`: today `.avatar` is
-  `display: grid; place-items: center` with no positioning context (`app.css:998-1010`), so an
+  `display: grid; place-items: center` with no positioning context (`app.css:1019-1031`), so an
   absolutely positioned child would otherwise anchor to the nearest positioned ancestor;
 - `data-count` renders as a superscript number only when `count >= 2`;
 - `aria-label` on the card's `card-main` button gains the notification count, because a purely
@@ -961,8 +1002,8 @@ Inside `renderCard` (`app.js:1103-1187`), appended to the avatar wrapper (`:1116
 
 ### 6.5 Narrow terminal / mobile
 
-- the card tail already holds status dot + open hint + lifecycle button (`:1147-1176`), and at
-  `@media (max-width: 520px)` (`app.css:1990`) the layout compacts; the badge lives on the avatar,
+- the card tail already holds status dot + open hint + lifecycle button (`:1155-1199`), and at
+  `@media (max-width: 520px)` (`app.css:2011`) the layout compacts; the badge lives on the avatar,
   not in the tail, so it costs zero horizontal space at every breakpoint (`860px:1926`,
   `720px:1944`, `520px:1990` exist today);
 - below `520px` the count is hidden (`display: none` on `.card-pulse[data-count]::after`) and only
@@ -990,7 +1031,7 @@ mirror:
 | file | what | why it is mandatory |
 | --- | --- | --- |
 | `src/core/types.ts` | add `agent_pulse_ms: number` to `GlobalConfig` (`:118-128`) | the field must exist on the type |
-| `src/core/config.ts` | `DEFAULT_GLOBAL` (`:12-22`) += `agent_pulse_ms: 5000`; `mergeDefaults()` (`:55-66`) += validity check; `CONFIG_FIELDS` (`:107-117`) += `{ key: 'agent_pulse_ms', kind: 'nonneg-int', label: 'agent pulse (ms)' }` (insert after `max_lifetime_ms`, keeping the ms-tuning group together) | single source of truth for CLI/MCP/TUI/Web |
+| `src/core/config.ts` | `DEFAULT_GLOBAL` (`:12-22`) += `agent_pulse_ms: 5000`; `mergeDefaults()` (`:46-67`) += validity check; `CONFIG_FIELDS` (`:107-117`) += `{ key: 'agent_pulse_ms', kind: 'nonneg-int', label: 'agent pulse (ms)' }` (insert after `max_lifetime_ms`, keeping the ms-tuning group together) | single source of truth for CLI/MCP/TUI/Web |
 | `test/config-set.test.ts` | update the pinned key array (`:24-26`) and add accept/reject cases | the test pins exact order — it fails otherwise |
 | `packages/reevesagents-win/src/shared/types.ts` | byte-identical copy of `src/core/types.ts` | `catalog-drift.test.ts:44-50` compares the two files byte for byte; refresh with `pnpm --dir packages/reevesagents-win sync:shared` |
 
@@ -1010,9 +1051,9 @@ through `translatePhrase`.
 
 ## 8. Contract risks
 
-1. **i18n key list.** 29 new keys (28 `web.*` keys that the guard scans, plus one config-panel
+1. **i18n key list.** 31 new keys (30 `web.*` keys that the guard scans, plus one config-panel
    phrase), and the exact set matters because the parity test scans `app.js` object literals
-   (`test/i18n.test.ts:48-59`):
+   (`test/i18n.test.ts:66-80`):
 
    `web.logs`, `web.logsSubtitle`, `web.logsEmpty`, `web.logsEmptyBody`, `web.logsFilterRun`,
    `web.logsAllRuns`, `web.logsUnreadOnly`, `web.logsMarkRead`, `web.logsMarkedRead`,
@@ -1021,6 +1062,7 @@ through `translatePhrase`.
    `web.notifKindRunCreated`, `web.notifKindRunStopped`, `web.notifKindRunArchived`,
    `web.notifKindNeedsHuman`, `web.notifKindAgentFinished`, `web.notifKindAgentFailed`,
    `web.notifKindProbeFailed`, `web.notifKindExternal`,
+   `web.notifKindFlowEscalated`, `web.notifKindFlowReviewTimeout`,
    `web.notifSeverityInfo`, `web.notifSeverityWarn`, `web.notifSeverityError`,
    `web.cardPulseTitle`, `web.cardPulseCount`,
    plus `config.agent_pulse_ms` for the config panel label (localized through `translatePhrase`,
@@ -1051,7 +1093,7 @@ through `translatePhrase`.
 5. **Privacy.** No `displayPath` helper exists in 2.1.0 (verified: repo-wide grep returns
    nothing), so there is no existing path-shortening to reuse — basename must be enforced at write
    time (§2.1). Do not store prompt text: `detail` is capped at 1000 chars and redacted, and the
-   agent's `task` field (`runs.ts:222-229`) is never copied into a notification. The file lives
+   agent's `task` field (`runs.ts:232-239`) is never copied into a notification. The file lives
    under `~/.reeves` with `0600`, next to data that is already that sensitive.
 
 6. **Hundreds of events.** Three separate bounds keep this cheap: the ring (2000 events / 2 MiB,
@@ -1076,7 +1118,7 @@ through `translatePhrase`.
      stored time against "now" — the pulse window, relative labels, the `since` cursor's human
      display — must read `received_at`, and the client must convert it through the `server_now`
      offset (§6.2). A producer `ts` may only label an event, never gate a timer or a filter. Note
-     that `nowIso()` (`runs.ts:69-71`) already exists and is what the append path should use;
+     that `nowIso()` (`runs.ts:70-72`) already exists and is what the append path should use;
    - *writes*: `appendNotification()` and `markNotificationsRead()` each own exactly one lock
      acquisition and one synchronous critical section — append + cap check + rotation, and
      read-max-write of the watermark respectively (§3.3, §3.4). A future refactor that makes either
@@ -1099,20 +1141,20 @@ Code:
   `markNotificationsRead(upTo)` (read-max-write under the lock, §3.4), `notificationSummary()`,
   `normalizeNotificationInput(raw)`, internal `rotateUnlocked()`, `withNotificationsLock(fn)`,
   `nextSeq()`. Uses `stateRoot()` (`runs.ts:37`), the `withRunsLock` recipe (`runs.ts:82-115`) for
-  its own lock file, `nowIso()` (`runs.ts:69-71`) for `received_at`, `redactSecrets`
+  its own lock file, `nowIso()` (`runs.ts:70-72`) for `received_at`, `redactSecrets`
   (`redact.ts:14`). No new dependency. `appendNotification` and `markNotificationsRead` are both
   synchronous and each owns a single lock acquisition (§3.3, §3.4).
 - `src/surfaces/webui/server.ts`: `GET /api/notifications` (after `/api/presets`, `:478`, before
   `/api/events`, `:486`), `POST /api/notifications` (peer check + rate limiter + validator),
   `POST /api/notifications/read` (§4.3, same guard chain, no rate limit), `notifications` summary
-  inside the SSE snapshot (`createSseHub`'s `snapshot()`, `:154-161`) and inside `GET /api/state`
-  (`:445-451`), `web.json` write/unlink in `startWebServer` (`:674-720`, around the bind at `:700`).
+  inside the SSE snapshot (`createSseHub`'s `snapshot()`, `:154-160`) and inside `GET /api/state`
+  (`:445-451`), `web.json` write/unlink in `startWebServer` (`:674-730`, around the bind at `:665`).
 - product emit points: `startRun`/`startRunFromPreset`/`startRunWithHead`/`spawnWorker`
-  (`runtime.ts:365,431,483,533`) → `run.created`; `stopRun` (`:684`) → `run.stopped`;
-  `archiveAndRemoveRun` (`runs.ts:437`) → `run.archived`; `createRunApproval` (`approvals.ts:141`)
+  (`runtime.ts:367,433,485,535`) → `run.created`; `stopRun` (`:802`) → `run.stopped`;
+  `archiveAndRemoveRun` (`runs.ts:481`) → `run.archived`; `createRunApproval` (`approvals.ts:141`)
   → `agent.needs_human`; the reaped list from `sweepAgentsThrottled()`
   (`reaper.ts:178-186`, `ReapedAgent` `reaper.ts:31-37`) → `agent.failed`; the stale-run branch of
-  `autoCleanupRuns` (`runs.ts:521`) → `probe.failed`.
+  `autoCleanupRuns` (`runs.ts:565`) → `probe.failed`.
 - config key per §7.
 - no client changes in this block.
 
@@ -1155,11 +1197,11 @@ Code:
   (`:300`), per §5.1.
 - `app.js`: `el` map additions (`:207+`), `openLogsDialog()`, `renderLogs(payload)`,
   `loadNotifications()`, `markAllRead()`, `schedulePulseExpiry()`, badge inside `renderCard`
-  (`:1103-1187`), handlers next to the existing ones (`:2098-2118`), summary consumption in
-  `subscribe()` (`:363-380`) and `applyState()` (`:348-361`), `WEB_EN` keys (`:34-205`).
+  (`:1115-1199`), handlers next to the existing ones (`:2118-2140`), summary consumption in
+  `subscribe()` (`:363-380`) and `applyState()` (`:348-361`), `WEB_EN` keys (`:34-206`).
 - `app.css`: `.card-pulse`, `@keyframes pulseDot`, `position: relative` on `.avatar`
-  (`:998`), `.logs-*` block, `.visually-hidden` utility (§5.5 note), mobile rules under
-  `@media (max-width: 520px)` (`:1990`), light-theme overrides next to `:root[data-theme="light"]`
+  (`:1019`), `.logs-*` block, `.visually-hidden` utility (§5.5 note), mobile rules under
+  `@media (max-width: 520px)` (`:2011`), light-theme overrides next to `:root[data-theme="light"]`
   (`:58`).
 - `src/i18n/locales/en.ts` + the nine other locales: the key list from §8.1.
 
@@ -1194,3 +1236,108 @@ in (reviewed by hand, no gate exists).
 4. **Retention numbers.** 2000 events / 2 MiB trigger, trim to 1500 events with a hard 1.5 MiB
    bound (§3.3). At the current fleet volume (5 runs, a few events per minute) that is days of
    history; say if you want more or less before it is written into the constants.
+
+## 11. Review notes as files: the notes channel (block 09 backend, block 10 UI)
+
+Today a reviewer's findings exist only as pane text: `verdictNotes()` (`src/core/verdict.ts:58`)
+scrapes the last 400 lines, keeps at most `NOTES_LIMIT` finding lines, redacts them, and
+`renderFixPrompt()` (`src/core/flow.ts:441`) pastes them into the dev's prompt. On disk nothing
+remains — the flow state keeps `claim.verdict`, `claim.verdict_count` and the bounded `log`
+(`FLOW_LOG_LIMIT` = 50, `src/core/flow.ts:84`, whose `logDetail` (`:730`) carries only reason, head and
+block id). So "what did the reviewer actually say in round 2" is unanswerable after the fact, and a
+parser that mis-reads one formatting variant loses the round entirely.
+
+The owner's decision: **notes become history**, and the file is the primary channel.
+
+### 11.1 Decisions
+
+| # | Decision | Why |
+| --- | --- | --- |
+| N1 | The review prompt asks the reviewer to write its findings to `~/.reeves/flows/<run-id>/notes/<head>-r<N>.md` and the engine reads that file **first** | a file survives scrollback, survives a parser change, and can be read by a human and by `flow notes` without touching tmux |
+| N2 | The pane stays as **fallback**, and the raw pane capture is stored too (`<head>-r<N>.pane.txt`) | a model can answer in a shape the parser does not expect; the raw capture is the evidence that survives that |
+| N3 | The journal entry carries `notes_ref` and counters, not the text | `flow logs` can say "round 2 → notes/<head>-r2.md · 2 MAJOR, 1 MINOR" while the journal stays bounded and path-free |
+| N4 | A new command `flow notes` prints one round | the reviewer, the operator and a later block all need the same read path; a command is testable and scriptable |
+| N5 | History is keyed by **head and round**, never a single rewritten file | the flow's whole model is "a verdict belongs to a commit"; a `last_notes.txt` would collide the moment two rounds ran back to back |
+| N6 | Caps by heads, rounds and bytes, cleaned when the flow closes | the state tree is not a document store; an unbounded notes directory is the same mistake as an unbounded journal |
+| N7 | Everything printed is home-shortened and redacted; `flow status --json` carries the reference and counters only | same rule as §8.5 — a payload is a transcript |
+
+### 11.2 File layout and validity
+
+```text
+~/.reeves/flows/<run-id>/notes/
+  <head>-r<N>.md          # the findings the reviewer wrote, primary source
+  <head>-r<N>.pane.txt    # raw capture of the reviewer pane at that round, fallback
+```
+
+`<head>` is the 40-char commit the review was requested for (the `claim.head` of that round) and `<N>`
+is the 1-based round number, so the pair is unique and never rewritten. Caps:
+
+| what | where | bounded by | cleaned by |
+| --- | --- | --- | --- |
+| findings file | `notes/<head>-r<N>.md` | one file per round; `NOTES_FILE_MAX_BYTES` = 64 KiB (a round that writes more is truncated at a line boundary and the journal says `truncated`) | `flow stop`, the `delete-history` cascade, and the round-pruning rule below |
+| raw capture | `notes/<head>-r<N>.pane.txt` | `NOTES_PANE_MAX_BYTES` = 256 KiB, tail-kept: the last bytes are what the verdict scanner reads anyway | same |
+| rounds kept | the `notes/` directory | newest `NOTES_KEEP_ROUNDS` = 20 files per flow (10 heads × 2 rounds is the realistic worst case before escalation), oldest dropped first | the append that writes round 21 prunes round 1 |
+| reference in the journal | `log[].notes_ref` | the `log` ring (`FLOW_LOG_LIMIT` = 50) | the log ring itself |
+| counters in the journal | `log[].notes_counts` | three integers | the log ring itself |
+
+**What counts as a valid findings file**, checked in this order by the engine:
+
+1. the file exists, is a regular file, is not a symlink out of the notes directory (`realpath` inside
+   the directory, the same rule as the spec containment in `docs/flows-design.md` §3.2), and is
+   non-empty after trimming;
+2. it ends with a `ВЕРДИКТ: ACCEPT|CHANGES_REQUESTED` line (the same vocabulary `verdict.ts` parses),
+   so the file is self-describing about which round it answers;
+3. at least one `BLOCKER|MAJOR|MINOR <file>:<line> — <what> / <why> / <what to do>` line, which is the
+   format the review prompt asks for; a file with the verdict but no findings is accepted only for
+   `ACCEPT` (nothing to fix is a legitimate round).
+
+A file that fails 1–3 is *not* used and the pane path takes over — the failure is written to the
+journal as `notes_invalid <reason>`, so a reviewer that keeps writing the wrong shape is visible
+instead of silently degraded. The pane fallback is exactly today's behaviour and is not removed.
+
+**Read order on a reviewing tick:** valid findings file → pane verdict scan → hold. The file wins even
+when the pane disagrees, because the file is the answer the reviewer chose to persist; the pane value
+is still recorded (`claim.verdict_count`) so the counter baseline keeps working.
+
+### 11.3 What changes in the flow state and the surfaces
+
+- **prompt**: `renderReviewPrompt()` gains one instruction block — write the findings to the path the
+  engine tells it, in the formats above, ending with the verdict line. The path is passed in, not
+  composed by the model, and the same text keeps the pane answer as a fallback so a reviewer that
+  ignores the instruction is not stranded.
+- **journal entry**: `{ at, event, detail, notes_ref, notes_counts: { blocker, major, minor } }` —
+  `notes_ref` is relative to the flow directory (`notes/<head>-r2.md`), never absolute, so nothing has
+  to be shortened at print time and the record survives a moved state root.
+- **`flow status --json`**: unchanged plus `last_notes: { ref, counts }` — no text.
+- **`flow logs`**: the row renders `round 2 → notes/<head>-r2.md · 2 MAJOR, 1 MINOR`; `--json` keeps the
+  same fields, so a script can follow the reference.
+- **`flow notes --run <id> [--head <sha>] [-r <N>] [--json]`**: prints the findings of the selected
+  round (default: the latest round of the current head), with the file path home-shortened and the raw
+  capture path as a second line. Behaviour when there is nothing to print is part of the contract:
+  `no notes for <run> (round 2 was dispatched without a notes file)` — exit 0 with `--json` printing
+  `{ notes: null, reason: 'missing' }`, because "the reviewer wrote nothing" is data, not an error. A
+  round that never happened is an error: `round 7 does not exist for <head> (rounds: 1-3)`, exit 1.
+  An unknown `--head` lists the heads that do have notes (first 5, like `resolveFlowRunId`).
+- **cleanup**: `flow stop` and the `delete-history` cascade remove the whole `<state>/flows/<run-id>/`
+  directory, notes included. `flow start --replace` on a closed flow removes the previous notes
+  directory before writing the new state, so a replaced flow cannot inherit round references from its
+  predecessor.
+
+### 11.4 Block 09 (backend) and block 10 (UI)
+
+- **Block 09** implements N1–N5, N7: `renderReviewPrompt` instruction, `notes.ts`
+  (`writeNotes`, `readNotes`, `pruneNotes`, `notesRef`), the journal fields, the read order in
+  `flow-runner.ts`, `flow notes`, the pruning rule, and the sanitizing (paths shortened with
+  `displayPath`, text through `redactSecrets` at write time). Definition of done: a round with a valid
+  file reads from the file (pane ignored); a round with a broken file falls back to the pane and logs
+  `notes_invalid`; `flow notes` prints both a valid and a missing round in the documented shapes; the
+  caps and the pruning are asserted with a synthetic 21-round fixture.
+- **Block 10** implements N6's UI half: the Logs dialog (§5) lists these same records with the notes
+  text as the "what was sent" column and the file reference as a link; the pulsing badge on the agent
+  card is driven by the same events (§6), so a flow escalation pulses the run's card and a review
+  timeout pulses the reviewer's. It reads through `flow notes --json`/the notification log — it does
+  not open the notes directory itself, so the caps and the sanitizing stay in one place.
+
+Open questions this section leaves to the owner: whether a notes file should also be attached to the
+`flow.escalated` notification's detail (a link, not the text), and whether `NOTES_KEEP_ROUNDS` = 20 is
+the right number before the flow closes.
