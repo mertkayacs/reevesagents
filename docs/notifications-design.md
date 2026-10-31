@@ -521,10 +521,11 @@ writers.
 `appendNotification()` acquires that lock **once** and performs the whole unit of work inside the
 single acquisition:
 
-1. `statSync` for the current size, resolve the exact line count from it (below) and, if the process's
-   cached size does not match, merge the dedupe index with what the file says (§3.5 — a merge, not a
-   rebuild: rotation removes rows whose keys the index must keep) — the same scan that recomputes the
-   count also collects the `dedupe_key` values, so the two never disagree;
+1. `statSync` once, **before this line is written**, and compare the result with the cache the previous
+   append left behind (`{ dev, ino, size, count }`, below); on a mismatch recompute the exact line count
+   and merge the dedupe index with what the file says (§3.5 — a merge, not a rebuild: rotation removes
+   rows whose keys the index must keep). The same scan that recomputes the count collects the
+   `dedupe_key` values, so the two never disagree;
 2. if the input carries a `dedupe_key` that the reconciled index already holds, return that entry with
    `duplicate: true` and write nothing (§3.5);
 3. `writeSync` of the line on the `O_APPEND` fd (short; readers may see a partial tail and skip it,
@@ -576,13 +577,20 @@ that a process-local counter could lag when a second process appends, which woul
 was not actually guaranteed. That is not acceptable, so the count is derived from the file itself at
 the moment the cap is evaluated, inside the critical section:
 
-- the module caches `{ dev, ino, size, mtimeMs, count }` after its own append;
-- on the next append it compares the cached `size + len(line)` with `statSync(path).size` **and** the
-  cached `{ dev, ino }` with the ones it just stat'ed;
-- equal size, same inode → nobody replaced the file, so `count += 1` (O(1), the normal path);
+- the module caches the state **it left behind**: `{ dev, ino, size, count }`, where `size` is the file
+  size *after* its own last append and `count` is the number of lines at that moment;
+- at the start of the next append — before this line is written, which is the only moment the
+  comparison means anything — it stat's the file once and compares `statSync(path).size` with the
+  cached `size` **and** `{ dev, ino }` with the cached pair. The current line is deliberately *not*
+  part of the comparison: adding `len(line)` there would make every clean append look foreign (the
+  bytes are not on disk yet) and would let a foreign write of exactly `len(line)` bytes pass as clean;
+- equal size, same inode → the file is exactly as this process left it, so the count is `cached.count`
+  and the new line takes it to `count + 1` (O(1), the normal path);
 - anything else → another process (or a rotation) wrote since, so the line count is recomputed by
   scanning the file for `\n` **before** the cap check (O(file size), only on the foreign-write path),
-  and — in the same pass — the dedupe index is merged with the keys the file holds (§3.5).
+  and — in the same pass — the dedupe index is merged with the keys the file holds (§3.5);
+- after the write, the cache is updated to the new `{ dev, ino, size, count }` — the post-write state,
+  so the next comparison starts from the truth.
 
 **Size alone is not a cache key**, and the previous revision was wrong to say it was: a rotation
 rewrites the file to a smaller prefix, and the appends that follow can bring it back to exactly the
