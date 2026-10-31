@@ -15,6 +15,7 @@
 import { chmodSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { stateRoot } from './runs.js'
+import { shortHomePath } from '../utils/paths.js'
 import type { FlowState } from './flow.js'
 import { FLOW_SCHEMA_VERSION, FlowStateError, parseFlowState } from './flow.js'
 
@@ -67,9 +68,9 @@ export function readFlowFile(path: string, runId = ''): FlowState {
     raw = readFileSync(path, 'utf-8')
   } catch (err) {
     if ((err as { code?: string }).code === 'ENOENT') {
-      throw new FlowStateError(`no flow state at ${path}`)
+      throw new FlowStateError(`no flow state at ${shortHomePath(path)}`)
     }
-    throw new FlowStateError(`flow state could not be read: ${path}: ${(err as Error).message}`)
+    throw new FlowStateError(`flow state could not be read: ${shortHomePath(path)}: ${(err as Error).message}`)
   }
   let parsed: unknown
   try {
@@ -77,17 +78,17 @@ export function readFlowFile(path: string, runId = ''): FlowState {
   } catch {
     // Explicit, and it names the file: a flow file that no longer parses can only be deleted by
     // a human, so hiding it behind "no flow" would be a lie.
-    throw new FlowStateError(`flow state is not valid JSON: ${path}`)
+    throw new FlowStateError(`flow state is not valid JSON: ${shortHomePath(path)}`)
   }
   let state: FlowState
   try {
     state = parseFlowState(parsed)
   } catch (err) {
-    if (err instanceof FlowStateError) throw new FlowStateError(`${err.message}: ${path}`)
+    if (err instanceof FlowStateError) throw new FlowStateError(`${err.message}: ${shortHomePath(path)}`)
     throw err
   }
   if (runId && state.run_id !== runId) {
-    throw new FlowStateError(`flow state at ${path} belongs to run ${state.run_id}, not ${runId}`)
+    throw new FlowStateError(`flow state at ${shortHomePath(path)} belongs to run ${state.run_id}, not ${runId}`)
   }
   return state
 }
@@ -105,7 +106,7 @@ export function saveFlow(state: FlowState, options: FlowStoreOptions = {}): stri
     // Remove the half-written temp file: the next reader must see the previous document or
     // nothing at all, never a file this save abandoned.
     try { unlinkSync(tmpPath) } catch { /* already gone */ }
-    throw new FlowStateError(`flow state was not saved: ${path}: ${(err as Error).message}`)
+    throw new FlowStateError(`flow state was not saved: ${shortHomePath(path)}: ${(err as Error).message}`)
   }
   return path
 }

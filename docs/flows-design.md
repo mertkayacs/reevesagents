@@ -356,6 +356,14 @@ What is deliberately *not* in this build, and must not be assumed by the next bl
   surfaces and the approval pickup, so a flow file is written by the engine's tests and by the
   next block, not by a command yet.
 
+The review **timeout** is implemented, because "wait for a verdict" without a deadline is a flow
+that hangs on a crashed reviewer: `review_started_at` (epoch ms) is stamped by the review request,
+`review_timeout_sec` defaults to `REVIEW_TIMEOUT_SEC` (900, §3.1) per flow, and a tick that finds no
+new verdict past the deadline moves to `escalated` with reason `review_timeout` — no send, no round
+counted, a human decides. A state that carries no clock (written before the field existed) is
+stamped on the first pass instead of waiting forever, and a dispatch that was not confirmed keeps
+the running clock rather than restarting it.
+
 One consequence worth stating plainly: a fix or a block is dispatched **only** into a pane the
 gate classified as `idle` on this tick, and a review is requested only when the dev's own pane is
 idle and the tree is clean — reviewing a commit the dev is still building on spends a round on a
@@ -393,7 +401,10 @@ failure (`src/surfaces/cli/agents.ts:54`–`:55`), and stable `--json` payloads 
 - paths: the flow file stores absolute paths because git needs them, but **every payload renders
   them home-shortened** — anything under `$HOME` prints as `~/…`, so a transcript never carries
   `/home/<user>/…`. A path the caller passed is echoed the way the caller wrote it (a relative
-  argument stays relative), never silently expanded.
+  argument stays relative), never silently expanded. The rule covers **error messages** as well as
+  payloads: `flow status` on a damaged file names it as `~/.reeves/flows/<id>.json`, and
+  `src/utils/paths.ts` is the single implementation both sides use, so the shorthand cannot drift
+  between the store that knows the path and the command that prints it.
 
 The same payload shape feeds the MCP tools, so both surfaces obey one redaction rule.
 

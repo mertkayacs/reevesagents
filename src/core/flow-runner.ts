@@ -70,6 +70,8 @@ export interface ObserveFlowOptions {
   // Caller-known facts win: a probe or a re-check can pass them instead of shelling out to git.
   head?: string
   tree_clean?: boolean
+  // The clock the timeout is measured against; the default is the wall clock.
+  now?: number
 }
 
 export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}): FlowObservations {
@@ -84,6 +86,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     ? { count: 0, last: null, notes: '' }
     : scanVerdict(ports.peek(state.roles.review, VERDICT_SCAN_LINES))
   return {
+    now: options.now ?? Date.now(),
     head,
     tree_clean: treeClean,
     dev_pane: devPane,
@@ -109,7 +112,9 @@ export interface FlowApplyResult {
 export interface ApplyFlowOptions {
   root?: string
   ports?: FlowPorts
-  now?: string
+  // Timestamp written into the log; the clock the engine measures a timeout against is
+  // `ObserveFlowOptions.now` (epoch ms).
+  at?: string
 }
 
 // The thin effect layer. It writes only what the pure engine already computed: no transition
@@ -120,7 +125,7 @@ export function applyDecision(
   options: ApplyFlowOptions = {},
 ): FlowApplyResult {
   const ports = options.ports ?? defaultFlowPorts
-  const at = options.now ?? new Date().toISOString()
+  const at = options.at ?? new Date().toISOString()
 
   if (!decisionChangesState(state, decision)) return { status: 'skipped', decision, state }
 

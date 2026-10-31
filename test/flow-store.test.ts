@@ -73,6 +73,30 @@ describe('flow store', () => {
     expect(() => readFlow('absent', { root })).toThrow(/no flow state/)
   })
 
+  it('renders a path under HOME as ~/ in its errors, never the absolute home path', () => {
+    // A transcript, a log or an approval record must not carry the account layout: the store is
+    // where the path is known, so it is where the shorthand is applied.
+    const savedHome = process.env.HOME
+    const home = join(root, 'home')
+    process.env.HOME = home
+    try {
+      mkdirSync(join(home, 'flows'), { recursive: true })
+      writeFileSync(join(home, 'flows', 'bad.json'), '{"schema_version":1,', 'utf-8')
+      let message = ''
+      try {
+        readFlow('bad', { root: home })
+      } catch (err) {
+        message = (err as Error).message
+      }
+      expect(message).toContain('~/flows/bad.json')
+      expect(message).not.toContain(home)
+      expect(() => readFlow('absent', { root: home })).toThrow(/no flow state at ~\/flows\/absent\.json/)
+    } finally {
+      if (savedHome === undefined) delete process.env.HOME
+      else process.env.HOME = savedHome
+    }
+  })
+
   it('refuses a run id that is not a plain file name', () => {
     expect(() => flowPath('../escape', root)).toThrow(/not a valid flow id/)
     expect(() => readFlow('a/b', { root })).toThrow(/not a valid flow id/)

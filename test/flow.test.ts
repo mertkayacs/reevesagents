@@ -3,6 +3,7 @@ import type { BlockSpec } from '../src/core/spec.js'
 import type { FlowObservations, FlowState } from '../src/core/flow.js'
 import {
   MAX_ROUNDS,
+  REVIEW_TIMEOUT_SEC,
   applyDecisionToState,
   createFlowState,
   decisionChangesState,
@@ -14,6 +15,7 @@ import {
 // the automaton is asserted here without tmux, git or a clock.
 
 const AT = '2026-01-01T00:00:00.000Z'
+const NOW = Date.parse(AT)
 
 function makeState(overrides: Partial<FlowState> = {}): FlowState {
   const base = createFlowState({
@@ -23,11 +25,18 @@ function makeState(overrides: Partial<FlowState> = {}): FlowState {
     head: 'aaa111',
     at: AT,
   })
-  return { ...base, ...overrides }
+  const state = { ...base, ...overrides }
+  // A `reviewing` fixture is a review that was just requested; tests that are not about the timer
+  // must not start from a state the engine has to stamp first.
+  if (state.state === 'reviewing' && state.review_started_at === null && overrides.review_started_at === undefined) {
+    state.review_started_at = NOW
+  }
+  return state
 }
 
 function makeObservations(overrides: Partial<FlowObservations> = {}): FlowObservations {
   return {
+    now: NOW,
     head: 'aaa111',
     tree_clean: true,
     dev_pane: 'idle',
@@ -300,6 +309,101 @@ describe('flowTick — fixing', () => {
     expect(decision.kind).toBe('request_review')
     expect(decision.next_state).toBe('reviewing')
     expect(decision.next_rounds).toBe(1)
+  })
+})
+
+describe('flowTick — a review without an answer is bounded by review_timeout_sec', () => {
+  it('starts the review clock with the request', () => {
+    const decision = flowTick(makeState(), makeObservations({ head: 'bbb222' }))
+    expect(decision.kind).toBe('request_review')
+    expect(decision.next_review_started_at).toBe(NOW)
+
+    const applied = applyDecisionToState(makeState(), decision, AT)
+    expect(applied.review_started_at).toBe(NOW)
+    expect(applied.review_timeout_sec).toBe(REVIEW_TIMEOUT_SEC)
+  })
+
+  it('waits while the review is younger than the timeout', () => {
+    const reviewing = makeState({
+      state: 'reviewing',
+      review_started_at: NOW - (REVIEW_TIMEOUT_SEC - 1) * 1000,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+    })
+    const decision = flowTick(reviewing, makeObservations({ verdict_count: 1 }))
+    expect(decision.kind).toBe('none')
+    expect(decision.reason).toBe('awaiting_verdict')
+    expect(decision.next_state).toBe('reviewing')
+  })
+
+  it('escalates once the reviewer has not answered within the timeout', () => {
+    const reviewing = makeState({
+      state: 'reviewing',
+      review_started_at: NOW - REVIEW_TIMEOUT_SEC * 1000,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+    })
+    const decision = flowTick(reviewing, makeObservations({ verdict_count: 1 }))
+
+    expect(decision.kind).toBe('escalate')
+    expect(decision.reason).toBe('review_timeout')
+    expect(decision.next_state).toBe('escalated')
+    expect(decision.next_review_started_at).toBeNull()
+    // Nothing is sent for an escalation, and the flow stops being ticked.
+    expect(decision.message).toBeUndefined()
+    const escalated = applyDecisionToState(reviewing, decision, AT)
+    expect(escalated.state).toBe('escalated')
+    expect(flowTick(escalated, makeObservations({ verdict_count: 1 })).reason).toBe('flow_closed')
+  })
+
+  it('escalates an expired review even when the reviewer pane cannot be read', () => {
+    // "The pane looks like nothing I know" is how a hung reviewer presents itself; without the
+    // deadline first, that state would hold for ever.
+    const reviewing = makeState({
+      state: 'reviewing',
+      review_started_at: NOW - REVIEW_TIMEOUT_SEC * 1000 - 1,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+    })
+    expect(flowTick(reviewing, makeObservations({ review_pane: 'unknown' })).reason).toBe('review_timeout')
+
+    // Before the deadline the same unreadable pane only holds.
+    const young = makeState({ state: 'reviewing', review_started_at: NOW, claim: reviewing.claim })
+    expect(flowTick(young, makeObservations({ review_pane: 'unknown' })).reason).toBe('review_pane_unknown')
+  })
+
+  it('honours a per-flow timeout instead of the default', () => {
+    const brisk = makeState({
+      state: 'reviewing',
+      review_timeout_sec: 60,
+      review_started_at: NOW - 61_000,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+    })
+    expect(flowTick(brisk, makeObservations({ verdict_count: 1 })).reason).toBe('review_timeout')
+  })
+
+  it('stamps a review state that carries no clock, instead of waiting forever', () => {
+    // A file written before the field existed (or a request that was never stamped) still gets a
+    // deadline: the tick starts the clock on the first pass and writes it.
+    const unstamped = makeState({
+      state: 'reviewing',
+      review_started_at: null,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+    })
+    const decision = flowTick(unstamped, makeObservations({ verdict_count: 1 }))
+    expect(decision.kind).toBe('none')
+    expect(decision.reason).toBe('review_timer_started')
+    expect(decision.next_review_started_at).toBe(NOW)
+
+    const stamped = applyDecisionToState(unstamped, decision, AT)
+    expect(stamped.review_started_at).toBe(NOW)
+    expect(stamped.state).toBe('reviewing')
+    // And the next pass waits on the deadline this one set.
+    expect(flowTick(stamped, makeObservations({ verdict_count: 1 })).reason).toBe('awaiting_verdict')
+  })
+
+  it('keeps a per-flow timeout through a save/parse round trip', () => {
+    const state = makeState({ review_timeout_sec: 120, review_started_at: NOW })
+    const parsed = parseFlowState(JSON.parse(JSON.stringify(state)))
+    expect(parsed.review_timeout_sec).toBe(120)
+    expect(parsed.review_started_at).toBe(NOW)
   })
 })
 

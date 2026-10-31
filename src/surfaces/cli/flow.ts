@@ -7,21 +7,13 @@
 // goes through the secret redactor.
 
 import type { Command } from 'commander'
-import { homedir } from 'node:os'
-import { sep } from 'node:path'
 import type { FlowState } from '../../core/flow.js'
 import { FlowStateError } from '../../core/flow.js'
 import { flowPath, listFlowFiles, readFlow } from '../../core/flow-store.js'
 import type { FlowStepResult } from '../../core/flow-runner.js'
 import { stepFlow } from '../../core/flow-runner.js'
 import { redactSecrets } from '../../core/redact.js'
-
-function shortPath(path: string): string {
-  if (!path) return ''
-  const home = homedir()
-  if (path === home) return '~'
-  return path.startsWith(`${home}${sep}`) ? `~${path.slice(home.length)}` : path
-}
+import { shortHomePath } from '../../utils/paths.js'
 
 // A run id is what a flow is keyed by. Flows of archived runs must still resolve, so this reads
 // the flow directory rather than the live run registry.
@@ -46,6 +38,8 @@ function flowPayload(state: FlowState, path: string) {
     state: state.state,
     rounds: state.rounds,
     max_rounds: state.max_rounds,
+    review_started_at: state.review_started_at,
+    review_timeout_sec: state.review_timeout_sec,
     head: state.claim.head,
     claim: {
       head: state.claim.head,
@@ -54,14 +48,14 @@ function flowPayload(state: FlowState, path: string) {
     },
     queue: pendingSpecs(state).map(spec => ({ id: spec.id, title: spec.title })),
     dispatched_specs: state.dispatched_specs,
-    repo: shortPath(state.repo),
+    repo: shortHomePath(state.repo),
     updated_at: state.updated_at,
     log: state.log.slice(-5).map(entry => ({
       at: entry.at,
       event: entry.event,
       detail: redactSecrets(entry.detail),
     })),
-    path: shortPath(path),
+    path: shortHomePath(path),
   }
 }
 
@@ -104,11 +98,15 @@ function printStatus(state: FlowState, path: string): void {
   console.log(`state     ${state.state}  round ${state.rounds}/${state.max_rounds}`)
   console.log(`head      ${head}`)
   console.log(`verdict   ${verdict}  (baseline ${state.claim.verdict_count} in the reviewer pane)`)
+  const review = state.review_started_at === null
+    ? 'not waiting'
+    : `started ${new Date(state.review_started_at).toISOString()}, timeout ${state.review_timeout_sec}s`
+  console.log(`review    ${review}`)
   console.log(`queue     ${pendingSpecs(state).length} pending, ${state.dispatched_specs.length} dispatched`)
-  console.log(`repo      ${shortPath(state.repo)}`)
+  console.log(`repo      ${shortHomePath(state.repo)}`)
   console.log(`updated   ${state.updated_at}`)
   console.log(`last      ${last ? `${last.event} ${redactSecrets(last.detail)}` : '(no events)'}`)
-  console.log(`file      ${shortPath(path)}`)
+  console.log(`file      ${shortHomePath(path)}`)
 }
 
 function printTick(result: FlowStepResult, dryRun: boolean): void {
@@ -127,7 +125,7 @@ function printTick(result: FlowStepResult, dryRun: boolean): void {
   }
   console.log(`result    ${result.status}`)
   console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
-  if (result.path) console.log(`file      ${shortPath(result.path)}`)
+  if (result.path) console.log(`file      ${shortHomePath(result.path)}`)
 }
 
 function fail(err: unknown): never {

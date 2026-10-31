@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
@@ -112,6 +112,24 @@ describe('flow status', () => {
     )
     expect(failure?.message).toMatch(/process\.exit\(1\)/)
     expect(failure?.cli_err).toContain('no flow for run ghost')
+  })
+
+  it('prints a home-shortened path for a damaged file, not the absolute one', async () => {
+    const savedHome = process.env.HOME
+    process.env.HOME = tmpDir
+    try {
+      mkdirSync(join(tmpDir, 'flows'), { recursive: true })
+      writeFileSync(join(tmpDir, 'flows', 'run-bad.json'), '{"schema_version":1,', 'utf-8')
+      const failure = await runCli(['flow', 'status', '--run', 'run-bad']).then(
+        () => null,
+        (error: Error & { cli_err?: string }) => error,
+      )
+      expect(failure?.cli_err).toContain('~/flows/run-bad.json')
+      expect(failure?.cli_err).not.toContain(tmpDir)
+    } finally {
+      if (savedHome === undefined) delete process.env.HOME
+      else process.env.HOME = savedHome
+    }
   })
 })
 

@@ -12,6 +12,7 @@ import { applyDecision, observeFlow } from '../src/core/flow-runner.js'
 // pane the gate did not confirm, and an ambiguous paste is never repeated.
 
 const AT = '2026-01-01T00:00:00.000Z'
+const NOW = Date.parse(AT)
 
 let root: string
 
@@ -31,11 +32,16 @@ function makeState(overrides: Partial<FlowState> = {}): FlowState {
     head: 'aaa111',
     at: AT,
   })
-  return { ...base, ...overrides }
+  const state = { ...base, ...overrides }
+  if (state.state === 'reviewing' && state.review_started_at === null && overrides.review_started_at === undefined) {
+    state.review_started_at = NOW
+  }
+  return state
 }
 
 function makeObservations(overrides: Partial<FlowObservations> = {}): FlowObservations {
   return {
+    now: NOW,
     head: 'aaa111',
     tree_clean: true,
     dev_pane: 'idle',
@@ -88,7 +94,7 @@ describe('applyDecision', () => {
       const decision = flowTick(state, makeObservations({ head: 'bbb222', review_pane: pane }))
       const ports = makePorts()
 
-      const result = applyDecision(state, decision, { root, ports, now: AT })
+      const result = applyDecision(state, decision, { root, ports, at: AT })
 
       expect(result.status).toBe('skipped')
       expect(ports.send).not.toHaveBeenCalled()
@@ -101,7 +107,7 @@ describe('applyDecision', () => {
     const decision = flowTick(state, makeObservations({ head: 'bbb222' }))
     const ports = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unknown' as const })) })
 
-    const result = applyDecision(state, decision, { root, ports, now: AT })
+    const result = applyDecision(state, decision, { root, ports, at: AT })
 
     expect(ports.send).toHaveBeenCalledTimes(1)
     expect(result.status).toBe('unconfirmed')
@@ -114,7 +120,7 @@ describe('applyDecision', () => {
     const decision = flowTick(state, makeObservations({ head: 'bbb222', verdict_count: 1 }))
     const ports = makePorts()
 
-    const result = applyDecision(state, decision, { root, ports, now: AT })
+    const result = applyDecision(state, decision, { root, ports, at: AT })
 
     expect(result.status).toBe('applied')
     expect(result.path).toBe(join(root, 'flows', 'run-1.json'))
@@ -130,7 +136,7 @@ describe('applyDecision', () => {
     expect(decision.kind).toBe('dispatch_fix')
 
     const ports = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'pane_changed' as const })) })
-    const first = applyDecision(state, decision, { root, ports, now: AT })
+    const first = applyDecision(state, decision, { root, ports, at: AT })
 
     expect(first.status).toBe('unconfirmed')
     // The status does not advance (the work may not have started) but the verdict is consumed.
@@ -147,6 +153,24 @@ describe('applyDecision', () => {
     expect(ports.send).toHaveBeenCalledTimes(1)
   })
 
+  it('escalates a review that timed out without sending anything', () => {
+    const state = makeState({
+      state: 'reviewing',
+      review_started_at: NOW - 901_000,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+    })
+    const decision = flowTick(state, makeObservations({ verdict_count: 1 }))
+    expect(decision.reason).toBe('review_timeout')
+
+    const ports = makePorts()
+    const result = applyDecision(state, decision, { root, ports, at: AT })
+
+    expect(result.status).toBe('applied')
+    expect(ports.send).not.toHaveBeenCalled()
+    expect(readFlow('run-1', { root }).state).toBe('escalated')
+    expect(readFlow('run-1', { root }).log.at(-1)?.event).toBe('escalate')
+  })
+
   it('escalates without sending anything', () => {
     const state = makeState({
       state: 'reviewing',
@@ -156,7 +180,7 @@ describe('applyDecision', () => {
     const decision = flowTick(state, makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_count: 2 }))
     const ports = makePorts()
 
-    const result = applyDecision(state, decision, { root, ports, now: AT })
+    const result = applyDecision(state, decision, { root, ports, at: AT })
 
     expect(result.status).toBe('applied')
     expect(ports.send).not.toHaveBeenCalled()

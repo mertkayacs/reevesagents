@@ -33,6 +33,11 @@ export const FLOW_SCHEMA_VERSION = 1
 // that a normal commit cycle resets is a budget that can never run out (§3.1).
 export const MAX_ROUNDS = 6
 
+// How long a requested review may stay unanswered before the flow stops waiting (§3.1,
+// `review_timeout_sec`). A reviewer that crashed, hit a login screen or is staring at a modal never
+// prints a verdict, and "wait forever" is not a state a pipeline can afford: the tick escalates.
+export const REVIEW_TIMEOUT_SEC = 900
+
 // `flow status` shows the tail; the file stays bounded so a long-lived flow cannot grow forever.
 export const FLOW_LOG_LIMIT = 50
 
@@ -67,6 +72,12 @@ export interface FlowState {
   state: FlowStatus
   rounds: number
   max_rounds: number
+  // Seconds a requested review may stay unanswered. Per flow, so a slow reviewer can be given
+  // more room without touching the engine.
+  review_timeout_sec: number
+  // When the outstanding review was requested (epoch ms), null when no review is outstanding.
+  // Without it the engine cannot tell "the reviewer is thinking" from "the reviewer is gone".
+  review_started_at: number | null
   claim: FlowClaim
   // Blocks queued but not necessarily dispatched (§3.2). The next block is the first one whose
   // id is absent from `dispatched_specs`.
@@ -83,6 +94,7 @@ export interface FlowInit {
   // The commit the flow starts from; a review is requested for the next one.
   head?: string
   max_rounds?: number
+  review_timeout_sec?: number
   specs?: BlockSpec[]
   at?: string
 }
@@ -90,6 +102,9 @@ export interface FlowInit {
 // What the caller observed at tick time. Every field is read outside this module, so a test can
 // describe any pane, any repository and any reviewer without tmux or git.
 export interface FlowObservations {
+  // The caller's clock, epoch ms. Injected instead of read here, so the tick stays a pure function
+  // of its arguments and a timeout is a testable fact rather than a wait.
+  now: number
   // HEAD of the flow's repository. Empty means "could not read it", which is not "unchanged".
   head: string
   // False when the worktree has uncommitted changes: reviewing a half-written tree burns a round.
@@ -121,7 +136,9 @@ export type FlowReason =
   | 'review_pane_unknown'
   | 'awaiting_verdict'
   | 'verdict_scrolled'
+  | 'review_timer_started'
   | 'rounds_exhausted'
+  | 'review_timeout'
   | 'head_moved'
   | 'review_requested'
   | 'fix_dispatched'
@@ -136,6 +153,8 @@ export interface FlowDecision {
   next_state: FlowStatus
   next_rounds: number
   next_claim: FlowClaim
+  // When the review clock starts (a review request) or stops (a consumed verdict).
+  next_review_started_at: number | null
   // Who receives `message`. Absent for a hold and for an escalation (a human decides that one).
   target?: keyof FlowRoles
   // The exact text a real tick pastes. Absent for a hold.
@@ -183,6 +202,10 @@ export function createFlowState(init: FlowInit): FlowState {
     state: 'idle',
     rounds: 0,
     max_rounds: init.max_rounds && init.max_rounds > 0 ? Math.floor(init.max_rounds) : MAX_ROUNDS,
+    review_timeout_sec: init.review_timeout_sec && init.review_timeout_sec > 0
+      ? Math.floor(init.review_timeout_sec)
+      : REVIEW_TIMEOUT_SEC,
+    review_started_at: null,
     claim: { head: init.head ?? '', verdict: null, verdict_count: 0 },
     specs: init.specs ?? [],
     dispatched_specs: [],
@@ -220,6 +243,10 @@ export function parseFlowState(raw: unknown): FlowState {
     state: status,
     rounds: count(record.rounds),
     max_rounds: count(record.max_rounds, MAX_ROUNDS) || MAX_ROUNDS,
+    review_timeout_sec: count(record.review_timeout_sec, REVIEW_TIMEOUT_SEC) || REVIEW_TIMEOUT_SEC,
+    review_started_at: typeof record.review_started_at === 'number' && Number.isFinite(record.review_started_at)
+      ? Math.floor(record.review_started_at)
+      : null,
     claim: { head: text(claim.head), verdict, verdict_count: count(claim.verdict_count) },
     specs: Array.isArray(record.specs) ? record.specs.map(normalizeSpec).filter((spec): spec is BlockSpec => spec !== null) : [],
     dispatched_specs: Array.isArray(record.dispatched_specs)
@@ -300,19 +327,33 @@ function hold(state: FlowState, reason: FlowReason): FlowDecision {
     next_state: state.state,
     next_rounds: state.rounds,
     next_claim: state.claim,
+    next_review_started_at: state.review_started_at,
   }
 }
 
-function withClaim(state: FlowState, reason: FlowReason, claim: FlowClaim): FlowDecision {
-  return { ...hold(state, reason), next_claim: claim }
+function withNext(state: FlowState, reason: FlowReason, patch: Partial<FlowDecision>): FlowDecision {
+  return { ...hold(state, reason), ...patch }
 }
 
-function reviewRequest(state: FlowState, head: string, verdictCount: number, reason: FlowReason): FlowDecision {
+function withClaim(state: FlowState, reason: FlowReason, claim: FlowClaim): FlowDecision {
+  return withNext(state, reason, { next_claim: claim })
+}
+
+function reviewRequest(
+  state: FlowState,
+  head: string,
+  verdictCount: number,
+  reason: FlowReason,
+  now: number,
+): FlowDecision {
   return {
     kind: 'request_review',
     reason,
     next_state: 'reviewing',
     next_rounds: state.rounds,
+    // The clock starts with the request: a reviewer that never answers is bounded by
+    // `review_timeout_sec`, not by a human noticing.
+    next_review_started_at: now,
     // The baseline is the reviewer's counter *now*, so the verdict that a previous commit left on
     // screen cannot be mistaken for this head's answer.
     next_claim: { head, verdict: null, verdict_count: verdictCount },
@@ -335,6 +376,7 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
     reason: 'fix_dispatched',
     next_state: 'fixing',
     next_rounds: rounds,
+    next_review_started_at: null,
     // Consume the verdict: one CHANGES_REQUESTED is dispatched once, however often the tick runs.
     next_claim: { ...state.claim, verdict: observations.verdict, verdict_count: observations.verdict_count },
     target: 'dev',
@@ -357,6 +399,7 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     // head, which is what `idle` means here.
     next_state: 'idle',
     next_rounds: state.rounds,
+    next_review_started_at: null,
     next_claim: { ...state.claim, verdict: observations.verdict, verdict_count: observations.verdict_count },
     target: 'dev',
     spec_id: spec.id,
@@ -364,12 +407,17 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
   }
 }
 
-function escalate(state: FlowState, observations: FlowObservations): FlowDecision {
+function escalate(
+  state: FlowState,
+  observations: FlowObservations,
+  reason: FlowReason = 'rounds_exhausted',
+): FlowDecision {
   return {
     kind: 'escalate',
-    reason: 'rounds_exhausted',
+    reason,
     next_state: 'escalated',
     next_rounds: state.rounds,
+    next_review_started_at: null,
     next_claim: { ...state.claim, verdict: observations.verdict, verdict_count: observations.verdict_count },
     head: state.claim.head,
     notes: observations.verdict_notes ?? '',
@@ -405,13 +453,25 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
-  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested')
+  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now)
 }
 
 function tickReviewing(state: FlowState, observations: FlowObservations): FlowDecision {
+  // A review state written before the clock existed, or a request that was stamped by nothing:
+  // start the clock now rather than waiting on a deadline nobody set.
+  if (state.review_started_at === null) {
+    return withNext(state, 'review_timer_started', { next_review_started_at: observations.now })
+  }
+
+  const timedOut = observations.now - state.review_started_at >= state.review_timeout_sec * 1000
+
   // An unreadable reviewer pane makes every verdict observation meaningless: hold instead of
-  // reading a capture that failed as "zero verdicts" and re-baselining on it.
-  if (observations.review_pane === 'unknown') return hold(state, 'review_pane_unknown')
+  // reading a capture that failed as "zero verdicts" and re-baselining on it. An expired deadline
+  // still wins, because it is a fact about the request and not about what this tick can see — a
+  // reviewer whose pane cannot be read is one of the ways a hang looks.
+  if (observations.review_pane === 'unknown') {
+    return timedOut ? escalate(state, observations, 'review_timeout') : hold(state, 'review_pane_unknown')
+  }
 
   // Fewer verdicts visible than the baseline is a scrolled window, not "no verdict" — the
   // capture is bounded, so an old verdict can leave it. Re-baseline and stay put.
@@ -420,24 +480,28 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   }
 
   const fresh = observations.verdict !== null && observations.verdict_count > state.claim.verdict_count
-  if (!fresh) return hold(state, 'awaiting_verdict')
+  if (!fresh) {
+    // Nothing answered within the budget: a reviewer that crashed, hit a login screen or is stuck
+    // on a modal never prints a verdict, so the flow escalates instead of waiting for ever.
+    return timedOut ? escalate(state, observations, 'review_timeout') : hold(state, 'awaiting_verdict')
+  }
 
   // The dev committed while the review was running: the verdict describes an older commit, so it
   // is not applied to the new head. The new head goes to review once the reviewer is free.
   if (observations.head !== state.claim.head) {
     const gate = reviewGate(state, observations)
     if (gate) return gate
-    return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved')
+    return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now)
   }
 
   if (observations.verdict === 'ACCEPT') {
     const spec = nextSpec(state)
     if (!spec) {
-      return {
-        ...hold(state, 'flow_done'),
+      return withNext(state, 'flow_done', {
         next_state: 'done',
+        next_review_started_at: null,
         next_claim: { ...state.claim, verdict: 'ACCEPT', verdict_count: observations.verdict_count },
-      }
+      })
     }
     const gate = dispatchGate(state, observations)
     if (gate) return gate
@@ -457,7 +521,7 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
-  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested')
+  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now)
 }
 
 // One step. Pure: it reads its arguments and returns a decision, never a pane, a file or a clock.
@@ -477,6 +541,7 @@ export function decisionChangesState(state: FlowState, decision: FlowDecision): 
   if (state.claim.head !== decision.next_claim.head) return true
   if (state.claim.verdict !== decision.next_claim.verdict) return true
   if (state.claim.verdict_count !== decision.next_claim.verdict_count) return true
+  if (state.review_started_at !== decision.next_review_started_at) return true
   if (decision.kind === 'dispatch_spec' && decision.spec_id) {
     return !state.dispatched_specs.includes(decision.spec_id)
   }
@@ -511,6 +576,9 @@ function withDelta(
     dispatched_specs: dispatched,
     state: options.advance ? decision.next_state : state.state,
     rounds: options.advance ? decision.next_rounds : state.rounds,
+    // A dispatch that was not confirmed changes no status, so the review clock keeps running:
+    // resetting it would hide a reviewer that never answered.
+    review_started_at: options.advance ? decision.next_review_started_at : state.review_started_at,
     log: appendLog(state, { at, event: options.event, detail: options.detail ?? logDetail(decision) }),
     updated_at: at,
   }
