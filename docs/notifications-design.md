@@ -1,6 +1,11 @@
 # Notification log and agent pulse badge — design
 
 Status: design only. No production code is changed by this document.
+Revision 3 (after review round 2): added the missing mark-read route (§4.3); the watermark's
+read-max-write now runs under the append/rotation lock (§3.4); `MAX_EVENTS` is derived from the file
+inside the lock instead of a drift-prone counter (§3.3); the `PIPE_BUF` justification is replaced by
+a correct description of the lock and of a partially written tail (§3.2); the rotation tests assert
+the retained suffix instead of all lines (§9).
 Revision 2 (after review): append and rotation now share one lock protocol (§3.2, §3.3); rotation
 trims by a hard byte budget instead of a line count (§3.3); the pulse window is driven by the
 server-stamped `received_at`, never by a producer-supplied `ts` (§2.1, §4.1, §4.2, §6.2).
@@ -12,7 +17,7 @@ Scope: Web UI notification history ("Logs") plus a pulse badge on the agent card
 | Question | Decision |
 | --- | --- |
 | Where events come from | One contract, two producers. The product emits what it can already observe in-process (run lifecycle, approvals, reaper, stale-run sweep); everything else — including "agent finished its turn", which 2.1.0 cannot detect at all — arrives through `POST /api/notifications` from the fleet supervisor as `source: "external"`. |
-| How events are stored | Append-only `~/.reeves/notifications.jsonl` (one JSON object per line, `O_APPEND`), ring-capped by count **and** size, trimmed to the newest lines that fit a hard byte budget; append and rotation share one lock acquisition (`.notifications.lock`) and one synchronous critical section. A separate `~/.reeves/notifications-read.json` holds a single read watermark. The server is the source of truth for both the log and unread state, not `localStorage`. |
+| How events are stored | Append-only `~/.reeves/notifications.jsonl` (one JSON object per line, `O_APPEND`), ring-capped by count **and** size, trimmed to the newest lines that fit a hard byte budget; append, rotation and the read watermark all share one lock acquisition (`.notifications.lock`) and one synchronous critical section each. A separate `~/.reeves/notifications-read.json` holds a single read watermark, updated read-max-write so it can only move forward. The server is the source of truth for both the log and unread state, not `localStorage`. |
 | How the badge behaves | The badge is pure derived state: `last unread event of that agent` → `received_at + agent_pulse_ms`, where `received_at` is stamped by the server, so a producer-supplied future `ts` cannot stretch the window. The client computes the remaining time on every render from `received_at` corrected by the `server_now` offset, so F5 mid-pulse shows the correct remainder. One `setTimeout` at the earliest expiry, no polling timer. |
 
 Verified premise for all of this — the product has no notification or attention mechanism at all in 2.1.0:
@@ -383,32 +388,44 @@ compact JSON object per line, `\n`-terminated, no pretty printing, no index file
 `<state>/notifications-read.json` = `{ "read_seq": 0, "updated_at": "…" }` (atomic temp+rename,
 `chmod 0600` like `atomicWriteJson` `runs.ts:117-123`).
 
-### 3.2 Append atomicity: `O_APPEND`, not temp+rename
+### 3.2 Append path: `O_APPEND` inside the lock, not temp+rename
 
-`openSync(path, 'a', 0o600)` + a single `writeSync(fd, line)`.
+`openSync(path, 'a', 0o600)` + a single `writeSync(fd, line)`, always inside the lock of §3.3.
 
-Reasoning, stated explicitly because the obvious choice is the wrong one:
+What `O_APPEND` actually guarantees, stated precisely — the previous revision justified the
+per-line cap through `PIPE_BUF`, and that was wrong: `PIPE_BUF` atomicity is specified for pipes and
+FIFOs, not for regular files, and no `write()` size makes a record "atomically visible" to a reader
+that is not synchronised with the writer.
 
-- temp+rename (`atomicWriteJson`) requires read-modify-write of the whole file for every event and
-  renames a new inode each time. The ingest caller is not a second writer — it posts over HTTP into
-  the same process — so the objection is different: a rewrite per event makes the append path
-  O(file size), and if a second `reevesagents web` instance ever runs against the same state dir,
-  two rewrites from the same snapshot silently drop each other's lines.
-- `O_APPEND` makes the kernel place every `write()` at the end of the file atomically; on Linux
-  and macOS a single small write below `PIPE_BUF` (4096 bytes) to a local filesystem is not
-  interleaved with another appender's write. That is why the per-line hard cap in §4.2 step 4 is
-  4000 bytes and not "about 4 KiB": staying strictly under `PIPE_BUF` is what makes this guarantee
-  hold, and a typical line is ~1.4 KB anyway.
-- Torn lines are survivable: the reader skips any line that is not valid JSON (and any line
-  missing `seq`/`kind`), so a crash mid-write costs at most the last event, never the file.
+- `O_APPEND` does guarantee that the offset is moved to the end of the file and the bytes are
+  written without an intervening modification of that offset (POSIX), so two appenders cannot
+  overwrite each other's records and the file never grows a hole. On Linux and macOS a single small
+  write to a local file is also not interleaved byte-wise with another appender's buffer in
+  practice — an implementation property, not a portable promise, and this design does not rely on
+  it.
+- What the design relies on is the **lock**: append, rotation and the watermark write all run in the
+  same `withNotificationsLock` critical section (§3.3), so there is exactly one writer at a time
+  across the process family. `O_APPEND` is kept because it makes the append O(1) — no seek, no
+  read-modify-write — and because it is a harmless second line of defence if some future tool
+  appends without taking the lock.
+- Readers deliberately do **not** take the lock (a UI must never block on a writer), so a reader can
+  observe the file while a line is being written. The contract is therefore explicit: **the last
+  line may be partial and is never trusted**. `readNotifications` splits on `\n`, parses each line
+  independently, and skips any line that is not valid JSON or lacks a numeric `seq`. A fragment is
+  invisible until `writeSync` returns, then the next read sees the complete line. If the writer died
+  mid-line, that fragment stays skipped forever and disappears at the next rotation, which rewrites
+  whole lines only.
+- A crash mid-write therefore costs at most the last event, never the file or the earlier records.
 
 `fsync` is deliberately not called per event: the value is a UI log, and a lost last event after a
 power failure is not worth an fsync per notification. The read watermark file *is* written
-atomically.
+atomically (temp+rename) and under the same lock, which is what makes the monotonicity argument in
+§3.4 hold.
 
-What `O_APPEND` does **not** solve is rotation, which is a read-modify-rename of the whole file: an
-append that lands between rotation's read and its `rename` goes to the old inode and is lost. That
-is why append and rotation share one lock protocol instead of only rotation taking a lock (§3.3).
+What `O_APPEND` cannot help with at all is rotation, which is a read-modify-rename of the whole
+file: an append that lands between rotation's read and its `rename` goes to the old inode and is
+lost. That is why append and rotation share one lock protocol instead of only rotation taking a
+lock (§3.3).
 
 ### 3.3 Ring: cap by count **and** size, rotate by rewrite
 
@@ -430,8 +447,9 @@ writers.
 `appendNotification()` acquires that lock **once** and performs the whole unit of work inside the
 single acquisition:
 
-1. `writeSync` of the line on the `O_APPEND` fd — short, and still atomic for readers;
-2. `statSync` for the current size, plus the in-memory event counter (below);
+1. `writeSync` of the line on the `O_APPEND` fd (short; readers may see a partial tail and skip it,
+   §3.2);
+2. `statSync` for the current size, and resolve the exact line count from it (below);
 3. if `size > MAX_BYTES` or `count > MAX_EVENTS`, call the **internal** `rotateUnlocked()`;
 4. release.
 
@@ -446,7 +464,7 @@ Two rules make this correct rather than merely locked:
   has exactly one entry point: the append critical section.
 
 **Rotation trims by count AND by bytes.** Trimming to `KEEP_EVENTS` lines alone cannot honour a
-byte cap: with the per-event ceiling from §4.2 step 4 (4000 bytes) 1500 lines can reach ~6 MiB, and even
+byte cap: with the per-event ceiling from §4.2 step 4 (4096 bytes) 1500 lines can reach ~6 MiB, and even
 a typical ~1.4 KiB line puts 1500 lines at ~2.1 MiB — already over `MAX_BYTES`. So rotation walks
 the file **from the end** and keeps the newest lines while both budgets hold:
 
@@ -466,19 +484,30 @@ Properties, all of them unit-testable:
   rather than "usually true";
 - the 25 % headroom under `MAX_BYTES` means the next rotation happens ~500 KiB later instead of on
   the very next append — the amortization the count-only trim was aiming for;
-- between rotations the file can exceed `MAX_BYTES` by at most one line (≤ 4000 bytes, the §4.2
+- between rotations the file can exceed `MAX_BYTES` by at most one line (≤ 4096 bytes, the §4.2
   ceiling); that overrun is precisely what triggers the next rotation;
 - at least one line is always kept (`len(kept) > 0` guard), and the file always ends on a line
   boundary with a trailing `\n`, so a reader never sees a half line produced by rotation;
 - the trim only drops the oldest lines and never rewrites the survivors, so redaction and `seq` are
   untouched by it.
 
-**Event counting.** The byte cap is exact and cross-process safe (one `statSync`). The count cap is
-tracked in memory as `kept_at_last_rotation + appends_since`, and is recomputed exactly during the
-read that rotation already performs. With the normal single-writer case (one `reevesagents web`
-process) it is exact; if a second process appends to the same state dir, the counter can lag, and in
-that case the byte cap is the bound that still holds. Stated explicitly so nobody assumes a
-two-process setup gets both caps exactly.
+**Event counting is exact inside the lock — no drift is permitted.** The previous revision admitted
+that a process-local counter could lag when a second process appends, which would mean `MAX_EVENTS`
+was not actually guaranteed. That is not acceptable, so the count is derived from the file itself at
+the moment the cap is evaluated, inside the critical section:
+
+- the module caches `{ size, count }` after its own append;
+- on the next append it compares the cached `size + len(line)` with `statSync(path).size`;
+- equal → nobody else touched the file, so `count += 1` (O(1), the normal path);
+- different → another process (or a rotation) wrote since, so the line count is recomputed by
+  scanning the file for `\n` **before** the cap check (O(file size), only on the foreign-write path).
+
+Every append adds at least one byte, so `size` is a sound cache key: it can only match after this
+process's own write, and it cannot match after a foreign append or a rotation. Both caps are
+therefore exact at the moment they are evaluated, for one writer and for several, and no wording in
+this document claims otherwise.
+
+The byte cap needs no such care — one `statSync` is already exact and cross-process safe.
 
 Crash safety: a process dying inside the critical section leaves a stale lock file that is taken
 over after 5 s (`runs.ts:85-101` uses the same policy). An orphan `notifications.jsonl.tmp` is
@@ -486,9 +515,11 @@ harmless, because rotation always truncates that path and the original file is u
 `rename`. Readers take no lock at all: `rename` swaps the inode, so a reader sees either the old
 file or the new one, never a half-written one.
 
-`seq` is **not** reset by rotation: the next id is `max(seq_in_file, read_seq, seq_file) + 1` —
-tracked in `<state>/notifications-seq` (single integer, atomic write) — so after a rotation that
-drops every old event, ids keep increasing and the watermark stays meaningful.
+`seq` is **not** reset by rotation, and it is allocated in the same critical section as the append
+that consumes it: the next id is `max(seq_in_file, read_seq, seq_file) + 1`, tracked in
+`<state>/notifications-seq` (single integer, atomic write). Two processes therefore cannot hand out
+the same `seq`, and ids keep increasing after a rotation that dropped every old event, so the
+watermark stays meaningful.
 
 ### 3.4 Unread state and why the server owns it
 
@@ -498,6 +529,25 @@ One integer watermark `read_seq`:
 - the dialog's "unread only" filter is that predicate;
 - an agent's badge exists iff that agent has at least one event with `seq > read_seq`;
 - "mark all read" sets `read_seq = latest_seq` (monotonic, never decreases).
+
+**Monotonicity is enforced inside the lock, not by convention.** `markNotificationsRead(upTo)` runs
+in the same `withNotificationsLock` critical section as append and rotation (§3.3) and performs
+read → `next = max(current, clamp(upTo))` → atomic temp+rename → release. Two concurrent calls can
+therefore never interleave as "read 0 / read 0 / write 20 / write 10": the second call reads the 20
+the first one wrote and keeps it. Taking the *same* lock as append matters for a second reason —
+`clamp(upTo)` is bounded by `latest_seq`, and `latest_seq` only moves in that critical section, so a
+concurrent append cannot slip an event past the clamp and get it marked read before it exists.
+
+The route that exposes this is specified in §4.3; the client never writes the watermark itself.
+
+Readers of `read_seq` (the SSE summary, `GET /api/notifications`) do not take the lock. That is safe
+because writes are monotonic: a stale read can only be *behind*, so a badge may linger for at most
+one frame and never returns after being cleared.
+
+**Clamping is part of the contract.** `upTo` is clamped to `latest_seq`, so a client cannot mark
+events as read before they exist. Without the clamp, a single `up_to_seq: 999999999` would suppress
+every future badge forever — the failure looks like "notifications stopped working" and has no
+obvious cause. With it, the worst a client can do is mark everything that currently exists.
 
 Why not per-event `read: true` flags: rewriting a JSONL file per flag flip is exactly the
 read-modify-write hazard of §3.2, and a watermark is 8 bytes.
@@ -550,7 +600,7 @@ agrees with the server.
 
 `pulse_ms` is sent along with the data so the client never has to know the config key name.
 
-Also added to the SSE summary and to `GET /api/state` (see §4.4) — a **summary only**:
+Also added to the SSE summary and to `GET /api/state` — a **summary only** (how the client consumes it: §5.4):
 
 ```json
 "notifications": {
@@ -601,8 +651,9 @@ Guard chain, in order (each returns a distinct status so the caller can see whic
 4. Body: `readJsonBody` (`server.ts:205-218`) enforces `MAX_BODY` = 64 KiB while streaming
    (`:211`). Per-event caps are tighter and validated separately, so a single event cannot be
    64 KiB: `title <= 200`, `detail <= 1000`, `run_name <= 80`, `project <= 64`, `run_id/agent_id/
-   agent_nickname <= 64`, and the total serialized line **<= 4000 bytes** — deliberately under
-   `PIPE_BUF` (4096) so the `O_APPEND` atomicity claimed in §3.2 still holds. Fail → `400 { error }`.
+   agent_nickname <= 64`, and the total serialized line **<= 4096 bytes**. The bound exists so a
+   single line stays cheap to parse and to rotate and always fits `KEEP_BYTES` by three orders of
+   magnitude — it is *not* a `PIPE_BUF` argument (see the correction in §3.2). Fail → `400 { error }`.
 5. Schema: `kind` must be one of §2.2; `severity` one of `info|warn|error`; `project` must not
    contain `/` or `\`; unknown top-level keys are ignored, not rejected (forward compatibility
    for the supervisor).
@@ -629,7 +680,41 @@ No authentication token is added. The threat model is unchanged from the rest of
 which is a worse secret-handling problem than a loopback origin check. The `Origin` requirement
 already blocks the realistic attack (a web page in the user's browser posting cross-site).
 
-### 4.3 How the supervisor reaches the server
+### 4.3 Mark read: `POST /api/notifications/read`
+
+The "Mark all read" button (§5.1, §5.5) has to move the *server* watermark — §3.4 explains why a
+`localStorage` flag is not the design — so the HTTP surface needs a third route. Without it the
+button can only clear the local view, and the next SSE frame or F5 resurrects every badge.
+
+| field | value |
+| --- | --- |
+| method / path | `POST /api/notifications/read` |
+| body | `{ "up_to_seq": 57 }` — optional; omitted or `null` means `latest_seq` |
+| effect | `read_seq = max(read_seq, min(up_to_seq, latest_seq))`, written under `withNotificationsLock` (§3.3, §3.4) |
+| response `200` | the same summary object as §4.1: `{ read_seq, latest_seq, unread_count, server_now, pulse }` |
+| `400` | `up_to_seq` present but not a non-negative integer → `{ error: "up_to_seq must be a non-negative integer" }` |
+| `403` | `forbidden host` / `forbidden origin` / `forbidden peer` — the identical guard chain as §4.2 |
+| `500` | lock timeout (`Timed out waiting for notifications lock`, same shape as `runs.ts:105`) |
+
+Properties:
+
+- **idempotent**: repeating the call with the same or a smaller value changes nothing;
+- **clamped** to `latest_seq` (§3.4), so a client cannot mark the future as read;
+- **monotonic** under concurrency: the read-max-write is one critical section, so a smaller
+  watermark can never overwrite a larger one;
+- returns the fresh summary so the clicking tab updates the badge and the "unread only" filter
+  immediately; other tabs get it from the next SSE frame, because `read_seq`/`unread_count`/`pulse`
+  are part of the summary and the frame is only sent when the serialized payload actually changes
+  (`server.ts:167`);
+- no rate limit: this is a click-driven state change, not a producer path. Body parsing uses
+  `readJsonBody` (`server.ts:205-218`), so the `MAX_BODY` ceiling applies here too.
+
+Route placement: with the other notification routes — `GET /api/notifications` next to
+`GET /api/events` (`server.ts:486`), and both POST routes in the POST block after
+`POST /api/presets/save` (`server.ts:548-556`), before the parameterised presets regexes at
+`:557`. The path is static, so it cannot be shadowed by those regexes.
+
+### 4.4 How the supervisor reaches the server
 
 The port is dynamic (`DEFAULT_PORT 8080`, `DEFAULT_RANGE 10`, `server.ts:47-48`, fallback at
 `:652-672`), so the supervisor cannot hardcode it. `startWebServer` therefore writes
@@ -643,7 +728,7 @@ Atomic temp+rename, `0600`, same style as `open-token.ts:19-22`. The supervisor 
 `/healthz`, and skips silently when the Web UI is not running (a missing web UI must never break
 the fleet loop).
 
-### 4.4 One-line ingest example for the fleet supervisor
+### 4.5 One-line ingest example for the fleet supervisor
 
 The supervisor is **not** modified in this cycle; this is the contract it will use:
 
@@ -735,6 +820,13 @@ with event data anywhere. The only existing `innerHTML` use is clearing a contai
   The list is filtered **client-side** from the loaded page of events; the `run` query parameter
   exists for the supervisor/other clients and for a future "load more".
 - "Unread only" toggles the `seq > read_seq` predicate client-side, re-rendering without a fetch.
+- "Mark all read" (`#logs-mark-read`) calls `POST /api/notifications/read` (§4.3) with `up_to_seq`
+  omitted, so the server clamps to `latest_seq`; then it applies the returned summary and
+  re-renders. An event that arrives between the last fetch and the click is marked read as well —
+  that is what the label promises, and the dialog is live-updating, so the user is looking at
+  current data when clicking. On failure the button shows `#logs-error` and the watermark stays
+  where it was: the local view is never cleared optimistically, so a failed request cannot fake a
+  "read" state that the next frame would contradict.
 - The dialog loads `limit=200` on open. A footer line shows `N of M` when `latest_seq` implies
   more than the loaded page; "Load older" is deliberately **out of scope** for blocks 02–03 —
   200 events covers the owner's stated need ("что я пропустил за последние часы") and the ring is
@@ -964,7 +1056,7 @@ through `translatePhrase`.
 
 6. **Hundreds of events.** Three separate bounds keep this cheap: the ring (2000 events / 2 MiB,
    §3.3), the read page (`limit <= 500`, §4.1), and the SSE summary (integers + one `pulse` entry
-   per agent with unread events, §4.4). The remaining cost is the full-file parse on read: with a
+   per agent with unread events, §4.1). The remaining cost is the full-file parse on read: with a
    2 MiB cap that is bounded, and it happens on dialog open / on change, not on the 1500 ms tick.
 
 7. **Live fleet safety.** Anything that starts the Web UI runs the sweeps in the SSE snapshot
@@ -977,18 +1069,24 @@ through `translatePhrase`.
    that is a separate project with pane-content heuristics, and it should not be smuggled into
    block 02.
 
-9. **Time authority, and write-path atomicity.** Two invariants that are cheap now and expensive to
-   retrofit, so they belong to block 02 from the first line of code:
+9. **Time authority, write-path atomicity, and counter exactness.** Three invariants that are cheap
+   now and expensive to retrofit, so they belong to block 02 from the first line of code:
 
    - *time*: `received_at` is the only server-stamped, trusted timestamp. Anything that compares a
      stored time against "now" — the pulse window, relative labels, the `since` cursor's human
      display — must read `received_at`, and the client must convert it through the `server_now`
      offset (§6.2). A producer `ts` may only label an event, never gate a timer or a filter. Note
      that `nowIso()` (`runs.ts:69-71`) already exists and is what the append path should use;
-   - *writes*: `appendNotification()` owns exactly one lock acquisition and one synchronous
-     critical section covering append + cap check + rotation (§3.3). A future refactor that makes
-     that path `async`, or that calls rotation from anywhere else, silently reintroduces the
-     lost-append window this design closes.
+   - *writes*: `appendNotification()` and `markNotificationsRead()` each own exactly one lock
+     acquisition and one synchronous critical section — append + cap check + rotation, and
+     read-max-write of the watermark respectively (§3.3, §3.4). A future refactor that makes either
+     path `async`, or that calls rotation from anywhere else, silently reintroduces the lost-append
+     window and the non-monotonic watermark this design closes;
+   - *counters*: `MAX_EVENTS` is derived from the file inside the lock, never from a process-local
+     increment that a second process can invalidate (§3.3). Any future caching must keep that
+     property, or the guarantee silently degrades to "usually true". The same rule covers `seq`
+     allocation, which must stay in the append critical section or two processes can issue
+     duplicate ids.
 
 ## 9. Blocks 02–03
 
@@ -998,16 +1096,17 @@ Code:
 
 - new `src/core/notifications.ts`:
   `appendNotification(input)`, `readNotifications({ limit, run, since, unread })`,
-  `markNotificationsRead(seq)`, `notificationSummary()`, `normalizeNotificationInput(raw)`,
-  internal `rotateUnlocked()`, `withNotificationsLock(fn)`, `nextSeq()`. Uses `stateRoot()`
-  (`runs.ts:37`), the `withRunsLock` recipe (`runs.ts:82-115`) for its own lock file, `nowIso()`
-  (`runs.ts:69-71`) for `received_at`, and `redactSecrets` (`redact.ts:14`). No new dependency.
-  `appendNotification` is synchronous and owns the single lock acquisition described in §3.3.
+  `markNotificationsRead(upTo)` (read-max-write under the lock, §3.4), `notificationSummary()`,
+  `normalizeNotificationInput(raw)`, internal `rotateUnlocked()`, `withNotificationsLock(fn)`,
+  `nextSeq()`. Uses `stateRoot()` (`runs.ts:37`), the `withRunsLock` recipe (`runs.ts:82-115`) for
+  its own lock file, `nowIso()` (`runs.ts:69-71`) for `received_at`, `redactSecrets`
+  (`redact.ts:14`). No new dependency. `appendNotification` and `markNotificationsRead` are both
+  synchronous and each owns a single lock acquisition (§3.3, §3.4).
 - `src/surfaces/webui/server.ts`: `GET /api/notifications` (after `/api/presets`, `:478`, before
   `/api/events`, `:486`), `POST /api/notifications` (peer check + rate limiter + validator),
-  `notifications` summary inside the SSE snapshot (`createSseHub`'s `snapshot()`, `:154-161`) and
-  inside `GET /api/state` (`:445-451`), `web.json` write/unlink in `startWebServer`
-  (`:674-720`, around the bind at `:700`).
+  `POST /api/notifications/read` (§4.3, same guard chain, no rate limit), `notifications` summary
+  inside the SSE snapshot (`createSseHub`'s `snapshot()`, `:154-161`) and inside `GET /api/state`
+  (`:445-451`), `web.json` write/unlink in `startWebServer` (`:674-720`, around the bind at `:700`).
 - product emit points: `startRun`/`startRunFromPreset`/`startRunWithHead`/`spawnWorker`
   (`runtime.ts:365,431,483,533`) → `run.created`; `stopRun` (`:684`) → `run.stopped`;
   `archiveAndRemoveRun` (`runs.ts:437`) → `run.archived`; `createRunApproval` (`approvals.ts:141`)
@@ -1025,15 +1124,20 @@ Verification:
 | round-trip + ordering | append 3 events in a temp `REEVES_REGISTRY`, read back newest-first, `seq` strictly increasing |
 | ring by count | set the count cap low via the module's exported constants in the test build; append cap+1 → oldest dropped, `seq` continues |
 | ring by size — **byte bound** | append events with long `detail` until > `MAX_BYTES` → after rotation assert `statSync(file).size <= KEEP_BYTES` **and** `<= MAX_BYTES`, and assert the byte walk stopped before `KEEP_EVENTS` lines (so the two budgets are independent) |
-| ring by size — worst case | fill with lines at the §4.2 ceiling (4000 bytes) → 1500 lines would be ~6 MiB; assert the resulting file is still ≤ `KEEP_BYTES`, proving the count target cannot override the byte cap |
+| ring by size — worst case | fill with lines at the §4.2 ceiling (4096 bytes) → 1500 lines would be ~6 MiB; assert the resulting file is still ≤ `KEEP_BYTES`, proving the count target cannot override the byte cap |
 | rotation preserves survivors | after rotation every kept line parses, ends with `\n`, redaction markers intact, `seq` values unchanged, and `next seq` is greater than the last kept one |
-| **lock protocol** | `test/notifications-lock.test.ts`: (a) one `appendNotification()` acquires the lock exactly once and removes it (assert via an injectable counter — no nested acquire); (b) `rotateUnlocked` is not exported and `appendNotification` is synchronous (no `await` inside the critical section — assert the returned type is not a Promise); (c) cross-process: `child_process.spawn` a second node process appending M events to the same temp `REEVES_REGISTRY` while the parent appends M and forces rotation, then assert `2M` valid lines (none lost) and no torn line — this is the case the previous design lost writes on |
+| **lock protocol** | `test/notifications-lock.test.ts`: (a) one `appendNotification()` acquires the lock exactly once and removes it (injectable counter — no nested acquire); (b) `rotateUnlocked` is not exported and `appendNotification` is synchronous (assert the returned type is not a Promise); (c) **cross-process without rotation** — keep M below both caps, `child_process.spawn` a second node process appending M events to the same temp `REEVES_REGISTRY` while the parent appends M: assert exactly `2M` valid lines, no torn line, no duplicate `seq`, no gap in `seq`. This is the case the previous design lost writes on. |
+| **cross-process with rotation** | same two writers, but with caps injected small enough that rotation runs: do **not** assert `2M` lines — rotation legitimately drops the oldest. Assert instead: no duplicate `seq`; `seq` strictly increasing within the retained range; the retained `seq` set equals the expected newest suffix `[last_kept - kept + 1 .. last_kept]`; nothing from that suffix is missing; every line is valid JSON ending with `\n` |
+| **exact `MAX_EVENTS` with two writers** | inject a small `MAX_EVENTS`, append from two processes, and assert that after every append the file never holds more than `MAX_EVENTS` lines — the cap must fire exactly, not "eventually" |
 | stale lock takeover | create `.notifications.lock` by hand with an old mtime → the next append proceeds within ~5 s and the lock is replaced, not obeyed |
 | **received_at authority** | append with `ts` one hour in the future → stored `received_at` is within a second of now, and the pulse summary for that agent reports `pulse_ts` = `received_at` (not the future `ts`); repeat with `ts` unparsable and with `ts` two days old |
 | future `ts` cannot extend the badge | `pulse_ms = 5000`, event with `ts = now + 1h` → `pulse.pulse_ts + pulse_ms <= server_now + 5000 + ε` |
 | filters | `since`, `run`, `unread` and `limit` clamping (`limit=9999` → 500) |
 | redaction | append a title containing `sk-ant-…` → stored line contains `[REDACTED]` and not the key |
-| watermark | `markNotificationsRead` is monotonic; a smaller value never lowers it |
+| watermark is monotonic | `markNotificationsRead` under the lock: a smaller value never lowers it; two concurrent calls (20 and 10, started in both orders, plus an interleaving where both read before either writes) always end at 20; a later append leaves the watermark unchanged |
+| watermark clamp | `up_to_seq` above `latest_seq` is clamped to `latest_seq`, and an event appended afterwards is still unread and still produces a pulse entry |
+| mark read route | `POST /api/notifications/read` with the matching loopback `Origin` → 200 with `read_seq == latest_seq`; a following `GET /api/notifications?unread=1` returns an empty list; without `Origin` → 403; with `up_to_seq: "abc"` → 400; with `up_to_seq: null` → treated as `latest_seq` |
+| SSE after mark read | mark read, then read the next SSE frame → `notifications.read_seq` equals the new value and `notifications.pulse` is empty, with no page reload |
 | route guards | `test/web/notifications-route.test.ts`: POST without `Origin` → 403; POST with `Origin: http://evil.com` → 403; POST with the matching loopback `Origin` → 201 then visible in GET |
 | body/rate limits | POST > 64 KiB → 400; 31 rapid events → 429 then recovers after refill |
 | SSE summary | extend `test/web/server-actions.test.ts:423` (the existing first-frame test) to assert `notifications.latest_seq` and `notifications.server_now` are present |
@@ -1066,7 +1170,7 @@ Verification:
 | client contract | extend `test/web/client-contract.test.ts` with `id="logs-btn"`, `id="logs-dialog"`, `id="logs-list"`, `id="logs-filter-run"`, `id="logs-unread"`, `id="logs-mark-read"`, `function openLogsDialog()`, `function renderLogs(`, `.card-pulse`, `class="logs-row"` |
 | i18n | extend `test/i18n.test.ts` so every new `web.*`/`common.*` key resolves in `en` (§8.1) |
 | unit | `npx --yes pnpm@10.34.7 run test` |
-| manual browser run (private pair only) | `REEVES_REGISTRY=$(mktemp -d) REEVES_CONFIG=<tmp>/config.json TMUX_TMPDIR=<tmp> env -u TMUX node dist/cli.js web --port 8123 --no-open`, then: (1) open Logs on an empty registry → empty state, no console errors; (2) `curl` two events with a fake agent id → both appear without reload; (3) filter by run and "unread only"; (4) Mark all read → badge and unread filter clear; (5) badge pulses ≈ 5 s and disappears; (6) F5 mid-pulse → badge still there with the remaining time; (7) set `agent_pulse_ms` to 15000 via the Config panel → pulse lasts 15 s without a rebuild; (8) DevTools "Emulate prefers-reduced-motion" → dot is static but visible; (9) Tab/Arrow/Escape through the dialog → focus lands correctly and returns to `#logs-btn`; (10) narrow the window to < 520 px → dot stays, count hides; (11) `curl` an event with `ts` set one hour in the future → badge still disappears after ≈ 5 s and the row's time shows the *server receipt* time, not the future one |
+| manual browser run (private pair only) | `REEVES_REGISTRY=$(mktemp -d) REEVES_CONFIG=<tmp>/config.json TMUX_TMPDIR=<tmp> env -u TMUX node dist/cli.js web --port 8123 --no-open`, then: (1) open Logs on an empty registry → empty state, no console errors; (2) `curl` two events with a fake agent id → both appear without reload; (3) filter by run and "unread only"; (4) Mark all read → badge and unread filter clear, and after F5 they *stay* cleared (proves the server watermark rather than local state); (5) badge pulses ≈ 5 s and disappears; (6) F5 mid-pulse → badge still there with the remaining time; (7) set `agent_pulse_ms` to 15000 via the Config panel → pulse lasts 15 s without a rebuild; (8) DevTools "Emulate prefers-reduced-motion" → dot is static but visible; (9) Tab/Arrow/Escape through the dialog → focus lands correctly and returns to `#logs-btn`; (10) narrow the window to < 520 px → dot stays, count hides; (11) `curl` an event with `ts` set one hour in the future → badge still disappears after ≈ 5 s and the row's time shows the *server receipt* time, not the future one |
 | fleet safety | count `reeves-*` tmux sessions before and after the manual run; they must be equal |
 
 Ready when: unit tests pass, the client contract test covers every new id, the manual run above is
