@@ -77,6 +77,15 @@ again. `sendText`/`sendKey` stay untouched for backward compatibility (and becau
 documented as "paste only, no submit" in `AGENTS.md`); `sendWhenIdle` becomes the only path
 the engine uses.
 
+The gate is **fail-closed**. `paneBusy(agentId)` returns `busy | idle | unknown`, and `unknown`
+is treated as busy: `sendWhenIdle` refuses and reports `busy_unknown`. A provider whose busy
+indicator has not been verified on a live pane cannot be declared idle from a heuristic, and a
+gate that silently answers "free" for an unknown provider is worse than no gate — it looks like
+protection. v1 therefore ships an allow-list of providers with a verified marker (the same shape
+as `DETECTORS` in `src/core/attention.ts:190`); anything else needs an explicit opt-in
+(`flow start --assume-idle`) and the flow records that it runs unguarded. The pane tail is
+re-read immediately before the paste, not only at the start of the tick.
+
 ### 2.3 Where the step runs
 
 The project already decided this in code: periodic work lives in the surfaces that are
@@ -94,6 +103,39 @@ notes). Concretely:
 `flow tick` itself must be idempotent and cheap when nothing changed: the TUI tick calls it
 every 2 s, the throttle (a proposal: 15 s, matching `sweepAgentsThrottled`'s default at
 `src/core/reaper.ts:179`) keeps `capture-pane` calls bounded.
+
+**No ticker, no movement.** The SSE hub only runs while a browser is connected
+(`src/surfaces/webui/server.ts:170`–`:175`), and the TUI tick only runs while the dashboard is
+open. With no UI and no cron, a flow simply stands still — it does not break, and `flow status`
+shows the last event and the timestamp. `docs/flows.md` must say this plainly and give the
+headless recipe (`*/1 * * * * reevesagents flow tick`), because "the pipeline stopped overnight"
+is otherwise indistinguishable from "the reviewer is slow". A background worker is a separate,
+later decision, not a hidden requirement of this design.
+
+### 2.4 Dispatch protocol — two phases, never a lock across a send
+
+`withRunsLock` (`src/core/runs.ts:82`) is **not reentrant**: it creates a lock file, a nested
+acquisition spins, and after 5 s (`staleMs`, `runs.ts:85`) it breaks the lock as stale. `sendText`
+(`src/core/runtime.ts:598`) calls `updateAgent` (`:605` → `src/core/runs.ts:386`), which takes
+that very lock. So "lock the flow → send → save" deadlocks and then resolves by stealing the
+lock from itself. It also loses work: a crash between the paste and the save either forgets a
+dispatch or lets the next ticker repeat it.
+
+The dispatch is three steps with an explicit intent record in the flow file:
+
+1. **claim** — short lock, no runtime calls: re-read the flow, decide the action, write
+   `state.pending = { op_id, target, kind, head, spec_id?, at }`, release.
+2. **act** — no lock: `sendWhenIdle(...)`, which may take the runs lock internally.
+3. **settle** — short lock: on success write the post-state and clear `pending`; on refusal
+   write `dispatch_unconfirmed` / `busy_unknown` and clear `pending`.
+
+Recovery is by observation, never by a blind retry: a `pending` older than `PENDING_TTL`
+(proposal 120 s) is settled on the next tick — if the agent is visibly working, the dispatch is
+considered delivered; otherwise the flow records `dispatch_unconfirmed` and waits for
+`flow resume --retry` or a human. `op_id` makes the settle idempotent, and a concurrent ticker
+that finds an unexpired `pending` does nothing at all. This is the only concurrency rule the
+engine has, and it is what makes the TUI tick, the Web tick and a cron `flow tick` safe to run
+together.
 
 ---
 
@@ -127,9 +169,9 @@ flow whose agents died is exactly a stale run.
   touching any shared type.
 - It is a **child of the run**, not a peer: `run_id` + two agent ids are the foreign keys. A
   flow without live agents is parked, never ticked.
-- Cost accepted: run deletion must cascade. One hook in `stopRun`/`archiveAndRemoveRun`
-  (`src/core/runtime.ts:682`, `src/core/runs.ts:437`) deletes the flow file, and `autoCleanupRuns`
-  marks it `orphaned` instead of throwing.
+- Cost accepted: the flow dies with the **history record**, not with the run directory. The one
+  cascade hook lives in `deleteRunHistory` (`src/core/runs.ts:367`); run archival
+  (`src/core/runs.ts:437`) and `autoCleanupRuns` (`:521`) only make the flow `orphaned` (§3.3).
 
 ### 3.1 Shape (draft)
 
@@ -150,7 +192,9 @@ flow whose agents died is exactly a stale run.
     "verdict_count_at_request": 3, "verdict_head": "abc1234",
     "verdict": "CHANGES_REQUESTED", "dispatched_head": "abc1234",
     "dispatched_specs": ["block_01"],
-    "rounds": 1, "status": "fixing"
+    "rounds_total": 3, "reviews_this_head": 1,
+    "pending": { "op_id": "…", "target": "dev", "kind": "fix", "head": "abc1234", "at": 1730000000000 },
+    "status": "dispatching"
   },
   "log": [{ "at": "…", "event": "fix_dispatched", "detail": "abc1234 round 1" }]
 }
@@ -174,16 +218,21 @@ brief the dev receives can be inspected without opening a second file:
 }
 ```
 
-Validation runs at `add-spec` time, not mid-round at 3 a.m.: non-empty `id` and `title`, at
-least one requirement and one check, `id` unique in the flow and absent from
-`state.dispatched_specs`. The dispatch prompt is rendered from these fields by a fixed
+Validation runs at `add-spec` time, not mid-round at 3 a.m.: non-empty `id` and `title` (trimmed,
+length-capped), at least one non-empty requirement and one check, every list entry a trimmed
+string with a size cap, and `id` unique in the flow *and* absent from
+`state.dispatched_specs`. A malformed spec is refused with the field name, never silently
+coerced. The dispatch prompt is rendered from these fields by a fixed
 renderer (`src/core/spec.ts`), so the dev receives a self-contained brief — title, goal,
 requirements, the exact checks to run, the report format — instead of "read this path".
 
-Markdown ingestion is a convenience, not a second contract: `add-spec --markdown file.md`
-stores the file as `body`, takes the title from the first heading, and leaves
-`requirements`/`checks` empty — refused unless `--allow-unstructured` is passed, so the
-downgrade is always a visible choice.
+Markdown ingestion is a convenience, not a second contract: `add-spec --markdown file.md` stores
+the file as `body`, takes the title from the first heading, leaves `requirements`/`checks`
+empty, and records `"unstructured": true`. Such a block is refused unless
+`--allow-unstructured` is passed **and** it carries a visible marker in the flow file, the
+dispatch prompt starts with an explicit "this block has no structured acceptance criteria"
+line, and `flow status` flags it. `report` is a requirement addressed to the reviewer (the dev
+must produce it), not something the engine validates — the reviewer is the gate.
 
 ### 3.3 Lifecycle against run archival (D7)
 
@@ -199,28 +248,63 @@ So "keep the flow until the run is deleted" resolves to:
 | Event | Flow file | Flow status |
 | --- | --- | --- |
 | run is live | present | normal states |
-| run ended / stopped / swept as stale (run dir gone, history record kept) | **kept** | `orphaned` — listed, never ticked; `flow status` / `flow stop` only |
-| history record deleted (`delete-run`, `delete-history`, panel delete) | **deleted** | cascade hook in `deleteRunHistory` (`src/core/runs.ts:367`), the one choke point all three paths share |
+| run ended / stopped / swept as stale — run dir gone, **history record kept** (`stop`: `runtime.ts:715`–`:717`, `delete-run`: `src/surfaces/cli/history.ts:19`, `delete_run`: `src/surfaces/mcp/server.ts:450`, Web `deleteWebRun`: `src/surfaces/webui/server.ts:396`–`:401`, sweep `autoCleanupRuns`: `runs.ts:521`) | **kept** | `orphaned` — listed, never ticked; `flow status` / `flow stop` only |
+| **history record** deleted (`delete-history`: `src/surfaces/cli/history.ts:54`, `delete_history`: `src/surfaces/mcp/server.ts:465`, Web `deleteHistoryRecord`: `src/surfaces/webui/server.ts:402`–`:406`, TUI panel: `src/surfaces/tui/screens/RunHistory.tsx:132`) | **deleted** | cascade hook in `deleteRunHistory` (`src/core/runs.ts:367`) — the single function all four paths funnel into |
 | `flow stop <id>` | deleted explicitly | gone |
+
+Note what is *not* in the second row: `delete-run` / `delete_run` / the panel's "delete run" do
+**not** delete a history record — they archive the run (the record is written, not removed). A
+first draft of this table said otherwise; the review caught it, and the code agrees with the
+review (`archiveAndRemoveRun` writes the record at `src/core/runs.ts:441`).
 
 `orphaned` is a status, not an error: `flow status` prints it with the reason (agents gone), the
 TUI/Web badge shows it muted, and a tick logs one line and parks instead of throwing every 2 s.
 
-**Rules that make the store safe (3.1–3.3):**
+### 3.4 State automaton (what a tick may do in each state)
+
+| Status | Meaning | A tick may | Leaves via |
+| --- | --- | --- | --- |
+| `idle` | nothing pending, waiting for the dev's next HEAD | request review when HEAD moved | `reviewing` |
+| `reviewing` | review requested for `req_head` | record a verdict, log a timeout once | `fixing` / `accepted` / `escalated` |
+| `dispatching` | a claim is out (`pending` set, send in flight) | nothing — another ticker owns it | `pending` cleared by settle |
+| `fixing` | fix request delivered | request review for a new HEAD | `reviewing` |
+| `dispatch_unconfirmed` | the paste/Enter did not visibly start the agent | nothing without a human | `flow resume --retry` (one explicit retry) |
+| `accepted` | reviewer said ACCEPT, no spec left | nothing but `need_spec` once | `flow add-spec` → next tick dispatches |
+| `escalated` | round budget spent | nothing | `flow resume` or an approved escalation approval |
+| `paused` | operator stopped it | nothing | `flow resume` |
+| `orphaned` | the run's agents are gone (run archived) | nothing | `flow stop`, or the history record's deletion deletes the file |
+
+Two invariants make the table safe: a transition is written only inside a short lock
+(§2.4), and no state re-sends the same text for the same `(head, verdict, spec_id)` — the
+`dispatched_*` keys are the memory that survives a crash.
+
+**Rules that make the store safe (3.1–3.4):**
 
 - **Atomic and private**: temp file + rename, mode 0600 — the same pattern as
   `src/core/runs.ts:117` and `src/core/store.ts:21`.
-- **Locked**: read-modify-write happens under the existing global state lock
-  (`withRunsLock`, `src/core/runs.ts:82`). A global lock is coarse but correct here: ticks are
-  rare, and the failure mode of a race is a **duplicate prompt** into an LLM (money, plus a
-  confused agent), which is far worse than a 25 ms wait.
-- **Idempotent by construction**: every send is keyed on `(head, verdict, verdict_count)`
-  recorded *before* dispatch, so a second ticker cannot re-send the same request.
+- **Locked, but never across a send**: state transitions use the existing global lock
+  (`withRunsLock`, `src/core/runs.ts:82`) in short claim/settle sections, and the paste itself
+  happens outside it — `withRunsLock` is not reentrant and `sendText` takes it internally
+  (§2.4). The lock is coarse but correct for a 25 ms section; the failure mode of holding it
+  across a send is a self-deadlock, not a slow tick.
+- **Idempotent by construction**: every dispatch carries an `op_id` and is keyed on
+  `(target, kind, head, verdict, spec_id)`, recorded *before* the send and settled after it, so a
+  second ticker cannot re-send the same request and a crash cannot lose it silently.
 - **Self-healing reads**: missing fields fall back to defaults; a damaged file is reported as
-  `flow state is not valid JSON: <path>` by `flow status <id>` and skipped by the listing, so
-  one bad file cannot break a dashboard.
-- **One active flow per run** in v1. Two flows over the same run would write into the same
-  panes and both claim the HEAD.
+  `flow state is not valid JSON: <path>` by `flow status <id>`, and the plain listing prints a
+  `corrupt <path>` row instead of hiding it — a dashboard skips it so one bad file cannot break
+  the board, but a human always sees that it exists. `flow stop <id>` deletes a corrupt file by
+  id, since it can never be read again.
+- **The budget is cumulative** (`max_rounds` → `state.rounds_total`): it counts fix dispatches
+  for the whole flow and is *not* reset when a new HEAD goes to review. A separate
+  `reviews_this_head` counter bounds re-reviews of one HEAD. `resume` resets `rounds_total`
+  explicitly and logs that it did — a human granting a new budget is a decision, not a side
+  effect of a commit.
+- **One active flow per run** in v1. "Active" means a flow attached to a live run in any status
+  except `paused`/`escalated`/`orphaned`; those three still occupy the slot while the run is
+  live (a second `flow start` is refused), and `orphaned` flows never block a fresh start on a
+  *new* run. Two flows over the same run would write into the same panes and both claim the
+  HEAD.
 
 ---
 
@@ -278,9 +362,12 @@ changes a written contract, so the change is deliberate and recorded:
 | `flow_control` | `action: pause \| resume \| stop` | one tool, three intents, so the surface does not grow three near-identical entries |
 
 - Guardrails, because a host holding these tools can spend money: `flow_step` answers
-  `{changed: false, events: []}` when nothing happened, so an agent polling it in a loop is
-  cheap and visible in its own transcript; round, timeout and escalation limits live in the
-  engine, never in the tool.
+  `{changed: false, events: []}` when nothing happened, so an agent polling it in a loop is cheap
+  and visible in its own transcript. `flow_step` is **not** the exclusive owner of a flow: the
+  claim protocol (§2.4) makes a step from the MCP, a step from the TUI tick and a step from cron
+  mutually exclusive, and a step that finds an unexpired `pending` returns `{changed: false,
+  reason: "busy"}` instead of queueing work. Round, timeout, escalation and the pane guard live
+  in the engine, never in the tool, so no surface can talk its way past them.
 - `flow_control` is the one place where an `action` enum is used instead of one tool per
   action; splitting it into `flow_pause` / `flow_resume` / `flow_stop` is equally defensible and
   can be revised in review.
@@ -298,8 +385,19 @@ changes a written contract, so the change is deliberate and recorded:
 On `escalated` (round budget spent), the runner calls `createRunApproval`
 (`src/core/approvals.ts:141`) with `action: "flow-escalated"`, the flow id and the review notes
 in `details`. The human decision already has a UI (`Approvals` page, `list_approvals`,
-`approve`/`deny`); `approve` on that record resumes the flow with a fresh round budget, `deny`
-parks it. No new notification channel, no second "needs attention" concept.
+`approve`/`deny`). No new notification channel, no second "needs attention" concept.
+
+What exists today is only the *record*: `resolveRunApproval` (`src/core/approvals.ts:192`)
+writes the decision and knows nothing about flows, and it should stay that way — approvals are a
+generic mechanism. The reaction belongs to the runner, on its next tick: it looks for a resolved
+`flow-escalated` approval belonging to this flow, and then
+
+- `approved` → `resume` with a fresh round budget, log `resumed_by_approval`;
+- `denied` → park as `paused`, log `denied_by_approval`.
+
+The engine stays the only writer of flow state, and a tick is the only thing that reads a
+decision — which also means an escalation is picked up by the same headless `flow tick` recipe
+as everything else (§2.3).
 
 ---
 
@@ -310,13 +408,15 @@ parks it. No new notification channel, no second "needs attention" concept.
 | Touching `src/core/types.ts` | `packages/reevesagents-win/test/catalog-drift.test.ts:43` fails until `sync:shared` runs and the copy is committed | Keep **all** flow types in `src/core/flow.ts`; add nothing to `types.ts` |
 | New config key | `test/config-set.test.ts:22`–`:27` pins the exact `CONFIG_FIELDS` order | If `flow_tick_ms` / `flow_max_rounds` are added, extend `DEFAULT_GLOBAL` (`config.ts:12`), `mergeDefaults` (`:45`, merge block `:54`–`:64`) and that test in the same commit |
 | `peek_interval_ms` is decorative | No screen reads it; screens hardcode 5000 (`RunAgents.tsx:21`, `AgentOutput.tsx:20`) | Do not advertise "the flow tick follows `peek_interval_ms`". Either wire it as a separate chore or add a dedicated key |
-| **Writing into a busy pane** | `sendText`/`sendKey` have no guard (`runtime.ts:598`, `:621`) | `sendWhenIdle` in core (§2.2); a unit test asserts zero sends against a busy pane |
+| **Writing into a busy pane** | `sendText`/`sendKey` have no guard (`runtime.ts:598`, `:621`) | `sendWhenIdle` in core (§2.2), fail-closed for providers without a verified marker; a unit test asserts zero sends against a busy pane and a refusal for `unknown` |
+| **A bypassable round budget** | With `rounds` reset per HEAD, a normal cycle never reaches `max_rounds` and `escalated` is unreachable | Cumulative `rounds_total` + `reviews_this_head` (§3.1); escalation tested by the engine tests, not by hand |
+| **Self-deadlock on the runs lock** | `withRunsLock` is not reentrant and `sendText` takes it (`runs.ts:82`, `runtime.ts:605`) | Two-phase claim/settle, never a lock across a send (§2.4); `pending` + `op_id` make a crash recoverable |
 | **The second Enter** | The bash prototype sent a second Enter when the pane did not look busy. This is the documented project hazard: a queued Enter later answers someone else's prompt | Never blind-retry. Paste → one Enter → confirm busy; if not confirmed, record `dispatch_unconfirmed`, do not re-send, surface it. (D5) |
 | Verdict parsing on redacted text | `peekAgent` strips ANSI *and* redacts secrets (`runtime.ts:579`) | Parse a raw capture. Either add `peekAgentRaw` or make the parser tolerate `[redacted]`; decide before writing the parser |
 | **The MCP contract changes** | `.github/CONTRIBUTING.md:59` promises a flat MCP; six flow tools that can start/step a pipeline contradict the old wording | Amend the sentence to "no implicit loops" in the same commit as the tools (§4.3, D3), and say it in `docs/mcp.md` |
 | Structured specs are authoring work | A spec with empty `requirements`/`checks` produces a vacuous brief, and validation only catches it at add time | Validate hard (§3.2), keep `--markdown` explicitly downgraded, and show a full example in `docs/flows.md` |
 | Flow outlives its run directory | `archiveAndRemoveRun` (`runs.ts:437`) removes the run dir; a naive cascade would delete the flow on every `stop` | Cascade only in `deleteRunHistory` (`runs.ts:367`); `orphaned` status otherwise (§3.3, D7) |
-| Two tickers (TUI + cron) | Duplicate prompts, double round counting | State lock + `dispatched_head` / `verdict_count` keys; `tick` is a no-op when nothing changed |
+| Two tickers (TUI + cron + MCP) | Duplicate prompts, double round counting | Claim protocol: an unexpired `pending` makes every other ticker a no-op (§2.4); `dispatched_*` keys survive a crash |
 | Run removed under a live flow | `autoCleanupRuns` (`runs.ts:521`) deletes stale run dirs on every UI tick | `Agent not found` parks the flow as `orphaned` with one log line instead of throwing every tick |
 | Cost | Every send spends provider tokens | `max_rounds`, `review_timeout_sec`, 15 s throttle, and no send while busy |
 | i18n surface | 10 locales × new keys, plus the commands table in `README.md:130`–`:160` and the nine translated READMEs under `docs/i18n/` | Budget it in the surfaces block, not as an afterthought |
@@ -329,8 +429,8 @@ parks it. No new notification channel, no second "needs attention" concept.
 | Block | Deliverable | Definition of done | How it is verified |
 | --- | --- | --- | --- |
 | **01 — recon (this)** | `docs/flows-design.md` | Decisions recorded in §7; no code written | Reviewed read-only by a second model (this document) |
-| **02 — core primitives only** | `src/core/activity.ts` (busy per provider), `verdict.ts`, `spec.ts` (model + validator + prompt renderer), `runtime.sendWhenIdle` + `paneBusy`; no flow yet | Existing behaviour unchanged; a busy pane is never written to; a malformed spec is refused at add time | `pnpm typecheck && pnpm lint && pnpm test` green, plus new unit tests: busy markers per provider, refusal against a busy pane, one-Enter-and-confirm, verdict/notes parsing |
-| **03 — engine + store + CLI** | `flow.ts`, `flow-store.ts`, `flow-runner.ts`, `src/surfaces/cli/flow.ts` (structured `add-spec`), `orphaned` lifecycle, TUI tick wiring only | A full ACCEPT → next dispatched spec runs end-to-end on a temp registry with real tmux fake agents; two tickers cannot double-send; an orphaned flow survives its run's archival and dies with the history record | `vitest run test/flow*.test.ts` + the real-tmux rehearsal script + `pnpm verify`; i18n untouched (CLI copy is English, like every other command) |
+| **02 — core primitives only** | `src/core/activity.ts` (busy per provider + fail-closed allow-list), `verdict.ts`, `spec.ts` (model + validator + prompt renderer), `runtime.paneBusy` / `sendWhenIdle`; no flow yet | Existing behaviour unchanged; a busy or unknown pane is never written to; a malformed spec is refused at add time | `pnpm typecheck && pnpm lint && pnpm test` green, plus new unit tests: busy markers per provider, refusal against a busy pane, one-Enter-and-confirm, verdict/notes parsing |
+| **03 — engine + store + CLI** | `flow.ts` (cumulative budget + §3.4 automaton), `flow-store.ts`, `flow-runner.ts` (claim/settle dispatch, approval pickup), `src/surfaces/cli/flow.ts` (structured `add-spec`), `orphaned` lifecycle, TUI tick wiring only | A full ACCEPT → next dispatched spec runs end-to-end on a temp registry with real tmux fake agents; three concurrent tickers produce exactly one send; a crashed claim is recovered by observation, never by a blind retry; an orphaned flow survives archival and dies with the history record | `vitest run test/flow*.test.ts` + the real-tmux rehearsal script + `pnpm verify`; i18n untouched (CLI copy is English, like every other command) |
 | **04 — surfaces + contract** | TUI Flow section + run badge, `WebRun.flow` + card + `web.flow*` in 10 locales, the six MCP flow tools **and** the `CONTRIBUTING.md:59` / `server.ts:1`–`:14` / `docs/mcp.md` amendment, `flow-escalated` approval, `docs/flows.md` + README command table | The state is visible without reading a JSON file; a human can resolve an escalation from the existing Approvals page | `pnpm verify`, `pnpm check:package`, manual TUI pass (narrow terminal too), Web UI pass with a fresh browser tab |
 
 Each block is one commit with an English conventional message; `AGENTS.md` stays untouched;
@@ -371,3 +471,29 @@ The prototype is committed, unpushed and **not** part of this design: it was wri
 recon, it puts the busy heuristic in the CLI layer, and it touches neither the runtime guard nor
 the tick sites of §2. Mine it for details; do not treat it as a baseline. Where they disagree,
 this document wins, and the prototype is expected to be reset before block 02.
+
+---
+
+## Appendix B — review round 1 (block 01)
+
+Reviewed read-only by a second model (Codex, agent `agents-review`, run `reevesagents-flow`) at
+commit `dafac03`. Verdict: **reject** — four blocking items. All four were checked against the
+code before acceptance; all four were accepted and are fixed in this revision.
+
+| Blocking item | Verdict on it | Fix |
+| --- | --- | --- |
+| D7 conflated archiving with deletion: `delete-run` does **not** delete a history record | **Correct.** `src/surfaces/cli/history.ts:19` archives; `delete_history` (`src/surfaces/mcp/server.ts:465`) and the panel (`RunHistory.tsx:132`) delete | §3.3 rewritten with every path and its reference; cascade stays in `deleteRunHistory` (`runs.ts:367`) |
+| `max_rounds` resets per HEAD, so a normal cycle never escalates | **Correct**, and it was the weakest part of the draft | Cumulative `rounds_total` + `reviews_this_head`, resume makes a new budget explicit (§3.1) |
+| Holding `withRunsLock` across a send self-deadlocks (`sendText` → `updateAgent` takes the same non-reentrant lock) and a crash between send and save loses or duplicates the dispatch | **Correct and serious** | Two-phase claim/settle with `pending` + `op_id` and observation-based recovery (§2.4) |
+| The busy gate is permissive for a provider with no marker | **Correct** | Fail-closed tri-state `busy / idle / unknown`, allow-list, explicit `--assume-idle` opt-in (§2.2) |
+
+Non-blocking items accepted: a formal state automaton (§3.4), a recovery/visibility policy for
+a corrupt flow file (§3.1), a definition of "one active flow" (§3.1), `report` described as a
+reviewer requirement rather than an engine guarantee (§3.2), stronger spec validation and a
+visible marker on unstructured blocks (§3.2), raw-capture parsing confined to the parser with
+redaction on everything that is logged (§5), and "who reacts to the approval" spelled out
+(§4.5).
+
+Deferred on purpose: a background worker (documented as a later decision, §2.3), wiring
+`peek_interval_ms` (separate chore), and the exact splitting of `flow_control` into three tools
+(left to implementation review).
