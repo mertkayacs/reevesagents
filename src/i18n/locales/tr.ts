@@ -61,6 +61,8 @@ export const tr = {
     'flow.status.escalated': 'yükseltildi',
     'flow.status.fixing': 'düzeltme',
     'flow.status.idle': 'bekliyor',
+    'flow.status.orphaned': 'öksüz',
+    'flow.status.paused': 'duraklatıldı',
     'flow.status.reviewing': 'inceleme',
     'history.deleteBody': 'Sadece bu arşivlenmiş geçmiş kaydını siler. Run zaten bitmiş durumda.',
     'history.deleteHint': 'arşivlenmiş run\'ı sil',

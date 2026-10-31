@@ -21,9 +21,51 @@ import type { BlockSpec } from './spec.js'
 import { renderDispatchPrompt } from './spec.js'
 import type { FlowVerdict } from './verdict.js'
 
-export type FlowStatus = 'idle' | 'reviewing' | 'fixing' | 'escalated' | 'done'
+export type FlowStatus = 'idle' | 'reviewing' | 'fixing' | 'paused' | 'orphaned' | 'escalated' | 'done'
 
-export const FLOW_STATUSES: readonly FlowStatus[] = ['idle', 'reviewing', 'fixing', 'escalated', 'done']
+export const FLOW_STATUSES: readonly FlowStatus[] = ['idle', 'reviewing', 'fixing', 'paused', 'orphaned', 'escalated', 'done']
+
+// Every transition the flow may make, from every state (§3.3, §3.4). Operator actions and engine
+// decisions go through the same table, so an illegal write is impossible from either side: a
+// `resume` out of `done`, a `pause` of an escalated flow, or a stray engine path into `orphaned`
+// all fail here with a message instead of quietly changing the file.
+//
+// `done` is terminal on purpose — a finished flow is replaced by `flow start --replace`, never
+// revived, because its claim and budget describe work that is over.
+export const FLOW_TRANSITIONS: Record<FlowStatus, readonly FlowStatus[]> = {
+  // `done` is reachable from every live state because `flow stop` is the operator's escape hatch.
+  // `escalated` is reachable from `idle` too: a claimed block dispatch that never settles escalates
+  // from there after `PENDING_TTL_SEC`, and refusing that transition would strand the claim.
+  idle: ['reviewing', 'paused', 'orphaned', 'escalated', 'done'],
+  reviewing: ['idle', 'fixing', 'paused', 'orphaned', 'escalated', 'done'],
+  fixing: ['reviewing', 'paused', 'orphaned', 'escalated', 'done'],
+  // A paused flow returns to the state it was paused from, which is one of the three above.
+  paused: ['idle', 'reviewing', 'fixing', 'orphaned', 'done'],
+  // An orphaned flow is parked: only the operator closes it, or its history record's deletion
+  // takes the file with it (§3.3).
+  orphaned: ['done'],
+  // `resume` on an escalated flow grants a fresh budget and returns it to `idle` (§3.4).
+  escalated: ['idle', 'orphaned', 'done'],
+  done: [],
+}
+
+export function canTransition(from: FlowStatus, to: FlowStatus): boolean {
+  return FLOW_TRANSITIONS[from].includes(to)
+}
+
+// The statuses a flow may be resumed into: its own `paused_from`, which is validated as a target.
+export function transitionsFrom(from: FlowStatus): readonly FlowStatus[] {
+  return FLOW_TRANSITIONS[from]
+}
+
+export function assertTransition(from: FlowStatus, to: FlowStatus, action: string): void {
+  if (canTransition(from, to)) return
+  const allowed = FLOW_TRANSITIONS[from]
+  const hint = allowed.length === 0
+    ? 'this flow is closed; start a new one with `flow start --replace`'
+    : `allowed from ${from}: ${allowed.join(', ')}`
+  throw new FlowStateError(`cannot ${action} a flow in state ${from} (${hint})`)
+}
 
 // Bumped whenever the on-disk shape changes incompatibly. A file with any other version is a
 // hard read error, never a silent reset (see `parseFlowState`).
@@ -107,6 +149,18 @@ export interface FlowState {
   // The dispatch in flight, or null. Optional in the file: a flow written before the claim existed
   // reads as "nothing in flight", which is the pre-claim behaviour and why the version stays 1.
   pending: FlowPendingDispatch | null
+  // Where `resume` returns the flow to, and when the pause happened. Null unless `state` is
+  // `paused`: a resume that guessed would silently restart a pipeline in the wrong state.
+  paused_from: FlowStatus | null
+  paused_at: number | null
+  // Why the flow was parked as `orphaned` (the run or its agents are gone). Written once, so the
+  // operator reads the reason instead of guessing from a muted badge.
+  orphan_reason: string | null
+  // Set by `flow stop` only: the operator ended the pipeline, which is not the same as ACCEPT.
+  close_reason: string | null
+  // Bounded journal (§3.4): transitions, dispatches, verdicts, refusals and escalations, one entry
+  // each, capped at FLOW_LOG_LIMIT. It never carries a prompt body — only the decision, the head,
+  // the block id and a short reason, so the file stays readable and leak-free.
   log: FlowLogEntry[]
   updated_at: string
 }
@@ -142,14 +196,23 @@ export interface FlowObservations {
   verdict_count: number
   // The reviewer's BLOCKER/MAJOR/MINOR lines, already redacted by `verdict.ts`.
   verdict_notes?: string
+  // Whether the flow's run and both role agents still exist in the registry. Absent means "this
+  // caller did not look", which is not evidence of absence: a probe that cannot see the registry
+  // must not park a live flow, so only an explicit `false` orphans it (§3.3).
+  run_present?: boolean
+  agents_present?: boolean
 }
 
-export type FlowActionKind = 'request_review' | 'dispatch_fix' | 'dispatch_spec' | 'escalate' | 'none'
+export type FlowActionKind = 'request_review' | 'dispatch_fix' | 'dispatch_spec' | 'escalate' | 'orphan' | 'none'
 
 // Machine-readable why. A hold and an action share the type, because `kind` already says which
 // one it is and one vocabulary keeps `flow status` and the JSON payload aligned.
 export type FlowReason =
   | 'flow_closed'
+  | 'flow_paused'
+  | 'flow_orphaned'
+  | 'run_gone'
+  | 'agents_gone'
   | 'head_unknown'
   | 'head_unchanged'
   | 'no_new_head'
@@ -236,6 +299,10 @@ export function createFlowState(init: FlowInit): FlowState {
     specs: init.specs ?? [],
     dispatched_specs: [],
     pending: null,
+    paused_from: null,
+    paused_at: null,
+    orphan_reason: null,
+    close_reason: null,
     log: [],
     updated_at: init.at ?? isoNow(),
   }
@@ -280,6 +347,17 @@ export function parseFlowState(raw: unknown): FlowState {
       ? record.dispatched_specs.map(text).filter(entry => entry !== '')
       : [],
     pending: parsePendingDispatch(record.pending),
+    // A paused file always names where it came from; a missing field defaults to `idle`, which is
+    // the only target a flow without a recorded origin could safely resume into.
+    paused_from: status === 'paused'
+      ? (FLOW_STATUSES.find(candidate => candidate === record.paused_from && candidate !== 'paused') ?? 'idle')
+      : null,
+    paused_at: typeof record.paused_at === 'number' && Number.isFinite(record.paused_at)
+      ? Math.floor(record.paused_at)
+      : null,
+    // Why the flow is parked: user-visible text, so it is bounded and never a prompt body.
+    orphan_reason: text(record.orphan_reason).slice(0, 200) || null,
+    close_reason: text(record.close_reason).slice(0, 200) || null,
     log: Array.isArray(record.log)
       ? record.log
         .map(asRecord)
@@ -589,18 +667,43 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now)
 }
 
+// The run (or one of its role agents) is gone: the flow is parked instead of being ticked against
+// panes that no longer exist. Parked means parked — a second tick holds, so the reason is written
+// once and the log does not fill up with the same line every two seconds (§3.3).
+function orphan(state: FlowState, reason: 'run_gone' | 'agents_gone'): FlowDecision {
+  return {
+    kind: 'orphan',
+    reason,
+    next_state: 'orphaned',
+    next_rounds: state.rounds,
+    next_review_started_at: null,
+    next_claim: state.claim,
+    notes: reason === 'run_gone'
+      ? 'the run is no longer in the registry (archived, stopped or swept)'
+      : 'one of the run\'s role agents is no longer in the registry',
+  }
+}
+
 // One step. Pure: it reads its arguments and returns a decision, never a pane, a file or a clock.
 export function flowTick(state: FlowState, observations: FlowObservations): FlowDecision {
   if (state.state === 'escalated' || state.state === 'done') return hold(state, 'flow_closed')
+  // Parked states are decided before anything is observed for a reason: a paused or orphaned flow
+  // must not be ticked into a pane, and its own reason is the answer the caller prints.
+  if (state.state === 'paused') return hold(state, 'flow_paused')
+  if (state.state === 'orphaned') return hold(state, 'flow_orphaned')
   // A claimed dispatch owns the flow until it settles. This is the rule that makes a cron tick, a
   // manual `flow tick` and a restart of the same process safe to run against one flow: the second
-  // caller sees the claim on disk, decides nothing, and pastes nothing.
+  // caller sees the claim on disk, decides nothing, and pastes nothing. It outranks the orphan
+  // check on purpose: a send in flight has to settle (or expire) before the flow is parked.
   if (state.pending) {
     if (observations.now - state.pending.at < PENDING_TTL_SEC * 1000) return hold(state, 'dispatch_pending')
     // Past the TTL the claim belongs to a process that is gone, and nobody can tell whether the
     // paste landed. Re-sending blind is how one prompt becomes two, so a human decides.
     return escalate(state, observations, 'dispatch_unresolved')
   }
+  // An explicit negative from the caller parks the flow; "not looked at" (undefined) does not.
+  if (observations.run_present === false) return orphan(state, 'run_gone')
+  if (observations.agents_present === false) return orphan(state, 'agents_gone')
   // `reviewing` owns the unreadable-HEAD case itself: a review that was requested still has a
   // deadline, and a repository this tick cannot read must not be able to keep it waiting for ever.
   if (state.state === 'reviewing') return tickReviewing(state, observations)
@@ -658,15 +761,23 @@ function withDelta(
     // Every settled decision ends the dispatch in flight: the claim exists only for the window
     // between the paste and this write.
     pending: null,
+    // The reason a flow was parked is part of the state, not only of the log: `flow status` reads
+    // it, and the log is bounded, so the reason must survive the entry being pushed out.
+    orphan_reason: decision.kind === 'orphan' ? (decision.notes ?? null) : state.orphan_reason,
     log: appendLog(state, { at, event: options.event, detail: options.detail ?? logDetail(decision) }),
     updated_at: at,
   }
 }
 
 export function applyDecisionToState(state: FlowState, decision: FlowDecision, at = isoNow()): FlowState {
+  // The engine's own transitions go through the same table as the operator's: an illegal one is a
+  // bug to surface, never a file silently describing a state the automaton cannot reach.
+  if (decision.next_state !== state.state) assertTransition(state.state, decision.next_state, decision.kind)
   return withDelta(state, decision, at, {
     advance: true,
-    event: decision.kind === 'none' ? decision.reason : decision.kind,
+    event: decision.kind === 'none'
+      ? decision.reason
+      : decision.kind === 'orphan' ? 'flow_orphaned' : decision.kind,
   })
 }
 
@@ -718,6 +829,37 @@ export function releaseDispatch(state: FlowState, reason: string, at = isoNow())
     ...state,
     pending: null,
     log: appendLog(state, { at, event: 'dispatch_refused', detail: reason }),
+    updated_at: at,
+  }
+}
+
+export interface FlowOperatorTransition {
+  // The status the operator puts the flow into. Validated against FLOW_TRANSITIONS.
+  to: FlowStatus
+  // Journal event name, e.g. `flow_paused`.
+  event: string
+  // The command name used in a refusal: `cannot pause a flow in state done`.
+  action: string
+  detail?: string
+  at?: string
+  // Fields this transition owns (the pause origin, the close reason, a reset budget).
+  patch?: Partial<FlowState>
+}
+
+// Pause, resume and stop all funnel through here: the table is the only gate, and the journal entry
+// and the dropped claim cannot be forgotten by one of the three commands. Nothing is sent, so there
+// is no lock to avoid — the caller holds it around read + this + write.
+export function applyOperatorTransition(state: FlowState, init: FlowOperatorTransition): FlowState {
+  assertTransition(state.state, init.to, init.action)
+  const at = init.at ?? isoNow()
+  return {
+    ...state,
+    ...init.patch,
+    state: init.to,
+    // A human decision outranks a dispatch in flight: a paused or stopped flow must not carry a
+    // claim that would escalate it later, and this call pasted nothing.
+    pending: null,
+    log: appendLog(state, { at, event: init.event, detail: init.detail ?? init.to }),
     updated_at: at,
   }
 }

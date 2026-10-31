@@ -14,8 +14,10 @@ import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
 import type { FlowStepResult } from '../../core/flow-runner.js'
 import { stepFlow } from '../../core/flow-runner.js'
 import { startFlow } from '../../core/flow-start.js'
+import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
 import { redactSecrets } from '../../core/redact.js'
 import { shortHomePath } from '../../utils/paths.js'
+import { requireDestructiveConfirmation } from './helpers.js'
 
 // The payload and the id resolution are shared with the MCP tools, so a host CLI and
 // `flow status --json` cannot show different things: both come from core/flow-view.ts.
@@ -65,6 +67,16 @@ function printStatus(state: FlowState, path: string): void {
   if (state.pending) {
     console.log(`dispatch  ${state.pending.kind} -> ${state.pending.target} claimed, unsettled (${state.pending.op_id})`)
   }
+  // A parked flow explains itself here: which state a resume returns to, or why it was parked. The
+  // state line alone would leave the operator guessing.
+  if (state.state === 'paused') {
+    const since = state.paused_at ? ` since ${new Date(state.paused_at).toISOString()}` : ''
+    console.log(`paused    from ${state.paused_from ?? 'idle'}${since} — \`flow resume\` puts it back`)
+  }
+  if (state.state === 'orphaned') {
+    console.log(`orphaned  ${state.orphan_reason ?? 'the run or its agents are gone'} — \`flow stop\` closes it`)
+  }
+  if (state.close_reason) console.log(`closed    ${state.close_reason}`)
   const review = state.review_started_at === null
     ? 'not waiting'
     : `started ${new Date(state.review_started_at).toISOString()}, timeout ${state.review_timeout_sec}s`
@@ -197,6 +209,139 @@ export function registerFlow(program: Command): void {
         }
         // An unconfirmed dispatch needs a human: it is the one outcome a clean exit would hide.
         if (!dryRun && result.status === 'unconfirmed') process.exitCode = 1
+      } catch (err) {
+        fail(err)
+      }
+    })
+
+  flow
+    .command('add-spec')
+    .description('queue a block on a flow that already exists: the dev receives it after the next ACCEPT')
+    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('--file <path...>', 'structured JSON block spec (requirements and checks are mandatory)')
+    .option('--markdown <path...>', 'ingest the file as an unstructured block: an explicit downgrade')
+    .option('--json', 'output JSON')
+    .action((opts: { run: string, file?: string[], markdown?: string[], json?: boolean }) => {
+      try {
+        const runId = resolveFlowRunId(opts.run)
+        const added = addFlowSpecs({ run_id: runId, files: opts.file, markdown: opts.markdown })
+        if (opts.json) {
+          console.log(JSON.stringify({
+            run_id: runId,
+            queued: added.queued.map(spec => ({
+              id: spec.id,
+              title: redactSecrets(spec.title),
+              unstructured: spec.unstructured === true,
+            })),
+            state: flowStatusPayload(added.state, added.path),
+          }, null, 2))
+          return
+        }
+        for (const spec of added.queued) {
+          console.log(`queued    ${spec.id}  ${redactSecrets(spec.title)}${spec.unstructured ? '  (unstructured)' : ''}`)
+        }
+        // The downgrade stays visible: an unstructured block gives the reviewer no acceptance
+        // criteria to check, which is a decision the operator has to have made on purpose (§3.2).
+        for (const spec of added.queued.filter(entry => entry.unstructured)) {
+          console.warn(`warning   ${spec.id} has no requirements/checks; the reviewer has only the body to judge`)
+        }
+        console.log(`queue     ${pendingCount(added.state)} pending`)
+        console.log(`file      ${shortHomePath(added.path)}`)
+      } catch (err) {
+        fail(err)
+      }
+    })
+
+  flow
+    .command('pause')
+    .description('park a flow: a paused flow is never ticked and never sends anything')
+    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('--json', 'output JSON')
+    .action((opts: { run: string, json?: boolean }) => {
+      try {
+        const runId = resolveFlowRunId(opts.run)
+        const paused = pauseFlow(runId)
+        if (opts.json) {
+          console.log(JSON.stringify(flowStatusPayload(paused.state, paused.path), null, 2))
+          return
+        }
+        console.log(`flow      ${runId} paused (was ${paused.state.paused_from ?? 'unknown'})`)
+        console.log('next      nothing is sent while it is paused; `flow resume` puts it back to work')
+      } catch (err) {
+        fail(err)
+      }
+    })
+
+  flow
+    .command('resume')
+    .description('put a paused flow back to work, or grant an escalated one a fresh round budget')
+    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('--json', 'output JSON')
+    .action((opts: { run: string, json?: boolean }) => {
+      try {
+        const runId = resolveFlowRunId(opts.run)
+        const resumed = resumeFlow(runId)
+        if (opts.json) {
+          console.log(JSON.stringify(flowStatusPayload(resumed.state, resumed.path), null, 2))
+          return
+        }
+        console.log(`flow      ${runId} resumed into ${resumed.state.state}`)
+        console.log(`rounds    ${resumed.state.rounds}/${resumed.state.max_rounds}`)
+        console.log('next      `flow tick --run <id>` picks it up')
+      } catch (err) {
+        fail(err)
+      }
+    })
+
+  flow
+    .command('stop')
+    .description('close a flow for good: nothing is sent after it (needs --yes)')
+    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('--yes', 'confirm: a stopped flow cannot be resumed')
+    .option('--json', 'output JSON')
+    .action((opts: { run: string, yes?: boolean, json?: boolean }) => {
+      try {
+        requireDestructiveConfirmation(opts, 'stop flow')
+        const runId = resolveFlowRunId(opts.run)
+        const stopped = stopFlow(runId)
+        if (opts.json) {
+          console.log(JSON.stringify(flowStatusPayload(stopped.state, stopped.path), null, 2))
+          return
+        }
+        console.log(`flow      ${runId} stopped (${stopped.state.close_reason ?? 'done'})`)
+        console.log(`file      ${shortHomePath(stopped.path)}  (kept: \`flow logs\` still reads it)`)
+      } catch (err) {
+        fail(err)
+      }
+    })
+
+  flow
+    .command('logs')
+    .description('the tail of one flow journal: transitions, dispatches, verdicts, refusals')
+    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('-n, --tail <n>', 'how many entries to show', (value: string) => Number(value), 20)
+    .option('--json', 'output JSON')
+    .action((opts: { run: string, tail: number, json?: boolean }) => {
+      try {
+        const runId = resolveFlowRunId(opts.run)
+        const state = readFlow(runId)
+        const limit = Number.isFinite(opts.tail) && opts.tail > 0 ? Math.floor(opts.tail) : 20
+        // The journal is already bounded (FLOW_LOG_LIMIT) and carries no prompt text: only the
+        // event, its time and a short reason. Redaction still runs over the detail.
+        const entries = state.log.slice(-limit).map(entry => ({
+          at: entry.at,
+          event: entry.event,
+          detail: redactSecrets(entry.detail),
+        }))
+        if (opts.json) {
+          console.log(JSON.stringify(entries, null, 2))
+          return
+        }
+        if (entries.length === 0) {
+          console.log('(no events)')
+          return
+        }
+        for (const entry of entries) console.log(`${entry.at}  ${entry.event.padEnd(20)} ${entry.detail}`)
       } catch (err) {
         fail(err)
       }

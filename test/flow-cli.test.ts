@@ -87,6 +87,11 @@ async function outsideHome<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function seedFlow(runId = 'run-c1') {
+  // A flow only exists for a live run: a tick asks the registry whether the run and both role agents
+  // are still there, and a fixture without them would park the flow as `orphaned`.
+  writeRun(makeRun(runId))
+  writeAgent(makeAgent('dev-1', runId))
+  writeAgent(makeAgent('rev-1', runId))
   const state = createFlowState({
     run_id: runId,
     repo: '/repo',
@@ -380,6 +385,162 @@ describe('flow tick', () => {
 
     expect(out).toContain('dev_pane_unknown')
     expect(readFileSync(path, 'utf-8')).toBe(before)
-    expect(execFileSync.mock.calls.some(call => call[0] === 'tmux')).toBe(false)
+    // The panes are read (that is how the tick learns they are unreadable); nothing is typed into
+    // them, which is what "neither sends" means here.
+    expect(execFileSync.mock.calls.some(call => call[0] === 'tmux' && (call[1] as string[]).includes('send-keys'))).toBe(false)
+  })
+})
+
+describe('flow add-spec', () => {
+  function writeSpec(name: string, overrides: Record<string, unknown> = {}): string {
+    const path = join(tmpDir, name)
+    writeFileSync(path, JSON.stringify({
+      id: 'block_07',
+      title: 'Lifecycle',
+      goal: 'g',
+      requirements: ['r'],
+      checks: ['c'],
+      ...overrides,
+    }), 'utf-8')
+    return path
+  }
+
+  it('queues a structured block and prints the queue', async () => {
+    seedFlow()
+    const spec = writeSpec('block_07.json')
+
+    const { out } = await runCli(['flow', 'add-spec', '--run', 'run-c1', '--file', spec])
+
+    expect(out).toContain('queued    block_07')
+    expect(out).toContain('queue     1 pending')
+    expect(readFlow('run-c1').specs.map(entry => entry.id)).toEqual(['block_07'])
+  })
+
+  it('prints the queued block and the new state as JSON', async () => {
+    seedFlow()
+    const spec = writeSpec('block_07.json', { id: 'block_08' })
+
+    const { out } = await runCli(['flow', 'add-spec', '--run', 'run-c1', '--file', spec, '--json'])
+    const payload = JSON.parse(out)
+
+    expect(payload.queued).toEqual([{ id: 'block_08', title: 'Lifecycle', unstructured: false }])
+    expect(payload.state.queue.map((entry: { id: string }) => entry.id)).toEqual(['block_08'])
+  })
+
+  it('refuses a block without requirements or checks and writes nothing', async () => {
+    const { path } = seedFlow()
+    const before = readFileSync(path, 'utf-8')
+    const thin = writeSpec('thin.json', { requirements: [], checks: [] })
+
+    const failure = await runCli(['flow', 'add-spec', '--run', 'run-c1', '--file', thin]).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+
+    expect(failure?.cli_err).toContain('requirements')
+    expect(readFileSync(path, 'utf-8')).toBe(before)
+  })
+
+  it('marks a --markdown block unstructured and warns about the downgrade', async () => {
+    seedFlow()
+    const md = join(tmpDir, 'block_09.md')
+    writeFileSync(md, '# Block 09 — notes\n\nBody.\n', 'utf-8')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const { out } = await runCli(['flow', 'add-spec', '--run', 'run-c1', '--markdown', md])
+      expect(out).toContain('(unstructured)')
+      expect(warn.mock.calls.flat().join(' ')).toContain('has no requirements/checks')
+    } finally {
+      warn.mockRestore()
+    }
+    expect(readFlow('run-c1').specs[0]!.unstructured).toBe(true)
+  })
+
+  it('requires at least one file', async () => {
+    seedFlow()
+    const failure = await runCli(['flow', 'add-spec', '--run', 'run-c1']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+    expect(failure?.cli_err).toContain('at least one --file or --markdown')
+  })
+})
+
+describe('flow pause / resume / stop', () => {
+  it('pauses, shows the paused state in status, and resumes into the same state', async () => {
+    seedFlow()
+
+    const paused = await runCli(['flow', 'pause', '--run', 'run-c1'])
+    expect(paused.out).toContain('paused (was idle)')
+
+    const status = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(status.out).toContain('state     paused')
+    expect(status.out).toContain('paused    from idle')
+
+    const resumed = await runCli(['flow', 'resume', '--run', 'run-c1'])
+    expect(resumed.out).toContain('resumed into idle')
+    expect(readFlow('run-c1').state).toBe('idle')
+  })
+
+  it('refuses a second pause and a resume of a flow that is not paused', async () => {
+    seedFlow()
+    await runCli(['flow', 'pause', '--run', 'run-c1'])
+
+    const second = await runCli(['flow', 'pause', '--run', 'run-c1']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+    expect(second?.cli_err).toContain('already paused')
+
+    await runCli(['flow', 'resume', '--run', 'run-c1'])
+    const resumeIdle = await runCli(['flow', 'resume', '--run', 'run-c1']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+    expect(resumeIdle?.cli_err).toContain('only a paused or escalated flow can be resumed')
+  })
+
+  it('refuses stop without --yes and stops with it', async () => {
+    seedFlow()
+
+    const refused = await runCli(['flow', 'stop', '--run', 'run-c1']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+    expect(refused?.cli_err).toContain('without --yes')
+    expect(readFlow('run-c1').state).toBe('idle')
+
+    const stopped = await runCli(['flow', 'stop', '--run', 'run-c1', '--yes'])
+    expect(stopped.out).toContain('stopped (stopped by the operator)')
+    expect(readFlow('run-c1').state).toBe('done')
+    expect(readFlow('run-c1').close_reason).toBe('stopped by the operator')
+  })
+})
+
+describe('flow logs', () => {
+  it('prints the journal tail in order, newest last', async () => {
+    seedFlow()
+    await runCli(['flow', 'pause', '--run', 'run-c1'])
+    await runCli(['flow', 'resume', '--run', 'run-c1'])
+
+    const { out } = await runCli(['flow', 'logs', '--run', 'run-c1', '-n', '2'])
+    const lines = out.trim().split('\n').filter(line => line.trim() !== '')
+
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toContain('flow_paused')
+    expect(lines[1]).toContain('flow_resumed')
+    expect(out).not.toContain('flow_started')
+  })
+
+  it('returns the tail as JSON and defaults to a bounded number of entries', async () => {
+    seedFlow()
+    await runCli(['flow', 'pause', '--run', 'run-c1'])
+    await runCli(['flow', 'resume', '--run', 'run-c1'])
+
+    const { out } = await runCli(['flow', 'logs', '--run', 'run-c1', '--json'])
+    const entries = JSON.parse(out)
+
+    expect(entries.map((entry: { event: string }) => entry.event)).toEqual(['flow_paused', 'flow_resumed'])
   })
 })

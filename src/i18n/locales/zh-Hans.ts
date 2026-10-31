@@ -64,6 +64,8 @@ export const zhHans = {
     'flow.status.escalated': '已升级',
     'flow.status.fixing': '修复中',
     'flow.status.idle': '等待中',
+    'flow.status.orphaned': '已孤立',
+    'flow.status.paused': '已暂停',
     'flow.status.reviewing': '评审中',
     'history.deleteBody': '只删除这条已归档历史记录。运行已经结束。',
     'history.deleteHint': '删除已归档运行',

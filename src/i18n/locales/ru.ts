@@ -63,6 +63,8 @@ export const ru = {
     'flow.status.escalated': 'эскалация',
     'flow.status.fixing': 'правки',
     'flow.status.idle': 'ожидание',
+    'flow.status.orphaned': 'осиротел',
+    'flow.status.paused': 'на паузе',
     'flow.status.reviewing': 'ревью',
     'history.deleteBody': 'Удаляет только эту архивную запись истории. Run уже завершён.',
     'history.deleteHint': 'удалить архивный run',

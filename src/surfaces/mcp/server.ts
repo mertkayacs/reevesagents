@@ -11,9 +11,12 @@
 // together.
 //
 // The flow tools are deliberate and explicit: `flow_start` attaches a pipeline to a run,
-// `flow_status` describes it and `flow_add_spec` queues a block. None of them ticks the flow or
-// sends anything into a pane, so the server keeps its "no implicit loops" contract — the flow
-// engine owns the loop and a host drives it by calling the engine, not this server.
+// `flow_status` describes it, `flow_add_spec` queues a block, `flow_control` pauses, resumes, stops
+// or queues, and `flow_step` runs **one** engine step when the host asks for it. Nothing here starts
+// a timer or a loop of its own, so the server keeps its "no implicit loops" contract: the flow
+// engine owns the loop, and a step is a call the host makes. `flow_step` sends at most one guarded
+// prompt and shares the CLI's claim protocol, so an MCP step, a cron tick and a manual tick can
+// never paste the same text twice.
 //
 // Each tool is one entry in TOOLS, colocating its schema and its handler so the
 // advertised list and the dispatch can never drift. MCP_TOOLS is derived from it.
@@ -46,6 +49,8 @@ import { resolveFlowRunId, flowQueueSummary, flowStatusPayload } from '../../cor
 import { flowPath, readFlow, saveFlow } from '../../core/flow-store.js'
 import { queueSpecFile } from '../../core/flow-queue.js'
 import { startFlow } from '../../core/flow-start.js'
+import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
+import { stepFlow } from '../../core/flow-runner.js'
 import { shortHomePath } from '../../utils/paths.js'
 import { redactSecrets } from '../../core/redact.js'
 import { detectHostProvider } from './host.js'
@@ -711,6 +716,90 @@ const TOOLS: ToolDef[] = [
           queue: flowQueueSummary(queued.state),
         })
       })
+    },
+  },
+  {
+    name: 'flow_step',
+    description: 'Run ONE engine step on a flow: observe, decide, claim, send and settle — the `flow tick` equivalent. It sends at most one guarded prompt, and only into a pane that is positively idle; an unsettled claim from another process makes it hold instead of pasting. Answers `changed: false` with the reason when it decided to do nothing, which makes polling it cheap. Nothing here starts a timer or a loop: one call is one step, and the flow engine owns every rule (rounds, timeout, escalation, pane guard).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        dry_run: { type: 'boolean', description: 'Print the decision; send nothing and write nothing.' },
+      },
+      required: ['run_id'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const result = stepFlow(runId, { dryRun: a.dry_run === true })
+      return ok({
+        run_id: runId,
+        // What the host needs to decide whether to call again: nothing happened, it worked, a pane
+        // refused (retry later), a paste landed without its submit (a human looks), or another
+        // process owns the state right now.
+        changed: result.status === 'applied',
+        status: result.status,
+        decision: result.decision.kind,
+        reason: result.decision.reason,
+        dry_run: a.dry_run === true,
+        send: result.send
+          ? { sent: result.send.sent, reason: result.send.sent ? null : result.send.reason }
+          : null,
+        flow: flowStatusPayload(result.state, result.path),
+      })
+    },
+  },
+  {
+    name: 'flow_control',
+    description: 'Drive a flow with one explicit action: `pause` parks it (a paused flow is never ticked and sends nothing), `resume` returns it to the state it was paused from or grants an escalated flow a fresh round budget, `stop` closes it for good and requires `confirm: true`, `add_spec` queues one block file (`file` for a structured JSON spec, `markdown` for an explicit unstructured ingest). Every action answers with the same payload `flow_status` returns; a refused action answers with the reason, never with a fake success.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        action: { type: 'string', enum: ['pause', 'resume', 'stop', 'add_spec'], description: 'What to do with the flow.' },
+        file: { type: 'string', description: 'add_spec: JSON block spec path (requirements and checks are mandatory).' },
+        markdown: { type: 'string', description: 'add_spec: file to ingest as an unstructured markdown block. An explicit downgrade.' },
+        confirm: { type: 'boolean', description: 'stop: must be true, because a stopped flow cannot be resumed.' },
+      },
+      required: ['run_id', 'action'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const action = asString(a.action)
+      if (action === 'pause') {
+        const paused = pauseFlow(runId)
+        return ok(flowStatusPayload(paused.state, paused.path))
+      }
+      if (action === 'resume') {
+        const resumed = resumeFlow(runId)
+        return ok(flowStatusPayload(resumed.state, resumed.path))
+      }
+      if (action === 'stop') {
+        if (a.confirm !== true) throw new Error('stop closes the flow for good; pass confirm: true')
+        const stopped = stopFlow(runId)
+        return ok(flowStatusPayload(stopped.state, stopped.path))
+      }
+      if (action === 'add_spec') {
+        const file = asString(a.file)
+        const markdown = asString(a.markdown)
+        if (!file && !markdown) throw new Error('add_spec needs a `file` (JSON spec) or a `markdown` path')
+        if (file && markdown) throw new Error('add_spec takes one file per call: `file` or `markdown`, not both')
+        const added = addFlowSpecs({
+          run_id: runId,
+          files: file ? [file] : [],
+          markdown: markdown ? [markdown] : [],
+        })
+        return ok({
+          run_id: runId,
+          queued: added.queued.map(spec => ({
+            id: spec.id,
+            title: redactSecrets(spec.title),
+            unstructured: spec.unstructured === true,
+          })),
+          flow: flowStatusPayload(added.state, added.path),
+        })
+      }
+      throw new Error(`unknown action ${JSON.stringify(action)}; expected pause, resume, stop or add_spec`)
     },
   },
 ]

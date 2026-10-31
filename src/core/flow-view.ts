@@ -44,6 +44,12 @@ export interface FlowStatusPayload {
   // The dispatch in flight: a claim written by a tick that has not settled it yet. This is why a
   // flow can be sitting still while a send is in progress.
   pending: { kind: string, target: string, at: number } | null
+  // Parked-state facts, so a surface can explain a flow that is not moving: `paused` shows where a
+  // resume would put it, `orphaned` shows why it was parked, `done` shows whether a human closed it.
+  paused_from: string | null
+  paused_at: number | null
+  orphan_reason: string | null
+  close_reason: string | null
   queue: { id: string, title: string, source_path: string | null }[]
   dispatched_specs: string[]
   repo: string
@@ -99,6 +105,12 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
     pending: state.pending
       ? { kind: state.pending.kind, target: state.pending.target, at: state.pending.at }
       : null,
+    paused_from: state.paused_from,
+    paused_at: state.paused_at,
+    // Both reasons are text a human wrote or a short engine string; the redactor still runs so a
+    // pasted token cannot ride out through them.
+    orphan_reason: state.orphan_reason ? redactSecrets(state.orphan_reason) : null,
+    close_reason: state.close_reason ? redactSecrets(state.close_reason) : null,
     queue,
     dispatched_specs: state.dispatched_specs,
     repo: shortHomePath(state.repo),

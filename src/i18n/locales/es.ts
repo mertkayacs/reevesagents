@@ -63,6 +63,8 @@ export const es = {
     'flow.status.escalated': 'escalado',
     'flow.status.fixing': 'corrigiendo',
     'flow.status.idle': 'en espera',
+    'flow.status.orphaned': 'huérfano',
+    'flow.status.paused': 'en pausa',
     'flow.status.reviewing': 'revisión',
     'history.deleteBody': 'Elimina solo esta entrada archivada del historial. El run ya terminó.',
     'history.deleteHint': 'eliminar run archivado',

@@ -59,6 +59,8 @@ export const de = {
     'flow.status.escalated': 'eskaliert',
     'flow.status.fixing': 'behebt',
     'flow.status.idle': 'wartet',
+    'flow.status.orphaned': 'verwaist',
+    'flow.status.paused': 'pausiert',
     'flow.status.reviewing': 'Review',
     'history.deleteBody': 'Entfernt nur diesen archivierten Verlaufseintrag. Der Run ist bereits beendet.',
     'history.deleteHint': 'archivierten Run löschen',

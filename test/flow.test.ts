@@ -444,7 +444,7 @@ describe('state serialisation', () => {
   it('refuses a state without a run id or with unknown status', () => {
     const noRun = { ...JSON.parse(JSON.stringify(makeState())), run_id: '' }
     expect(() => parseFlowState(noRun)).toThrow(/no run_id/)
-    const badState = { ...JSON.parse(JSON.stringify(makeState())), state: 'paused' }
+    const badState = { ...JSON.parse(JSON.stringify(makeState())), state: 'dispatching' }
     expect(() => parseFlowState(badState)).toThrow(/unknown state/)
   })
 

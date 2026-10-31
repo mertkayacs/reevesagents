@@ -64,6 +64,8 @@ export const ar = {
     'flow.status.escalated': 'مُصعَّد',
     'flow.status.fixing': 'إصلاح',
     'flow.status.idle': 'انتظار',
+    'flow.status.orphaned': 'بلا مالك',
+    'flow.status.paused': 'موقوف',
     'flow.status.reviewing': 'مراجعة',
     'history.deleteBody': 'يزيل هذا السجل المؤرشف. التشغيلة منتهية بالفعل.',
     'history.deleteHint': 'حذف تشغيلة مؤرشفة',

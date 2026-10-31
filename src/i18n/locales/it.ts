@@ -61,6 +61,8 @@ export const it = {
     'flow.status.escalated': 'escalato',
     'flow.status.fixing': 'correzione',
     'flow.status.idle': 'in attesa',
+    'flow.status.orphaned': 'orfano',
+    'flow.status.paused': 'in pausa',
     'flow.status.reviewing': 'revisione',
     'history.deleteBody': 'Rimuove solo questa voce di cronologia archiviata. Il run è già terminato.',
     'history.deleteHint': 'elimina run archiviato',

@@ -71,9 +71,13 @@ function makePorts(overrides: Partial<FlowPorts> = {}): FlowPorts & { send: Retu
   } as FlowPorts & { send: ReturnType<typeof vi.fn> }
 }
 
-// Every step below passes `head` and `tree_clean`, so no test shells out to git.
+// Every step below passes `head` and `tree_clean`, so no test shells out to git. Presence is passed
+// as well: this file describes a dispatcher, and the registry question (is the run still there?) has
+// its own tests — without the flags every case here would park the flow as `orphaned`.
 function step(ports: FlowPorts, overrides: Partial<StepFlowOptions> = {}): FlowStepResult {
-  return stepFlow('run-1', { ports, head: 'bbb222', tree_clean: true, now: NOW, at: AT, ...overrides })
+  return stepFlow('run-1', {
+    ports, head: 'bbb222', tree_clean: true, now: NOW, at: AT, run_present: true, agents_present: true, ...overrides,
+  })
 }
 
 describe('observeFlow', () => {
@@ -291,7 +295,9 @@ describe('stepFlow', () => {
     seed()
     const ports = makePorts()
 
-    const result = stepFlow('run-1', { ports, dryRun: true, head: 'bbb222', tree_clean: true, now: NOW, at: AT })
+    const result = stepFlow('run-1', {
+      ports, dryRun: true, head: 'bbb222', tree_clean: true, now: NOW, at: AT, run_present: true, agents_present: true,
+    })
 
     expect(result.status).toBe('skipped')
     expect(result.decision.kind).toBe('request_review')

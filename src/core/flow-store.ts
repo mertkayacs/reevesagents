@@ -17,7 +17,7 @@
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { stateRoot } from './runs.js'
+import { stateRoot } from './state-path.js'
 import { displayPath } from '../utils/paths.js'
 import type { FlowState } from './flow.js'
 import { FLOW_SCHEMA_VERSION, FlowStateError, parseFlowState } from './flow.js'
@@ -91,6 +91,20 @@ export function flowExists(runId: string, options: FlowStoreOptions = {}): boole
     return existsSync(flowPath(runId, options.root))
   } catch {
     return false
+  }
+}
+
+// The flow's only cascade (§3.3): a run whose history record is deleted has nothing left to
+// describe, so its flow file goes with it. Called from `deleteRunHistory` *inside* the runs lock, so
+// this function must never take that lock itself. Returns whether a file was there.
+export function deleteFlowFileForRun(runId: string, root = stateRoot()): boolean {
+  const path = flowPath(runId, root)
+  try {
+    unlinkSync(path)
+    return true
+  } catch (err) {
+    if ((err as { code?: string }).code === 'ENOENT') return false
+    throw new FlowStateError(`flow state was not deleted: ${displayPath(path)} (${fsFailure(err)})`)
   }
 }
 

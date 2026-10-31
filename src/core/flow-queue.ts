@@ -36,6 +36,9 @@ export interface SpecFileOptions {
   repo: string
   // Ids already queued or dispatched in this flow.
   existingIds?: string[]
+  // Read the file as markdown even when it is named `.json`: `flow add-spec --markdown` is the
+  // explicit downgrade, and a block ingested that way is always marked unstructured (§3.2).
+  asMarkdown?: boolean
 }
 
 // Does `target` sit outside `base`? Decided on strings only, so it is the caller's job to hand in
@@ -111,9 +114,10 @@ export function readSpecFile(path: string, options: SpecFileOptions): BlockSpec 
 
   // A JSON spec is the structured contract; anything else is markdown and is downgraded to an
   // unstructured block explicitly, with its heading as the id and title.
-  const validation = extname(absolute).toLowerCase() === '.json'
-    ? parseSpecJson(text, { existingIds: options.existingIds })
-    : specFromMarkdown(text, absolute, { existingIds: options.existingIds })
+  const asMarkdown = options.asMarkdown === true || extname(absolute).toLowerCase() !== '.json'
+  const validation = asMarkdown
+    ? specFromMarkdown(text, absolute, { existingIds: options.existingIds })
+    : parseSpecJson(text, { existingIds: options.existingIds })
   if (!validation.spec) throw new FlowSpecError(formatSpecIssues(validation.issues))
   return { ...validation.spec, source_path: absolute }
 }

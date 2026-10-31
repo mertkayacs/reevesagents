@@ -30,7 +30,7 @@ import {
   releaseDispatch,
 } from './flow.js'
 import { readFlow, saveFlow } from './flow-store.js'
-import { isRunsLockTimeout, withRunsLock } from './runs.js'
+import { isRunsLockTimeout, listAgents, readRun, withRunsLock } from './runs.js'
 import { paneBusy, peekAgentRaw, sendWhenIdle } from './runtime.js'
 import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
@@ -86,6 +86,48 @@ export interface ObserveFlowOptions {
   tree_clean?: boolean
   // The clock the timeout is measured against; the default is the wall clock.
   now?: number
+  // Registry facts, so a test can describe a live or an archived run without one.
+  run_present?: boolean
+  agents_present?: boolean
+}
+
+// Is the flow's run still there, and are both of its role agents still part of it? An archived run
+// (`stop`, `delete-run`, the stale sweep) removes the run directory, and a missing role agent means
+// the flow would paste into a pane that no longer exists — both park the flow as `orphaned` (§3.3).
+//
+// A registry that cannot be read is reported as "not seen", never as "gone": a broken probe must
+// not archive a live pipeline. The engine only orphans on an explicit `false`.
+function registryPresence(state: FlowState): { run_present: boolean, agents_present: boolean } {
+  let run: { id: string, status: string, ended_at: string | null }
+  try {
+    run = readRun(state.run_id)
+  } catch {
+    return { run_present: false, agents_present: false }
+  }
+  if (run.status === 'ended' || run.ended_at !== null) return { run_present: false, agents_present: false }
+  const agents = listAgents(run.id)
+  const present = everyAgentPresent(state, agents)
+  return { run_present: true, agents_present: present }
+}
+
+function everyAgentPresent(state: FlowState, agents: { id: string }[]): boolean {
+  const ids = new Set(agents.map(agent => agent.id))
+  return [state.roles.dev, state.roles.review].every(id => id !== '' && ids.has(id))
+}
+
+// The observations a parked flow gets: no git, no tmux, no registry. `flowTick` holds on `paused` and
+// `orphaned` before it looks at any of these, which is what "a tick does nothing and observes
+// nothing" means in code — a paused flow cannot cost a pane capture or a git call.
+export function unobservedFlow(now: number): FlowObservations {
+  return {
+    now,
+    head: '',
+    tree_clean: false,
+    dev_pane: 'unknown',
+    review_pane: 'unknown',
+    verdict: null,
+    verdict_count: 0,
+  }
 }
 
 export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}): FlowObservations {
@@ -99,6 +141,9 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
   const scan = reviewPane === 'unknown'
     ? { count: 0, last: null, notes: '' }
     : scanVerdict(ports.peek(state.roles.review, VERDICT_SCAN_LINES))
+  const presence = options.run_present === undefined || options.agents_present === undefined
+    ? registryPresence(state)
+    : { run_present: options.run_present, agents_present: options.agents_present }
   return {
     now: options.now ?? Date.now(),
     head,
@@ -108,6 +153,8 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     verdict: scan.last,
     verdict_count: scan.count,
     verdict_notes: scan.notes,
+    run_present: options.run_present ?? presence.run_present,
+    agents_present: options.agents_present ?? presence.agents_present,
   }
 }
 
@@ -180,6 +227,12 @@ function withStateLock<T>(fn: () => T): { locked: true } | { locked: false, valu
   }
 }
 
+// A parked flow is decided from the file alone: `paused` and `orphaned` hold, so observing would
+// only cost a git call, two pane captures and a verdict scan to reach the same answer.
+function isParked(state: FlowState): boolean {
+  return state.state === 'paused' || state.state === 'orphaned'
+}
+
 // One engine step: claim, act, settle.
 export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStepResult {
   const ports = options.ports ?? defaultFlowPorts
@@ -188,14 +241,14 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
 
   if (options.dryRun === true) {
     const state = readFlow(runId, { root: options.root })
-    const observations = observeFlow(state, options)
+    const observations = isParked(state) ? unobservedFlow(now) : observeFlow(state, options)
     return { observations, decision: flowTick(state, observations), status: 'skipped', state }
   }
 
   // Observation stays outside the lock: it shells out to git and tmux, and only the state read, the
   // decision and the write have to be atomic with each other.
   const before = readFlow(runId, { root: options.root })
-  const observations = observeFlow(before, options)
+  const observations = isParked(before) ? unobservedFlow(now) : observeFlow(before, options)
 
   // Phase one — claim. Re-reading inside the lock is what makes two tickers safe: the decision comes
   // from the file as it is now, so the second ticker sees the first one's claim and holds.

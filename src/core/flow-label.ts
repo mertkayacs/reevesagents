@@ -15,8 +15,11 @@ export type FlowTranslate = (_key: TranslationKey, _values?: Record<string, stri
 
 export function flowBadgeText(t: FlowTranslate, badge: FlowBadge, options: { compact?: boolean } = {}): string {
   const status = t(`flow.status.${badge.status}` as TranslationKey)
-  // A closed or escalated flow has no meaningful ratio: the budget is either spent or irrelevant.
-  if (options.compact === true || badge.status === 'escalated' || badge.status === 'done') {
+  // A closed, escalated or orphaned flow has no meaningful ratio: the budget is either spent
+  // (escalated), irrelevant (done) or nobody will spend it (orphaned). `paused` keeps the ratio:
+  // it resumes into the same budget.
+  const withoutRatio = badge.status === 'escalated' || badge.status === 'done' || badge.status === 'orphaned'
+  if (options.compact === true || withoutRatio) {
     return t('flow.badge.status', { status })
   }
   return t('flow.badge.rounds', { status, rounds: badge.rounds, max: badge.max_rounds })

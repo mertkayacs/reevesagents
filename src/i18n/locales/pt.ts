@@ -63,6 +63,8 @@ export const pt = {
     'flow.status.escalated': 'escalado',
     'flow.status.fixing': 'corrigindo',
     'flow.status.idle': 'aguardando',
+    'flow.status.orphaned': 'órfão',
+    'flow.status.paused': 'em pausa',
     'flow.status.reviewing': 'revisão',
     'history.deleteBody': 'Remove apenas esta entrada arquivada do histórico. A execução já terminou.',
     'history.deleteHint': 'eliminar execução arquivada',

@@ -17,7 +17,6 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type {
   AgentRecord,
@@ -33,10 +32,12 @@ import { redactSecrets } from './redact.js'
 import { isProvider } from './providers.js'
 import { reapPaneProcess } from './process.js'
 import * as tmux from './tmux.js'
+import { stateRoot } from './state-path.js'
+import { deleteFlowFileForRun } from './flow-store.js'
 
-export function stateRoot(): string {
-  return process.env.REEVES_REGISTRY || join(homedir(), '.reeves')
-}
+// Re-exported because every caller and every test names `stateRoot` from the registry module; the
+// implementation moved to `state-path.ts` to keep this module and the flow store acyclic.
+export { stateRoot }
 
 export function runsDir(): string {
   return join(stateRoot(), 'runs')
@@ -376,6 +377,10 @@ export function deleteAgent(agentId: string): AgentRecord {
 export function deleteRunHistory(runId: string): void {
   withRunsLock(() => {
     rmSync(runHistoryPath(runId), { force: true })
+    // The flow is the one artefact that outlives a run's directory (§3.3): while the history record
+    // existed, `flow status` still described the run; once the record is gone there is no reader
+    // left, so the pipeline file goes with it. No other path deletes a flow automatically.
+    deleteFlowFileForRun(runId)
   })
 }
 
