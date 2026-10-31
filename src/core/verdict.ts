@@ -16,6 +16,10 @@ export interface VerdictScan {
   last: FlowVerdict | null
   // The reviewer's actionable lines, oldest first, already redacted.
   notes: string
+  // The capture was longer than the window, so an older verdict may have scrolled out and the
+  // count is not monotonic. A caller that sees a count *drop* must treat it as a scroll and
+  // re-baseline instead of deciding that no new verdict appeared.
+  truncated: boolean
 }
 
 // A review scrolls; the window is generous so a verdict rendered before a long findings list
@@ -60,11 +64,12 @@ export function verdictNotes(paneText: string, lines = VERDICT_SCAN_LINES, limit
   return redactSecrets(notes)
 }
 
-// One pass for the callers that need all three facts about the same capture.
+// One pass for the callers that need every fact about the same capture.
 export function scanVerdict(paneText: string, lines = VERDICT_SCAN_LINES): VerdictScan {
   return {
     count: countVerdicts(paneText, lines),
     last: lastVerdict(paneText, lines),
     notes: verdictNotes(paneText, lines),
+    truncated: lines > 0 && paneText.split('\n').length > lines,
   }
 }

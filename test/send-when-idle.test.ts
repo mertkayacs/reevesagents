@@ -107,14 +107,43 @@ async function seed(agentOverrides: Partial<AgentRecord> = {}) {
 
 const FAST = { timings: { pasteSettleMs: 0, submitWaitMs: 0 } }
 
+// Real pane shapes (see test/activity.test.ts): the gate needs a positive idle signal, and a
+// send reads the pane three times — gate, pre-Enter re-check, post-Enter confirm.
+const CODEX_IDLE = [
+  '› Ask Codex to do anything',
+  '',
+  '  GPT-6-Luna high · ~/projects/reevesagents-flow',
+  '  ← for agents · ? for shortcuts',
+].join('\n')
+
+const CODEX_BUSY = [
+  '  ◦ Working (3s • esc to interrupt)',
+  '',
+  '› Ask Codex to do anything',
+  '  GPT-6-Luna high · ~/projects/reevesagents-flow',
+].join('\n')
+
+const HERMES_IDLE = [
+  '❯ fix the failing test',
+  '────────────────────────────────────────────',
+  ' ☤ deepseek-v4.1-flash · 282K/1M · ✓ 6m · ~/projects/salon-dashboard (main)',
+].join('\n')
+
 describe('paneBusy', () => {
   it('reads the pane through the injected driver', async () => {
     const { paneBusy } = await seed()
     const driver = new PaneDriver()
-    driver.captures = ['◦ Working (3s • esc to interrupt)']
+    driver.captures = [CODEX_BUSY]
     expect(paneBusy('agent-1', { driver })).toBe('busy')
 
-    driver.captures = ['VERDICT: ACCEPT\nMAJOR nothing\n❯ ']
+    driver.captures = [CODEX_IDLE]
+    expect(paneBusy('agent-1', { driver })).toBe('idle')
+  })
+
+  it('classifies a hermes pane through the same gate', async () => {
+    const { paneBusy } = await seed({ provider: 'hermes' as Provider })
+    const driver = new PaneDriver()
+    driver.captures = [HERMES_IDLE]
     expect(paneBusy('agent-1', { driver })).toBe('idle')
   })
 
@@ -138,7 +167,7 @@ describe('sendWhenIdle', () => {
   it('refuses a busy pane without touching it', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    driver.captures = ['◦ Working (3s • esc to interrupt)']
+    driver.captures = [CODEX_BUSY]
 
     expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'busy' })
     expect(driver.count('load-buffer')).toBe(0)
@@ -156,7 +185,7 @@ describe('sendWhenIdle', () => {
   it('pastes once and submits with exactly one Enter when the pane goes busy', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    driver.captures = ['> idle prompt', '◦ Working (1s • esc to interrupt)']
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_BUSY]
 
     expect(sendWhenIdle('agent-1', 'block brief', { driver, ...FAST })).toEqual({ sent: true })
     expect(driver.pasted()).toEqual(['block brief'])
@@ -167,17 +196,28 @@ describe('sendWhenIdle', () => {
   it('reports unconfirmed and never sends a second Enter', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    driver.captures = ['> idle prompt', '> still idle prompt']
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_IDLE]
 
     expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed' })
     expect(driver.count('send-keys')).toBe(1)
     expect(driver.pasted()).toHaveLength(1)
   })
 
+  it('refuses to submit when the pane stops being idle during the settle window', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    // Gate sees an idle agent; by the time the Enter would go in, a turn has started.
+    driver.captures = [CODEX_IDLE, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'pane_changed' })
+    expect(driver.count('send-keys')).toBe(0)
+    expect(driver.pasted()).toEqual(['hello'])
+  })
+
   it('waits the full confirm window by default', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    driver.captures = ['> idle', '◦ Working (2s • esc to interrupt)']
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_BUSY]
 
     expect(sendWhenIdle('agent-1', 'hello', { driver })).toEqual({ sent: true })
     // 9 s after the paste, 6 s after the Enter: the timings the design settled on.
@@ -204,7 +244,7 @@ describe('sendWhenIdle', () => {
   it('flips a queued agent to working, like every other send path', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    driver.captures = ['> idle', '◦ Working (1s • esc to interrupt)']
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_BUSY]
 
     sendWhenIdle('agent-1', 'hello', { driver, ...FAST })
     const { readAgent } = await import('../src/core/runs.js')

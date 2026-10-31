@@ -628,7 +628,7 @@ export interface IdleSendTimings {
 
 export const DEFAULT_IDLE_SEND_TIMINGS: IdleSendTimings = { pasteSettleMs: 9000, submitWaitMs: 6000 }
 
-export type SendRefusal = 'busy' | 'unknown' | 'stale_pane' | 'headless' | 'unconfirmed'
+export type SendRefusal = 'busy' | 'unknown' | 'stale_pane' | 'headless' | 'pane_changed' | 'unconfirmed'
 export type SendOutcome = { sent: true } | { sent: false; reason: SendRefusal }
 
 export interface IdleSendOptions extends RuntimeOptions {
@@ -672,9 +672,21 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
     return { sent: false, reason: 'stale_pane' }
   }
   lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
-  if (!agent.ended_at && agent.task_status === 'queued') updateAgent(agent.run_id, agent.id, { task_status: 'working' })
+  // Best effort: the text is already pasted, so a bookkeeping failure must never abort the
+  // submit and leave the prompt sitting in the input box with nothing recorded.
+  if (!agent.ended_at && agent.task_status === 'queued') {
+    try {
+      updateAgent(agent.run_id, agent.id, { task_status: 'working' })
+    } catch {
+      // the record is repaired by the next send or status read
+    }
+  }
 
   waitBlocking(driver, timings.pasteSettleMs)
+  // Re-check right before the Enter: during the settle window the agent can start working, or
+  // the screen can change to a modal, and submitting then would answer whatever prompt just
+  // appeared. The paste is already done, so this is reported as an ambiguous dispatch.
+  if (paneBusy(agent.id, options) !== 'idle') return { sent: false, reason: 'pane_changed' }
   try {
     driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])
   } catch {

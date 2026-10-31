@@ -82,6 +82,18 @@ describe('validateSpec', () => {
     })))).toContain('requirements')
   })
 
+  it('reports wrong types instead of silently coercing them', () => {
+    const bad = validateSpec(validSpec({
+      goal: 42,
+      body: ['not', 'a', 'string'],
+      source_path: { nope: true },
+      requirements: ['fine', 7, null],
+    }))
+    expect(issueFields(bad)).toEqual(expect.arrayContaining(['goal', 'body', 'source_path', 'requirements']))
+    expect(bad.spec).toBeNull()
+    expect(formatSpecIssues(bad.issues)).toContain('requirements entry must be a string')
+  })
+
   it('rejects a non-list where a list belongs, and a non-object spec', () => {
     expect(issueFields(validateSpec(validSpec({ requirements: 'add a file' })))).toContain('requirements')
     expect(validateSpec('not a spec').issues[0]?.field).toBe('spec')
@@ -124,6 +136,15 @@ describe('specFromMarkdown', () => {
       source_path: '/specs/block_03.md',
     })
     expect(result.spec?.body).toContain('Long text')
+  })
+
+  it('refuses a markdown block whose derived id is already queued', () => {
+    const first = specFromMarkdown('# Block 03 — surfaces\n\nbody')
+    expect(first.spec?.id).toBe('block-03-surfaces')
+
+    const second = specFromMarkdown('# Block 03 — surfaces\n\nother body', '', { existingIds: ['block-03-surfaces'] })
+    expect(second.spec).toBeNull()
+    expect(issueFields(second)).toContain('id')
   })
 
   it('falls back to the first line when there is no heading', () => {

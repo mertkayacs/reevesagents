@@ -62,8 +62,14 @@ function asRecord(raw: unknown): Record<string, unknown> | null {
   return typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? raw as Record<string, unknown> : null
 }
 
-function normalizeText(value: unknown): string {
-  return typeof value === 'string' ? value.replace(/\r\n/g, '\n').trim() : ''
+// A scalar text field: absent is empty, but a wrong type is an issue, never a silent ''.
+function readText(value: unknown, field: string, issues: SpecIssue[]): string {
+  if (value === undefined || value === null) return ''
+  if (typeof value !== 'string') {
+    issues.push({ field, message: `${field} must be a string` })
+    return ''
+  }
+  return value.replace(/\r\n/g, '\n').trim()
 }
 
 // A list of short strings: trimmed, blanks dropped, capped per entry and in total.
@@ -80,7 +86,11 @@ function normalizeList(
   }
   const entries: string[] = []
   for (const item of value) {
-    const text = normalizeText(item)
+    if (typeof item !== 'string') {
+      issues.push({ field, message: `${field} entry must be a string` })
+      continue
+    }
+    const text = item.replace(/\r\n/g, '\n').trim()
     if (!text) continue
     if (text.length > limit) {
       issues.push({ field, message: `${field} entry is longer than ${limit} characters` })
@@ -102,14 +112,14 @@ export function validateSpec(raw: unknown, options: ValidateSpecOptions = {}): S
   if (!record) return { spec: null, issues: [{ field: 'spec', message: 'spec must be an object' }] }
 
   const issues: SpecIssue[] = []
-  const id = normalizeText(record.id)
-  const title = normalizeText(record.title)
-  const goal = normalizeText(record.goal)
+  const id = readText(record.id, 'id', issues)
+  const title = readText(record.title, 'title', issues)
+  const goal = readText(record.goal, 'goal', issues)
   const requirements = normalizeList(record.requirements, 'requirements', SPEC_LIMITS.entry, issues)
   const checks = normalizeList(record.checks, 'checks', SPEC_LIMITS.entry, issues)
   const report = normalizeList(record.report, 'report', SPEC_LIMITS.entry, issues)
-  const body = normalizeText(record.body)
-  const sourcePath = normalizeText(record.source_path)
+  const body = readText(record.body, 'body', issues)
+  const sourcePath = readText(record.source_path, 'source_path', issues)
 
   if (!id) issues.push({ field: 'id', message: 'id is required' })
   else if (!SPEC_ID_PATTERN.test(id)) issues.push({ field: 'id', message: `id must match ${SPEC_ID_PATTERN.source}` })
@@ -149,8 +159,10 @@ export function parseSpecJson(text: string, options: ValidateSpecOptions = {}): 
 }
 
 // Markdown ingestion is the shortcut, never the contract: the whole file becomes `body`, the
-// title comes from the first heading, and the block is marked unstructured.
-export function specFromMarkdown(text: string, sourcePath = ''): SpecValidation {
+// title comes from the first heading, and the block is marked unstructured. Two files with the
+// same heading collapse to the same id, so pass `existingIds` and the collision is refused
+// instead of silently queueing a block that can never be dispatched.
+export function specFromMarkdown(text: string, sourcePath = '', options: ValidateSpecOptions = {}): SpecValidation {
   const normalized = text.replace(/\r\n/g, '\n').trim()
   const heading = normalized.split('\n').find(line => /^#\s+\S/.test(line.trim()))
   const firstLine = normalized.split('\n').find(line => line.trim() !== '')
@@ -164,7 +176,7 @@ export function specFromMarkdown(text: string, sourcePath = ''): SpecValidation 
     .slice(0, SPEC_LIMITS.id) || 'block'
   return validateSpec(
     { id: idSeed, title: title || idSeed, body: normalized, source_path: sourcePath },
-    { allowUnstructured: true },
+    { ...options, allowUnstructured: true },
   )
 }
 

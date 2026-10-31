@@ -62,6 +62,19 @@ describe('verdict scanning', () => {
     expect(scanVerdict(pane).notes).not.toContain('sk-abcdefghijklmnopqrstuvwx')
   })
 
+  it('flags a truncated window so a caller can detect a scrolled verdict', () => {
+    const short = 'VERDICT: ACCEPT\nMAJOR one'
+    expect(scanVerdict(short, 10).truncated).toBe(false)
+
+    // Older verdicts scroll out of the window, so the count can shrink between two scans: a
+    // caller must re-baseline instead of concluding "no new verdict".
+    const long = ['VERDICT: CHANGES_REQUESTED', ...Array.from({ length: 10 }, (_item, index) => `line ${index}`), 'VERDICT: ACCEPT'].join('\n')
+    const narrow = scanVerdict(long, 3)
+    expect(narrow.truncated).toBe(true)
+    expect(narrow.count).toBe(1)
+    expect(narrow.last).toBe('ACCEPT')
+  })
+
   it('reads only the requested tail window', () => {
     const pane = ['VERDICT: ACCEPT', 'MAJOR old', 'later output', 'more output'].join('\n')
     expect(countVerdicts(pane, 2)).toBe(0)
