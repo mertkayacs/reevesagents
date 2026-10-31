@@ -177,3 +177,25 @@ describe('web client create flow', () => {
     expect(js).toContain("api('POST', `/api/presets/${encodeURIComponent(name)}/delete`")
   })
 })
+
+describe('web client flow chip', () => {
+  it('renders the server-rendered label and styles attention, with no copy of the wording', () => {
+    const js = readClientFile('app.js')
+    const css = readClientFile('app.css')
+
+    // The chip reads the label the server rendered through core/flow-label.ts.
+    expect(js).toContain('run.flow.label')
+    expect(js).toContain("flow.className = 'run-flow'")
+    expect(js).toContain('flow.dataset.attention')
+    // No second copy of the badge text or of the attention wording in the browser bundle.
+    expect(js).not.toContain('flow: review')
+    expect(js).not.toContain('flow: escalated')
+    expect(js).not.toContain('needs attention')
+    expect(js).not.toContain('rounds spent')
+    // State comes from the existing panel classes, not from inline styles.
+    expect(js).not.toContain('flow.style.color')
+    expect(css).toContain('.run-flow {')
+    expect(css).toContain('.run-flow[data-attention]')
+    expect(css).toContain('var(--warn)')
+  })
+})

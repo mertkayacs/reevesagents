@@ -934,6 +934,18 @@
       meta.className = 'run-meta'
       meta.textContent = `${statusLabel(run.status)} · ${agentCountLabel(run.terminals.length)}`
       headBody.appendChild(meta)
+      // The flow chip is rendered by the server (core/flow-label.ts), so the client holds no copy of
+      // its wording; attention is an attribute on the same chip, painted by app.css.
+      if (run.flow) {
+        const flow = document.createElement('span')
+        flow.className = 'run-flow'
+        flow.textContent = run.flow.label
+        if (run.flow.attention) {
+          flow.dataset.attention = run.flow.attention
+          flow.title = run.flow.attention_label || run.flow.label
+        }
+        headBody.appendChild(flow)
+      }
       head.appendChild(headBody)
 
       const actions = document.createElement('div')

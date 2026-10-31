@@ -510,6 +510,27 @@ button { letter-spacing: 0; }
   letter-spacing: 0;
 }
 
+/* Flow chip under the run name: muted by default, warn when a human is needed. The text comes from
+   the server; only the attention state is styled here. */
+.run-flow {
+  overflow: hidden;
+  align-self: flex-start;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-1);
+  padding: 0 var(--s-1);
+  color: color-mix(in srgb, var(--muted) 70%, var(--text));
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-flow[data-attention] {
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
 .run-action,
 .run-stop,
 .run-delete {

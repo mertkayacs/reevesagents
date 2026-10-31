@@ -19,7 +19,7 @@ import { autoCleanupRuns, computeRunStatus, listAgents, listRuns, runHasLiveTmux
 import { sweepAgentsThrottled, sweepOrphanSessionsThrottled } from '../../../core/reaper.js'
 import type { FlowBadge } from '../../../core/flow-view.js'
 import { listFlowBadges, sameFlowBadges } from '../../../core/flow-view.js'
-import { flowAttentionText, flowBadgeText } from '../utils/flowBadge.js'
+import { flowAttentionText, flowBadgeText } from '../../../core/flow-label.js'
 import { useLayoutColumns } from '../components/LayoutContext.js'
 import type { RunRecord } from '../../../core/types.js'
 

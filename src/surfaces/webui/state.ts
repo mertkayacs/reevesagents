@@ -14,10 +14,32 @@ import { PROVIDERS, detectAvailable, providerSupportsAuthMode, providerSupportsE
 import { modelValuesForProvider } from '../../core/model-catalog.js'
 import { providerColor, providerDisplayName } from '../../utils/display.js'
 import { listRunApprovals, type ApprovalRisk } from '../../core/approvals.js'
-import type { Provider, RunRecord, RunViewStatus, TaskStatus } from '../../core/types.js'
+import type { FlowAttention, FlowBadge } from '../../core/flow-view.js'
+import { readFlowBadge } from '../../core/flow-view.js'
+import { flowAttentionText, flowBadgeText, type FlowTranslate } from '../../core/flow-label.js'
+import { loadConfig } from '../../core/config.js'
+import { translate } from '../../i18n/catalog.js'
+import type { LanguageCode, Provider, RunRecord, RunViewStatus, TaskStatus } from '../../core/types.js'
 
 export interface WebStateOptions {
   liveTmuxTarget?: (_run: RunRecord) => boolean
+  // Rendered here, not in the browser: the label is formatted by the same helper the TUI uses, so
+  // the client never holds a second copy of "flow: review (2/6)".
+  language?: LanguageCode
+  // The clock the review deadline is measured against.
+  now?: number
+}
+
+// The flow badge as a surface shows it. `label` and `attention_label` arrive pre-rendered from
+// core/flow-label.ts; the client only displays them.
+export interface WebRunFlow {
+  status: string
+  rounds: number
+  max_rounds: number
+  label: string
+  attention: FlowAttention | null
+  attention_label: string | null
+  review_overdue: boolean
 }
 
 export interface WebTerminal {
@@ -47,6 +69,8 @@ export interface WebRun {
   canStop: boolean
   canDelete: boolean
   terminals: WebTerminal[]
+  // Derived from the flow file on every snapshot, never stored on the run record.
+  flow: WebRunFlow | null
 }
 
 export interface WebRunHistory {
@@ -99,13 +123,31 @@ function monogram(nickname: string, provider: string): string {
   return (alnum.slice(0, 2) || provider.slice(0, 2)).toUpperCase()
 }
 
+function webFlow(badge: FlowBadge, t: FlowTranslate): WebRunFlow {
+  return {
+    status: badge.status,
+    rounds: badge.rounds,
+    max_rounds: badge.max_rounds,
+    label: flowBadgeText(t, badge),
+    attention: badge.attention,
+    attention_label: flowAttentionText(t, badge),
+    review_overdue: badge.review_overdue,
+  }
+}
+
 export function buildWebState(options: WebStateOptions = {}): WebState {
+  const language = options.language ?? loadConfig().global.language
+  const t: FlowTranslate = (key, values) => translate(language, key, values)
+  const now = options.now ?? Date.now()
   const agentIndex = new Map<string, { nickname: string; provider: Provider }>()
   const runNameById = new Map<string, string>()
   const runs = listRuns().map<WebRun>(run => {
     runNameById.set(run.id, run.name)
     const live = options.liveTmuxTarget ? options.liveTmuxTarget(run) : runHasLiveTmuxTarget(run)
     const runStatus = computeRunStatus(run, live)
+    // Read once per run per snapshot: the flow file is small and this is the only place the web
+    // view learns about it.
+    const flow = readFlowBadge(run.id, now)
     const terminals = listAgents(run.id).map<WebTerminal>(agent => {
       agentIndex.set(agent.id, { nickname: agent.nickname, provider: agent.provider })
       const status = agent.ended_at ? 'ended' : agent.task_status
@@ -146,6 +188,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       canStop: run.status === 'running' && !run.ended_at,
       canDelete: run.status === 'ended' || run.ended_at !== null,
       terminals,
+      flow: flow ? webFlow(flow, t) : null,
     }
   })
   const history = listRunHistory().map<WebRunHistory>(record => ({
