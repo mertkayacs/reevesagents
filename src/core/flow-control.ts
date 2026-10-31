@@ -22,11 +22,14 @@ import { readSpecFile } from './flow-queue.js'
 import type { FlowStoreOptions } from './flow-store.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import { isRunsLockTimeout, withRunsLock } from './runs.js'
+import { withDispatchGate } from './flow-dispatch-gate.js'
 
 export interface FlowControlOptions extends FlowStoreOptions {
   // Timestamp written into the log entry; the clock is the caller's so a test can pin it.
   at?: string
   now?: number
+  // How long to wait for an in-flight dispatch to finish before refusing. A test shortens it.
+  gate_timeout_ms?: number
 }
 
 export interface FlowControlResult {
@@ -37,6 +40,11 @@ export interface FlowControlResult {
 // One short critical section for a transition. `fn` runs inside the lock and reads the flow as it is
 // *now*, which is what makes two control commands (or a control command and a tick) safe: the second
 // one validates against the state the first one wrote.
+//
+// The dispatch gate comes first, the runs lock second — the same order the runner takes (`§2.4`), so
+// a control command can never land between a runner's claim check and the paste it guards. While a
+// prompt is being typed this waits for it to finish (bounded), then applies on top of the settled
+// state; if the sender is stuck the command refuses instead of hanging for ever.
 function transition(
   runId: string,
   options: FlowControlOptions,
@@ -44,10 +52,17 @@ function transition(
   fn: (_state: FlowState) => FlowState,
 ): FlowControlResult {
   try {
-    return withRunsLock<FlowControlResult>(() => {
-      const next = fn(readFlow(runId, { root: options.root }))
-      return { state: next, path: saveFlow(next, { root: options.root }) }
-    })
+    const gated = withDispatchGate<FlowControlResult>(
+      () => withRunsLock<FlowControlResult>(() => {
+        const next = fn(readFlow(runId, { root: options.root }))
+        return { state: next, path: saveFlow(next, { root: options.root }) }
+      }),
+      { root: options.root, timeoutMs: options.gate_timeout_ms },
+    )
+    if (!gated.acquired) {
+      throw new FlowStateError('a dispatch is in flight; nothing was changed — try again in a moment')
+    }
+    return gated.value
   } catch (err) {
     // A timeout means another reevesagents process is writing the state tree right now: nothing was
     // changed, and the operator can run the command again.

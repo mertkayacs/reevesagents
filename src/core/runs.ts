@@ -423,11 +423,41 @@ function listAgentsForRunIds(runIds: string[]): AgentRecord[] {
     }
   }
 
-  return agents.sort((a, b) => {
-    if (a.run_id !== b.run_id) return a.run_id.localeCompare(b.run_id)
-    if (a.role !== b.role) return a.role === 'root' ? -1 : 1
-    return new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-  })
+  return agents.sort(compareAgents)
+}
+
+// Failure-aware sibling of `listAgents`: `null` means "this process could not read the registry",
+// `[]` means "there are no agents". A decision that parks a flow must never read the first as the
+// second, so decisions use this and display code keeps the lenient one — the same pair the tmux
+// probes use (`tryAllWindowIds` next to `allWindowIds`).
+export function tryListAgents(runId: string): AgentRecord[] | null {
+  let files: string[]
+  try {
+    files = readdirSync(agentsDir(runId))
+  } catch (err) {
+    // A run without an agents directory really has no agents; anything else (EACCES on the run
+    // directory, a path that is not a directory) is a probe failure, not an empty answer.
+    return (err as { code?: string }).code === 'ENOENT' ? [] : null
+  }
+  const agents: AgentRecord[] = []
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue
+    const id = file.slice(0, -5)
+    try {
+      agents.push(readAgentUnlocked(runId, id))
+    } catch {
+      // A record that is there but does not parse is a probe failure; a file that vanished between
+      // `readdirSync` and the read really is gone.
+      if (existsSync(agentPath(runId, id))) return null
+    }
+  }
+  return agents.sort(compareAgents)
+}
+
+function compareAgents(a: AgentRecord, b: AgentRecord): number {
+  if (a.run_id !== b.run_id) return a.run_id.localeCompare(b.run_id)
+  if (a.role !== b.role) return a.role === 'root' ? -1 : 1
+  return new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
 }
 
 function buildRunHistoryRecord(run: RunRecord, status: RunHistoryStatus): RunHistoryRecord {

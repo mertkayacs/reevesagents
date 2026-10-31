@@ -155,17 +155,33 @@ is not in this build: escalating is the answer that cannot send the same prompt 
 nothing at all. This is the only concurrency rule the engine has, and it is what makes a cron
 `flow tick` safe to run next to a manual one.
 
-**The claim is re-read once before the paste (review round 6).** The claim protects a ticker from
-another ticker; it does not, by itself, protect the flow from a *human*: `flow pause` and `flow stop`
-drop the claim precisely so nothing lands in a pipeline the operator just stopped, and they can win
-the race between the claim write and the send. So the runner takes one more short lock immediately
-before the paste and asks "is this still my `op_id`, and is the flow still live?". A claim that is
-gone, or a flow that is `paused`/`orphaned`/`done`, means **nothing is pasted** and the step answers
-`cancelled` (a claim that survived but is now parked is released with a journal line, so a resume
-cannot inherit a send that never happened). The window that remains — between that check and the
-`sendWhenIdle` call — is microseconds and cannot be closed without holding the runs lock across the
-send, which the non-reentrant lock forbids (§3.4); a command landing there leaves the flow paused and
-the agent with one prompt it will need to finish, which is exactly what the operator asked for.
+**The claim protects a ticker from another ticker; it does not protect the flow from a human.**
+`flow pause` and `flow stop` drop the claim precisely so nothing lands in a pipeline the operator just
+stopped, and a check-then-paste alone cannot stop them winning the window between the check and the
+send (review round 6 added the check, round 7 closed the window). Three pieces make the act atomic:
+
+1. The runner re-reads the flow **inside the dispatch gate** and pastes only when the `pending`
+   `op_id` is still its own and the flow is still live. A claim that is gone, or a flow that is
+   `paused`/`orphaned`/`done`, means nothing is pasted and the step answers `cancelled`; a claim that
+   survived while the flow was parked is released with a journal line, so a resume cannot inherit a
+   send that never happened.
+2. The gate (`src/core/flow-dispatch-gate.ts`, `<state dir>/.flow-dispatch.lock`) is held for the
+   whole act — verify, paste, settle — not only for a moment, so nothing can be inserted between the
+   check and the paste.
+3. `pause` and `stop` take the same gate before touching the flow, so they land either before the
+   check (the runner sees the claim gone) or after the settle (there is nothing left to cancel),
+   never in between. While a prompt is being typed they wait for it (bounded by
+   `DISPATCH_GATE_TIMEOUT_MS`, 15 s) and answer "a dispatch is in flight — try again in a moment"
+   rather than hanging or pretending they succeeded.
+
+The gate exists because the runs lock cannot do this job: `sendWhenIdle` takes it internally and it is
+not reentrant, so holding it across the paste deadlocks (§3.4). It is a **second lock domain with a
+fixed ordering — gate first, runs lock second — and no path takes them the other way round**: the
+runner writes its claim under the runs lock, releases it, and only then takes the gate; a control
+command takes the gate and then the runs lock inside it. A gate left behind by a process that died
+mid-paste is broken after `DISPATCH_GATE_STALE_MS` (60 s), which is longer than any send, so a live
+paste is never broken underneath itself; a tick that cannot take the gate pastes nothing, releases its
+claim and answers `locked`.
 
 ---
 
@@ -330,8 +346,10 @@ The presence probe distinguishes three cases (review round 6), because parking i
 the engine's side: a **missing run file** is a run that is gone (archiving removes the directory); a
 run file that **exists but does not read** is a broken probe, reported as "not seen" (`undefined`),
 which the engine refuses to treat as absence — `readRun` answers "Run not found" for both, so
-existence is checked first; and an agent whose record is still there but has **ended**
-(`ended_at !== null`) is not a live pane, so it counts as gone. The cascade
+existence is checked first; a **directory that cannot be listed or a role-agent record that does not
+parse** is "not seen" as well, which is why the probe uses the failure-aware `tryListAgents` (an
+unreadable `agents/` directory is not an empty one); and an agent whose record is still there but has
+**ended** (`ended_at !== null`) is not a live pane, so it counts as gone. The cascade
 is `deleteFlowFileForRun` called from `deleteRunHistory` (`src/core/runs.ts:377`), inside the runs
 lock it already holds; no other path deletes a flow file.
 
@@ -381,10 +399,12 @@ reader will meet: `flow_started`, `flow_paused`, `flow_resumed`, `flow_stopped`,
   a failed rename must fail the save, and the caller reports it — losing one tick is cheaper than
   losing the state.
 - **Locked, but never across a send**: state transitions use the existing global lock
-  (`withRunsLock`, `src/core/runs.ts:82`) in short claim/settle sections, and the paste itself
-  happens outside it — `withRunsLock` is not reentrant and `sendText` takes it internally
-  (§2.4). The lock is coarse but correct for a 25 ms section; the failure mode of holding it
-  across a send is a self-deadlock, not a slow tick.
+  (`withRunsLock`, `src/core/runs.ts:82`) in short claim/settle sections, the paste itself happens
+  outside it — `withRunsLock` is not reentrant and `sendText` takes it internally (§2.4) — and the
+  act is serialised by the *dispatch gate* instead (`src/core/flow-dispatch-gate.ts`). Two lock
+  domains, one ordering: **gate → runs lock**, never the reverse. The runs lock stays coarse but
+  correct for a 25 ms section; the failure mode of holding it across a send is a self-deadlock, not
+  a slow tick.
 - **Idempotent by construction**: every dispatch carries an `op_id` and is keyed on
   `(target, kind, head, verdict, spec_id)`, recorded *before* the send and settled after it, so a
   second ticker cannot re-send the same request and a crash cannot lose it silently.
@@ -761,7 +781,7 @@ internal contradictions, all of them fair:
 | Open item | Fix |
 | --- | --- |
 | §2.2 mandates a tri-state gate, but the documented signature still returned `boolean` | §2.2 now declares `PaneBusyState` and `SendOutcome` (`busy`/`idle`/`unknown`, and a refusal reason), so no caller can collapse "unknown" into "free" |
-| §2.1 said the store has its own lock domain while §2.4 used the shared `withRunsLock` | One lock, named once: the flow store adds no second lock; claim/settle use `withRunsLock` for short sections (§2.1, §2.4) |
+| §2.1 said the store has its own lock domain while §2.4 used the shared `withRunsLock` | One lock, named once: the flow store adds no second lock; claim/settle use `withRunsLock` for short sections (§2.1, §2.4). *(Round 7 added one deliberate exception — the dispatch gate around the act, §2.4 — which is not a store lock and has a fixed ordering against `withRunsLock`.)* |
 | Paths: the rule only covered "as the caller wrote it", so an absolute argument still leaked an absolute home path | §4.1 now states the full rule: absolute paths are stored, every payload renders them `~/…`-shortened, a caller's relative argument stays relative |
 
 A name clash the review did not name but the rule implies was also removed: the pure detector in

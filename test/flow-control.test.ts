@@ -13,6 +13,7 @@ import {
 } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../src/core/flow-control.js'
+import { dispatchGatePath } from '../src/core/flow-dispatch-gate.js'
 import type { FlowPorts } from '../src/core/flow-runner.js'
 import { stepFlow } from '../src/core/flow-runner.js'
 import { deleteRunHistory, runPath, writeAgent, writeRun } from '../src/core/runs.js'
@@ -304,6 +305,32 @@ describe('orphaned', () => {
     expect(readFlow('run-1', { root }).state).not.toBe('orphaned')
   })
 
+  it('does not park a flow when the agents directory cannot be read', () => {
+    // `listAgents` turns a read error into an empty list, which would read as "the agents are gone".
+    // A file where the directory should be makes `readdirSync` fail with ENOTDIR, not ENOENT.
+    seedLiveRun()
+    seed(makeState({ state: 'idle' }))
+    const agentsDir = join(root, 'runs', 'run-1', 'agents')
+    rmSync(agentsDir, { recursive: true, force: true })
+    writeFileSync(agentsDir, 'not a directory', 'utf-8')
+
+    const result = step(makePorts())
+
+    expect(result.decision.kind).not.toBe('orphan')
+    expect(readFlow('run-1', { root }).state).not.toBe('orphaned')
+  })
+
+  it('does not park a flow when a role agent record is damaged', () => {
+    seedLiveRun()
+    seed(makeState({ state: 'idle' }))
+    writeFileSync(join(root, 'runs', 'run-1', 'agents', 'rev-1.json'), '{"id": "rev-1", broken', 'utf-8')
+
+    const result = step(makePorts())
+
+    expect(result.decision.kind).not.toBe('orphan')
+    expect(readFlow('run-1', { root }).state).not.toBe('orphaned')
+  })
+
   it('parks a flow whose role agent has ended, even though its record is still there', () => {
     seedLiveRun()
     // The reviewer's agent ended: the record stays in the run directory, the pane does not exist.
@@ -389,6 +416,57 @@ describe('a control command that lands during a dispatch', () => {
     expect(result.status).toBe('cancelled')
     expect(ports.send).not.toHaveBeenCalled()
     expect(readFlow('run-1', { root }).state).toBe('done')
+  })
+
+  it('refuses a pause that arrives while the prompt is being typed', () => {
+    // The gate is what closes the window a check-then-act leaves: while the paste is in flight a
+    // control command cannot get in, so it never writes a state the paste will contradict.
+    seedLiveRun()
+    seed(makeState({ state: 'idle' }))
+    // A holder rather than a `let`: TypeScript cannot see an assignment made inside the callback and
+    // would narrow the variable to `null` at the assertion.
+    const captured: { error: Error | null } = { error: null }
+    const ports = makePorts({
+      send: vi.fn(() => {
+        try {
+          pauseFlow('run-1', { at: AT, now: NOW, gate_timeout_ms: 50 })
+        } catch (err) {
+          captured.error = err as Error
+        }
+        return { sent: true as const }
+      }),
+    })
+
+    const result = step(ports)
+
+    expect(result.status).toBe('applied')
+    expect(ports.send).toHaveBeenCalledTimes(1)
+    expect(captured.error?.message).toContain('a dispatch is in flight')
+    // The flow moved, and the pause changed nothing: it landed before the claim check or not at all.
+    expect(readFlow('run-1', { root }).state).toBe('reviewing')
+    // The gate is free again, so the operator can pause now.
+    expect(existsSync(dispatchGatePath(root))).toBe(false)
+    expect(pauseFlow('run-1', { at: AT, now: NOW }).state.state).toBe('paused')
+  })
+
+  it('does not paste when someone else holds the gate, and releases its claim', () => {
+    seedLiveRun()
+    seed(makeState({ state: 'idle' }))
+    // Another actor holds the gate (a control command mid-transition, or a stuck sender).
+    writeFileSync(dispatchGatePath(root), JSON.stringify({ pid: 4242 }), 'utf-8')
+    const ports = makePorts()
+
+    const result = step(ports, { gate_timeout_ms: 50 })
+
+    expect(result.status).toBe('locked')
+    expect(ports.send).not.toHaveBeenCalled()
+    // The claim is released so the next tick starts clean instead of escalating a send that never
+    // happened; the flow itself did not move.
+    const after = readFlow('run-1', { root })
+    expect(after.pending).toBeNull()
+    expect(after.state).toBe('idle')
+    expect(after.log.at(-1)).toMatchObject({ event: 'dispatch_refused', detail: 'dispatch gate busy' })
+    expect(existsSync(dispatchGatePath(root))).toBe(true)
   })
 
   it('still sends when nothing interrupts it', () => {

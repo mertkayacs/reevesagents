@@ -193,7 +193,9 @@ One tool, four explicit actions — no implicit anything:
 
 Every accepted action answers with the `flow_status` payload; a refused one answers the
 reason (`cannot resume a flow in state done (…)`, `stop closes the flow for good; pass
-confirm: true`, …).
+confirm: true`, …). A `pause`/`stop` that arrives while a prompt is being typed waits for
+that dispatch to settle and then applies; if it cannot within 15 seconds it answers
+"a dispatch is in flight — try again in a moment" and changes nothing.
 
 Paths and log text in every flow tool come back home-shortened and redacted: a tool
 answer is a transcript, so a spec title carrying a token is reported as

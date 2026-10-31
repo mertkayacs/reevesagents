@@ -160,8 +160,11 @@ human is highlighted with the same warning colour as a stale run.
   tick dies mid-send, the claim is escalated to a human after two minutes instead of
   being pasted again.
 - `pause` and `stop` also win against a tick that is already preparing a send: the
-  runner re-checks its claim right before pasting, so a flow you stopped does not
-  receive one last prompt (`flow tick` reports `cancelled` when that happens).
+  runner holds the dispatch gate for the whole act (check, paste, settle) and the
+  control commands take the same gate, so a flow you stopped does not receive one
+  last prompt (`flow tick` reports `cancelled`). If a prompt is being typed at that
+  moment the command waits for it and, past 15 seconds, answers "a dispatch is in
+  flight — try again in a moment" without changing anything.
 - A flow whose run was stopped, deleted or swept is parked as `orphaned`: `flow status`
   prints the reason, nothing is ticked, and `flow stop` is how you close it. Deleting
   the run's history record deletes the flow file too — that is the only automatic

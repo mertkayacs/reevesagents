@@ -18,7 +18,7 @@
 // the engine, which escalates it after `PENDING_TTL_SEC` instead of re-sending.
 
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { PaneBusyState } from './activity.js'
 import type { FlowDecision, FlowObservations, FlowState } from './flow.js'
@@ -31,7 +31,8 @@ import {
   releaseDispatch,
 } from './flow.js'
 import { readFlow, saveFlow } from './flow-store.js'
-import { isRunsLockTimeout, listAgents, readRun, runPath, withRunsLock } from './runs.js'
+import { withDispatchGate } from './flow-dispatch-gate.js'
+import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
 import { paneBusy, peekAgentRaw, sendWhenIdle } from './runtime.js'
 import type { SendOutcome } from './runtime.js'
@@ -104,18 +105,35 @@ export interface ObserveFlowOptions {
 //   read failure answers "not seen" (`undefined`), which the engine refuses to treat as absence;
 // - an agent that is still on disk but has **ended** is not a live pane, so `ended_at` decides.
 function registryPresence(state: FlowState): { run_present?: boolean, agents_present?: boolean } {
-  if (!existsSync(runPath(state.run_id))) return { run_present: false, agents_present: false }
+  const presence = probeRunFile(runPath(state.run_id))
+  if (presence === 'missing') return { run_present: false, agents_present: false }
+  // `existsSync` answers `false` for an unreadable directory too, which would turn "cannot see" into
+  // "the run is gone". `statSync` keeps the reason, so a permission failure says nothing.
+  if (presence === 'unreadable') return {}
   let run: RunRecord
   try {
     run = readRun(state.run_id)
   } catch {
-    // A damaged or unreadable registry: say nothing rather than park a live pipeline. The pane
-    // guard still holds the tick, so this cannot turn into a blind send either.
+    // The file is there but does not describe a run (damaged JSON, a directory in its place): say
+    // nothing rather than park a live pipeline. The pane guard still holds the tick.
     return {}
   }
   if (run.status === 'ended' || run.ended_at !== null) return { run_present: false, agents_present: false }
-  const agents = listAgents(run.id)
+  // `listAgents` swallows read failures into an empty list, which would read as "the agents are
+  // gone". The failure-aware variant is what a parking decision uses.
+  const agents = tryListAgents(run.id)
+  if (agents === null) return { run_present: true }
   return { run_present: true, agents_present: everyAgentPresent(state, agents) }
+}
+
+// Does the run file exist, is it missing, or can this process not tell?
+function probeRunFile(path: string): 'present' | 'missing' | 'unreadable' {
+  try {
+    statSync(path)
+    return 'present'
+  } catch (err) {
+    return (err as { code?: string }).code === 'ENOENT' ? 'missing' : 'unreadable'
+  }
 }
 
 function everyAgentPresent(state: FlowState, agents: AgentRecord[]): boolean {
@@ -202,6 +220,9 @@ export interface StepFlowOptions extends ObserveFlowOptions {
   // Called once the claim is on disk and before the paste. A surface can render "dispatching" from
   // it, and a test uses it to interleave a control command with the exact race it guards against.
   onClaimed?: (_state: FlowState) => void
+  // How long to wait for the dispatch gate. A test shortens it to prove that a control command
+  // cannot slip into the act; production uses the default.
+  gate_timeout_ms?: number
 }
 
 interface ClaimedDispatch {
@@ -229,13 +250,12 @@ interface SettlePhaseResult {
   path?: string
 }
 
-// The answer to "is this claim still mine and is the flow still live?", asked once right before the
-// paste. `send: false` means a control command won the race and nothing may be pasted.
-interface PreSendGuard {
-  send: boolean
-  state: FlowState
-  path?: string
-}
+// What the act phase produced. `cancelled` means a control command got there first (nothing was
+// pasted); `settle-locked` means the paste landed but its outcome could not be written.
+type ActResult =
+  | { kind: 'cancelled', state: FlowState, path?: string }
+  | { kind: 'settle-locked', send: SendOutcome, state: FlowState, path?: string }
+  | { kind: 'settled', send: SendOutcome, status: FlowApplyStatus, state: FlowState, path?: string }
 
 // The runs lock is the one lock in this state tree (§2.4): a second implementation over the same
 // files is how ordering bugs are born. It is not reentrant and it gives up after a few seconds, so
@@ -318,85 +338,100 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     }
   }
 
-  // Phase two — act. The claim is ours, but a control command may have landed between the claim and
-  // this line: `flow pause` and `flow stop` drop the claim on purpose, so the intent is re-read once
-  // immediately before the paste. A claim that is gone, or a flow that is no longer live, means
-  // nothing is sent — without this check a paused flow would still receive one prompt.
+  // Phase two — act, inside the dispatch gate and outside the runs lock (`sendWhenIdle` takes that
+  // lock itself). The gate is what makes "the operator paused the flow" and "this prompt is being
+  // typed" mutually exclusive: `pause` and `stop` take the same gate, so they land either before the
+  // claim re-check below or after the settle — never between them, which is the race a check-then-act
+  // alone cannot close.
   options.onClaimed?.(dispatch.state)
-  const guard = withStateLock<PreSendGuard>(() => {
+  const act = withDispatchGate<ActResult>(() => {
     const current = readFlow(runId, { root: options.root })
-    if (current.pending?.op_id !== dispatch.op_id) return { send: false, state: current }
+    if (current.pending?.op_id !== dispatch.op_id) return { kind: 'cancelled', state: current }
     if (current.state === 'paused' || current.state === 'orphaned' || current.state === 'done') {
       // Our claim survived but the flow was parked: release it so a later resume cannot inherit a
       // send that never happened, and leave the reason in the journal.
       const released = releaseDispatch(current, `flow is ${current.state}`, at)
-      return { send: false, state: released, path: saveFlow(released, { root: options.root }) }
+      return { kind: 'cancelled', state: released, path: saveFlow(released, { root: options.root }) }
     }
-    return { send: true, state: current }
-  })
 
-  if (guard.locked) {
-    // Someone is writing the state right now, so the claim cannot be verified: send nothing and let
-    // the next tick decide. The claim stays and expires with `PENDING_TTL_SEC` if nobody settles it.
-    return { observations, decision: phase.decision, status: 'locked', state: dispatch.state, path: dispatch.path }
-  }
-  if (!guard.value.send) {
+    // The paste itself, still inside the gate: no state lock is held here, so `sendWhenIdle` can
+    // take the runs lock on its own.
+    const send = ports.send(dispatch.agent, dispatch.message)
+
+    // Phase three — settle, and only for our own claim: a claim that someone else already settled
+    // must not be applied twice. Kept inside the gate so a control command waits for the outcome
+    // instead of reading a half-finished dispatch.
+    const settle = withStateLock<SettlePhaseResult>(() => {
+      const after = readFlow(runId, { root: options.root })
+      if (after.pending?.op_id !== dispatch.op_id) return { state: after, status: 'skipped' }
+      if (send.sent) {
+        const next = applyDecisionToState(after, phase.decision, at)
+        return { state: next, status: 'applied', path: saveFlow(next, { root: options.root }) }
+      }
+      if (send.reason === 'pane_changed' || send.reason === 'unconfirmed') {
+        // The text is in the input box but the submit was not confirmed. Consume the decision so the
+        // same text is never pasted twice; the status stays put and the log says why.
+        const stuck = applyUnconfirmedDispatch(after, phase.decision, send.reason, at)
+        return { state: stuck, status: 'unconfirmed', path: saveFlow(stuck, { root: options.root }) }
+      }
+      // Nothing was pasted (busy, unknown, stale pane, headless): release the claim and leave the
+      // status alone, so the next tick retries once the pane is free.
+      const released = releaseDispatch(after, send.reason, at)
+      return { state: released, status: 'refused', path: saveFlow(released, { root: options.root }) }
+    })
+
+    if (settle.locked) return { kind: 'settle-locked', send, state: dispatch.state, path: dispatch.path }
+    return {
+      kind: 'settled',
+      send,
+      status: settle.value.status,
+      state: settle.value.state,
+      path: settle.value.path ?? dispatch.path,
+    }
+  }, { root: options.root, timeoutMs: options.gate_timeout_ms })
+
+  if (!act.acquired) {
+    // A control command (or a stuck sender) held the gate for the whole timeout: nothing was pasted.
+    // Release our claim so the next tick starts clean instead of escalating a send that never
+    // happened — unless the claim is already someone else's, in which case this tick owns nothing.
+    const freed = withStateLock<SettlePhaseResult>(() => {
+      const current = readFlow(runId, { root: options.root })
+      if (current.pending?.op_id !== dispatch.op_id) return { state: current, status: 'locked' }
+      const released = releaseDispatch(current, 'dispatch gate busy', at)
+      return { state: released, status: 'locked', path: saveFlow(released, { root: options.root }) }
+    })
     return {
       observations,
       decision: phase.decision,
-      status: 'cancelled',
-      state: guard.value.state,
-      path: guard.value.path,
+      status: 'locked',
+      state: freed.locked ? dispatch.state : freed.value.state,
+      path: freed.locked ? dispatch.path : freed.value.path,
     }
   }
 
-  // The paste happens outside every lock: `sendWhenIdle` reaches `updateAgent`, which takes the runs
-  // lock itself, so holding it across the send would deadlock and then steal the lock from itself.
-  const send = ports.send(dispatch.agent, dispatch.message)
-
-  // Phase three — settle, and only for our own claim: a claim that someone else already settled
-  // (a restarted process, a second ticker that took over) must not be applied twice.
-  const settle = withStateLock<SettlePhaseResult>(() => {
-    const current = readFlow(runId, { root: options.root })
-    if (current.pending?.op_id !== dispatch.op_id) {
-      return { state: current, status: 'skipped' }
-    }
-    if (send.sent) {
-      const next = applyDecisionToState(current, phase.decision, at)
-      return { state: next, status: 'applied', path: saveFlow(next, { root: options.root }) }
-    }
-    if (send.reason === 'pane_changed' || send.reason === 'unconfirmed') {
-      // The text is in the input box but the submit was not confirmed. Consume the decision so the
-      // same text is never pasted twice; the status stays put and the log says why.
-      const stuck = applyUnconfirmedDispatch(current, phase.decision, send.reason, at)
-      return { state: stuck, status: 'unconfirmed', path: saveFlow(stuck, { root: options.root }) }
-    }
-    // Nothing was pasted (busy, unknown, stale pane, headless): release the claim and leave the
-    // status alone, so the next tick retries once the pane is free.
-    const released = releaseDispatch(current, send.reason, at)
-    return { state: released, status: 'refused', path: saveFlow(released, { root: options.root }) }
-  })
-
-  if (settle.locked) {
-    // The paste happened but its outcome could not be written: the claim stays behind, and the
-    // engine escalates it after the TTL. A human has to read that one, so it is reported as such.
+  const done = act.value
+  if (done.kind === 'cancelled') {
+    return { observations, decision: phase.decision, status: 'cancelled', state: done.state, path: done.path }
+  }
+  if (done.kind === 'settle-locked') {
+    // The paste happened but its outcome could not be written: the claim stays behind and the engine
+    // escalates it after the TTL. A human has to read that one, so it is reported as such.
     return {
       observations,
       decision: phase.decision,
       status: 'unconfirmed',
-      send,
-      state: dispatch.state,
-      path: dispatch.path,
+      send: done.send,
+      state: done.state,
+      path: done.path,
     }
   }
-
-  const settled = settle.value
   return {
     observations,
     decision: phase.decision,
-    status: settled.status,
-    send,
-    state: settled.state,
-    path: settled.path ?? dispatch.path,
+    status: done.status,
+    send: done.send,
+    state: done.state,
+    path: done.path,
   }
+
 }
