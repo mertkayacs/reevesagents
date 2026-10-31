@@ -142,6 +142,13 @@ function probeInstance(pid: number, probe: InstanceProbe): string | null {
   return found
 }
 
+// The instance this host reports for `pid`, using the built-in probe. Exported so a test (and a
+// future `flow doctor`) can ask the same question the gate asks, on whatever platform it runs on,
+// instead of hard-coding one probe's format.
+export function processInstanceOf(pid: number): string | null {
+  return defaultProbe(pid)
+}
+
 // Is the participant that wrote `record` still running? A reused pid answers "alive" to
 // `kill(pid, 0)` while its owner is long gone, so the instance has to match as well.
 //

@@ -13,6 +13,7 @@ import {
 } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../src/core/flow-control.js'
+import { processInstanceOf } from '../src/core/flow-dispatch-gate.js'
 
 import type { FlowPorts } from '../src/core/flow-runner.js'
 import { stepFlow } from '../src/core/flow-runner.js'
@@ -454,14 +455,8 @@ describe('a control command that lands during a dispatch', () => {
     seed(makeState({ state: 'idle' }))
     // Another live actor holds the gate: its ticket is the smallest one, so this tick must not paste.
     // It carries a real process instance (PID 1), because an entry without one is refused instead.
-    const instance = (() => {
-      try {
-        const stat = readFileSync('/proc/1/stat', 'utf-8')
-        return `linux:${stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]}`
-      } catch {
-        return ''
-      }
-    })()
+    // The gate's own probe answers in the format this host produces, so the fixture does too.
+    const instance = processInstanceOf(1) ?? ''
     if (!instance) return
     const foreignTicket = join(root, '.flow-dispatch.cand.1.foreign')
     writeFileSync(foreignTicket, JSON.stringify({ pid: 1, token: 'foreign', ts: 0, instance }), 'utf-8')

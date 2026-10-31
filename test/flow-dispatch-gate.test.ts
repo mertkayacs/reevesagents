@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { withDispatchGate } from '../src/core/flow-dispatch-gate.js'
+import { processInstanceOf, withDispatchGate } from '../src/core/flow-dispatch-gate.js'
 
 // The gate keeps "the operator paused the flow" and "a prompt is being typed" mutually exclusive.
 // It is Lamport's bakery over files, so these tests check what the runner and the control commands
@@ -43,23 +43,39 @@ function writeEntry(kind: 'cand' | 'choosing', pid: number, token: string, ts = 
   return path
 }
 
-// The instance id the gate writes for a pid (`linux:<starttime>`), or '' when this host has no /proc.
+// The instance id the gate writes for a pid, in whatever format this host's probe produces
+// (`linux:<ticks>` or `ps:<lstart>`), or '' when it has neither.
 function instanceOf(pid: number): string {
-  try {
-    const stat = readFileSync(`/proc/${pid}/stat`, 'utf-8')
-    const start = stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]
-    return start ? `linux:${start}` : ''
-  } catch {
-    return ''
-  }
+  return processInstanceOf(pid) ?? ''
 }
 
 function ownInstance(): string {
   return instanceOf(process.pid)
 }
 
-// A well-formed instance value that is deliberately not the one the pid currently has.
-const RECYCLED_INSTANCE = 'linux:0'
+// A well-formed instance of the *shape this host produces* that is not the one the pid currently has.
+// It has to reuse the running probe's tag: the gate treats values from different probes as
+// incomparable, so a hard-coded `linux:0` would silently stop testing anything on macOS.
+function foreignInstanceFor(own: string): string {
+  const tag = own.includes(':') ? own.slice(0, own.indexOf(':') + 1) : 'linux:'
+  return tag === 'ps:' ? 'ps:Thu Jan  1 00:00:00 1970' : `${tag}0`
+}
+
+function recycledInstance(): string | null {
+  const own = ownInstance()
+  return own ? foreignInstanceFor(own) : null
+}
+
+describe('test fixtures', () => {
+  it('builds a foreign instance with the running probe\'s tag', () => {
+    // The gate compares only same-tag values; a hard-coded `linux:` fixture would turn every recycled
+    // pid test into a no-op on a host whose probe answers `ps:`.
+    expect(foreignInstanceFor('linux:123456')).toBe('linux:0')
+    expect(foreignInstanceFor('ps:Thu Oct 30 10:00:00 2026')).toBe('ps:Thu Jan  1 00:00:00 1970')
+    expect(foreignInstanceFor('linux:123456')).not.toBe('linux:123456')
+    expect(foreignInstanceFor('ps:Thu Oct 30 10:00:00 2026')).not.toBe('ps:Thu Oct 30 10:00:00 2026')
+  })
+})
 
 describe('withDispatchGate', () => {
   it('runs the section and leaves nothing behind', () => {
@@ -126,13 +142,40 @@ describe('contenders', () => {
   it('collects a ticket whose pid was reused by another process', () => {
     // Round 13: `kill(pid, 0)` answers "alive" for a recycled pid, so a dead contender's ticket would
     // block the gate for ever. The instance id tells the two apart.
-    const stale = writeEntry('cand', process.pid, 'recycled', 1, RECYCLED_INSTANCE)
+    const recycled = recycledInstance()
+    if (!recycled) return   // no probe on this host: the gate refuses to bid at all
+    const stale = writeEntry('cand', process.pid, 'recycled', 1, recycled)
 
     const result = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
 
     expect(result).toEqual({ acquired: true, value: 'mine' })
     expect(existsSync(stale)).toBe(false)
     expect(gateFiles()).toEqual([])
+  })
+
+  it('collects a recycled ticket on a host whose probe answers like macOS does', () => {
+    // The same rule as above, exercised with `ps:<lstart>` values through the injectable probe: this
+    // is the macOS code path, which cannot be produced on a Linux box any other way.
+    const own = 'ps:Thu Oct 30 10:00:00 2026'
+    const stale = writeEntry('cand', process.pid, 'recycled', 1, 'ps:Thu Jan  1 00:00:00 1970')
+
+    const result = withDispatchGate(() => 'mine', {
+      root,
+      timeoutMs: 500,
+      instanceProbe: () => own,
+    })
+
+    expect(result).toEqual({ acquired: true, value: 'mine' })
+    expect(existsSync(stale)).toBe(false)
+  })
+
+  it('keeps a ps-shaped ticket whose instance still matches', () => {
+    const own = 'ps:Thu Oct 30 10:00:00 2026'
+    writeEntry('cand', process.pid, 'live', 0, own)
+
+    const result = withDispatchGate(() => 'never', { root, timeoutMs: 120, instanceProbe: () => own })
+
+    expect(result.acquired).toBe(false)
   })
 
   it('does not treat its own live instance as dead', () => {
@@ -145,7 +188,9 @@ describe('contenders', () => {
   })
 
   it('collects a choosing marker left by a reused pid', () => {
-    const stale = writeEntry('choosing', process.pid, 'recycled', 0, RECYCLED_INSTANCE)
+    const recycled = recycledInstance()
+    if (!recycled) return
+    const stale = writeEntry('choosing', process.pid, 'recycled', 0, recycled)
 
     const result = withDispatchGate(() => 'mine', { root, timeoutMs: 500 })
 
