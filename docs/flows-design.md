@@ -410,7 +410,8 @@ failure (`src/surfaces/cli/agents.ts:54`–`:55`), and stable `--json` payloads 
   between the store that knows the path and the command that prints it. An fs failure is reported
   by its error code (`ENOENT`, `EISDIR`), never by the raw message: node embeds the absolute path it
   failed on — including the `.tmp` name — and repeating that would undo the shorthand in front of
-  it.
+  it. If an error carries no code, its text is cut at the first path separator and marked `<path>`;
+  scrubbing word by word is not enough, because a path may contain spaces.
 
 The same payload shape feeds the MCP tools, so both surfaces obey one redaction rule.
 

@@ -118,32 +118,44 @@ describe('flow store', () => {
     expect(message).not.toContain('/tmp/elsewhere')
   })
 
-  it('scrubs absolute paths from a failure that carries no error code', () => {
+  it('drops a path that carries no error code, even when it contains spaces', () => {
+    // A quoted path with a space used to survive token by token: replacing `'/home/some` left
+    // `one/.reeves/flows/run-1.json.tmp'` behind in the message.
     let message = ''
     try {
       saveFlow(makeState(), {
         root,
-        rename: () => { throw new Error("could not swap '/home/someone/.reeves/flows/run-1.json.tmp' into place") },
+        rename: () => {
+          throw new Error("could not swap '/home/some one/.reeves/flows/run-1.json.tmp' into place")
+        },
       })
     } catch (err) {
       message = (err as Error).message
     }
     expect(message).toContain('<path>')
-    expect(message).not.toContain('/home/someone')
+    expect(message).not.toContain('/home')
+    expect(message).not.toContain('one/.reeves')
   })
 
   it('reports a read failure by its code, keeping the home shorthand', () => {
     // A directory where the document should be: the fs error names it, the report must not.
-    mkdirSync(join(root, 'flows', 'dir-run.json'), { recursive: true })
-    let message = ''
+    // HOME is pinned to the test root so the assertion is about the invariant and not about where
+    // the system put its temp directory (a TMPDIR outside $HOME would legitimately stay absolute).
+    const savedHome = process.env.HOME
+    process.env.HOME = root
     try {
-      readFlow('dir-run', { root })
-    } catch (err) {
-      message = (err as Error).message
+      mkdirSync(join(root, 'flows', 'dir-run.json'), { recursive: true })
+      let message = ''
+      try {
+        readFlow('dir-run', { root })
+      } catch (err) {
+        message = (err as Error).message
+      }
+      expect(message).toBe('flow state could not be read: ~/flows/dir-run.json (EISDIR)')
+    } finally {
+      if (savedHome === undefined) delete process.env.HOME
+      else process.env.HOME = savedHome
     }
-    expect(message).toContain('flow state could not be read')
-    expect(message).toContain('EISDIR')
-    expect(message).not.toContain(root)
   })
 
   it('refuses a run id that is not a plain file name', () => {

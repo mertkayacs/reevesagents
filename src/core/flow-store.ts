@@ -33,21 +33,21 @@ export interface FlowStoreOptions {
 
 // An fs error message embeds the absolute path it failed on ("ENOENT: no such file or directory,
 // open '/home/u/.reeves/flows/x.json.tmp'"), which would defeat the shorthand in front of it. The
-// code is the diagnosable part, so it is preferred; any other text is stripped of absolute paths
-// before it is repeated to a human.
+// code is the diagnosable part, so it is preferred.
+//
+// Without a code the text cannot be scrubbed token by token: a path may contain spaces, and
+// replacing one word would leave the rest of it in the message. The text is therefore cut at the
+// first path separator and a single marker is appended, so no fragment of a path survives
+// whatever it contained.
 function fsFailure(err: unknown): string {
   const code = (err as { code?: string }).code
   if (typeof code === 'string' && code !== '') return code
-  const message = err instanceof Error ? err.message : String(err)
-  const scrubbed = message
-    .split(/\s+/)
-    .map(token => {
-      const bare = token.replace(/^['"(]+|['"),;]+$/g, '')
-      return /^(?:\/|[A-Za-z]:\\)/.test(bare) ? '<path>' : token
-    })
-    .join(' ')
-    .trim()
-  return scrubbed || 'unknown error'
+  const message = (err instanceof Error ? err.message : String(err)).trim()
+  if (!message) return 'unknown error'
+  const cut = message.search(/(?:\/|[A-Za-z]:\\)/)
+  if (cut === -1) return message
+  const head = message.slice(0, cut).replace(/[\s'"(]+$/, '')
+  return head ? `${head} <path>` : '<path>'
 }
 
 export function flowsDir(root = stateRoot()): string {
