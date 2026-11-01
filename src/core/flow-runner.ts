@@ -40,7 +40,8 @@ import {
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { loadConfig } from './config.js'
 import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound } from './plan.js'
-import { planTickView } from './flow-plan.js'
+import { emitNotification } from './notifications.js'
+import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js'
 import type { PlanTickView } from './flow-plan.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
@@ -326,6 +327,15 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
       if (!current) return { plan: null, value: null }
       let next = current
       if (close) {
+        emitNotification({
+          kind: 'plan.item_done',
+          title: `plan item ${close.id} done`,
+          detail: `closed by ${close.head} after ${close.rounds} round${close.rounds === 1 ? '' : 's'}${close.notes_ref ? ` · notes ${close.notes_ref}` : ''}`,
+          run_id: before.run_id,
+          project: projectOfRepo(before.repo),
+          source: 'product',
+          dedupe_key: `${before.flow_id}:plan.item_done:${close.id}:${close.head}`,
+        })
         next = closeItemOnAccept(next, {
           id: close.id,
           head: close.head,
@@ -335,6 +345,17 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
         })
       }
       if (status) {
+        if (status.status === 'blocked_owner') {
+          emitNotification({
+            kind: 'plan.item_blocked',
+            title: `plan item ${status.id} blocked`,
+            detail: status.block_reason ?? 'blocked_owner',
+            run_id: before.run_id,
+            project: projectOfRepo(before.repo),
+            source: 'product',
+            dedupe_key: `${before.flow_id}:plan.item_blocked:${status.id}:${before.notify_episode}`,
+          })
+        }
         next = moveItemByEngine(next, {
           id: status.id,
           status: status.status,
@@ -354,6 +375,39 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
   } catch {
     // The plan is a mirror, not the engine's state: a failure here must not undo a saved decision. The next
     // tick re-reads the file and acts on what it finds.
+  }
+}
+
+// A flow event exists iff the badge would show a warning (§2.2): the same decision that escalated the flow writes
+// the notification, with a key that survives a retry and a `--replace` (§ `flow_id`).
+function emitFlowAttention(state: FlowState, decision: FlowDecision): void {
+  if (decision.kind !== 'escalate') return
+  const kind = decision.reason === 'review_timeout' ? 'flow.review_timeout' : 'flow.escalated'
+  const parts = state.repo.split(/[\\/]+/).filter(Boolean)
+  emitNotification({
+    kind,
+    title: kind === 'flow.review_timeout'
+      ? `review timed out on ${state.run_id}`
+      : `flow escalated on ${state.run_id}`,
+    detail: `reason ${decision.reason} · round ${state.rounds}/${state.max_rounds} · ${planTickSummaryOf(state)}`,
+    run_id: state.run_id,
+    project: parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : '',
+    source: 'product',
+    dedupe_key: `${state.flow_id}:${kind}:${state.notify_episode}`,
+  })
+}
+
+function projectOfRepo(repo: string): string {
+  const parts = repo.split(/[\\/]+/).filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : ''
+}
+
+function planTickSummaryOf(state: FlowState): string {
+  try {
+    const view = readPlanView(state)
+    return view ? planSummaryLine(view) : 'no plan'
+  } catch {
+    return 'plan unreadable'
   }
 }
 
@@ -616,6 +670,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     // decision that holds the flow can still move the plan (an accepted verdict closes its item, a spent
     // budget blocks one) — and `decisionChangesState` only looks at the flow's own fields.
     applyPlanDecision(before, observations, phase.decision)
+    emitFlowAttention(phase.settled?.state ?? before, phase.decision)
     if (phase.settled) {
       publishRoundNotes(before, observations, phase.decision, options)
       pruneClosedNotes(phase.settled.state, options)
@@ -725,6 +780,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   // The settle is where an answer becomes the flow's state: publish its record only when this tick did not
   // reject it. A refused send leaves the round open for a retry, so nothing is recorded yet.
   if (done.status === 'applied') applyPlanDecision(before, observations, phase.decision)
+  if (done.status === 'applied') emitFlowAttention(done.state, phase.decision)
   if (done.status === 'applied') publishRoundNotes(before, observations, phase.decision, options)
   pruneClosedNotes(done.state, options)
   return {

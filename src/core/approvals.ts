@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { emitNotification } from './notifications.js'
 import { dirname, join } from 'node:path'
 import {
   findAgent,
@@ -138,6 +139,21 @@ function readApprovalUnlocked(runId: string, approvalId: string): RunApproval {
   }
 }
 
+// Run and project labels for the journal: a name, never a path.
+function runNameOf(runId: string): string {
+  try {
+    const run = listRuns().find(entry => entry.id === runId)
+    return run?.name.slice(0, 80) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function projectOf(dir: string): string {
+  const parts = dir.split(/[\\/]+/).filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : ''
+}
+
 export function createRunApproval(input: CreateRunApprovalInput): RunApproval {
   return withRunsLock(() => {
     const agent = findAgent(input.agent_id)
@@ -155,6 +171,19 @@ export function createRunApproval(input: CreateRunApprovalInput): RunApproval {
       resolved_at: null,
     }
     writeApprovalUnlocked(approval)
+    // The owner's actual pain: something is waiting for a human. The summary is already the redacted text the UI
+    // shows, so the journal carries the same words and no approval internals.
+    emitNotification({
+      kind: 'agent.needs_human',
+      title: `approval needed: ${agent.nickname}`,
+      detail: approval.summary,
+      run_id: agent.run_id,
+      run_name: runNameOf(agent.run_id),
+      project: projectOf(agent.working_dir),
+      agent_id: agent.id,
+      agent_nickname: agent.nickname,
+      source: 'product',
+    })
     return redactApproval(approval)
   })
 }

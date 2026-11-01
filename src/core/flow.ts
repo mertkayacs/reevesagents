@@ -16,6 +16,7 @@
 // - Every state change is a pure function of (state, observations): same input, same decision,
 //   which is what lets `--dry-run` print exactly what a real tick would do.
 
+import { randomUUID } from 'node:crypto'
 import type { PaneBusyState } from './activity.js'
 import type { BlockSpec } from './spec.js'
 import { renderDispatchPrompt } from './spec.js'
@@ -165,6 +166,13 @@ export interface FlowPlanSummary {
 export interface FlowState {
   schema_version: number
   run_id: string
+  // A stable identity for *this* flow. `flow start --replace` on the same run writes a new file, so a run-scoped
+  // notification key would collide with the closed flow's key and the dedupe index would suppress a genuinely
+  // new escalation (§2.2 of the notification design).
+  flow_id: string
+  // Incremented on every transition into `escalated`; the notification key is `flow_id:kind:episode`, so a
+  // second escalation after `flow resume` is a new episode rather than a duplicate.
+  notify_episode: number
   // Absolute path, because git needs it. Every payload renders it home-shortened (§4.1).
   repo: string
   roles: FlowRoles
@@ -425,6 +433,8 @@ export function createFlowState(init: FlowInit): FlowState {
   return {
     schema_version: FLOW_SCHEMA_VERSION,
     run_id: runId,
+    flow_id: randomUUID(),
+    notify_episode: 0,
     repo: init.repo,
     roles: { dev, review },
     state: 'idle',
@@ -478,6 +488,8 @@ export function parseFlowState(raw: unknown): FlowState {
   return {
     schema_version: FLOW_SCHEMA_VERSION,
     run_id: runId,
+    flow_id: typeof record.flow_id === 'string' && record.flow_id ? record.flow_id : randomUUID(),
+    notify_episode: count(record.notify_episode),
     repo: text(record.repo),
     roles: { dev, review },
     state: status,
@@ -1231,6 +1243,10 @@ function withDelta(
     unsubstantiated_attempts: decision.next_unsubstantiated_attempts ?? state.unsubstantiated_attempts,
     answered_round: decision.next_answered_round === undefined ? state.answered_round : decision.next_answered_round,
     active_plan_item: decision.next_active_plan_item === undefined ? state.active_plan_item : decision.next_active_plan_item,
+    // A new episode starts when the flow *becomes* escalated, which is exactly when a human has to be told.
+    notify_episode: options.advance && state.state !== 'escalated' && decision.next_state === 'escalated'
+      ? state.notify_episode + 1
+      : state.notify_episode,
     log: appendLog(state, {
       at,
       event: options.event,

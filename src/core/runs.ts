@@ -17,6 +17,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { emitNotification } from './notifications.js'
 import { dirname, join } from 'node:path'
 import type {
   AgentRecord,
@@ -478,12 +479,31 @@ function buildRunHistoryRecord(run: RunRecord, status: RunHistoryStatus): RunHis
   }
 }
 
+// The archive is a run-level fact and the last one a run produces, so it is journalled here rather than in each
+// of its three callers (kill, stop, cleanup).
+function emitRunArchived(run: RunRecord, reason: string): void {
+  const parts = run.working_dir.split(/[\\/]+/).filter(Boolean)
+  emitNotification({
+    kind: 'run.archived',
+    title: `run ${run.name || run.id} archived`,
+    detail: `reason: ${reason}`,
+    run_id: run.id,
+    run_name: run.name,
+    project: parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : '',
+    source: 'product',
+  })
+}
+
 export function archiveAndRemoveRun(runId: string, status: RunHistoryStatus): RunHistoryRecord {
   return withRunsLock(() => {
     const run = readRunUnlocked(runId)
     const record = buildRunHistoryRecord(run, status)
     writeRunHistoryUnlocked(record)
     rmSync(runDir(runId), { recursive: true, force: true })
+    // Emitted while the run is still readable, and inside the lock, so the event carries the run's own name and
+    // project instead of a guess made after the directory is gone. `emitNotification` takes a different lock, and
+    // never throws.
+    emitRunArchived(run, status)
     return record
   })
 }

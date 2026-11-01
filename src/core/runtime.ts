@@ -31,6 +31,7 @@ import {
   writeAgent,
   writeRun,
 } from './runs.js'
+import { emitNotification } from './notifications.js'
 import { loadConfig } from './config.js'
 import { loadPreset } from './store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
@@ -366,6 +367,24 @@ function validateAgents(configs: AgentLaunchConfig[], available: Record<Provider
   for (const config of configs) requireProvider(config.provider, available)
 }
 
+// The three fields every run-scoped event needs, derived in one place: the project is a directory name, never a
+// path (§2.1 of the notification design).
+function basenameOf(dir: string): string {
+  const parts = dir.split(/[\\/]+/).filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : ''
+}
+
+function emitRunCreated(run: RunRecord): void {
+  emitNotification({
+    kind: 'run.created',
+    title: `run ${run.name || run.id} started`,
+    run_id: run.id,
+    run_name: run.name,
+    project: basenameOf(run.working_dir),
+    source: 'product',
+  })
+}
+
 export function startRun(request: StartRunRequest, options: RuntimeOptions = {}): { run: RunRecord, agents: AgentRecord[] } {
   const cfg = loadConfig()
   const driver = options.driver ?? realDriver
@@ -404,6 +423,7 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
     const workerAgents = workers.map(worker => {
       return createAgentWindow(runId, tmuxSession, 'worker', worker, workingDir, readyDelayMs, driver)
     })
+    emitRunCreated(run)
     return { run, agents: [root, ...workerAgents] }
   } catch (err) {
     if (createdRunSession) {
@@ -523,6 +543,7 @@ export function startRunWithHead(
     }
     writeRun(run)
     const worker = createAgentWindow(runId, tmuxSession, 'worker', firstWorker, workingDir, readyDelayMs, driver)
+    emitRunCreated(run)
     return { run, agents: [head, worker] }
   } catch (err) {
     if (createdRunSession) {
@@ -926,6 +947,14 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
   }
   const endedRun: RunRecord = { ...run, status: 'ended', ended_at: endedAt }
   updateRun(run.id, { status: endedRun.status, ended_at: endedRun.ended_at })
+  emitNotification({
+    kind: 'run.stopped',
+    title: `run ${run.name || run.id} stopped`,
+    run_id: run.id,
+    run_name: run.name,
+    project: basenameOf(run.working_dir),
+    source: 'product',
+  })
   archiveAndRemoveRun(run.id, 'ended')
   return endedRun
 }
