@@ -311,6 +311,18 @@ and count `reeves-*` sessions before and after.
 
 ## 2. Event model
 
+**Shipped names (block 14).** `src/core/notifications.ts`: `appendNotification`, `readNotifications`,
+`markNotificationsRead`, `notificationSummary`, `normalizeNotificationInput`, `emitNotification` (the product's
+fire-and-forget wrapper: a journal that cannot be written never breaks the action it describes),
+`withNotificationsLock` (its own `.notifications.lock`, 5 s stale takeover, 25 ms spin retry). Caps live in
+`NOTIFICATION_LIMITS`: `max_events 2000`, `max_bytes 2 MiB`, `keep_events 1500`, `keep_bytes 1.5 MiB`,
+`dedupe_keys 2000`, plus the field caps from §2.1. The ingest route is
+`POST /api/notifications` (loopback peer **and** an `Origin` header, 60 events per 10 s per peer, body ≤ 64 KiB),
+reads are `GET /api/notifications?limit&run&since&unread`, acknowledgement is
+`POST /api/notifications/read`, and `GET /api/state` plus the SSE frame carry
+`{latest_seq, unread, latest_ts}`. Two kinds were added to §2.2 by block 13:
+`plan.item_done` (`info`) and `plan.item_blocked` (`warn`), both product-only.
+
 ### 2.1 Fields
 
 ```ts

@@ -78,6 +78,9 @@ own CLI only if you explicitly want that worker to spawn more agents.
 - `flow_start`: attach a dev -> review -> fix flow to an existing run.
 - `flow_status`: read the dev -> review -> fix pipeline attached to one run.
 - `flow_add_spec`: queue a block spec file on that pipeline.
+- No notification tool: the journal is read from `GET /api/notifications` and `reevesagents notifications list`.
+  An MCP host that could append would be a second ingest surface with the product's own kinds, which §2.2 of the
+  notification design deliberately forbids.
 - `flow_plan`: read the plan imported from the project document — progress, what waits for a human, the
   next item, and one item with `item_id`.
 - `flow_plan_import`: import or re-import that document into a flow; `dry_run` parses and reports.

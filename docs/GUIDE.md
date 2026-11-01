@@ -208,6 +208,22 @@ human is highlighted with the same warning colour as a stale run.
   the run's history record deletes the flow file too — that is the only automatic
   deletion.
 
+### The notification journal
+
+Every run that starts, every approval that waits for you, every flow that escalates and every plan item that
+closes or blocks is written to `~/.reeves/notifications.jsonl` (append-only, `0600`, rotated at 2000 events or
+2 MiB and trimmed to the newest 1500 / 1.5 MiB). Read it without a browser:
+
+- `reevesagents notifications list [--run <id>] [--unread] [--limit N] [--json]` — newest first; `*` marks unread.
+- `reevesagents notifications read [--seq N]` — move the watermark (monotonic; it never goes back).
+
+`kind` says what happened (`run.created`, `run.stopped`, `run.archived`, `agent.needs_human`, `agent.failed`,
+`agent.finished`, `probe.failed`, `flow.escalated`, `flow.review_timeout`, `plan.item_done`, `plan.item_blocked`,
+`external`) and `severity` says whether it needs you now: `error` — something failed, `warn` — a human is
+required, `info` — progress. The same journal feeds the Web UI's Logs dialog and the agent card's pulse; the
+pulse interval is `agent_pulse_ms` (`0` turns the pulse off). The two flow kinds and the two plan kinds are
+product-only: the ingest route refuses them, so a supervisor cannot fake "a human is required".
+
 ### The plan as an object
 
 **How a project runs on its plan:** `flow plan import` once (and again after the document changes) →
