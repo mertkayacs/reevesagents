@@ -237,16 +237,26 @@ Once a plan is imported and a brief is attached to an item, nobody has to type `
 function, and the claim protocol makes two of them harmless: if a cron tick and a dashboard tick meet, one of them
 sees the other's claim and does nothing instead of pasting the prompt twice.
 
-The flow stops on its own only for two reasons:
+What happens without you is one of three things, and only the first is "progress":
 
-- **the plan is finished** — every item is `done` or `skipped`, and the flow closes;
-- **a human is needed** — an item has no brief (`waiting: P1.7.2 (needs a brief)` in `flow status`, and the run
-  badge says `plan: waiting for a brief (P1.7.2)`), or an item is `blocked_owner`. Nothing else pauses it: a
-  reviewer asking for changes is normal work, and the item's own round budget is what stops a bad item.
+- **the plan moves** — the ticker takes the next item that has a brief, dispatches it, and closes it on an
+  accepted review. A reviewer asking for changes is normal work, not a stop.
+- **the plan waits** — nothing can be taken: the item at the head of the line has no brief (`waiting: P1.7.2
+  (needs a brief)` in `flow status`, and the run badge says `plan: waiting for a brief (P1.7.2)`), or it is
+  `blocked_owner` (a human already decided to hold it), or the remaining items are `missing` from the document —
+they exist in the mirror but the file no longer lists them, so nothing may be dispatched.
+  The flow holds, stays in a working state, and does not escalate. To continue: attach the brief
+  (`flow plan attach`) or decide the item (`flow plan set --item <id> --status queued|skipped`) — the next tick
+  picks it up.
+- **the flow escalates** — this is not a plan stop but a pipeline one: the reviewer did not answer within
+  `review_timeout_sec`, the round budgets ran out (`rounds_exhausted` / `total_rounds_exhausted`), or the
+  reviewer kept answering without evidence (`review_unsubstantiated`). `flow status` shows `escalated` and the
+  reason, and `flow resume` gives it a fresh budget once the cause is dealt with.
 
-To continue after such a stop: attach the brief (`flow plan attach`) or decide the item (`flow plan set --item
-<id> --status queued|skipped`) — the next tick picks it up. To turn the autonomous tick off, set
-`flow_tick_ms` to `0`: `flow tick` keeps working, and a machine with its own cron usually wants that.
+The plan is **done** when every item is `done` or `skipped` — that is the only automatic close.
+
+To turn the autonomous tick off, set `flow_tick_ms` to `0`: `flow tick` keeps working, and a machine with its own
+cron usually wants that.
 
 ### The plan as an object
 

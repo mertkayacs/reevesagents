@@ -97,15 +97,16 @@ re-read immediately before the paste, not only at the start of the tick.
 ### 2.3 Where the step runs
 
 The engine is a pure function (`flowTick`) wrapped by `stepFlow`, and **nothing in `src/core` starts a timer**.
-The tick is a surface concern, and there are three of them:
+The tick is a surface concern; the surfaces and their state:
 
 | Tick site | Reference | State |
 | --- | --- | --- |
-| Web UI SSE hub | `src/surfaces/webui/server.ts` (`createSseHub`, `start()`) | **shipped**: `tickAllFlows()` on its own `flow_tick_ms` cadence (default 60 s), next to the agent sweep |
-| Web UI `/api/state` snapshot | `src/surfaces/webui/server.ts` (`snapshot()`) | **shipped**: one pass per snapshot, so a dashboard that is open advances what can be advanced |
+| Web UI SSE hub — a dedicated timer | `src/surfaces/webui/server.ts` (`createSseHub`, `start()`) | **shipped**: `tickAllFlows()` every `flow_tick_ms` (default 60 s), on its own interval so a slow tick cannot make the screen feel slow |
+| Web UI SSE hub — the state frame | same file, `snapshot()` | **shipped**: one pass per frame, so an open dashboard also advances what can be advanced |
+| Web UI `GET /api/state` | same file, the route handler | **no tick**: it sweeps agents and builds the payload; a plain API poll must not paste into a pane |
 | CLI | `reevesagents flow tick --run <id>` / `flow tick --all` | **shipped**: the cron and headless path; `--all` walks every live flow once and exits |
 
-`tickAllFlows()` (`src/core/flow-ticker.ts`) is the single entry point for all three: one step per flow, skipping
+`tickAllFlows()` (`src/core/flow-ticker.ts`) is the single entry point for all of them: one step per flow, skipping
 `paused`/`orphaned`/`escalated`/`done`, and a failing flow never stops the pass. Because the CLI and the dashboard
 call the same function, a cron tick and a browser tick cannot disagree about what a flow does.
 
@@ -120,13 +121,10 @@ its own cron should set it, or every dashboard visit would also tick.
 a hold that changes nothing does not rewrite the state file; the badge and `flow status` read `updated_at` to say
 when the last real move happened.
 
-**No ticker, no movement.** The SSE hub only runs while a browser is connected
-(`src/surfaces/webui/server.ts:170`–`:175`), and the TUI tick only runs while the dashboard is
-open — and today neither drives a flow at all. With no cron, a flow simply stands still: it does
-not break, and `flow status` shows the last event and the timestamp. `docs/GUIDE.md` says this
-plainly and gives the headless recipe (`*/1 * * * * reevesagents flow tick`), because "the pipeline
-stopped overnight" is otherwise indistinguishable from "the reviewer is slow". A background worker
-is a separate, later decision, not a hidden requirement of this design.
+**A browser is not a requirement.** The SSE hub only ticks while somebody is watching, and the TUI does not tick
+at all; a flow on a machine nobody watches needs the cron path (`flow tick --all`, or `*/1 * * * *`) or an open
+dashboard. `flow status` says which one is in effect: the `tick` line shows the interval when the autonomous tick is
+on and says it is off when `flow_tick_ms` is `0`. A background worker is a separate, later decision.
 
 ### 2.4 Dispatch protocol — two phases, never a lock across a send
 

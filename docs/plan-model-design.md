@@ -366,7 +366,8 @@ The plan decides *what* moves; a surface decides *when* (`docs/flows-design.md` 
 (`0` disables) is their cadence. The engine still holds no timer.
 
 A blocker is a **view** value, never a field written into `task_status`: `flowBadge()` takes the plan's first
-unmovable item and reports `attention: 'plan_waiting'` with `{ reason: 'needs_brief' | 'blocked_owner', item }`,
+unmovable item — a `blocked_owner` row, or an open row with no brief — and reports `attention: 'plan_waiting'` with
+`{ reason: 'needs_brief' | 'blocked_owner', item }`,
 which the badge renders as `plan: waiting for a brief (P1.7.2)`. The same hold emits one warning notification per
 item (`plan.item_needs_brief` / `plan.item_blocked`, keyed by the item), and `flow status` prints the list of
 waiting items plus when the last move happened and when the next tick is due.
