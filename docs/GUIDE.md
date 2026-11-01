@@ -229,6 +229,25 @@ carries `{latest_seq, unread, latest_ts}`). The Web UI's Logs dialog and the age
 not in this branch yet; `agent_pulse_ms` is the setting that dialog will use (`0` turns the pulse off), and until
 then it is a stored preference with no consumer.
 
+### The plan drives the flow by itself
+
+Once a plan is imported and a brief is attached to an item, nobody has to type `flow tick`: an open dashboard
+(Web UI) advances every live flow on its own, one step at a time, every `flow_tick_ms` (default 60 s), and
+`reevesagents flow tick --all` does the same thing once for a cron job or a headless machine. Both call the same
+function, and the claim protocol makes two of them harmless: if a cron tick and a dashboard tick meet, one of them
+sees the other's claim and does nothing instead of pasting the prompt twice.
+
+The flow stops on its own only for two reasons:
+
+- **the plan is finished** — every item is `done` or `skipped`, and the flow closes;
+- **a human is needed** — an item has no brief (`waiting: P1.7.2 (needs a brief)` in `flow status`, and the run
+  badge says `plan: waiting for a brief (P1.7.2)`), or an item is `blocked_owner`. Nothing else pauses it: a
+  reviewer asking for changes is normal work, and the item's own round budget is what stops a bad item.
+
+To continue after such a stop: attach the brief (`flow plan attach`) or decide the item (`flow plan set --item
+<id> --status queued|skipped`) — the next tick picks it up. To turn the autonomous tick off, set
+`flow_tick_ms` to `0`: `flow tick` keeps working, and a machine with its own cron usually wants that.
+
 ### The plan as an object
 
 **How a project runs on its plan:** `flow plan import` once (and again after the document changes) →

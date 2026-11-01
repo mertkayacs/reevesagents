@@ -96,26 +96,29 @@ re-read immediately before the paste, not only at the start of the tick.
 
 ### 2.3 Where the step runs
 
-The project already decided this in code: periodic work lives in the surfaces that are
-always present, and the Web UI server starts on demand
-(`src/surfaces/webui/tui-launch.ts`, referenced from `docs/testing.md` and the development
-notes). Concretely:
+The engine is a pure function (`flowTick`) wrapped by `stepFlow`, and **nothing in `src/core` starts a timer**.
+The tick is a surface concern, and there are three of them:
 
-| Tick site | Reference | Add |
+| Tick site | Reference | State |
 | --- | --- | --- |
-| TUI Runs page refresh | `src/surfaces/tui/screens/Runs.tsx:77`–`:98` (already calls `sweepAgentsThrottled`, `sweepOrphanSessionsThrottled`, `autoCleanupRuns`) | `sweepFlowsThrottled()` next to them — **not shipped**: the TUI renders the badge and ticks nothing |
-| Web SSE snapshot + `/api/state` | `src/surfaces/webui/server.ts:153`–`:160`, `:439`–`:443` | the same call — **not shipped** either; the Web UI renders the badge and nothing else |
-| CLI | `reevesagents flow tick --run <id>` | **shipped**: explicit, scriptable, cron-able, and **the only way to tick a flow today** |
-| MCP `list` | `src/surfaces/mcp/server.ts:334` | **deliberately not wired** — see §4.3 |
+| Web UI SSE hub | `src/surfaces/webui/server.ts` (`createSseHub`, `start()`) | **shipped**: `tickAllFlows()` on its own `flow_tick_ms` cadence (default 60 s), next to the agent sweep |
+| Web UI `/api/state` snapshot | `src/surfaces/webui/server.ts` (`snapshot()`) | **shipped**: one pass per snapshot, so a dashboard that is open advances what can be advanced |
+| CLI | `reevesagents flow tick --run <id>` / `flow tick --all` | **shipped**: the cron and headless path; `--all` walks every live flow once and exits |
 
-The two dashboard rows above are the plan, not the branch: nothing in `src/surfaces/tui` or
-`src/surfaces/webui` calls `stepFlow`, so neither surface can move a flow, and the guide says so
-(review round 4, MINOR on `docs/GUIDE.md`). Wiring a throttled sweep there is the next block's job;
-until then a flow that is not ticked from cron or by hand simply stands still.
+`tickAllFlows()` (`src/core/flow-ticker.ts`) is the single entry point for all three: one step per flow, skipping
+`paused`/`orphaned`/`escalated`/`done`, and a failing flow never stops the pass. Because the CLI and the dashboard
+call the same function, a cron tick and a browser tick cannot disagree about what a flow does.
 
-`flow tick` itself must be idempotent and cheap when nothing changed: a UI tick would call it
-every 2 s, so the throttle (a proposal: 15 s, matching `sweepAgentsThrottled`'s default at
-`src/core/reaper.ts:179`) keeps `capture-pane` calls bounded once that wiring exists.
+**Two tickers cannot double-paste.** The claim (`pending` + `op_id`, §2.4) is what makes that true: the second
+passenger re-reads the state inside the lock, sees a claim it did not make, and holds. The test
+`test/flow-ticker.test.ts` exercises exactly that.
+
+**Off switch.** `flow_tick_ms = 0` disables the autonomous tick and leaves `flow tick` working — a machine that runs
+its own cron should set it, or every dashboard visit would also tick.
+
+**Cheap when nothing changed.** A hold that repeats itself is journalled once (the same event and detail dedupe), and
+a hold that changes nothing does not rewrite the state file; the badge and `flow status` read `updated_at` to say
+when the last real move happened.
 
 **No ticker, no movement.** The SSE hub only runs while a browser is connected
 (`src/surfaces/webui/server.ts:170`–`:175`), and the TUI tick only runs while the dashboard is

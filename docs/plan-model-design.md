@@ -359,6 +359,18 @@ the engine already requires before it closes a flow — no second, weaker gate.
 
 `--dry-run` prints the item and the rendered prompt without queuing or sending.
 
+### 5.1 Who ticks, and what a blocker looks like
+
+The plan decides *what* moves; a surface decides *when* (`docs/flows-design.md` §2.3). Three sites call
+`tickAllFlows()` — the Web UI SSE hub, its `/api/state` snapshot, and `flow tick --all` — and `flow_tick_ms`
+(`0` disables) is their cadence. The engine still holds no timer.
+
+A blocker is a **view** value, never a field written into `task_status`: `flowBadge()` takes the plan's first
+unmovable item and reports `attention: 'plan_waiting'` with `{ reason: 'needs_brief' | 'blocked_owner', item }`,
+which the badge renders as `plan: waiting for a brief (P1.7.2)`. The same hold emits one warning notification per
+item (`plan.item_needs_brief` / `plan.item_blocked`, keyed by the item), and `flow status` prints the list of
+waiting items plus when the last move happened and when the next tick is due.
+
 ## 6. Progress and completion
 
 `flow plan` prints `done/total`, the remaining count per status, and the two "waiting for a human" buckets:
