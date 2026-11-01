@@ -166,9 +166,16 @@ human is highlighted with the same warning colour as a stale run.
 - `reevesagents flow stop --run <run> --yes` — close the flow for good. Nothing is sent
   afterwards, and the file is kept so `flow status`/`flow logs` still explain what
   happened. Without `--yes` the command refuses.
+- `reevesagents flow notes --run <run> [--head <sha>] [-r <N>] [--json]` — the reviewer's findings
+  for one round, read from the notes file the engine published. Defaults: the commit under review and
+  the newest round that has notes. A round that was answered only in the reviewer's pane has no file —
+  that prints "no notes" and exits 0; a round that never happened is an error and names the rounds that
+  exist. The file itself lives at `~/.reeves/flows/<run-id>/notes/<head>-r<N>.md`; secrets and
+  absolute paths are already removed from it, and they are removed again on the way out.
 - `reevesagents flow logs --run <run> [-n 20] [--json]` — the flow's own journal:
   transitions, dispatches, verdicts, refusals and escalations, newest last. It never
-  holds a prompt body.
+  holds a prompt body. An entry that consumed a review round points at it — `→ notes/<head>-r2.md ·
+  2 MAJOR, 1 MINOR` — so the journal says where the findings are without carrying them.
 - **Nothing ticks a flow on its own — opening the TUI or the Web UI does not either:**
   those two only render the badge. Run `flow tick` on a schedule (cron every minute is
   the usual setup; `--run` accepts a unique prefix) or call it by hand.

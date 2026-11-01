@@ -1472,9 +1472,9 @@ is the 1-based round number, so the pair is unique and never rewritten. Caps:
 
 | what | where | bounded by | cleaned by |
 | --- | --- | --- | --- |
-| findings file | `notes/<head>-r<N>.md` | one file per round; `NOTES_FILE_MAX_BYTES` = 64 KiB (a round that writes more is truncated at a line boundary and the journal says `truncated`) | `flow stop`, the `delete-history` cascade, and the round-pruning rule below |
+| findings file | `notes/<head>-r<N>.md` | one file per round; `NOTES_FILE_MAX_BYTES` = 64 KiB — a larger round is cut at a line boundary with a visible `(notes truncated at … bytes)` marker, and the **verdict line is always kept** so the record stays a record | `flow stop`, the `delete-history` cascade, and the round-pruning rule below |
 | raw capture | `notes/<head>-r<N>.pane.txt` | `NOTES_PANE_MAX_BYTES` = 256 KiB, tail-kept: the last bytes are what the verdict scanner reads anyway | same |
-| rounds kept | the `notes/` directory | newest `NOTES_KEEP_ROUNDS` = 20 files per flow (10 heads × 2 rounds is the realistic worst case before escalation), oldest dropped first | the append that writes round 21 prunes round 1 |
+| rounds kept | the `notes/` directory | `NOTES_KEEP_HEADS` = 10 heads and `NOTES_KEEP_ROUNDS_PER_HEAD` = 3 rounds per head, plus a hard `NOTES_TOTAL_MAX_BYTES` = 4 MiB over the whole directory; oldest dropped first | every publish (`pruneNotes`), and on close (`pruneClosedFlowNotes`, which keeps the newest round only — `NOTES_CLOSED_KEEP_ROUNDS` = 1) |
 | reference in the journal | `log[].notes_ref` | the `log` ring (`FLOW_LOG_LIMIT` = 50) | the log ring itself |
 | counters in the journal | `log[].notes_counts` | three integers | the log ring itself |
 
@@ -1523,13 +1523,19 @@ is still recorded (`claim.verdict_count`) so the counter baseline keeps working.
 
 ### 11.4 Block 09 (backend) and block 10 (UI)
 
-- **Block 09** implements N1–N5, N7: `renderReviewPrompt` instruction, `notes.ts`
-  (`readStaging`, `publishNotes` — the sanitiser from step 2 above, `readNotes`, `pruneNotes`,
-  `notesRef`), the journal fields, the read order in `flow-runner.ts`, `flow notes`, the pruning rule,
-  and the print-time sanitiser for files the engine did not write. The pipeline order (staging →
-  sanitise → publish → reference) is part of the definition of done, not an implementation detail: a
-  test must feed a staging file containing a key and an absolute path and assert that the durable file
-  and the `flow notes` output carry neither. Definition of done: a round with a valid
+- **Block 09 — shipped** (this branch, `src/core/flow-notes.ts`): `stagingPath` / `durablePath` /
+  `panePath` / `notesRef` for the layout above; `readStaging` (symlink refusal via `lstatSync`, size
+  cap, format check), `validateNotesText` (verdict line last, at least one finding unless ACCEPT),
+  `publishNotes` (sanitise → `capRecord` → temp+rename 0600 → staging removed), `writePaneCapture`
+  (same sanitiser, tail-kept at `NOTES_PANE_MAX_BYTES` = 256 KiB), `readNotesRound` (re-sanitises on
+  read), `pruneNotes` / `pruneClosedFlowNotes` / `removeNotesDir`. The names in this document are the
+  shipped ones; there is no separate `notes.ts`. Wiring: `renderReviewPrompt` takes the staging path as
+  a parameter (`notes_path`), `observeFlow` reads the file first (`verdict_source: 'file'`) and falls
+  back to the pane, `stepFlow` writes the capture on every reviewing tick and publishes the record once,
+  `applyDecisionToState` puts `notes_ref` + `notes_counts` in the journal entry, `flow logs` prints
+  `→ notes/<head>-rN.md · 2 MAJOR, 1 MINOR`, `flow status --json` carries `last_notes` (reference and
+  counters only), `flow start --replace` removes the previous notes directory and `deleteFlowFileForRun`
+  takes it with the flow file. Definition of done: a round with a valid
   file reads from the file (pane ignored); a round with a broken file falls back to the pane and logs
   `notes_invalid`; `flow notes` prints both a valid and a missing round in the documented shapes; the
   caps and the pruning are asserted with a synthetic 21-round fixture.

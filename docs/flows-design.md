@@ -304,7 +304,7 @@ above plus `schema_version`, `repo`, `roles`, `state`, `rounds`, `max_rounds`, `
 the bounded `log`. Every field added after the first release is optional on read, which is why
 `schema_version` is still 1.
 
-Three fields belong to the notification work and are **planned** (blocks 09–10 of
+Two fields belong to the notification work and are **planned** (blocks 10–11 of
 `docs/notifications-design.md`), not in this build:
 
 - `flow_id` — a uuid written once by `createFlowState` (`src/core/flow.ts:279`) and never reused. It is
@@ -315,10 +315,12 @@ Three fields belong to the notification work and are **planned** (blocks 09–10
   notification at-least-once and idempotent (that document, §2.2). `episode` is a per-flow counter
   incremented on every transition into an attention state, so a second escalation or timeout on the
   same commit after a `resume` is a new key rather than a suppressed duplicate;
-- `notes_ref` / `notes_counts` on a `log` entry — the reference to the sanitised notes file of a review
-  round (§11 there).
+Both are optional on read, like every other field added after the first release.
 
-All three are optional on read, like every other field added after the first release.
+One field from the same work is **shipped** (block 09): `notes_ref` / `notes_counts` on a `log` entry,
+written by `applyDecisionToState` when the round answered from a notes file, and printed by `flow logs`.
+The reference is relative to the flow directory (`notes/<head>-r<N>.md`); the text never enters the
+journal, and `flow status --json` carries only `last_notes: { ref, counts }`.
 
 ### 3.2 Block spec — structured from day one (D2)
 
