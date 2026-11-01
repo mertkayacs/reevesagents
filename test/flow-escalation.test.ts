@@ -123,6 +123,36 @@ describe('the decision', () => {
     expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).not.toBe('in_work')
   })
 
+  it('ignores a decision that belongs to an older episode', () => {
+    const approval = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })!
+    // The operator resumed the flow by hand and it escalated again: a new episode. The old ticket is stale.
+    saveFlow({ ...readFlow('run-1'), state: 'escalated', notify_episode: 2 })
+    resolveRunApproval(approval.id, 'approved')
+    const state = readFlow('run-1')
+    expect(state.state).toBe('escalated')
+    expect(state.notify_episode).toBe(2)
+    expect(state.log.filter(entry => entry.event === 'escalation_approved')).toHaveLength(0)
+  })
+
+  it('ignores a decision when the flow is no longer escalated', () => {
+    const approval = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })!
+    saveFlow({ ...readFlow('run-1'), state: 'reviewing' })
+    resolveRunApproval(approval.id, 'denied')
+    expect(readFlow('run-1').state).toBe('reviewing')
+    expect(readFlow('run-1').close_reason).toBeNull()
+  })
+
+  it('does not carry a decision twice when two resolves race', () => {
+    const approval = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })!
+    // Both callers see the same approval; only the transition out of `pending` (decided inside the runs lock) applies.
+    const first = resolveRunApproval(approval.id, 'approved')
+    const second = resolveRunApproval(approval.id, 'denied')
+    expect(first.status).toBe('approved')
+    expect(second.status).toBe('approved')
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'escalation_approved')).toHaveLength(1)
+    expect(readFlow('run-1').state).toBe('idle')
+  })
+
   it('applies a decision once, and leaves other approvals alone', () => {
     const approval = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })!
     resolveRunApproval(approval.id, 'approved')

@@ -86,8 +86,14 @@ export function applyEscalationDecision(approval: RunApproval, note = ''): Escal
   const itemId = typeof approval.details?.item_id === 'string' ? approval.details.item_id : null
   const reason = typeof approval.details?.reason === 'string' ? approval.details.reason : 'escalated'
 
+  const episode = typeof approval.details?.episode === 'number' ? approval.details.episode : null
   const outcome = withRunsLock(() => {
     const state = readFlow(runId)
+    // The approval is about one episode of one flow. After a `flow resume` (or a replacement flow) the number moved on,
+    // and applying an old ticket would resume a flow the operator already dealt with — or close a fresh one.
+    if (state.state !== 'escalated' || (episode !== null && state.notify_episode !== episode)) {
+      return { run_id: runId, decision: 'approved' as const, flow_state: state.state, item_id: null }
+    }
     if (approval.status === 'approved') {
       // Resume first, then hand the item back: a flow that is still `escalated` would ignore the new budget.
       const resumed: FlowState = {

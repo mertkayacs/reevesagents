@@ -220,21 +220,25 @@ export function listRunApprovals(runId?: string, status?: ApprovalStatus): RunAp
 }
 
 export function resolveRunApproval(approvalId: string, decision: 'approved' | 'denied', note = ''): RunApproval {
-  const before = listRunApprovals().find(item => item.id === approvalId)
-  const resolved = resolveRunApprovalUnlocked(approvalId, decision, note)
+  // "Was it pending?" is answered *inside* the lock: reading the status before it lets two concurrent resolves both see
+  // `pending`, and although only one of them writes the decision, both would then carry it into the flow.
+  const { approval: resolved, transitioned } = resolveRunApprovalUnlocked(approvalId, decision, note)
   // A flow escalation carries the decision into the flow itself: approve resumes it with a fresh budget, deny closes it
-  // with a reason. Only on the transition out of `pending` — a second resolve returns the decided record and must not
-  // move the flow again. Done after the lock is released: `applyEscalationDecision` takes the same runs lock.
-  if (before?.status === 'pending') applyEscalationDecision(resolved, note)
+  // with a reason. Done after the lock is released — `applyEscalationDecision` takes the same runs lock.
+  if (transitioned) applyEscalationDecision(resolved, note)
   return resolved
 }
 
-function resolveRunApprovalUnlocked(approvalId: string, decision: 'approved' | 'denied', note: string): RunApproval {
+function resolveRunApprovalUnlocked(
+  approvalId: string,
+  decision: 'approved' | 'denied',
+  note: string,
+): { approval: RunApproval, transitioned: boolean } {
   return withRunsLock(() => {
     const approval = listRunApprovals().find(item => item.id === approvalId)
     if (!approval) throw new Error(`Approval not found: ${approvalId}`)
     // Decide once: a resolved approval is returned as-is, never re-decided.
-    if (approval.status !== 'pending') return approval
+    if (approval.status !== 'pending') return { approval, transitioned: false }
     const updated: RunApproval = {
       ...approval,
       status: decision,
@@ -242,6 +246,6 @@ function resolveRunApprovalUnlocked(approvalId: string, decision: 'approved' | '
       resolved_at: nowIso(),
     }
     writeApprovalUnlocked(updated)
-    return redactApproval(updated)
+    return { approval: redactApproval(updated), transitioned: true }
   })
 }
