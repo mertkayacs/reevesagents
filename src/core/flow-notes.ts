@@ -322,6 +322,42 @@ export function publishNotes(
   return { ref: notesRef(validHead, validRound), path, counts: validation.counts, verdict: validation.verdict }
 }
 
+// Publish only when the record actually changed. The runner calls this on the tick that *accepts* the
+// round's answer, and that same tick can run more than once when the dispatch is gated (a busy dev pane),
+// so the comparison is what keeps the record from being rewritten on every held tick — and what lets a
+// later, accepted answer replace an earlier one that was published by mistake (a rejected round never
+// publishes now, but a state written by the previous build may carry one).
+export function publishNotesIfChanged(
+  runId: string,
+  head: string,
+  round: number,
+  rawText: string,
+  options: NotesOptions = {},
+): { ref: string, path: string, counts: NotesCounts, verdict: FlowVerdict, written: boolean } {
+  const validHead = assertHead(head)
+  const validRound = assertRound(round)
+  const validation = validateNotesText(rawText)
+  if (validation.reason || !validation.verdict) {
+    throw new FlowStateError(`cannot publish notes for ${validHead}-r${validRound}: ${validation.reason ?? 'invalid'}`)
+  }
+  const sanitized = capRecord(sanitizeNotesText(rawText.trim()), NOTES_FILE_MAX_BYTES)
+  const body = sanitized.endsWith('\n') ? sanitized : `${sanitized}\n`
+  const path = durablePath(runId, validHead, validRound, options.root)
+  let current: string | null
+  try {
+    current = readFileSync(path, 'utf-8')
+  } catch {
+    current = null
+  }
+  if (current === body) {
+    try { unlinkSync(stagingPath(runId, validHead, validRound, options.root)) } catch { /* already gone */ }
+    return { ref: notesRef(validHead, validRound), path, counts: validation.counts, verdict: validation.verdict, written: false }
+  }
+  writePrivate(path, body)
+  try { unlinkSync(stagingPath(runId, validHead, validRound, options.root)) } catch { /* already gone */ }
+  return { ref: notesRef(validHead, validRound), path, counts: validation.counts, verdict: validation.verdict, written: true }
+}
+
 // The pane capture: the same sanitiser, the tail kept (that is what the verdict scanner reads), and the
 // same 0600. Written on every reviewing tick, whether or not the file answered.
 export function writePaneCapture(

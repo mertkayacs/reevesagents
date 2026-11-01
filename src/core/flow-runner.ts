@@ -18,7 +18,7 @@
 // the engine, which escalates it after `PENDING_TTL_SEC` instead of re-sending.
 
 import { randomUUID } from 'node:crypto'
-import { existsSync, statSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { PaneBusyState } from './activity.js'
 import type { EvidencePolicy, FlowDecision, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
@@ -33,10 +33,9 @@ import {
   releaseDispatch,
 } from './flow.js'
 import { readFlow, saveFlow } from './flow-store.js'
-import type { NotesOptions } from './flow-notes.js'
 import {
-  durablePath, findingsText, isCommitId, notesRef, pruneClosedFlowNotes, pruneNotes, publishNotes,
-  readDurable, readStaging, stagingPath, writePaneCapture,
+  durablePath, findingsText, isCommitId, notesRef, pruneClosedFlowNotes, pruneNotes,
+  publishNotesIfChanged, readDurable, readStaging, stagingPath, writePaneCapture,
 } from './flow-notes.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { loadConfig } from './config.js'
@@ -266,12 +265,17 @@ const TOOL_LINE_PATTERN = /^(?:\s*[│|]?\s*[●◦•·]\s|\s*[│|]\s*(?:run|e
 
 export function measureEvidence(state: FlowState, observations: FlowObservations): VerdictEvidence {
   const elapsed = state.review_started_at === null ? 0 : Math.max(0, observations.now - state.review_started_at)
-  const notes = observations.notes_text ?? ''
+  // The findings can come from either channel: the notes file when it answered, and the pane's scraped
+  // finding lines when it did not. Counting only the file would reject a reviewer that named three MAJORs
+  // in the pane — "no evidence" is not the same as "no notes file".
+  const findingsSource = observations.notes_text ?? observations.verdict_notes ?? ''
   const paneText = observations.pane_text ?? ''
   return {
     elapsed_ms: elapsed,
-    notes_bytes: Buffer.byteLength(notes, 'utf-8'),
-    notes_findings: notes ? notes.split('\n').filter(line => /^(BLOCKER|MAJOR|MINOR)\b/.test(line.trim())).length : 0,
+    notes_bytes: Buffer.byteLength(findingsSource, 'utf-8'),
+    notes_findings: findingsSource
+      ? findingsSource.split('\n').filter(line => /^(BLOCKER|MAJOR|MINOR)\b/.test(line.trim())).length
+      : 0,
     pane_tool_lines: paneText.split('\n').filter(line => TOOL_LINE_PATTERN.test(line)).length,
   }
 }
@@ -437,36 +441,39 @@ function isParked(state: FlowState): boolean {
 }
 
 
-// Persist this round's notes. Two separate jobs, and the order matters:
-// - the **raw capture** is written on every reviewing tick, because it is the fallback evidence for a
-//   round whose file never appears or never validates;
-// - the **durable record** is published only from a valid staging file, and only once — a second tick
-//   that sees the same file must not rewrite it (it is the round's record, not a cache), so an existing
-//   durable file is left alone. Publication sanitises, so the record on disk is the one a transcript may
-//   quote.
-function persistRoundNotes(state: FlowState, observations: FlowObservations, options: StepFlowOptions): void {
+// The capture is written on every reviewing tick: it is the fallback evidence for a round whose file never
+// appears or never validates, so it cannot wait for a decision.
+function writeRoundCapture(state: FlowState, observations: FlowObservations, options: StepFlowOptions): void {
+  if (state.state !== 'reviewing') return
+  const head = state.claim.head
+  if (!head || !isCommitId(head) || observations.pane_text === undefined) return
+  try {
+    writePaneCapture(state.run_id, head, reviewRound(state), observations.pane_text, { root: options.root })
+  } catch {
+    // Evidence, not state: a failure here must not stop the tick that decides.
+  }
+}
+
+// The durable record is published only when this tick **accepted** the round's answer. Publishing before
+// the decision was a bug: a valid but unsubstantiated answer (too fast) was recorded and its staging file
+// removed, so the reviewer's second, real answer had nowhere to go — the re-request reuses the same
+// (head, round), the durable file already existed and `flow notes` kept showing the rejected text.
+function publishRoundNotes(
+  state: FlowState,
+  observations: FlowObservations,
+  decision: FlowDecision,
+  options: StepFlowOptions,
+): void {
   if (state.state !== 'reviewing') return
   const head = state.claim.head
   if (!head || !isCommitId(head)) return
-  const round = reviewRound(state)
-  const store: NotesOptions = { root: options.root }
-  if (observations.pane_text !== undefined) {
-    try {
-      writePaneCapture(state.run_id, head, round, observations.pane_text, store)
-    } catch {
-      // The capture is evidence, not state: a failure here must not stop the tick that decides.
-    }
-  }
-  if (observations.notes_ref && observations.notes_raw !== undefined) {
-    const path = durablePath(state.run_id, head, round, options.root)
-    if (!existsSync(path)) {
-      try {
-        publishNotes(state.run_id, head, round, observations.notes_raw, store)
-        pruneNotes(state.run_id, store)
-      } catch {
-        // A publish failure leaves the staging file where the next tick finds it.
-      }
-    }
+  if (observations.notes_raw === undefined) return          // the answer came from the pane
+  if (decision.reason === 'review_unsubstantiated') return  // the answer was rejected
+  try {
+    publishNotesIfChanged(state.run_id, head, reviewRound(state), observations.notes_raw, { root: options.root })
+    pruneNotes(state.run_id, { root: options.root })
+  } catch {
+    // A publish failure leaves the staging file where the next tick finds it.
   }
 }
 
@@ -498,7 +505,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   const before = readFlow(runId, { root: options.root })
   const observations = isParked(before) ? unobservedFlow(now) : observeFlow(before, options)
   if (!isParked(before)) {
-    persistRoundNotes(before, observations, options)
+    writeRoundCapture(before, observations, options)
     pruneClosedNotes(before, options)
   }
 
@@ -537,7 +544,10 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   const phase = claim.value
   const { dispatch } = phase
   if (!dispatch) {
-    if (phase.settled) pruneClosedNotes(phase.settled.state, options)
+    if (phase.settled) {
+      publishRoundNotes(before, observations, phase.decision, options)
+      pruneClosedNotes(phase.settled.state, options)
+    }
     return {
       observations,
       decision: phase.decision,
@@ -639,6 +649,10 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       path: done.path,
     }
   }
+  // The settle is where an answer becomes the flow's state: publish its record only when this tick did not
+  // reject it. A refused send leaves the round open for a retry, so nothing is recorded yet.
+  if (done.status === 'applied') publishRoundNotes(before, observations, phase.decision, options)
+  pruneClosedNotes(done.state, options)
   return {
     observations,
     decision: phase.decision,
@@ -647,5 +661,4 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     state: done.state,
     path: done.path,
   }
-
 }

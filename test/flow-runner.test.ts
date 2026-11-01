@@ -429,10 +429,10 @@ describe('the notes channel in the runner', () => {
     expect(ports.send).toHaveBeenCalledTimes(1)
   })
 
-  it('answers from the published record on the tick after a held one', () => {
-    // The publish happens before the decision, so a tick that held on a busy dev pane has already
-    // consumed the staging file. Without reading the durable record the round would never be answered
-    // again and would run into the review timeout.
+  it('keeps the round open on a held tick and records it only when the answer is accepted', () => {
+    // The record is the outcome of an accepted round, not a cache written before the decision: publishing
+    // early deleted the staging file of a round that was still open, and a reviewer's second answer had
+    // nowhere to go.
     seed(reviewingState())
     writeStaging('run-1', NOTES_HEAD, 1, fileText)
     const busy = makePorts({ paneBusy: id => (id === 'dev-1' ? 'busy' : 'idle') })
@@ -440,15 +440,49 @@ describe('the notes channel in the runner', () => {
     const held = step(busy, { head: NOTES_HEAD })
     expect(held.decision.reason).toBe('dev_busy')
     expect(held.status).toBe('skipped')
-    // Published already, and the staging copy is gone.
-    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(true)
-    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(false)
+    // Nothing recorded yet, and the reviewer's file is still there for the next tick.
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(false)
+    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(true)
 
     const idle = makePorts()
     const applied = step(idle, { head: NOTES_HEAD })
     expect(applied.decision.kind).toBe('dispatch_fix')
     expect(applied.decision.message).toContain('MAJOR src/core/flow.ts:120')
     expect(idle.send).toHaveBeenCalledTimes(1)
+    // Accepted: the record is published and the staging copy is gone.
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(true)
+    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(false)
+  })
+
+  it('lets a reviewer replace a rejected answer with a substantiated one', () => {
+    // First answer: valid shape, no findings, one second old — rejected, and *not* recorded. The
+    // re-request reuses the same (head, round), so the second staging file lands on the same path and
+    // must be able to become the record. This is the case the pre-decision publish broke.
+    seed(makeState({
+      state: 'reviewing',
+      review_started_at: NOW,
+      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
+    }))
+    writeStaging('run-1', NOTES_HEAD, 1, 'ВЕРДИКТ: ACCEPT\n')
+    const fast = step(makePorts(), { head: NOTES_HEAD, verdict_evidence: { elapsed_ms: 1_000, notes_bytes: 0, notes_findings: 0, pane_tool_lines: 0 } })
+    expect(fast.decision.reason).toBe('review_unsubstantiated')
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(false)
+    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(true)
+
+    // The reviewer answers again, this time with a finding, and the review is two minutes old.
+    seed(makeState({
+      state: 'reviewing',
+      review_started_at: NOW - 120_000,
+      unsubstantiated_attempts: 1,
+      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
+    }))
+    writeStaging('run-1', NOTES_HEAD, 1, fileText)
+    const second = step(makePorts(), { head: NOTES_HEAD })
+
+    expect(second.decision.kind).toBe('dispatch_fix')
+    const durable = readFileSync(durablePath('run-1', NOTES_HEAD, 1, root), 'utf-8')
+    expect(durable).toContain('MAJOR src/core/flow.ts:120')
+    expect(durable).toContain('ВЕРДИКТ: CHANGES_REQUESTED')
   })
 
   it('falls back to the pane when the notes file is unusable, and says why in the journal', () => {
@@ -530,6 +564,23 @@ describe('verdict evidence', () => {
     expect(after.claim.head).toBe('aaa111')
     // The journal carries the numbers a human needs.
     expect(after.log.at(-1)!.detail).toContain('elapsed=2s notes=0/0b tool=0')
+  })
+
+  it('counts the findings a pane answer named, not only the ones in a file', () => {
+    // The reviewer answered in the pane with three real MAJOR lines: that is evidence of a review, and
+    // counting only the notes file used to reject it and send the round to the retry/escalation path.
+    seed(makeState({ state: 'reviewing', review_started_at: NOW - 90_000, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    const pane = [
+      'VERDICT: CHANGES_REQUESTED',
+      'MAJOR src/core/flow.ts:120 — the claim is not re-read',
+      'MINOR docs/GUIDE.md:80 — wording',
+    ].join('\n')
+    const ports = makePorts({ peek: () => pane })
+
+    // The evidence is measured by the runner here, not injected: that measurement is the thing under test.
+    const result = step(ports, { head: 'aaa111', verdict_evidence: undefined })
+
+    expect(result.decision.kind).toBe('dispatch_fix')
   })
 
   it('escalates when the reviewer keeps stamping', () => {

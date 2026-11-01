@@ -552,6 +552,12 @@ only — and accepts the answer when **both** halves hold:
 - at least one `BLOCKER|MAJOR|MINOR` line, **or** an explicit "no findings" statement *in a notes file* —
   a bare ACCEPT in a pane is never admissible, because that is the shape the stamping took.
 
+The evidence counts the findings either channel produced: the notes file when it answered, **and** the
+finding lines scraped from the pane when it did not — "no notes file" is not "no review". The record of a
+round is published only when the tick **accepts** its answer: a rejected (too fast, no findings) file keeps
+its staging copy and writes nothing, so the reviewer's second answer to the same `(head, round)` can become
+the record instead of being shadowed by the rejected one.
+
 A rejected verdict does not touch the claim. The journal gets `review_unsubstantiated` with the numbers
 (`elapsed=2s notes=0/0b tool=0`), `unsubstantiated_attempts` in the state goes up, and the flow re-requests
 the review **once** with a prompt that says the previous answer was rejected and what has to change. When
@@ -571,7 +577,9 @@ in tmux copy mode ate the Enter. So the dispatch path now, in `runtime.sendWhenI
    anything else → `composer_dirty`, which escalates and pastes nothing — a blind re-paste is how nine copies
    of one prompt ended up in one pane;
 4. waits for the busy marker inside `dispatch_confirm_seconds` (default 90) instead of a fixed nap, and if
-   the pane never turns busy, presses Enter again **only** while the composer still holds exactly our text.
+   the pane never turns busy, presses Enter again **only** when the pane right now reads positively idle
+   *and* ready (an `unknown` pane takes no keystroke at all) **and** the composer still holds exactly our
+   text.
 
 Both thresholds are global config keys (`review_min_seconds`, `review_evidence_retries`,
 `dispatch_confirm_seconds`), so they are visible in `reevesagents config`, the MCP `get_config`, the TUI

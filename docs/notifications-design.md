@@ -1457,7 +1457,11 @@ record:
 4. the same pass writes `<head>-r<N>.pane.txt` from the reviewer's pane — **also sanitised**, because
    the pane is model output too: the capture exists to survive a parser mismatch, not to smuggle a
    secret onto disk;
-5. if any step fails, the staging file is kept (so a retry can read it) and the journal records
+5. the record is published only when the tick **accepts** the round's answer. A rejected answer (too
+   fast, no findings — see the evidence rule in `docs/flows-design.md` §3.5) keeps its staging copy and
+   publishes nothing, so the reviewer's second answer to the same `(head, round)` becomes the record
+   instead of being shadowed by the rejected one;
+6. if any step fails, the staging file is kept (so a retry can read it) and the journal records
    `notes_invalid <reason>`; a staging file older than a day is removed by the next tick.
 
 That ordering is the whole answer to "the engine cannot control what the model writes": it does not

@@ -763,9 +763,14 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   const pollMs = Math.max(timings.confirmPollMs ?? 1000, 1)
   if (waitForBusy(agent, options, driver, confirmMs, pollMs)) return { sent: true }
 
-  // The Enter was pressed and the pane never turned busy. One more Enter is allowed *only* while the
-  // composer still holds exactly our text — a submit that did not land, not a blind repeat.
+  // The Enter was pressed and the pane never turned busy. One more Enter is allowed only when two things
+  // hold, and neither is a guess: the pane right now reads **positively idle and ready** (a pane that went
+  // `unknown` — a modal, a login screen, a half-drawn frame — must not receive a keystroke at all), and the
+  // composer still holds exactly our text (a submit that did not land, not a blind repeat).
   const after = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  const afterBusy = detectPaneBusy(after, agent.provider)
+  const afterReady = detectPaneReady(after, agent.provider)
+  if (afterBusy !== 'idle' || afterReady !== 'ready') return { sent: false, reason: 'unconfirmed' }
   const stillOurs = normalizeComposer(composerText(after, agent.provider) ?? '') === normalizeComposer(text)
   if (!stillOurs) return { sent: false, reason: 'unconfirmed' }
   try {

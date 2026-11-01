@@ -277,6 +277,12 @@ const CODEX_OUR_TEXT = [
   '  ← for agents · ? for shortcuts',
 ].join('\n')
 
+// Our text is in the box, but the pane is not showing the composer hint any more: not ready, not ours.
+const CODEX_OUR_TEXT_NO_HINT = [
+  '› hello',
+  '  some modal is in the way',
+].join('\n')
+
 const CODEX_COPY_MODE = [
   '  ◦ Working (3s • esc to interrupt)',
   '  [12/345]',
@@ -383,5 +389,28 @@ describe('readiness and the composer', () => {
 
     expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed' })
     expect(driver.count('send-keys')).toBe(1)
+  })
+})
+
+describe('the repeated Enter', () => {
+  it('does not press it when the pane stopped reading as ready, even with our text in the box', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    // After the paste the composer still holds our text, but the pane no longer shows a composer *hint*
+    // (a modal, a half-drawn frame): a keystroke there answers whatever is on screen instead.
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT_NO_HINT, CODEX_OUR_TEXT_NO_HINT]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed' })
+    expect(driver.count('send-keys')).toBe(1)   // the first Enter only
+  })
+
+  it('presses it once more while the pane is idle, ready and still holding our text', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: true })
+    expect(driver.count('send-keys')).toBe(2)
+    expect(driver.pasted()).toEqual(['hello'])
   })
 })
