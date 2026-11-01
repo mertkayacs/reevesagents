@@ -12,6 +12,9 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './guards.js'
 import { buildWebState, listWebProviders } from './state.js'
+import {
+  NotificationError, appendNotification, markNotificationsRead, notificationSummary, readNotifications,
+} from '../../core/notifications.js'
 import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
 import { startRun, startRunFromPreset, spawnWorker, killAgent, stopRun } from '../../core/runtime.js'
@@ -80,6 +83,26 @@ interface RequestContext {
   webRoot: string
   cache: Map<string, Buffer>
   sse: SseHub
+}
+
+// The ingest route is a local surface, but "local" is not "trusted": a runaway supervisor loop must not fill the
+// journal, so a simple per-peer window applies. 60 events per 10 s is far above any real fleet and far below
+// "flood".
+const INGEST_WINDOW_MS = 10_000
+const INGEST_MAX_PER_WINDOW = 60
+const ingestWindows = new Map<string, { start: number, count: number }>()
+
+function ingestAllowed(peer: string | undefined): boolean {
+  const key = peer ?? 'unknown'
+  const now = Date.now()
+  const window = ingestWindows.get(key)
+  if (!window || now - window.start > INGEST_WINDOW_MS) {
+    ingestWindows.set(key, { start: now, count: 1 })
+    return true
+  }
+  if (window.count >= INGEST_MAX_PER_WINDOW) return false
+  window.count += 1
+  return true
 }
 
 function errMessage(err: unknown): string {
@@ -157,7 +180,9 @@ function createSseHub(): SseHub {
     sweepAgentsThrottled()
     sweepOrphanSessionsThrottled()
     autoCleanupRuns()
-    return JSON.stringify(buildWebState())
+    // The journal summary rides along with the state frame: a badge that needs a second request would be a badge
+    // that lags the screen it belongs to.
+    return JSON.stringify({ ...buildWebState(), notifications: notificationSummary() })
   }
   const write = (res: ServerResponse, payload: string): void => {
     try { res.write(`data: ${payload}\n\n`) } catch { /* client gone; close handler will drop it */ }
@@ -447,6 +472,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       providers: listWebProviders(),
       language: webLanguagePayload(),
       web_theme: loadConfig().global.web_theme,
+      // One compact summary, so the Logs button can show a badge without loading the journal.
+      notifications: notificationSummary(),
       version: REEVESAGENTS_VERSION,
     })
     return
@@ -478,6 +505,72 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
   if (method === 'GET' && path === '/api/presets') {
     try {
       sendJson(res, 200, presetsPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/notifications') {
+    // The query is parsed by hand: `URLSearchParams` has no global in this lint config, and the surface is three
+    // parameters wide.
+    const query = new Map<string, string>()
+    for (const pair of ((req.url ?? '').split('?')[1] ?? '').split('&')) {
+      if (!pair) continue
+      const [rawKey, rawValue = ''] = pair.split('=')
+      query.set(decodeURIComponent(rawKey ?? ''), decodeURIComponent(rawValue))
+    }
+    const limit = Number.parseInt(query.get('limit') ?? '', 10)
+    const since = Number.parseInt(query.get('since') ?? '', 10)
+    try {
+      sendJson(res, 200, readNotifications({
+        limit: Number.isFinite(limit) ? limit : undefined,
+        run: query.get('run') ?? undefined,
+        since: Number.isFinite(since) ? since : undefined,
+        unread: query.get('unread') === '1' || query.get('unread') === 'true',
+      }))
+    } catch (err) {
+      sendJson(res, 500, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/notifications') {
+    // Ingest is for the supervisor on this machine: loopback peer and a same-origin header, both required. The
+    // origin guard above already rejects a foreign Origin on a state-changing method; the peer check is what
+    // stops a container or a forwarded request from writing history.
+    const peer = req.socket.remoteAddress ?? ''
+    const loopback = peer === '127.0.0.1' || peer === '::1' || peer === '::ffff:127.0.0.1'
+    if (!loopback) {
+      sendJson(res, 403, { error: 'notifications are accepted from loopback only' })
+      return
+    }
+    if (!req.headers.origin) {
+      sendJson(res, 403, { error: 'an Origin header is required' })
+      return
+    }
+    if (!ingestAllowed(peer)) {
+      sendJson(res, 429, { error: 'too many notifications; slow down' })
+      return
+    }
+    try {
+      const body = await readJsonBody(req)
+      const created = appendNotification({ ...body, source: body.source === undefined ? 'external' : body.source })
+      sendJson(res, 201, created)
+    } catch (err) {
+      // Drain what is left of the body before answering: the client may still be writing, and a `res.end()` on a
+      // paused request tears the socket down (the caller then sees a reset instead of the status it needs).
+      try { req.resume() } catch { /* the stream is already gone */ }
+      // A body over the limit and a schema violation are both `400`; an unavailable store is `503`.
+      if (err instanceof NotificationError && err.code === 'refused') sendJson(res, 400, { error: err.message })
+      else if (err instanceof NotificationError && err.code === 'unavailable') sendJson(res, 503, { error: err.message })
+      else sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/notifications/read') {
+    try {
+      const body = await readJsonBody(req)
+      const seq = typeof body.seq === 'number' ? body.seq : undefined
+      sendJson(res, 200, markNotificationsRead(seq))
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }
