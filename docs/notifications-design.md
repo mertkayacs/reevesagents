@@ -318,7 +318,7 @@ fire-and-forget wrapper: a journal that cannot be written never breaks the actio
 `NOTIFICATION_LIMITS`: `max_events 2000`, `max_bytes 2 MiB`, `keep_events 1500`, `keep_bytes 1.5 MiB`,
 `dedupe_keys 2000`, plus the field caps from §2.1. Path shortening covers Unix, drive-letter (`C:\Users\…`) and UNC
 (`\\server\share\…`) forms, with Unicode components and any lead character (a path after `path:` is still a path; a `scheme://` URL is
-not) — the checkouts here are Polish, Ukrainian and Russian, so
+not — except `file:///…`, whose `//` part *is* a local path and is shortened like one) — the checkouts here are Polish, Ukrainian and Russian, so
 `/home/Дмитро/Проект/secret.txt` must shorten like any other path — three patterns, because one combined regex makes the escape count unreadable and that
 is how the UNC case was missed. The redactor also knows `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` tokens and fine-grained
 `github_pat_…` ones. The ingest route is

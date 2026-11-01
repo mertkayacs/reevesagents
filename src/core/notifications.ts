@@ -168,15 +168,22 @@ function clean(value: unknown, limit: number): string {
 // `path:`, `file:`, `->` and a dozen other joins, and a whitelist silently misses each one. The exception is a
 // colon that introduces a `scheme://…` URL — that is not a path on this machine (see `shortenPath`).
 const LEAD = '(^|[^\\p{L}\\p{N}._@+\\-/\\\\])'
-const UNIX_PATH = new RegExp(`${LEAD}((?:\\/[\\p{L}\\p{N}._@+-]+){2,}\\/?)`, 'gu')
+const UNIX_PATH = new RegExp(`${LEAD}((?:\\/{1,}[\\p{L}\\p{N}._@+-]+){2,}\\/?)`, 'gu')
 const WINDOWS_PATH = new RegExp(`${LEAD}([A-Za-z]:\\\\[\\p{L}\\p{N}.@+ -]+(?:\\\\[\\p{L}\\p{N}.@+ -]+){1,})`, 'gu')
 const UNC_PATH = new RegExp(`${LEAD}(\\\\\\\\[\\p{L}\\p{N}.@+ -]+(?:\\\\[\\p{L}\\p{N}.@+ -]+){1,})`, 'gu')
 
-function shortenPath(match: string, lead: string, path: string): string {
-  // A URL is not a path on this machine: `https://host/x` reaches here with `lead: ':'` and a path that starts
-  // with `//`, and rewriting it would corrupt the link instead of protecting anything.
-  if (lead === ':' && path.startsWith('//')) return match
-  if (path.startsWith('//')) return match
+// The schemes whose `//…` part is a *local* path. Everything else with `scheme://` is a URL and is left alone: it
+// points somewhere else, and rewriting it would corrupt a link rather than protect anything.
+const LOCAL_URL_SCHEMES = /(?:^|[^\p{L}\p{N}+.-])(?:file)$/iu
+
+function shortenPath(match: string, lead: string, path: string, offset: number, whole: string): string {
+  if (path.startsWith('//')) {
+    // `lead: ':'` means a scheme sits right in front of the slashes. `file:///home/u/x` is a local path and must be
+    // shortened; `https://host/x` is not.
+    if (lead !== ':') return match
+    const before = whole.slice(0, offset)
+    if (!LOCAL_URL_SCHEMES.test(before)) return match
+  }
   // The last component only: the file name is what a human needs, the tree is what must not leak.
   const parts = path.split(/[\\/]+/).filter(Boolean)
   const last = parts[parts.length - 1] ?? ''

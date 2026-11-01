@@ -120,6 +120,12 @@ describe('the schema', () => {
     // A URL is not a path: shortening it would corrupt the link.
     const url = appendNotification(valid({ detail: 'GET https://example.com/api/state failed' })).event
     expect(url.detail).toContain('https://example.com/api/state')
+
+    // `file://` is the exception: its `//` part is a local path, and the empty component after the scheme is why a
+    // one-slash-per-component pattern missed the whole thing.
+    const fileUrl = appendNotification(valid({ detail: 'open file:///home/dmytro/private/file.ts now' })).event
+    expect(fileUrl.detail).not.toContain('dmytro')
+    expect(fileUrl.detail).toContain('file.ts')
   })
 
   it('shortens a path whose components are not ASCII', () => {
