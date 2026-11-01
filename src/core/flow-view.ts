@@ -228,6 +228,50 @@ export function planAttentionOf(runId: string, root?: string): PlanAttention | n
   }
 }
 
+// The Flow section on the run page: a few plain lines, so the renderer needs no logic and a test can assert the text
+// for every state. Width is capped at 78 columns for the narrow terminal: a status line that wraps is a status line
+// nobody reads.
+export interface FlowSectionOptions {
+  now?: number
+  // `flow_tick_ms` from the config; 0 means the autonomous tick is off.
+  tickMs?: number
+  plan?: PlanAttention | null
+  active_plan_item?: string | null
+  queue_depth?: number
+}
+
+export function flowSectionLines(state: FlowState, options: FlowSectionOptions = {}): string[] {
+  const now = options.now ?? Date.now()
+  const badge = flowBadge(state, now, options.plan ?? null)
+  const lines: string[] = []
+  const budget = badge.status === 'escalated' || badge.status === 'done' || badge.status === 'orphaned'
+    ? `round ${badge.rounds}`
+    : `round ${badge.rounds}/${badge.max_rounds}`
+  lines.push(`state    ${badge.status} · ${budget}`)
+  if (options.active_plan_item) {
+    const suffix = options.plan && options.plan.item === options.active_plan_item ? '' : ''
+    lines.push(`item     ${options.active_plan_item}${suffix}`)
+  }
+  if (typeof options.queue_depth === 'number') lines.push(`queue    ${options.queue_depth} pending`)
+  if (options.plan) {
+    const why = options.plan.reason === 'needs_brief' ? 'needs a brief' : 'blocked'
+    lines.push(`waiting  ${options.plan.item} (${why})`)
+  }
+  if (badge.attention === 'review_timeout') lines.push('attention review timed out')
+  else if (badge.attention === 'escalated') lines.push('attention rounds spent — approve or deny in Approvals')
+  else if (badge.attention === 'plan_waiting') lines.push('attention waiting for you')
+  // Where the next move comes from: the autonomous tick, or a manual `flow tick`.
+  if ((options.tickMs ?? 0) > 0) {
+    const since = Date.parse(state.updated_at)
+    const age = Number.isNaN(since) ? 0 : Math.max(0, now - since)
+    const nextIn = Math.max(0, Math.ceil(((options.tickMs ?? 0) - age) / 1000))
+    lines.push(`tick     auto every ${Math.round((options.tickMs ?? 0) / 1000)}s · next in ${nextIn}s`)
+  } else {
+    lines.push('tick     off (flow_tick_ms 0) — run `flow tick`')
+  }
+  return lines.map(line => (line.length > 78 ? `${line.slice(0, 77)}…` : line))
+}
+
 // A run without a flow has no badge, and neither has one whose file cannot be read: a dashboard
 // skips a damaged file instead of breaking the board, while `flow status` still reports it (§3.3).
 export function readFlowBadge(runId: string, now: number = Date.now(), root?: string): FlowBadge | null {

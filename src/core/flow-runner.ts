@@ -41,6 +41,7 @@ import { withDispatchGate } from './flow-dispatch-gate.js'
 import { loadConfig } from './config.js'
 import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound } from './plan.js'
 import { emitNotification } from './notifications.js'
+import { raiseEscalationApproval } from './flow-escalation.js'
 import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js'
 import type { PlanTickView } from './flow-plan.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
@@ -402,6 +403,24 @@ function emitPlanAttention(state: FlowState, observations: FlowObservations, dec
   })
 }
 
+// Every escalation becomes an approval: the operator gets a decision to make instead of a stopped pipeline with a
+// log line. `raiseEscalationApproval` is idempotent per episode, so a ticker that sees the same escalated flow again
+// does not create a second ticket.
+function raiseEscalationFor(state: FlowState, decision: FlowDecision): void {
+  if (state.state !== 'escalated') return
+  try {
+    raiseEscalationApproval({
+      run_id: state.run_id,
+      flow_id: state.flow_id,
+      episode: state.notify_episode,
+      reason: decision.kind === 'escalate' ? decision.reason : (state.log.at(-1)?.detail ?? 'escalated'),
+      item_id: state.active_plan_item,
+    })
+  } catch {
+    // The approval is how a human hears about it, but a failure to write it must not undo the escalation itself.
+  }
+}
+
 function emitFlowAttention(state: FlowState, decision: FlowDecision): void {
   // The state is the authority, not the decision's kind: a `composer_dirty` escalation is a `dispatch_spec`
   // decision that ended in `escalated`, and gating on `kind` silently dropped exactly that case. The dedupe key
@@ -710,6 +729,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     // budget blocks one) — and `decisionChangesState` only looks at the flow's own fields.
     applyPlanDecision(before, observations, phase.decision)
     emitFlowAttention(phase.settled?.state ?? before, phase.decision)
+    raiseEscalationFor(phase.settled?.state ?? before, phase.decision)
     emitPlanAttention(before, observations, phase.decision)
     if (phase.settled) {
       publishRoundNotes(before, observations, phase.decision, options)

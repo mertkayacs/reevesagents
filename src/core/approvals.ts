@@ -12,6 +12,7 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { emitNotification } from './notifications.js'
+import { applyEscalationDecision } from './flow-escalation.js'
 import { dirname, join } from 'node:path'
 import {
   findAgent,
@@ -219,6 +220,16 @@ export function listRunApprovals(runId?: string, status?: ApprovalStatus): RunAp
 }
 
 export function resolveRunApproval(approvalId: string, decision: 'approved' | 'denied', note = ''): RunApproval {
+  const before = listRunApprovals().find(item => item.id === approvalId)
+  const resolved = resolveRunApprovalUnlocked(approvalId, decision, note)
+  // A flow escalation carries the decision into the flow itself: approve resumes it with a fresh budget, deny closes it
+  // with a reason. Only on the transition out of `pending` — a second resolve returns the decided record and must not
+  // move the flow again. Done after the lock is released: `applyEscalationDecision` takes the same runs lock.
+  if (before?.status === 'pending') applyEscalationDecision(resolved, note)
+  return resolved
+}
+
+function resolveRunApprovalUnlocked(approvalId: string, decision: 'approved' | 'denied', note: string): RunApproval {
   return withRunsLock(() => {
     const approval = listRunApprovals().find(item => item.id === approvalId)
     if (!approval) throw new Error(`Approval not found: ${approvalId}`)

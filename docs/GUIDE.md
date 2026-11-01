@@ -245,6 +245,26 @@ carries `{latest_seq, unread, latest_ts}`). The Web UI's Logs dialog and the age
 not in this branch yet; `agent_pulse_ms` is the setting that dialog will use (`0` turns the pulse off), and until
 then it is a stored preference with no consumer.
 
+### When the flow escalates
+
+An escalation is never silent: the tick raises **an approval** (`flow escalated: <reason> (P1.7.2) — continue with a
+fresh budget, or stop the flow`), so it appears where your other approvals appear — in the TUI's Approvals screen and
+in the Web UI.
+
+- **Approve** puts the item back in the queue (`queued`), zeroes the flow's round counter and returns it to `idle`:
+  the next tick picks the item up again.
+- **Deny** closes the flow as `done` with a `close_reason` that carries the escalation reason and your note; the item
+  is closed as `skipped`. Nothing else is sent.
+
+One escalation, one approval: a ticker that sees the same escalated flow again does not create a second ticket. A new
+episode (after a `flow resume`, then another escalation) is a new decision.
+
+### Machine tokens are not translated
+
+Prompts are English by decision (2026-11-01). The machine tokens — `VERDICT: ACCEPT|CHANGES_REQUESTED`,
+`BLOCKER|MAJOR|MINOR`, `file:line`, `no findings` — are part of the contract and are never translated, in any locale;
+the parser still accepts the older `ВЕРДИКТ:` spelling so files and panes written before the canon keep working.
+
 ### The plan drives the flow by itself
 
 Once a plan is imported and a brief is attached to an item, nobody has to type `flow tick`: an open dashboard

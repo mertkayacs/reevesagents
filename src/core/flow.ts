@@ -638,7 +638,7 @@ export function renderReviewPrompt(parts: {
       '',
       `Also write those same lines to ${parts.notes_path} — one finding per line,`,
       'each starting with BLOCKER, MAJOR or MINOR followed by file:line, then what is wrong and what to do,',
-      'and end the file with the line "ВЕРДИКТ: ACCEPT" or "ВЕРДИКТ: CHANGES_REQUESTED".',
+      'and end the file with the line "VERDICT: ACCEPT" or "VERDICT: CHANGES_REQUESTED".',
     )
   }
   return lines.join('\n')

@@ -760,6 +760,8 @@ as everything else (§2.3).
 | Engine, store, CLI `flow status` / `flow tick` | **shipped** (`src/core/flow.ts`, `flow-store.ts`, `flow-runner.ts`, `src/surfaces/cli/flow.ts`) |
 | The `pending`/`op_id` dispatch claim (§2.4) | **shipped** (`flow.ts` claim/release, `flow-runner.ts` claim -> act -> settle); a claim nobody settled escalates with `dispatch_unresolved` |
 | CLI `flow start` | **shipped** (`src/core/flow-start.ts`, `src/surfaces/cli/flow.ts`) |
+| TUI flow section on the run page | **shipped** (block 17) — `src/surfaces/tui/screens/Run.tsx` renders `flowLine()` from `src/core/flow-view.ts`: state, round/budget, active plan item, queue depth, attention with its item, and the next tick |
+| Escalation as an approval | **shipped** (block 17) — `src/core/flow-escalation.ts` raises one approval per episode (`action: flow_escalation`); approve resumes the flow and re-queues the item, deny closes it with `close_reason` |
 | TUI runs-list badge + attention | **shipped** (`src/core/flow-view.ts`, `src/core/flow-label.ts`, `src/surfaces/tui/screens/Runs.tsx`) |
 | Web run-card badge + attention | **shipped** (`src/surfaces/webui/state.ts` `WebRun.flow`, `client/app.js`, `client/app.css`) |
 | MCP `flow_status`, `flow_add_spec`, `flow_start` | **shipped** (`src/surfaces/mcp/server.ts`); no tool here ticks a flow on its own |

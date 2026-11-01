@@ -1,0 +1,139 @@
+// Escalation as an approval: raised once per episode, and the decision moves the flow.
+//
+// The block's rule: no silent escalations. A flow that stops because an item spent its rounds, the fuse ran out or no
+// substantiated verdict arrived must show up as an approval a human can act on — approve resumes with a fresh budget,
+// deny closes the flow with a reason.
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { createFlowState } from '../src/core/flow.js'
+import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
+import { raiseEscalationApproval, applyEscalationDecision, FLOW_ESCALATION_ACTION } from '../src/core/flow-escalation.js'
+import { listRunApprovals, resolveRunApproval } from '../src/core/approvals.js'
+import { writeAgent, writeRun } from '../src/core/runs.js'
+
+vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => ''), spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
+
+const NOW = Date.parse('2026-11-02T09:00:00.000Z')
+const AT = new Date(NOW).toISOString()
+
+let root: string
+let savedRegistry: string | undefined
+
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'reeves-escalation-'))
+  savedRegistry = process.env.REEVES_REGISTRY
+  process.env.REEVES_REGISTRY = root
+  process.env.REEVES_CONFIG = join(root, 'config.json')
+
+  writeRun({
+    id: 'run-1', name: 'demo', status: 'running', tmux_session: 'reeves-run-1', reeves_window_id: '@0',
+    reeves_pane_id: '%0', root_agent_id: 'dev-1', working_dir: root, preset_name: null,
+    started_at: '2026-11-01T00:00:00.000Z', ended_at: null,
+  })
+  for (const [id, pane] of [['dev-1', '%1'], ['rev-1', '%2']] as const) {
+    writeAgent({
+      id, run_id: 'run-1', nickname: id, provider: 'codex', model: '', role: 'worker', working_dir: root,
+      task: 't', task_status: 'working', task_note: '', tmux_session: 'reeves-run-1', tmux_window_id: '@1',
+      tmux_pane_id: pane, rc_enabled: false, permissions: 'ask', inbox: [], last_seen: 1,
+      started_at: '2026-11-01T00:00:01.000Z', ended_at: null,
+    })
+  }
+
+  const created = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: '- [ ] **P1.1** — first', now: NOW })
+  const plan = attachSpec(created.plan, {
+    id: 'P1.1',
+    text: JSON.stringify({ id: 'P1.1', title: 'first', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+    format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW,
+  }).plan
+  mkdirSync(dirname(planPath('run-1')), { recursive: true })
+  savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const, rounds: 2 })) })
+  saveFlow({
+    ...createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 2, max_total_rounds: 5, at: AT,
+    }),
+    state: 'escalated',
+    notify_episode: 1,
+    active_plan_item: 'P1.1',
+    log: [{ at: AT, event: 'escalate', detail: 'rounds_exhausted' }],
+  })
+})
+
+afterEach(() => {
+  if (savedRegistry === undefined) delete process.env.REEVES_REGISTRY
+  else process.env.REEVES_REGISTRY = savedRegistry
+  delete process.env.REEVES_CONFIG
+  rmSync(root, { recursive: true, force: true })
+})
+
+describe('raising the approval', () => {
+  it('creates exactly one approval per episode', () => {
+    const first = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })
+    const again = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })
+    expect(first).not.toBeNull()
+    expect(again?.id).toBe(first!.id)
+    expect(listRunApprovals('run-1', 'pending').filter(entry => entry.action === FLOW_ESCALATION_ACTION)).toHaveLength(1)
+
+    // A new episode is a new approval: `flow resume` then another escalation is a second decision.
+    const second = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 2, reason: 'rounds_exhausted', item_id: 'P1.1' })
+    expect(second?.id).not.toBe(first!.id)
+  })
+
+  it('says what happened and what the human can do', () => {
+    const approval = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'total_rounds_exhausted', item_id: null })
+    expect(approval?.summary).toContain('escalated: total_rounds_exhausted')
+    expect(approval?.summary).toContain('continue with a fresh budget, or stop the flow')
+    expect(approval?.details).toMatchObject({ run_id: 'run-1', episode: 1, reason: 'total_rounds_exhausted' })
+  })
+
+  it('does nothing when the flow is no longer escalated', () => {
+    saveFlow({ ...readFlow('run-1'), state: 'idle' })
+    expect(raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })).toBeNull()
+  })
+})
+
+describe('the decision', () => {
+  it('approve gives the item a fresh budget and resumes the flow', () => {
+    const approval = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })!
+    const resolved = resolveRunApproval(approval.id, 'approved', 'give it another go')
+
+    expect(resolved.status).toBe('approved')
+    const state = readFlow('run-1')
+    expect(state.state).toBe('idle')
+    expect(state.rounds).toBe(0)
+    expect(state.log.at(-1)).toMatchObject({ event: 'escalation_approved' })
+    // The item is back in the plan and may be picked up by the next tick. `queued` and not `pending`: the engine table
+    // forbids `in_work → pending`, and `queued` is the state the picker takes.
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).toBe('queued')
+  })
+
+  it('deny closes the flow with a reason', () => {
+    const approval = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })!
+    resolveRunApproval(approval.id, 'denied', 'not worth another round')
+
+    const state = readFlow('run-1')
+    expect(state.state).toBe('done')
+    expect(state.close_reason).toContain('escalation denied: rounds_exhausted')
+    expect(state.close_reason).toContain('not worth another round')
+    // Denied work leaves the line: `in_work → skipped` is not a human or engine transition, so the item is queued
+    // first and then closed. What matters for the operator is that it stops being "in work".
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).not.toBe('in_work')
+  })
+
+  it('applies a decision once, and leaves other approvals alone', () => {
+    const approval = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })!
+    resolveRunApproval(approval.id, 'approved')
+    const afterFirst = readFlow('run-1')
+    // A second resolve returns the decided record and changes nothing.
+    const again = resolveRunApproval(approval.id, 'denied')
+    expect(again.status).toBe('approved')
+    expect(readFlow('run-1').state).toBe(afterFirst.state)
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'escalation_approved')).toHaveLength(1)
+
+    // An approval of another kind is not a flow decision.
+    expect(applyEscalationDecision({ ...approval, action: 'shell' })).toBeNull()
+  })
+})

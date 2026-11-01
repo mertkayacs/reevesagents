@@ -412,7 +412,9 @@ describe('the notes channel in the runner', () => {
 
     expect(result.decision.kind).toBe('request_review')
     expect(result.decision.message).toContain(stagingPath('run-1', NOTES_HEAD, 1, root))
-    expect(result.decision.message).toContain('ВЕРДИКТ')
+    // The prompt asks for the English token (`VERDICT`) by decision; the parsers still accept both spellings, which
+    // `verdict.test.ts` and the notes tests cover.
+    expect(result.decision.message).toContain('VERDICT: ACCEPT')
   })
 
   it('acts on the notes file even when the reviewer pane cannot be classified', () => {
