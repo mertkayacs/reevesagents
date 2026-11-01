@@ -274,6 +274,23 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain('schedulePulseTick()\n    }, earliest + 25)')
   })
 
+  it('feeds SSE frames through the same consumer as the first load', () => {
+    // The stream used to copy only runs/history/approvals and drop `notifications`, so a read on another tab never
+    // reached the badge, the pulse or an open Logs list.
+    expect(js).toContain('events.onmessage = (e) => {')
+    const subscribe = js.slice(js.indexOf('function subscribe()'), js.indexOf('function setConn('))
+    expect(subscribe).toContain('applyState(data)')
+    expect(subscribe).not.toContain('runs = data.runs')
+  })
+
+  it('keeps fields a frame does not carry instead of blanking them', () => {
+    const apply = js.slice(js.indexOf('function applyState(data)'), js.indexOf('function subscribe()'))
+    // Providers, language, theme and version only arrive on the first load; a frame must not reset them.
+    expect(apply).toContain('if (Array.isArray(data.providers)) providers = data.providers')
+    expect(apply).toContain('if (data.language) applyLanguage(data.language)')
+    expect(apply).not.toContain('providers = data.providers || []')
+  })
+
   it('refreshes the Logs list when another tab marks events read', () => {
     // `latest_seq` does not move on "mark read"; the condition has to watch the watermark and the unread count too.
     expect(js).toContain('previous.read_seq !== data.notifications.read_seq')

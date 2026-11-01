@@ -417,12 +417,18 @@
     applyState(data)
   }
 
+  // One consumer for "a state payload arrived", whether it is the first `/api/state` load or an SSE frame. A field
+  // that a frame does not carry (providers, language, theme, version — the stream sends neither) is left untouched
+  // instead of being reset to an empty value, which is what a shared consumer must respect.
   function applyState(data) {
-    providers = data.providers || []
-    runs = data.runs || []
-    history = data.history || []
-    approvals = data.approvals || []
-    appVersion = data.version || ''
+    if (Array.isArray(data.providers)) providers = data.providers
+    if (Array.isArray(data.runs)) runs = data.runs
+    if (Array.isArray(data.history)) history = data.history
+    if (Array.isArray(data.approvals)) approvals = data.approvals
+    if (typeof data.version === 'string' && data.version) appVersion = data.version
+    if (data.language) applyLanguage(data.language)
+    if (data.web_theme) applyTheme(data.web_theme)
+    if (Array.isArray(data.providers)) renderProviders()
     if (data.notifications) {
       const previous = insights.notifications
       insights.notifications = data.notifications
@@ -442,9 +448,6 @@
       if (el.insightsDialog.open && changed) void loadLogs()
       schedulePulseTick()
     }
-    applyLanguage(data.language)
-    applyTheme(data.web_theme)
-    renderProviders()
     renderSidebar()
     reconcileCreateDialog()
     reconcileSelectedAgent()
@@ -458,14 +461,10 @@
     events.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
-        if (Array.isArray(data.runs)) {
-          runs = data.runs
-        }
-        if (Array.isArray(data.history)) history = data.history
-        if (Array.isArray(data.approvals)) approvals = data.approvals
-        renderSidebar()
-        reconcileCreateDialog()
-        reconcileSelectedAgent()
+        // Everything a frame carries goes through the same consumer as the first load. The previous version only
+        // copied runs/history/approvals and dropped `notifications`, so a read (or a new event) on the stream never
+        // reached the badge, the pulse or the open Logs list.
+        applyState(data)
       } catch { /* ignore malformed frame */ }
     }
   }
