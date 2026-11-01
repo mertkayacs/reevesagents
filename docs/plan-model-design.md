@@ -134,7 +134,8 @@ single `closed` status would lose that, and the UI needs to show `12/23` (delive
 `14/23 closed`.
 
 **The transitions are a table, not a free-for-all** (`PLAN_TRANSITIONS` in `src/core/plan.ts`, the same shape
-as the flow's `FLOW_TRANSITIONS`):
+as the flow's `FLOW_TRANSITIONS`), and there are **two** of them: what the engine may do, and the smaller set a
+human command may do (`HUMAN_TRANSITIONS`). The engine table:
 
 | from | may become |
 | --- | --- |
@@ -146,13 +147,28 @@ as the flow's `FLOW_TRANSITIONS`):
 | `blocked_owner` | `pending`, `needs_brief`, `queued`, `skipped`, `done` |
 | `done`, `skipped` | — terminal |
 
-Two rules fall out of it, and both were review findings before they were written down:
+The **human** table is what `plan set` follows, and it is a strict subset:
 
-- **an item whose round is in flight cannot be closed by a human.** `in_work` and `reviewing` have no
-  `skipped`, and `set --status done` refuses while a round is running even though the table allows
-  `reviewing → done` — that edge exists for the engine (`closeItemOnAccept`), which closes the item when the
-  round's verdict accepts the commit. A manual `done` there would claim a review that may be about to ask for
-  changes.
+| from | a human may set |
+| --- | --- |
+| `pending` | `needs_brief`, `queued`, `skipped`, `blocked_owner`, `done` |
+| `needs_brief` | `pending`, `queued`, `skipped`, `blocked_owner`, `done` |
+| `queued` | `pending`, `needs_brief`, `skipped`, `blocked_owner`, `done` |
+| `in_work`, `reviewing` | — (the engine's own statuses) |
+| `blocked_owner` | `pending`, `needs_brief`, `queued`, `skipped`, `done` |
+| `done`, `skipped` | — terminal |
+
+Three rules fall out, and each was a review finding before it was written down:
+
+- **a human cannot claim or release a round in flight.** `queued → in_work` is the engine's transition when
+  it claims a dispatch; done by hand it would make an item look active while nothing was ever sent. Worse in
+  the other direction: `in_work → queued` would free an item whose round is still running, and the next
+  `plan next` would dispatch a second brief on top of the first. So `in_work` and `reviewing` have no human
+  edges at all — the operator pauses or stops the flow, which is a decision about the pipeline, not about one
+  row of the plan.
+- **an item whose round is in flight cannot be closed by a human.** The engine table has `reviewing → done`
+  because `closeItemOnAccept` closes the item when the round's verdict accepts the commit; a manual `done`
+  there would claim a review that may be about to ask for changes.
 - **terminal means terminal.** `done` and `skipped` have no outgoing edge: `done` is a claim about a reviewed
   commit, and flipping a checkbox or a status later must not create a claim the engine never made. Reopening
   is a deliberate non-feature; a wrong close is corrected in the document and re-imported as a conflict, not

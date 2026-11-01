@@ -89,6 +89,45 @@ export function canTransition(from: PlanStatus, to: PlanStatus): boolean {
   return from === to || PLAN_TRANSITIONS[from].includes(to)
 }
 
+// What a **human command** may do, as opposed to what the engine may do. The difference is not cosmetic:
+// `queued -> in_work` is the engine's own transition when it claims a dispatch, and a human marking it by
+// hand would make an item look active while nothing was ever sent — the plan would claim work in flight
+// that does not exist. `in_work -> queued` is worse in the other direction: it frees an item whose round is
+// still running, and the next `plan next` would dispatch a second brief on top of the first.
+//
+// So a human may triage (pending/needs_brief/queued/blocked_owner), close (done/skipped) and unblock. The two
+// statuses that describe a round in flight are the engine's alone; to intervene there, the operator pauses or
+// stops the flow, which is a decision about the pipeline rather than about one row of the plan.
+export const HUMAN_TRANSITIONS: Record<PlanStatus, readonly PlanStatus[]> = {
+  pending: ['needs_brief', 'queued', 'skipped', 'blocked_owner', 'done'],
+  needs_brief: ['pending', 'queued', 'skipped', 'blocked_owner', 'done'],
+  queued: ['pending', 'needs_brief', 'skipped', 'blocked_owner', 'done'],
+  in_work: [],
+  reviewing: [],
+  blocked_owner: ['pending', 'needs_brief', 'queued', 'skipped', 'done'],
+  done: [],
+  skipped: [],
+}
+
+export function canSetStatus(from: PlanStatus, to: PlanStatus): boolean {
+  return from === to || HUMAN_TRANSITIONS[from].includes(to)
+}
+
+// Why a human transition was refused, in the terms the operator can act on.
+function humanRefusal(item: PlanItem, to: PlanStatus): PlanError {
+  if (BUSY_STATUSES.includes(item.status)) {
+    return new PlanError(
+      `cannot move ${item.id} from ${item.status} to ${to}: the engine owns ${item.status} while a round is in flight — pause or stop the flow to intervene, or wait for the verdict`,
+      'refused',
+    )
+  }
+  const allowed = HUMAN_TRANSITIONS[item.status]
+  const why = allowed.length === 0
+    ? `${item.status} is terminal: an item closed on evidence does not reopen, and a manual reopen would be a claim the engine never made`
+    : `${item.status} may only become ${allowed.join(', ')}`
+  return new PlanError(`cannot move ${item.id} from ${item.status} to ${to}: ${why}`, 'refused')
+}
+
 // The message a refused transition deserves: what was asked, and what was allowed instead.
 function transitionRefusal(item: PlanItem, to: PlanStatus): PlanError {
   const allowed = PLAN_TRANSITIONS[item.status]
@@ -504,16 +543,9 @@ export function setItemStatus(plan: Plan, input: SetStatusInput): { plan: Plan, 
     throw new PlanError(`unknown status "${input.status}"; expected one of: ${PLAN_STATUSES.join(', ')}`, 'invalid')
   }
   if (input.status === item.status) return { plan, previous: item.status }
-  if (!canTransition(item.status, input.status)) throw transitionRefusal(item, input.status)
-  // The table allows `reviewing -> done` because the engine closes an item when the round's verdict accepts
-  // the commit. A human command must not take that shortcut: while a round is running, "done" would claim a
-  // review that may be about to ask for changes.
-  if (input.status === 'done' && BUSY_STATUSES.includes(item.status)) {
-    throw new PlanError(
-      `cannot move ${item.id} from ${item.status} to done: a round is in flight, so the item closes only when that round's review accepts the commit`,
-      'refused',
-    )
-  }
+  // The human subset, not the engine's table: see `HUMAN_TRANSITIONS` for why `queued -> in_work` and
+  // `in_work -> queued` are not a human's to make.
+  if (!canSetStatus(item.status, input.status)) throw humanRefusal(item, input.status)
   const at = isoAt(input)
 
   if ((input.status === 'done' || input.status === 'skipped') && input.yes !== true) {

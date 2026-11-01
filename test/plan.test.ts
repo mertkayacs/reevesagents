@@ -8,10 +8,11 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  attachSpec, canTransition, closeItemOnAccept, createPlan, deriveId, ensurePlanSummary, hashDocument,
-  importInto, mutatePlan, normalizeDocument, parsePlanDocument, planComplete, PLAN_LIMITS, planItemView,
-  planPath, planProgress, PLAN_TRANSITIONS, PlanError, planSummary, readPlan, resolveRepositoryPath,
-  savePlan, setItemStatus,
+  attachSpec, canSetStatus, canTransition, closeItemOnAccept, createPlan, deriveId, ensurePlanSummary,
+  hashDocument,
+  importInto, mutatePlan, normalizeDocument, parsePlanDocument, planComplete, HUMAN_TRANSITIONS, PLAN_LIMITS,
+  planItemView, planPath, planProgress, PLAN_TRANSITIONS, PlanError, planSummary, readPlan,
+  resolveRepositoryPath, savePlan, setItemStatus,
 } from '../src/core/plan.js'
 import { createFlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
@@ -568,6 +569,34 @@ describe('the status transition table', () => {
     expect(canTransition('pending', 'done')).toBe(true)
     // Every status is reachable from somewhere, and nothing leads out of the two terminal ones.
     for (const status of ['done', 'skipped'] as const) expect(PLAN_TRANSITIONS[status]).toEqual([])
+  })
+
+  it('does not let a human claim or release a round in flight', () => {
+    // `queued -> in_work` would make an item look active while nothing was sent; `in_work -> queued` would
+    // free an item whose round is still running, and the next `plan next` would dispatch on top of it.
+    expect(canTransition('queued', 'in_work')).toBe(true)      // the engine claims a dispatch
+    expect(canSetStatus('queued', 'in_work')).toBe(false)      // a human may not
+    expect(canTransition('in_work', 'queued')).toBe(true)      // the engine re-queues after a refusal
+    expect(canSetStatus('in_work', 'queued')).toBe(false)
+
+    const queued = planWith('queued')
+    expect(() => setItemStatus(queued, { id: 'P1', status: 'in_work', now: NOW }))
+      .toThrow(/the engine owns queued|may only become/)
+    const busy = planWith('in_work')
+    expect(() => setItemStatus(busy, { id: 'P1', status: 'queued', now: NOW }))
+      .toThrow(/the engine owns in_work while a round is in flight/)
+    const reviewing = planWith('reviewing')
+    expect(() => setItemStatus(reviewing, { id: 'P1', status: 'done', yes: true, note: 'x', now: NOW }))
+      .toThrow(/the engine owns reviewing while a round is in flight/)
+
+    // Everything a human is actually for still works.
+    expect(canSetStatus('pending', 'queued')).toBe(true)
+    expect(canSetStatus('blocked_owner', 'queued')).toBe(true)
+    expect(canSetStatus('queued', 'done')).toBe(true)
+    expect(canSetStatus('queued', 'skipped')).toBe(true)
+    // And the busy statuses have no human edges at all.
+    expect(HUMAN_TRANSITIONS.in_work).toEqual([])
+    expect(HUMAN_TRANSITIONS.reviewing).toEqual([])
   })
 
   it('closes an item on an accepted verdict through the engine path', () => {

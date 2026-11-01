@@ -238,9 +238,11 @@ what is left. The design is `docs/plan-model-design.md`; two rules matter when y
 - `reevesagents flow plan set --run <run> --item P1.7.1 --status <status> [--yes] [--note <text>]` — move an
   item by hand. `done` and `skipped` need `--yes`, and a `done` without an accepted commit also needs a
   `--note`; the manual close is recorded in the plan's conflicts so `flow plan` shows how it was closed.
-  The command follows the status table: an item whose round is running (`in_work`, `reviewing`) cannot be
-  closed by hand, and a closed item (`done`, `skipped`) cannot be reopened — a wrong close is fixed in the
-  document and re-imported, where it shows up as a conflict instead of silently rewriting history.
+  The command follows the human status table: it may triage (`pending`, `needs_brief`, `queued`,
+  `blocked_owner`) and close (`done`, `skipped`), but it may not touch an item whose round is running
+  (`in_work`, `reviewing` — `pause`/`stop` the flow instead), and a closed item cannot be reopened. A wrong
+  close is fixed in the document and re-imported, where it shows up as a conflict instead of silently
+  rewriting history.
 
 
 ## Keeping cost down
