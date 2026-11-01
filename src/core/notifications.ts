@@ -157,19 +157,26 @@ function clean(value: unknown, limit: number): string {
 // `displayPath` takes a whole path; a title may contain one inside a sentence. Anything that looks like an
 // absolute home path is therefore shortened to its last component, which is the only part a human needs and the
 // only part that cannot leak a directory tree.
-// Unix (`/home/u/a/b`) and Windows (`C:\\Users\\Alice\\work`, `\\\\server\\share\\x`) absolute paths. The second
-// form matters because the fleet supervisor and the Windows app both write into this journal, and a backslash path
-// is exactly as revealing as a slash one.
-const ABSOLUTE_PATH = /(^|[\s("'`=])((?:(?:\/[\w.@+-]+){2,}\/?)|(?:[A-Za-z]:\\[\w.@+ -]+(?:\\[\w.@+ -]+){1,})|(?:\\[\w.@+ -]+(?:\\[\w.@+ -]+){1,}))/g
+// Three shapes, each with its own pattern so the escape count stays readable: `/home/u/a/b`, `C:\Users\Alice\work`,
+// and `\\server\share\file.txt`. The last one needs two leading backslashes in the text, which means four in a
+// regex literal — folded into one pattern with the other two, that is where the first version got it wrong.
+const UNIX_PATH = /(^|[\s("'`=])((?:\/[\w.@+-]+){2,}\/?)/g
+const WINDOWS_PATH = /(^|[\s("'`=])([A-Za-z]:\\[\w.@+ -]+(?:\\[\w.@+ -]+){1,})/g
+const UNC_PATH = /(^|[\s("'`=])(\\\\[\w.@+ -]+(?:\\[\w.@+ -]+){1,})/g
+
+function shortenPath(match: string, lead: string, path: string): string {
+  if (path.startsWith('//')) return match
+  // The last component only: the file name is what a human needs, the tree is what must not leak.
+  const parts = path.split(/[\\/]+/).filter(Boolean)
+  const last = parts[parts.length - 1] ?? ''
+  return `${lead}${last}`
+}
 
 function displayPathInText(text: string): string {
-  return text.replace(ABSOLUTE_PATH, (match, lead: string, path: string) => {
-    if (path.startsWith('//')) return match
-    // Keep the last component only: the file name is what a human needs, the tree is what must not leak.
-    const parts = path.split(/[\\/]+/).filter(Boolean)
-    const last = parts[parts.length - 1] ?? ''
-    return `${lead}${last}`
-  })
+  return text
+    .replace(UNIX_PATH, shortenPath)
+    .replace(WINDOWS_PATH, shortenPath)
+    .replace(UNC_PATH, shortenPath)
 }
 
 export function normalizeNotificationInput(raw: unknown): NotificationInput {

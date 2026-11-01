@@ -106,6 +106,19 @@ describe('the schema', () => {
     expect(event.detail).not.toContain(secret)
   })
 
+  it('shortens a UNC path too', () => {
+    // `\\server\share\secret.txt` needs two leading backslashes in the text: a pattern that accepts one leaves the
+    // share name and the file name in the journal.
+    const { event } = appendNotification(valid({
+      detail: `mounted \\\\fileserver\\finance\\secret.txt as a share`,
+      title: 'read \\\\fileserver\\finance\\secret.txt',
+    }))
+    expect(event.detail).not.toContain('fileserver')
+    expect(event.detail).not.toContain('finance')
+    expect(event.detail).toContain('secret.txt')
+    expect(event.title).not.toContain('fileserver')
+  })
+
   it('shortens a Windows path too, and refuses it in project', () => {
     const { event } = appendNotification(valid({
       detail: 'failed at C:\\Users\\Alice\\work\\secret.md while reading',
@@ -357,6 +370,14 @@ describe('the ingest route', () => {
 })
 
 describe('a plan-style secret in the journal', () => {
+  it('redacts a fine-grained GitHub PAT', () => {
+    const pat = `github_pat_11ABCDEFG0_${'a'.repeat(40)}`
+    appendNotification(valid({ detail: `token ${pat}` }))
+    const raw = readFileSync(notificationPaths(root).log, 'utf-8')
+    expect(raw).not.toContain('github_pat_11ABCDEFG0')
+    expect(raw).toContain('[REDACTED]')
+  })
+
   it('is redacted on the way in, not on the way out', () => {
     const token = `ghp_${'a'.repeat(36)}`
     appendNotification(valid({ title: `token ${token}` }))
