@@ -773,6 +773,7 @@ as everything else (§2.3).
 | Review notes as files (`notes/<head>-r<N>.md`, `notes_ref` in the journal, `flow notes`) | **planned** — block 09; designed in `docs/notifications-design.md` §11, together with the rule that the file is the primary channel and the pane scan is the fallback |
 | Verdict evidence (`review_unsubstantiated`) | **shipped** (block 10) — `unsubstantiated_attempts` in the state, one re-request with a stricter prompt, then escalation; numbers in the journal and in `flow status` |
 | Dispatch readiness (`target_not_ready`, `composer_dirty`, `dispatch_confirm_seconds`) | **shipped** (block 10) — `runtime.sendWhenIdle` probes the composer, cancels copy mode, and refuses instead of pasting twice |
+| The plan as an object (`plan.json`, import/attach/next, `plan_incomplete`) | **planned** — designed in `docs/plan-model-design.md`; blocks 12–13 implement it, 15 draws it. The mirror lives beside the flow file, `done` is only ever set by a substantiated ACCEPT, and an item without a brief escalates instead of letting the engine invent scope |
 | Notification log + agent pulse badge | **planned** — blocks 02–03 of `docs/notifications-design.md`; the two flow kinds (`flow.escalated`, `flow.review_timeout`) are emitted from this engine's `FlowAttention`, not from a second model of "needs a human", and the `notify` marker in the state (§3.1) is what makes that emission at-least-once and idempotent |
 
 Nothing above is described as working elsewhere in this document: the tables and the sections it
