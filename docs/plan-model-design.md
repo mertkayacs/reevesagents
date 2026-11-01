@@ -342,7 +342,9 @@ the engine already requires before it closes a flow — no second, weaker gate.
 - spending `max_total_rounds` escalates the **flow** (`total_rounds_exhausted`), and the boundary is the round
   itself: a fuse of 5 permits rounds 1–5 and escalates on the sixth attempt, not before the fifth;
 - a plan file that exists but cannot be parsed is an **error**, not "no plan": the tick refuses instead of
-  taking the legacy branch, because that branch would let an ACCEPT close the flow with items still open.
+  taking the legacy branch, because that branch would let an ACCEPT close the flow with items still open. The
+  same holds one level down — only `ENOENT` means "there is no plan"; a permission or I/O error while checking
+  the file is reported, never read as absence.
 
 `flow plan next` is the **only** automatic way an item becomes work:
 

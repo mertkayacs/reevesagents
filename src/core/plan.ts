@@ -816,12 +816,21 @@ export function planPath(runId: string, options: PlanStoreOptions = {}): string 
   return join(planDir(runId, options), 'plan.json')
 }
 
+// Only `ENOENT` means "there is no plan". Any other failure — a permission bit, an I/O error, a mount that went
+// away — is a plan whose state cannot be established, and answering `false` there would send the flow down the
+// legacy path with items still open. It is reported instead.
 export function planExists(runId: string, options: PlanStoreOptions = {}): boolean {
+  const path = planPath(runId, options)
   try {
-    statSync(planPath(runId, options))
+    statSync(path)
     return true
-  } catch {
-    return false
+  } catch (err) {
+    const code = (err as { code?: string }).code
+    if (code === 'ENOENT') return false
+    throw new PlanError(
+      `the plan at ${displayPath(path)} cannot be checked (${code ?? 'unknown error'}); the flow will not guess`,
+      'invalid',
+    )
   }
 }
 

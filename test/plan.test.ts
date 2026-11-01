@@ -3,7 +3,7 @@
 // The two documents here are the *shapes* the design describes, not the projects they came from: one with
 // explicit ids, one without and with folded lines. Tests are about the shapes.
 
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +12,7 @@ import {
   attachSpec, canSetStatus, canTransition, closeItemOnAccept, createPlan, deriveId, ensurePlanSummary,
   hashDocument,
   importInto, mutatePlan, normalizeDocument, parsePlanDocument, planComplete, HUMAN_TRANSITIONS, PLAN_LIMITS,
-  planItemView, planPath, planProgress, PLAN_TRANSITIONS, PlanError, planSummary, readPlan,
+  planExists, planItemView, planPath, planProgress, PLAN_TRANSITIONS, PlanError, planSummary, readPlan,
   resolveRepositoryPath, savePlan, setItemStatus,
 } from '../src/core/plan.js'
 import { createFlowState } from '../src/core/flow.js'
@@ -648,5 +648,46 @@ describe('the design document matches the tables in the code', () => {
     const statuses = doc.split('### 2.2 Statuses')[1]!.split('### ')[0]!
     expect(statuses).not.toContain('leaves to |')
     expect(statuses).toContain('| status | meaning | who sets it |')
+  })
+})
+
+describe('planExists', () => {
+  function withRoot<T>(fn: (_rootDir: string) => T): T {
+    const root = mkdtempSync(join(tmpdir(), 'reeves-plan-exists-'))
+    try {
+      return fn(root)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+
+  it('reports a missing plan as absent', () => {
+    withRoot(root => {
+      expect(planExists('run-1', { root })).toBe(false)
+    })
+  })
+
+  it('reports a saved plan as present', () => {
+    withRoot(root => {
+      savePlan(importNew(WITH_IDS).plan, { root })
+      expect(planExists('run-1', { root })).toBe(true)
+    })
+  })
+
+  // A permission bit on the directory makes `stat` fail with EACCES, which must not be read as "no plan": the
+  // flow would then take the legacy path with items still open. Root ignores the bits, so the case is skipped
+  // there rather than asserting a lie.
+  it.skipIf(process.getuid?.() === 0)('throws instead of answering "absent" when the plan cannot be checked', () => {
+    withRoot(root => {
+      savePlan(importNew(WITH_IDS).plan, { root })
+      const dir = dirname(planPath('run-1', { root }))
+      chmodSync(dir, 0o000)
+      try {
+        expect(() => planExists('run-1', { root })).toThrow(/cannot be checked/)
+      } finally {
+        chmodSync(dir, 0o700)
+      }
+      expect(planExists('run-1', { root })).toBe(true)
+    })
   })
 })
