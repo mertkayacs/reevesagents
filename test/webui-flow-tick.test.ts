@@ -177,6 +177,21 @@ describe('the Web UI does not tick when the tick is off', () => {
     }
   })
 
+  it('ships the pulse length with the state summary', async () => {
+    // The client has no access to the config; a summary without `agent_pulse_ms` made every card compute 0 ms, so the
+    // pulse never drew at all.
+    await (await import('../src/core/config.js')).setConfigValues({ agent_pulse_ms: 4321 })
+    vi.resetModules()
+    const { startWebServer } = await import('../src/surfaces/webui/server.js')
+    const handle = await startWebServer({ port: 0 })
+    try {
+      const state = JSON.parse((await httpGet(`${handle.url}/api/state`)).text) as { notifications: { agent_pulse_ms: number } }
+      expect(state.notifications.agent_pulse_ms).toBe(4321)
+    } finally {
+      await handle.close()
+    }
+  })
+
   it('still lets a manual tick work when the autonomous one is off', async () => {
     await (
       await import('../src/core/config.js')

@@ -296,6 +296,20 @@ describe('the watermark', () => {
     expect(notificationSummary()).toMatchObject({ unread: 0, latest_seq: second.seq })
   })
 
+  it('lists unread news per target, so a card pulses only for its own agent', () => {
+    appendNotification(valid({ run_id: 'run-1', agent_id: 'dev-1', title: 'for dev' }))
+    appendNotification(valid({ run_id: 'run-1', agent_id: 'rev-1', title: 'for rev' }))
+    const summary = notificationSummary()
+    expect(summary.unread_by.map(entry => entry.agent_id).sort()).toEqual(['dev-1', 'rev-1'])
+    expect(summary.unread_by.every(entry => entry.run_id === 'run-1')).toBe(true)
+
+    // Grouped by target: a second event for the same agent keeps one entry with the newest stamp.
+    const newest = appendNotification(valid({ run_id: 'run-1', agent_id: 'dev-1', title: 'for dev again' })).event
+    const again = notificationSummary()
+    expect(again.unread_by.filter(entry => entry.agent_id === 'dev-1')).toHaveLength(1)
+    expect(again.unread_by.find(entry => entry.agent_id === 'dev-1')!.latest_ts).toBe(newest.received_at)
+  })
+
   it('counts unread against the watermark', () => {
     appendNotification(valid({ title: 'one' }))
     const second = appendNotification(valid({ title: 'two' })).event

@@ -220,8 +220,9 @@ The **Logs** button in the header (right after About) opens a dialog with two ta
 - **Logs** — the notification journal: time, run, agent and what was reported, with a run filter and "unread only",
   plus *Mark all read*. It refreshes itself from the live stream, so there is nothing to reload.
 
-The agent cards pulse while a run has unread news; the pulse length is `agent_pulse_ms` (`0` turns it off), and it
-stops when you mark the log read. On a narrow window the log rows collapse to time and message.
+The card of the agent that has unread news pulses — not the whole sidebar: a run-level event pulses the run's cards.
+The length is `agent_pulse_ms` (`0` turns it off), it counts down from the event's own timestamp, and it stops when you
+mark the log read. On a narrow window the log rows collapse to time and message.
 
 ### The notification journal
 

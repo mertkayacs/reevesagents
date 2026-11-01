@@ -426,9 +426,10 @@
     if (data.notifications) {
       const previous = insights.notifications
       insights.notifications = data.notifications
-      // Remember when this summary was first seen: `pulseRemaining` needs an anchor the reload preserves.
-      if (data.notifications.latest_ts && !pulseSeenAt.has(data.notifications.latest_ts)) {
-        pulseSeenAt.set(data.notifications.latest_ts, Date.now())
+      // Remember when each timestamp was first seen (diagnostics only): the remaining time is measured from the
+      // event's server stamp to now, so a reload continues the ring instead of restarting it.
+      for (const entry of data.notifications.unread_by || []) {
+        if (entry.latest_ts && !pulseSeenAt.has(entry.latest_ts)) pulseSeenAt.set(entry.latest_ts, Date.now())
       }
       // The dialog refreshes itself from the same stream: a new sequence means new rows, no polling needed.
       if (el.insightsDialog.open && previous && previous.latest_seq !== data.notifications.latest_seq) {
@@ -1468,15 +1469,25 @@
     return { pulseMs, latestTs: notifications.latest_ts || null }
   }
 
-  function pulseFor() {
-    const { pulseMs, latestTs } = pulseState()
-    if (!latestTs || pulseMs <= 0) return 0
-    const seen = pulseSeenAt.get(latestTs)
-    return core().pulseRemaining(latestTs, Date.now(), pulseMs, seen)
+  // The pulse belongs to the card that has news: `unread_by` lists one entry per (run, agent), so an approval on one
+  // agent no longer animates the whole sidebar. An event with no agent is run-level and pulses the run's cards.
+  function pulseFor(agent, run) {
+    const notifications = insights.notifications || {}
+    const pulseMs = Number(notifications.agent_pulse_ms ?? 0)
+    if (pulseMs <= 0) return 0
+    const entries = Array.isArray(notifications.unread_by) ? notifications.unread_by : []
+    let latest = null
+    for (const entry of entries) {
+      if (entry.agent_id === agent.id) latest = entry.latest_ts
+      else if (entry.agent_id === '' && run && entry.run_id === run.id) latest = entry.latest_ts
+    }
+    if (!latest) return 0
+    const seen = pulseSeenAt.get(latest)
+    return core().pulseRemaining(latest, Date.now(), pulseMs, seen)
   }
 
-  function renderPulse(card) {
-    const remaining = pulseFor()
+  function renderPulse(card, agent, run) {
+    const remaining = pulseFor(agent, run)
     card.classList.toggle('card-pulse', remaining > 0)
     if (remaining > 0) card.style.setProperty('--pulse-remaining', `${remaining}ms`)
   }
@@ -1571,7 +1582,7 @@
       tail.appendChild(lifecycle)
     }
     card.appendChild(tail)
-    renderPulse(card)
+    renderPulse(card, agent, run)
 
     if (agent.canAttach) {
       open.title = t('web.openAgentTitle', { name: agent.nickname })

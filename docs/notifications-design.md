@@ -977,9 +977,12 @@ About). The Plan tab is the default when the selected run has a plan, otherwise 
 existing SSE state frame — a new `notifications.latest_seq` reloads `GET /api/notifications`, no second poller. The
 plan payload comes from a new read-only `GET /api/plan?run=<id>` that reuses `planItemView` (no brief bodies).
 
-The agent-card pulse is `.card-pulse`: its length is computed by `insights-core.js` (`pulseRemaining`) from the newest
-unread event's **server** `received_at`, so a reload keeps the remainder; `agent_pulse_ms = 0` draws nothing, and the
-whole animation is suppressed under `prefers-reduced-motion`.
+The agent-card pulse is `.card-pulse`: its length is computed by `insights-core.js` (`pulseRemaining`) as
+`agent_pulse_ms − (now − received_at)` from the newest unread event's **server** timestamp, so a reload keeps the
+remainder and an open page keeps counting down. The state summary carries the two things the client cannot read
+itself: `agent_pulse_ms` (the config lives on the server) and `unread_by` — one `{run_id, agent_id, latest_ts}` entry
+per target, so an approval on one agent pulses that card and not the whole sidebar. A run-level event (`agent_id: ''`)
+pulses the run's cards. `agent_pulse_ms = 0` draws nothing, and `prefers-reduced-motion` suppresses the animation.
 
 ### 5.1 Markup
 

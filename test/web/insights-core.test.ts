@@ -50,10 +50,12 @@ describe('pulseRemaining', () => {
     expect(core.pulseRemaining(started, startedMs + 6000, 5000)).toBe(0)
   })
 
-  it('keeps the remainder across a reload', () => {
-    // The page reloaded two seconds into the pulse: the anchor is when this client first saw the summary, so the
-    // ring continues from 3 s instead of restarting at 5 s.
-    expect(core.pulseRemaining(started, startedMs + 10_000, 5000, startedMs + 2000)).toBe(3000)
+  it('keeps the remainder across a reload, and keeps counting down while the page is open', () => {
+    // A reload two seconds into the pulse continues from 3 s (measured from the event's server stamp), and the next
+    // render one second later shows 2 s — the remainder must decrease with wall time, not stand still.
+    expect(core.pulseRemaining(started, startedMs + 2000, 5000)).toBe(3000)
+    expect(core.pulseRemaining(started, startedMs + 3000, 5000)).toBe(2000)
+    expect(core.pulseRemaining(started, startedMs + 5000, 5000)).toBe(0)
   })
 
   it('is off when agent_pulse_ms is 0, and tolerant of a missing timestamp', () => {
@@ -65,17 +67,22 @@ describe('pulseRemaining', () => {
 
 describe('plan filters', () => {
   const items = [
-    { id: 'P1.1', status: 'done', spec_path: 'docs/briefs/P1.1.json' },
-    { id: 'P1.2', status: 'queued', spec_path: 'docs/briefs/P1.2.json' },
-    { id: 'P1.3', status: 'pending', spec_path: null },
-    { id: 'P1.4', status: 'blocked_owner', spec_path: 'docs/briefs/P1.4.json' },
-    { id: 'P1.5', status: 'skipped', spec_path: null },
+    { id: 'P1.1', status: 'done', spec_path: 'docs/briefs/P1.1.json', missing_since: null },
+    { id: 'P1.2', status: 'queued', spec_path: 'docs/briefs/P1.2.json', missing_since: null },
+    { id: 'P1.3', status: 'pending', spec_path: null, missing_since: null },
+    { id: 'P1.4', status: 'blocked_owner', spec_path: 'docs/briefs/P1.4.json', missing_since: null },
+    { id: 'P1.5', status: 'skipped', spec_path: null, missing_since: null },
+    // Dropped from the document: it is not waiting for a brief, it is waiting for a re-import.
+    { id: 'P1.6', status: 'pending', spec_path: null, missing_since: '2026-11-02T09:00:00.000Z' },
   ]
 
   it('splits all / open / waiting', () => {
-    expect(core.filterPlanItems(items, 'all').map(item => item.id)).toEqual(['P1.1', 'P1.2', 'P1.3', 'P1.4', 'P1.5'])
-    expect(core.filterPlanItems(items, 'open').map(item => item.id)).toEqual(['P1.2', 'P1.3', 'P1.4'])
-    // Waiting = a blocked item, or an open item with no brief. `skipped` with no brief is not waiting.
+    expect(core.filterPlanItems(items, 'all').map(item => item.id)).toEqual(['P1.1', 'P1.2', 'P1.3', 'P1.4', 'P1.5', 'P1.6'])
+    // `open` keeps the missing row: it is still open work, just not in the document — the list has to show it so the
+    // owner can re-import rather than wonder where it went.
+    expect(core.filterPlanItems(items, 'open').map(item => item.id)).toEqual(['P1.2', 'P1.3', 'P1.4', 'P1.6'])
+    // Waiting = a blocked item, or an open item with no brief. `skipped` is closed and a `missing` row is not
+    // waiting for a brief at all.
     expect(core.filterPlanItems(items, 'waiting').map(item => item.id)).toEqual(['P1.3', 'P1.4'])
   })
 

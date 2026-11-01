@@ -18,20 +18,29 @@
   // How long the card's pulse should still run, from the *server* clock of the newest unread event. The client
   // clock is only used to measure elapsed time since the snapshot, so an F5 mid-pulse keeps the remainder instead of
   // restarting it. `pulseMs` 0 disables the pulse entirely.
+  // The remainder is measured from the event's server timestamp to *now*, full stop. `seenAtMs` is only a fallback
+  // for a client whose clock has not been trusted yet; using it as the anchor made the remainder stand still while
+  // the page was open, so the ring never finished.
   function pulseRemaining(latestTs, nowMs, pulseMs, seenAtMs) {
     if (!Number.isFinite(pulseMs) || pulseMs <= 0) return 0
     const stamped = Date.parse(latestTs)
     if (Number.isNaN(stamped)) return 0
-    const anchor = Number.isFinite(seenAtMs) ? seenAtMs : nowMs
-    const elapsed = Math.max(0, anchor - stamped)
-    return Math.max(0, pulseMs - elapsed)
+    const now = Number.isFinite(nowMs) ? nowMs : seenAtMs
+    if (!Number.isFinite(now)) return 0
+    return Math.max(0, pulseMs - Math.max(0, now - stamped))
   }
 
   // The filter the Plan tab offers: all, open (not done/skipped), or waiting for a human.
   function filterPlanItems(items, filter) {
     const list = Array.isArray(items) ? items : []
     if (filter === 'open') return list.filter(item => item.status !== 'done' && item.status !== 'skipped')
-    if (filter === 'waiting') return list.filter(item => item.status === 'blocked_owner' || item.status === 'needs_brief' || (item.spec_path === null && item.status !== 'done' && item.status !== 'skipped'))
+    if (filter === 'waiting') {
+      return list.filter(item => {
+        if (item.status === 'done' || item.status === 'skipped') return false
+        if (item.missing_since !== null && item.missing_since !== undefined) return false
+        return item.status === 'blocked_owner' || item.status === 'needs_brief' || item.spec_path === null
+      })
+    }
     return list
   }
 
@@ -43,6 +52,9 @@
     const blocked = []
     for (const item of list) {
       if (item.status === 'done' || item.status === 'skipped') continue
+      // An item the document dropped is not waiting for a brief: it is waiting for a re-import, and dressing it up
+      // as "needs a brief" sends the owner to attach one for a row that may not exist any more.
+      if (item.missing_since !== null && item.missing_since !== undefined) continue
       if (item.status === 'blocked_owner') blocked.push(item)
       else if (item.spec_path === null) needsBrief.push(item)
     }

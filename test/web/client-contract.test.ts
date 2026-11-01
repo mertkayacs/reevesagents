@@ -252,6 +252,16 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain("const wanted = tab || (insights.plan ? 'plan' : 'logs')")
   })
 
+  it('pulses only the card that has unread news, from the summary the server sends', () => {
+    // The summary carries `agent_pulse_ms` (the client cannot read the config) and `unread_by` (one entry per
+    // run/agent), so a single approval does not animate the whole sidebar.
+    expect(js).toContain('notifications.agent_pulse_ms')
+    expect(js).toContain('notifications.unread_by')
+    expect(js).toContain("entry.agent_id === agent.id")
+    const server = readFileSync(join(process.cwd(), 'src/surfaces/webui/server.ts'), 'utf8')
+    expect(server).toContain('withPulse(')
+  })
+
   it('draws the pulse from the server timestamp and respects agent_pulse_ms', () => {
     expect(js).toContain('function renderPulse(')
     expect(js).toContain('function schedulePulseTick(')

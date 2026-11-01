@@ -364,14 +364,30 @@ export interface NotificationSummary {
   latest_seq: number
   unread: number
   latest_ts: string | null
+  // Which agents have unread news, so a card pulses on its own agent and not on every card in the sidebar. Grouped
+  // and bounded: one entry per (run, agent), newest timestamp wins.
+  unread_by: { run_id: string, agent_id: string, latest_ts: string }[]
 }
 
 export function notificationSummary(root = stateRoot()): NotificationSummary {
   const { events, latest } = scanLog(root)
   const readSeq = readWatermark(root)
-  const unread = events.filter(event => event.seq > readSeq).length
+  const unreadEvents = events.filter(event => event.seq > readSeq)
   const newest = events.length > 0 ? events[events.length - 1]! : null
-  return { latest_seq: latest, unread, latest_ts: newest ? newest.received_at : null }
+  const byTarget = new Map<string, { run_id: string, agent_id: string, latest_ts: string }>()
+  for (const event of unreadEvents) {
+    const key = `${event.run_id}\u0000${event.agent_id}`
+    const existing = byTarget.get(key)
+    if (!existing || existing.latest_ts < event.received_at) {
+      byTarget.set(key, { run_id: event.run_id, agent_id: event.agent_id, latest_ts: event.received_at })
+    }
+  }
+  return {
+    latest_seq: latest,
+    unread: unreadEvents.length,
+    latest_ts: newest ? newest.received_at : null,
+    unread_by: [...byTarget.values()].slice(-50),
+  }
 }
 
 function readWatermark(root: string): number {

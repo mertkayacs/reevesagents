@@ -109,6 +109,11 @@ function ingestAllowed(peer: string | undefined): boolean {
   return true
 }
 
+// The summary plus the one setting the client needs to draw the pulse. `0` disables it, and the client draws nothing.
+function withPulse<T extends object>(summary: T): T & { agent_pulse_ms: number } {
+  return { ...summary, agent_pulse_ms: loadConfig().global.agent_pulse_ms }
+}
+
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
@@ -200,7 +205,7 @@ function createSseHub(): SseHub {
     }
     // The journal summary rides along with the state frame: a badge that needs a second request would be a badge
     // that lags the screen it belongs to.
-    return JSON.stringify({ ...buildWebState(), notifications: notificationSummary() })
+    return JSON.stringify({ ...buildWebState(), notifications: withPulse(notificationSummary()) })
   }
   const write = (res: ServerResponse, payload: string): void => {
     try { res.write(`data: ${payload}\n\n`) } catch { /* client gone; close handler will drop it */ }
@@ -513,8 +518,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       providers: listWebProviders(),
       language: webLanguagePayload(),
       web_theme: loadConfig().global.web_theme,
-      // One compact summary, so the Logs button can show a badge without loading the journal.
-      notifications: notificationSummary(),
+      // One compact summary, so the Logs button can show a badge without loading the journal. The pulse length
+      // travels with it: the client cannot read the config, and a summary without it made every card compute 0 ms.
+      notifications: withPulse(notificationSummary()),
       version: REEVESAGENTS_VERSION,
     })
     return
