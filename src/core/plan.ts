@@ -167,6 +167,8 @@ export interface PlanItem {
   owner_action: boolean
   missing_since: string | null
   line: number | null
+  // Why an item waits for a human, when the reason is not the status itself: `rounds_exhausted` today.
+  block_reason?: string | null
 }
 
 export interface Plan {
@@ -397,6 +399,7 @@ export function importInto(plan: Plan | null, options: ImportOptions): ImportRes
         owner_action: false,
         missing_since: null,
         line: parsed.line,
+        block_reason: null,
       })
       continue
     }
@@ -587,6 +590,43 @@ export function setItemStatus(plan: Plan, input: SetStatusInput): { plan: Plan, 
   }
 }
 
+// A status move by the **engine**, gated by the engine table rather than the human one: a dispatch moves an
+// item into `in_work`, a review request into `reviewing`, a spent budget into `blocked_owner`. Same guards on
+// terminal items, same refusal text — the difference is only which table is consulted.
+export function moveItemByEngine(
+  plan: Plan,
+  input: { id: string, status: PlanStatus, block_reason?: string | null, now: number, at?: string },
+): Plan {
+  const item = plan.items.find(entry => entry.id === input.id)
+  if (!item) throw new PlanError(`no plan item ${input.id}`, 'not_found')
+  if (item.status === input.status) return plan
+  if (!canTransition(item.status, input.status)) throw transitionRefusal(item, input.status)
+  const at = isoAt(input)
+  return {
+    ...plan,
+    items: plan.items.map(entry => (entry.id === item.id
+      ? {
+        ...entry,
+        status: input.status,
+        owner_action: deriveOwnerAction(input.status),
+        block_reason: input.status === 'blocked_owner' ? (input.block_reason ?? entry.block_reason ?? null) : null,
+        updated_at: at,
+      }
+      : entry)),
+  }
+}
+
+// A fix round belongs to the item in flight: the counter is what `max_rounds` is measured against.
+export function addItemRound(plan: Plan, id: string, now: number, at?: string): Plan {
+  const item = plan.items.find(entry => entry.id === id)
+  if (!item) return plan
+  const iso = isoAt({ now, at })
+  return {
+    ...plan,
+    items: plan.items.map(entry => (entry.id === id ? { ...entry, rounds: entry.rounds + 1, updated_at: iso } : entry)),
+  }
+}
+
 // A `done` the engine can trust: it needs the commit the round accepted (§4.4). Called by the engine when
 // a substantiated ACCEPT consumes a round; a human path goes through `setItemStatus`.
 export function closeItemOnAccept(
@@ -732,6 +772,7 @@ export interface PlanItemView {
   owner_action: boolean
   missing_since: string | null
   line: number | null
+  block_reason: string | null
   updated_at: string
 }
 
@@ -751,6 +792,7 @@ export function planItemView(item: PlanItem): PlanItemView {
     owner_action: item.owner_action,
     missing_since: item.missing_since,
     line: item.line,
+    block_reason: item.block_reason ?? null,
     updated_at: item.updated_at,
   }
 }
@@ -848,6 +890,7 @@ function parseItem(record: Record<string, unknown>): PlanItem {
     owner_action: record.owner_action === true,
     missing_since: typeof record.missing_since === 'string' ? record.missing_since : null,
     line: typeof record.line === 'number' ? record.line : null,
+    block_reason: typeof record.block_reason === 'string' ? record.block_reason : null,
   }
 }
 

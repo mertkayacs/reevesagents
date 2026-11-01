@@ -64,7 +64,13 @@ function printStatus(state: FlowState, path: string): void {
   const verdict = state.claim.verdict ?? 'none'
   const last = state.log.at(-1)
   console.log(`flow      ${state.run_id}`)
-  console.log(`state     ${state.state}  round ${state.rounds}/${state.max_rounds}`)
+  console.log(`state     ${state.state}  round ${state.rounds}/${state.max_rounds}${state.max_total_rounds ? ` (flow cap ${state.max_total_rounds})` : ''}`)
+  if (state.plan) {
+    // The one-line summary the plan commands keep in step: a surface can say `plan 12/23` without opening
+    // `plan.json`, which is the whole point of storing it here (§3.1 of the plan design).
+    console.log(`plan      ${state.plan.done}/${state.plan.total} done${state.plan.waiting > 0 ? ` · ${state.plan.waiting} waiting for you` : ''}  (imported ${state.plan.imported_at})`)
+  }
+  if (state.active_plan_item) console.log(`plan item ${state.active_plan_item} in flight`)
   console.log(`head      ${head}`)
   console.log(`verdict   ${verdict}  (baseline ${state.claim.verdict_count} in the reviewer pane)`)
   if (state.pending) {

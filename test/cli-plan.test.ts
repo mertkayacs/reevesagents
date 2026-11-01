@@ -123,7 +123,9 @@ describe('flow plan', () => {
     const { out } = await runCli(['flow', 'plan', '--run', 'run-p'])
     expect(out).toContain('progress  0/3 done')
     expect(out).toContain('3 pending')
-    expect(out).toContain('next      P1.1.1 — "create the workspace" (no brief yet)')
+    // An item without a brief is what the picker stops at, and the line says so: it is not dispatched and it is
+    // not hidden.
+    expect(out).toContain('next      P1.1.1 — "create the workspace"  needs brief')
   })
 
   it('reports an unchanged document instead of rewriting it', async () => {

@@ -12,7 +12,7 @@
 
 import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
-import { listFlowFiles } from '../../core/flow-store.js'
+import { listFlowFiles, readFlow } from '../../core/flow-store.js'
 import { readRun } from '../../core/runs.js'
 import { addFlowSpecs } from '../../core/flow-control.js'
 import type { Plan, PlanItem, PlanStatus, SetStatusInput } from '../../core/plan.js'
@@ -21,6 +21,7 @@ import {
   planItemView, planPath, planProgress, readPlan, renderPlanItemPrompt, resolveRepositoryPath,
   setItemStatus, ensurePlanSummary,
 } from '../../core/plan.js'
+import { planIsComplete, planNext, planOpenItems, planTickView, planWaitingForBrief } from '../../core/flow-plan.js'
 import { resolveFlowRunId } from '../../core/flow-view.js'
 import { displayPath } from '../../utils/paths.js'
 
@@ -136,7 +137,7 @@ export function registerPlanCommands(flow: Command): void {
           console.log(JSON.stringify(planPayload(imported, displayPath(planPath(runId))), null, 2))
           return
         }
-        printPlan(imported)
+        printPlan(imported, { perItem: readFlow(runId).max_rounds, total: readFlow(runId).max_total_rounds })
         if (imported.conflicts.length > 0) process.exitCode = 3
       } catch (err) {
         failPlan(err)
@@ -193,6 +194,74 @@ export function registerPlanCommands(flow: Command): void {
         console.log(`${opts.dryRun === true ? 'would import' : 'imported'}  ${sourcePath}: ${parts.join(', ')}`)
         for (const conflict of result.conflicts) console.log(`  ${conflict.kind}  ${conflict.detail}`)
         if (result.conflicts.length > 0) process.exitCode = 3
+      } catch (err) {
+        failPlan(err)
+      }
+    })
+
+  plan
+    .command('next')
+    .description('the item the plan wants next, and why (or why not): the only automatic path to work')
+    .option('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('--dry-run', 'print the decision; queue nothing')
+    .option('--json', 'output JSON')
+    .action((opts: { run?: string, dryRun?: boolean, json?: boolean }, cmd: Command) => {
+      const json = jsonOption(cmd, opts)
+      try {
+        const runId = resolveFlowRunId(runOption(cmd))
+        const flow = readFlow(runId)
+        const imported = readPlan(runId)
+        const view = planTickView(imported, { perItem: flow.max_rounds, total: flow.max_total_rounds })
+        const next = planNext(view)
+        const body = {
+          run_id: runId,
+          dry_run: opts.dryRun === true,
+          kind: next.kind,
+          item: next.kind === 'none' ? null : { id: next.item.id, title: next.item.title, status: next.item.status, spec_path: next.item.spec_path ?? null, rounds: next.item.rounds },
+          reason: next.kind === 'item'
+            ? null
+            : next.kind === 'none' ? (planIsComplete(view) ? 'plan_complete' : 'nothing_open') : next.kind,
+          progress: { done: imported.items.filter(item => item.status === 'done').length, total: imported.items.length },
+          waiting_for_brief: planWaitingForBrief(view).map(item => item.id),
+        }
+        let queued = false
+        if (next.kind === 'item' && opts.dryRun !== true && next.item.spec) {
+          // Queue the brief on the flow so the next tick sends it: `plan next` is the only automatic path from a
+          // plan item to a dispatch, and it never invents one.
+          if (!flow.specs.some(entry => entry.id === next.item.id) && next.item.spec_path) {
+            // The brief is stored in the plan with a repository-relative path; `addFlowSpecs` reads the file, so
+            // the path is resolved against the same project root.
+            addFlowSpecs({ run_id: runId, files: [projectPath(next.item.spec_path, projectRoot(runId)).absolute] })
+            queued = true
+          }
+        }
+        if (json) {
+          console.log(JSON.stringify({ ...body, queued }, null, 2))
+          return
+        }
+        if (next.kind === 'item') {
+          const brief = next.item.spec_path ? ` (brief ${next.item.spec_path})` : ''
+          console.log(`next      ${next.item.id} — "${next.item.title}"${brief}${queued ? '  queued for dispatch' : ''}`)
+          return
+        }
+        if (next.kind === 'needs_brief') {
+          const waiting = planWaitingForBrief(view).map(item => item.id)
+          console.log(`waiting   ${next.item.id} has no brief: \`flow plan attach --run ${runId} --item ${next.item.id} --spec <file>\``)
+          if (waiting.length > 1) console.log(`waiting   ${waiting.length} items need a brief: ${waiting.join(', ')}`)
+          return
+        }
+        if (next.kind === 'blocked_owner') {
+          console.log(`waiting   ${next.item.id} is blocked_owner: a human decides (\`flow plan set --status skipped|queued\`)`)
+          return
+        }
+        if (next.kind === 'in_flight') {
+          console.log(`waiting   ${next.item.id} is ${next.item.status}: one task per flow`)
+          return
+        }
+        const open = planOpenItems(view).length
+        console.log(planIsComplete(view)
+          ? `nothing   the plan is complete (${imported.items.length} items)`
+          : `nothing   ${open} item(s) open, none of them ready`)
       } catch (err) {
         failPlan(err)
       }
@@ -404,11 +473,15 @@ function readDocument(path: string): string {
   }
 }
 
-function printPlan(plan: Plan): void {
+function printPlan(plan: Plan, budgets: { perItem: number, total: number }): void {
   console.log(`plan      ${plan.source_path}  (imported ${plan.imported_at}, hash ${plan.source_hash.slice(0, 8)})`)
   console.log(`progress  ${statusCountsLine(plan)}`)
   const waiting: string[] = []
-  const needsBrief = idsOf(plan, 'needs_brief')
+  // An item waiting for a brief is `pending` as far as the status table goes (it becomes `needs_brief` only
+  // when `plan next` looks at it), so the line is built from the specs, not from the status.
+  const needsBrief = plan.items
+    .filter(item => item.spec === null && item.missing_since === null && item.status !== 'done' && item.status !== 'skipped')
+    .map(item => item.id)
   const blocked = idsOf(plan, 'blocked_owner')
   const missing = plan.items.filter(item => item.missing_since !== null).map(item => item.id)
   if (needsBrief.length > 0) waiting.push(`needs_brief: ${needsBrief.join(', ')}`)
@@ -416,7 +489,14 @@ function printPlan(plan: Plan): void {
   if (missing.length > 0) waiting.push(`missing: ${missing.join(', ')}`)
   if (plan.conflicts.length > 0) waiting.push(`conflicts: ${plan.conflicts.length}`)
   if (waiting.length > 0) console.log(`waiting   ${waiting.join(' · ')}`)
-  const next = nextItem(plan)
+  // The picker decides, not document order alone: an item without a brief is reported, and the next line shows
+  // what `flow plan next` would actually take.
+  const picked = planNext(planTickView(plan, budgets), {})
+  const next = picked.kind === 'none' ? null : picked.item
+  if (picked.kind === 'needs_brief' || picked.kind === 'blocked_owner' || picked.kind === 'in_flight') {
+    console.log(`next      ${picked.item.id} — "${picked.item.title}"  ${picked.kind.replace('_', ' ')}`)
+    return
+  }
   if (!next) {
     console.log(`next      (nothing open)${planComplete(plan) ? ' — the plan is complete' : ''}`)
     return

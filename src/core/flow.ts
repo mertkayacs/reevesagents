@@ -20,6 +20,11 @@ import type { PaneBusyState } from './activity.js'
 import type { BlockSpec } from './spec.js'
 import { renderDispatchPrompt } from './spec.js'
 import type { FlowVerdict } from './verdict.js'
+import type { PlanItemTick, PlanTickView } from './flow-plan.js'
+import {
+  defaultTotalRounds, itemBudgetSpent, planIsComplete, planNext, planOpenItems, planTickSummary,
+  planWaitingForBrief, totalBudgetSpent,
+} from './flow-plan.js'
 
 export type FlowStatus = 'idle' | 'reviewing' | 'fixing' | 'paused' | 'orphaned' | 'escalated' | 'done'
 
@@ -142,6 +147,11 @@ function parsePlanSummary(raw: unknown): FlowPlanSummary | null {
   }
 }
 
+// The plan statuses this module may write. Declared structurally for the same reason as `FlowPlanSummary`:
+// `plan.ts` already imports this module, and a type-only cycle through a value module is fragile.
+export type FlowPlanItemStatus = 'pending' | 'needs_brief' | 'queued' | 'in_work' | 'reviewing' | 'done'
+  | 'blocked_owner' | 'skipped'
+
 // Mirrors `PlanSummary` in `plan.ts` structurally rather than importing it: the plan module already imports
 // this one, and a type-only cycle through a value module is more fragile than two small shapes.
 export interface FlowPlanSummary {
@@ -160,7 +170,11 @@ export interface FlowState {
   roles: FlowRoles
   state: FlowStatus
   rounds: number
+  // With a plan this is the budget of **one item**; without one it stays the flow's round budget, exactly as
+  // before (a schema-v1 flow must keep working, and `max_rounds` was never about an item there).
   max_rounds: number
+  // The fuse for the whole flow: `4 × max_rounds` capped at 100 unless set. Without a plan it is not read.
+  max_total_rounds: number
   // Seconds a requested review may stay unanswered. Per flow, so a slow reviewer can be given
   // more room without touching the engine.
   review_timeout_sec: number
@@ -178,6 +192,9 @@ export interface FlowState {
   // How many verdicts of the current review have been rejected as unsubstantiated (§Evidence). Reset to
   // zero whenever a substantiated verdict is consumed, so a later round gets its own allowance.
   unsubstantiated_attempts: number
+  // The plan item whose brief the dispatch in flight was rendered from. An ACCEPT closes *this* item, not
+  // "the next one in the document": the two differ as soon as a round runs long enough for the plan to change.
+  active_plan_item: string | null
   // `<head>-r<round>` of the last notes-file answer a dispatch was built from. The key is head-scoped, so a
   // new commit starts clean; it exists because a file answer was otherwise fresh on *every* tick — after
   // `dispatch_unconfirmed` (claim released, staging file kept) the next tick rebuilt and re-pasted the same
@@ -210,6 +227,8 @@ export interface FlowInit {
   // The commit the flow starts from; a review is requested for the next one.
   head?: string
   max_rounds?: number
+  // Optional: defaults to `defaultTotalRounds(max_rounds)`.
+  max_total_rounds?: number
   review_timeout_sec?: number
   specs?: BlockSpec[]
   at?: string
@@ -266,6 +285,9 @@ export interface FlowObservations {
   verdict_explicit_clean?: boolean
   // The policy the tick applies; the runner reads it from the global config, a test passes it directly.
   evidence_policy?: EvidencePolicy
+  // The plan, when the flow has one. Present means "the plan owns the queue": the engine takes the next item
+  // from it instead of `state.specs`. Absent keeps the pre-plan behaviour intact (§5 of the plan design).
+  plan?: PlanTickView
   // The raw staging text (untruncated), so the runner can publish the durable record without reading
   // the file a second time.
   notes_raw?: string
@@ -317,6 +339,12 @@ export type FlowReason =
   | 'dispatch_pending'
   | 'dispatch_unresolved'
   | 'review_unsubstantiated'
+  | 'plan_incomplete'
+  | 'plan_in_flight'
+  | 'rounds_exhausted'
+  | 'total_rounds_exhausted'
+  | 'off_plan_spec'
+  | 'plan_item_dispatched'
   | 'target_not_ready'
   | 'composer_dirty'
   | 'head_moved'
@@ -342,6 +370,12 @@ export interface FlowDecision {
   next_unsubstantiated_attempts?: number
   // The round key a dispatch was built from, recorded so the same file answer is not consumed twice.
   next_answered_round?: string | null
+  // The plan item this decision dispatches for (null clears it: a dispatch that is not the plan's).
+  next_active_plan_item?: string | null
+  // The plan item an accepted verdict closes, with the facts the plan records.
+  next_plan_close?: { id: string, head: string, rounds: number, notes_ref: string | null }
+  // A plan item this decision moves by itself (blocked after spending its rounds).
+  next_plan_status?: { id: string, status: FlowPlanItemStatus, block_reason?: string | null }
   // The status, round count and claim after this decision is applied. Carried in the decision so
   // the transition is computed once, purely, instead of being re-derived by the writer.
   next_state: FlowStatus
@@ -396,6 +430,9 @@ export function createFlowState(init: FlowInit): FlowState {
     state: 'idle',
     rounds: 0,
     max_rounds: init.max_rounds && init.max_rounds > 0 ? Math.floor(init.max_rounds) : MAX_ROUNDS,
+    max_total_rounds: init.max_total_rounds && init.max_total_rounds > 0
+      ? Math.floor(init.max_total_rounds)
+      : defaultTotalRounds(init.max_rounds && init.max_rounds > 0 ? Math.floor(init.max_rounds) : MAX_ROUNDS),
     review_timeout_sec: init.review_timeout_sec && init.review_timeout_sec > 0
       ? Math.floor(init.review_timeout_sec)
       : REVIEW_TIMEOUT_SEC,
@@ -406,6 +443,7 @@ export function createFlowState(init: FlowInit): FlowState {
     pending: null,
     unsubstantiated_attempts: 0,
     answered_round: null,
+    active_plan_item: null,
     paused_from: null,
     paused_at: null,
     orphan_reason: null,
@@ -445,6 +483,8 @@ export function parseFlowState(raw: unknown): FlowState {
     state: status,
     rounds: count(record.rounds),
     max_rounds: count(record.max_rounds, MAX_ROUNDS) || MAX_ROUNDS,
+    max_total_rounds: count(record.max_total_rounds, defaultTotalRounds(count(record.max_rounds, MAX_ROUNDS) || MAX_ROUNDS))
+      || defaultTotalRounds(count(record.max_rounds, MAX_ROUNDS) || MAX_ROUNDS),
     review_timeout_sec: count(record.review_timeout_sec, REVIEW_TIMEOUT_SEC) || REVIEW_TIMEOUT_SEC,
     review_started_at: typeof record.review_started_at === 'number' && Number.isFinite(record.review_started_at)
       ? Math.floor(record.review_started_at)
@@ -457,6 +497,7 @@ export function parseFlowState(raw: unknown): FlowState {
     pending: parsePendingDispatch(record.pending),
     unsubstantiated_attempts: count(record.unsubstantiated_attempts),
     answered_round: typeof record.answered_round === 'string' ? record.answered_round : null,
+    active_plan_item: typeof record.active_plan_item === 'string' ? record.active_plan_item : null,
     // A paused file always names where it came from; a missing field defaults to `idle`, which is
     // the only target a flow without a recorded origin could safely resume into.
     paused_from: status === 'paused'
@@ -611,7 +652,7 @@ export function renderFixPrompt(parts: {
   return lines.join('\n')
 }
 
-function hold(state: FlowState, reason: FlowReason): FlowDecision {
+function hold(state: FlowState, reason: FlowReason, detail?: string): FlowDecision {
   return {
     kind: 'none',
     reason,
@@ -619,6 +660,7 @@ function hold(state: FlowState, reason: FlowReason): FlowDecision {
     next_rounds: state.rounds,
     next_claim: state.claim,
     next_review_started_at: state.review_started_at,
+    ...(detail ? { log_detail: detail } : {}),
   }
 }
 
@@ -698,9 +740,10 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
 }
 
 function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObservations): FlowDecision {
+  const fromPlan = observations.plan?.items.some(item => item.id === spec.id) === true
   return {
     kind: 'dispatch_spec',
-    reason: 'spec_dispatched',
+    reason: fromPlan ? 'plan_item_dispatched' : 'spec_dispatched',
     // A dispatched block is not a fix round: the flow goes back to waiting for the dev's next
     // head, which is what `idle` means here.
     next_state: 'idle',
@@ -709,6 +752,10 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_claim: { ...state.claim, verdict: observations.verdict, verdict_count: observations.verdict_count },
     target: 'dev',
     spec_id: spec.id,
+    // A spec that is an item of the flow's plan *is* that item's work: the ACCEPT will close it, and the fix
+    // rounds will count against its budget. A spec outside the plan leaves this null, which is why
+    // `off_plan_spec` exists in the journal.
+    next_active_plan_item: observations.plan?.items.some(item => item.id === spec.id) ? spec.id : null,
     next_unsubstantiated_attempts: 0,
     next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
     message: renderDispatchPrompt(spec),
@@ -748,6 +795,120 @@ function reviewGate(state: FlowState, observations: FlowObservations): FlowDecis
   if (observations.review_pane === 'busy') return hold(state, 'review_busy')
   if (observations.review_pane !== 'idle') return hold(state, 'review_pane_unknown')
   return null
+}
+
+// The item an accepted verdict closes, with what the plan records about it. `notes_ref` comes from the round
+// that produced the verdict, so `flow plan status` can point at the findings of the closing review.
+function planCloseOf(state: FlowState, observations: FlowObservations): FlowDecision['next_plan_close'] {
+  const id = state.active_plan_item
+  if (!id) return undefined
+  return { id, head: state.claim.head, rounds: state.rounds, notes_ref: observations.notes_ref ?? null }
+}
+
+function withPlanClose(state: FlowState, observations: FlowObservations, decision: FlowDecision): FlowDecision {
+  const close = planCloseOf(state, observations)
+  return close ? { ...decision, next_plan_close: close } : decision
+}
+
+// An ACCEPT with a plan: close this item, then decide what the plan wants next.
+function planAcceptDecision(
+  state: FlowState,
+  observations: FlowObservations,
+  plan: PlanTickView,
+): FlowDecision {
+  const close = (decision: FlowDecision): FlowDecision => withPlanClose(state, observations, decision)
+
+  // The fuse outranks everything: a flow that has spent its total budget escalates even while closing an item,
+  // otherwise a pathological reviewer could keep it walking from item to item for ever.
+  if (totalBudgetSpent(plan, state.rounds)) {
+    return close({
+      ...escalate(state, observations, 'total_rounds_exhausted'),
+      log_detail: `total rounds spent: ${state.rounds}/${plan.max_total_rounds} · ${planTickSummary(plan)}`,
+    })
+  }
+
+  const next = planNext(plan, { skip: state.active_plan_item })
+  if (next.kind === 'none') {
+    if (!planIsComplete(plan)) {
+      const open = planOpenItems(plan)
+      return close(hold(
+        state,
+        'plan_incomplete',
+        `plan incomplete: ${open.length} open (${open.map(item => item.id).join(', ')})`,
+      ))
+    }
+    return close({
+      kind: 'none',
+      reason: 'flow_done',
+      next_state: 'done',
+      next_rounds: state.rounds,
+      next_review_started_at: null,
+      next_claim: { ...state.claim, verdict: 'ACCEPT', verdict_count: observations.verdict_count },
+      next_unsubstantiated_attempts: 0,
+      next_active_plan_item: null,
+      log_detail: `plan complete: ${planTickSummary(plan)}`,
+    })
+  }
+  if (next.kind === 'needs_brief') {
+    // Nothing to dispatch and nothing to invent: the flow holds on the plan and names every item waiting for a
+    // brief. It is a hold, not an escalation — the owner's block-13 rule is "the item shows up in the report",
+    // and an escalation here would make a half-written document look like a broken pipeline.
+    const waiting = planWaitingForBrief(plan).map(item => item.id)
+    return close(hold(
+      state,
+      'plan_incomplete',
+      `needs a brief for ${next.item.id}${waiting.length > 1 ? ` (waiting: ${waiting.join(', ')})` : ''} — attach one with \`flow plan attach\``,
+    ))
+  }
+  if (next.kind === 'blocked_owner') {
+    return close(hold(
+      state,
+      'plan_incomplete',
+      `${next.item.id} is blocked_owner${next.item.rounds > 0 ? ` after ${next.item.rounds} rounds` : ''}: the plan waits for a human`,
+    ))
+  }
+  if (next.kind === 'in_flight') {
+    return close(hold(state, 'plan_in_flight', `${next.item.id} is ${next.item.status}: one task per flow`))
+  }
+
+  const gate = dispatchGate(state, observations)
+  if (gate) return close(gate)
+  return close(planItemDispatch(state, next.item, observations))
+}
+
+// A CHANGES_REQUESTED on an item that has spent its rounds does not start another fix round: the item blocks
+// and the flow stops on it, so a bad item cannot be silently walked past.
+function planBudgetDecision(
+  state: FlowState,
+  observations: FlowObservations,
+  plan: PlanTickView,
+): FlowDecision | null {
+  if (totalBudgetSpent(plan, state.rounds + 1)) {
+    return {
+      ...escalate(state, observations, 'total_rounds_exhausted'),
+      log_detail: `total rounds spent: ${state.rounds + 1}/${plan.max_total_rounds} · ${planTickSummary(plan)}`,
+    }
+  }
+  const id = state.active_plan_item
+  if (!id) return null
+  const item = plan.items.find(entry => entry.id === id)
+  if (!item || !itemBudgetSpent(plan, item)) return null
+  return {
+    ...hold(state, 'rounds_exhausted', `${id} spent ${item.rounds}/${plan.max_rounds_per_item} rounds; it is blocked until a human decides`),
+    next_plan_status: { id, status: 'blocked_owner', block_reason: 'rounds_exhausted' },
+  }
+}
+
+// Dispatch the brief of one plan item. It is `specDispatch` plus the two facts the plan needs: which item the
+// dispatch belongs to, and the journal line the operator reads.
+function planItemDispatch(state: FlowState, item: PlanItemTick, observations: FlowObservations): FlowDecision {
+  const decision = specDispatch(state, item.spec as BlockSpec, observations)
+  return {
+    ...decision,
+    reason: 'plan_item_dispatched',
+    next_active_plan_item: item.id,
+    log_detail: `plan_item_dispatched ${item.id}`,
+  }
 }
 
 function nextSpec(state: FlowState): BlockSpec | null {
@@ -832,6 +993,10 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   if (!isVerdictSubstantiated(observations)) return unsubstantiated(state, observations)
 
   if (observations.verdict === 'ACCEPT') {
+    // With a plan the queue comes from the document, not from `state.specs` (§5): the accepted item closes and
+    // the engine takes the next item in document order — or refuses to move on, which is the whole point.
+    if (observations.plan) return planAcceptDecision(state, observations, observations.plan)
+
     const spec = nextSpec(state)
     if (!spec) {
       return withNotes(withNext(state, 'flow_done', {
@@ -846,8 +1011,19 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
     return withNotes(specDispatch(state, spec, observations), observations)
   }
 
-  // CHANGES_REQUESTED: the budget is checked before the dispatch, so the flow stops on the round
-  // it cannot afford instead of looping until a human notices.
+  // CHANGES_REQUESTED: the budget is checked before the dispatch, so the flow stops on the round it cannot
+  // afford instead of looping until a human notices.
+  //
+  // With a plan there are two budgets and neither is `max_rounds`-of-the-flow: the item's own rounds
+  // (`max_rounds` per item) block the item, and the flow's fuse (`max_total_rounds`) escalates the flow.
+  if (observations.plan) {
+    const budget = planBudgetDecision(state, observations, observations.plan)
+    if (budget) return withNotes(budget, observations)
+    const planGate = dispatchGate(state, observations)
+    if (planGate) return planGate
+    return withNotes(fixDispatch(state, observations), observations)
+  }
+  // No plan: the rule a schema-v1 flow has always had, untouched.
   if (state.rounds >= state.max_rounds) return withNotes(escalate(state, observations), observations)
   const gate = dispatchGate(state, observations)
   if (gate) return gate
@@ -1039,6 +1215,7 @@ function withDelta(
     orphan_reason: decision.kind === 'orphan' ? (decision.notes ?? null) : state.orphan_reason,
     unsubstantiated_attempts: decision.next_unsubstantiated_attempts ?? state.unsubstantiated_attempts,
     answered_round: decision.next_answered_round === undefined ? state.answered_round : decision.next_answered_round,
+    active_plan_item: decision.next_active_plan_item === undefined ? state.active_plan_item : decision.next_active_plan_item,
     log: appendLog(state, {
       at,
       event: options.event,

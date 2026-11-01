@@ -23,6 +23,7 @@ import type { FlowStoreOptions } from './flow-store.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import { isRunsLockTimeout, withRunsLock } from './runs.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
+import { planExists, readPlan } from './plan.js'
 import { pruneClosedFlowNotes } from './flow-notes.js'
 
 export interface FlowControlOptions extends FlowStoreOptions {
@@ -171,6 +172,17 @@ export interface AddSpecsResult extends FlowControlResult {
 
 // Queue blocks on a flow that already exists. Every file is read and validated *before* the lock, so
 // one bad path leaves the flow untouched instead of half-queued; the queue is written once.
+// The item ids of the flow's plan, or null when there is none. Read-only and failure-tolerant: the plan is a
+// mirror, and a damaged one must not stop a spec from being queued.
+function planItemIds(runId: string): string[] | null {
+  try {
+    if (!planExists(runId)) return null
+    return readPlan(runId).items.map(item => item.id)
+  } catch {
+    return null
+  }
+}
+
 export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions = {}): AddSpecsResult {
   const at = options.at ?? new Date().toISOString()
   const files = input.files ?? []
@@ -202,11 +214,20 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
       if (taken.length > 0) {
         throw new FlowStateError(`block ${taken.map(spec => spec.id).join(', ')} was queued by another call meanwhile`)
       }
+      // When the flow has a plan, a spec that is not an item of it is "off plan": allowed (a human may want a
+      // side task), but never silent — the journal says so, and `flow status` shows the same log.
+      const offPlan = planItemIds(state.run_id)
+      const strays = offPlan === null ? [] : queued.map(spec => spec.id).filter(id => !offPlan.includes(id))
       return {
         ...state,
         specs: [...state.specs, ...queued],
-        log: [...state.log, { at, event: 'spec_queued', detail: queued.map(spec => spec.id).join(', ') }]
-          .slice(-FLOW_LOG_LIMIT),
+        log: [
+          ...state.log,
+          { at, event: 'spec_queued', detail: queued.map(spec => spec.id).join(', ') },
+          ...(strays.length > 0
+            ? [{ at, event: 'off_plan_spec', detail: `${strays.join(', ')} — queued outside the plan` }]
+            : []),
+        ].slice(-FLOW_LOG_LIMIT),
         updated_at: at,
       }
     }),

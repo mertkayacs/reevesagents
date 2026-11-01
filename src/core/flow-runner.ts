@@ -39,6 +39,9 @@ import {
 } from './flow-notes.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { loadConfig } from './config.js'
+import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound } from './plan.js'
+import { planTickView } from './flow-plan.js'
+import type { PlanTickView } from './flow-plan.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
 import { paneBusy, peekAgentRaw, sendWhenIdle } from './runtime.js'
@@ -106,6 +109,8 @@ export interface ObserveFlowOptions {
   evidence_policy?: EvidencePolicy
   // Evidence for this tick, when the caller already knows it. The default measures it from the round.
   verdict_evidence?: VerdictEvidence
+  // The plan view, when the caller has already read it. The default reads `flows/<run-id>/plan.json`.
+  plan?: PlanTickView | null
   // Read the notes of this round from here instead of disk (a test seam: the pipeline's own tests
   // describe a valid, an invalid and a missing file without writing one).
   notes?: NotesRead
@@ -293,6 +298,66 @@ function evidencePolicy(): EvidencePolicy {
   }
 }
 
+// A damaged or absent plan is "no plan": the flow then behaves exactly as it did before plans existed, which is
+// better than refusing to tick because a document mirror is unreadable.
+export function readPlanView(state: FlowState): PlanTickView | null {
+  try {
+    if (!planExists(state.run_id)) return null
+    return planTickView(readPlan(state.run_id), { perItem: state.max_rounds, total: state.max_total_rounds })
+  } catch {
+    return null
+  }
+}
+
+// Apply what the decision asked the plan to record. Runs after the flow state is saved, and is idempotent in
+// the parts that matter: closing an item that is already closed and moving a status that is already set are
+// both no-ops.
+function applyPlanDecision(before: FlowState, observations: FlowObservations, decision: FlowDecision): void {
+  if (!observations.plan) return
+  const activeId = before.active_plan_item
+  const close = decision.next_plan_close
+  const status = decision.next_plan_status
+  const fixRound = decision.kind === 'dispatch_fix' && activeId !== null
+  const started = decision.reason === 'plan_item_dispatched' || decision.kind === 'dispatch_spec'
+  const reviewStarted = decision.kind === 'request_review' && activeId !== null
+  if (!close && !status && !fixRound && !started && !reviewStarted) return
+
+  try {
+    mutatePlan(before.run_id, current => {
+      if (!current) return { plan: null, value: null }
+      let next = current
+      if (close) {
+        next = closeItemOnAccept(next, {
+          id: close.id,
+          head: close.head,
+          rounds: close.rounds,
+          notes_ref: close.notes_ref,
+          now: Date.now(),
+        })
+      }
+      if (status) {
+        next = moveItemByEngine(next, {
+          id: status.id,
+          status: status.status,
+          block_reason: status.block_reason ?? null,
+          now: Date.now(),
+        })
+      }
+      if (fixRound) next = addItemRound(next, activeId, Date.now())
+      if (started && decision.next_active_plan_item) {
+        next = moveItemByEngine(next, { id: decision.next_active_plan_item, status: 'in_work', now: Date.now() })
+      }
+      if (reviewStarted) {
+        next = moveItemByEngine(next, { id: activeId, status: 'reviewing', now: Date.now() })
+      }
+      return { plan: next === current ? null : next, value: null }
+    })
+  } catch {
+    // The plan is a mirror, not the engine's state: a failure here must not undo a saved decision. The next
+    // tick re-reads the file and acts on what it finds.
+  }
+}
+
 const EXPLICIT_CLEAN_PATTERN = /(?:no findings|nothing to report|nothing found|замечаний нет|нет замечаний)/i
 
 function observations_explicit_clean(text: string): boolean {
@@ -342,6 +407,9 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     notes_staging_path: notes.staging_path,
     pane_text: reviewPane === 'unknown' ? undefined : paneText,
     evidence_policy: options.evidence_policy ?? evidencePolicy(),
+    // The plan owns the queue only when it exists: a flow without one keeps `state.specs`, which is what
+    // schema-v1 flows have always used.
+    plan: options.plan === null ? undefined : (options.plan ?? readPlanView(state) ?? undefined),
   }
   // The evidence is measured on the finished observation: it needs the notes text and the capture, so it
   // cannot be built before them. A caller that has already measured it (the flow's own tests) passes it.
@@ -518,7 +586,8 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     const { message, target } = decision
     if (!message || !target) {
       const next = applyDecisionToState(state, decision, at)
-      return { state, decision, dispatch: null, settled: { state: next, path: saveFlow(next, { root: options.root }) } }
+      const path = saveFlow(next, { root: options.root })
+      return { state, decision, dispatch: null, settled: { state: next, path } }
     }
     const opId = randomUUID()
     const claimed = claimPendingDispatch(state, decision, { op_id: opId, now, at })
@@ -544,6 +613,10 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   const phase = claim.value
   const { dispatch } = phase
   if (!dispatch) {
+    // Outside the runs lock: `mutatePlan` takes it itself, and it is not reentrant. Unconditional, because a
+    // decision that holds the flow can still move the plan (an accepted verdict closes its item, a spent
+    // budget blocks one) — and `decisionChangesState` only looks at the flow's own fields.
+    applyPlanDecision(before, observations, phase.decision)
     if (phase.settled) {
       publishRoundNotes(before, observations, phase.decision, options)
       pruneClosedNotes(phase.settled.state, options)
@@ -585,7 +658,8 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       if (after.pending?.op_id !== dispatch.op_id) return { state: after, status: 'skipped' }
       if (send.sent) {
         const next = applyDecisionToState(after, phase.decision, at)
-        return { state: next, status: 'applied', path: saveFlow(next, { root: options.root }) }
+        const path = saveFlow(next, { root: options.root })
+        return { state: next, status: 'applied', path }
       }
       if (send.reason === 'composer_dirty') {
         // Somebody else's text is sitting in the composer: nothing was pasted, and repeating the paste is
@@ -651,6 +725,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   }
   // The settle is where an answer becomes the flow's state: publish its record only when this tick did not
   // reject it. A refused send leaves the round open for a retry, so nothing is recorded yet.
+  if (done.status === 'applied') applyPlanDecision(before, observations, phase.decision)
   if (done.status === 'applied') publishRoundNotes(before, observations, phase.decision, options)
   pruneClosedNotes(done.state, options)
   return {
