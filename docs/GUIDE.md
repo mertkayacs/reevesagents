@@ -176,9 +176,11 @@ human is highlighted with the same warning colour as a stale run.
   transitions, dispatches, verdicts, refusals and escalations, newest last. It never
   holds a prompt body. An entry that consumed a review round points at it — `→ notes/<head>-r2.md ·
   2 MAJOR, 1 MINOR` — so the journal says where the findings are without carrying them.
-- **Nothing ticks a flow on its own — opening the TUI or the Web UI does not either:**
-  those two only render the badge. Run `flow tick` on a schedule (cron every minute is
-  the usual setup; `--run` accepts a unique prefix) or call it by hand.
+- **A flow is advanced by whatever is running:** an open Web UI dashboard ticks every live flow on its own
+  cadence (`flow_tick_ms`, default 60 s — see "The plan drives the flow by itself" below), and
+  `reevesagents flow tick --all` does one pass for a cron job or a headless machine. The TUI only renders the
+  badge and ticks nothing, and `GET /api/state` does not tick either. Set `flow_tick_ms` to `0` to switch the
+  autonomous tick off and keep the manual `flow tick` / `flow tick --all` path.
 - Two ticks at the same time are safe: the first writes the dispatch it is about to
   send into the flow file, and the second finds that claim and sends nothing. If a
   tick dies mid-send, the claim is escalated to a human after two minutes instead of
