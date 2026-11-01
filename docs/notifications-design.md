@@ -317,7 +317,8 @@ fire-and-forget wrapper: a journal that cannot be written never breaks the actio
 `withNotificationsLock` (its own `.notifications.lock`, 5 s stale takeover, 25 ms spin retry). Caps live in
 `NOTIFICATION_LIMITS`: `max_events 2000`, `max_bytes 2 MiB`, `keep_events 1500`, `keep_bytes 1.5 MiB`,
 `dedupe_keys 2000`, plus the field caps from §2.1. Path shortening covers Unix, drive-letter (`C:\Users\…`) and UNC
-(`\\server\share\…`) forms — three patterns, because one combined regex makes the escape count unreadable and that
+(`\\server\share\…`) forms, with Unicode components — the checkouts here are Polish, Ukrainian and Russian, so
+`/home/Дмитро/Проект/secret.txt` must shorten like any other path — three patterns, because one combined regex makes the escape count unreadable and that
 is how the UNC case was missed. The redactor also knows `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` tokens and fine-grained
 `github_pat_…` ones. The ingest route is
 `POST /api/notifications` (loopback peer **and** an `Origin` header, 60 events per 10 s per peer, body ≤ 64 KiB),

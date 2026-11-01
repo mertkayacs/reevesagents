@@ -106,6 +106,25 @@ describe('the schema', () => {
     expect(event.detail).not.toContain(secret)
   })
 
+  it('shortens a path whose components are not ASCII', () => {
+    // The checkouts here are Polish, Ukrainian and Russian: a `\w`-based pattern treats `Дмитро` as prose and leaves
+    // the whole tree in the event.
+    const { event } = appendNotification(valid({
+      detail: 'failed at /home/Дмитро/Проект/secret.txt while reading',
+      title: 'open /home/Дмитро/Проект/конфіг.yaml',
+    }))
+    expect(event.detail).not.toContain('Дмитро')
+    expect(event.detail).not.toContain('Проект')
+    expect(event.detail).toContain('secret.txt')
+    expect(event.title).not.toContain('Дмитро')
+    expect(event.title).toContain('конфіг.yaml')
+
+    // The Windows form too.
+    const windows = appendNotification(valid({ detail: 'C:\\Users\\Дмитро\\Проект\\secret.txt' })).event
+    expect(windows.detail).not.toContain('Дмитро')
+    expect(windows.detail).toContain('secret.txt')
+  })
+
   it('shortens a UNC path too', () => {
     // `\\server\share\secret.txt` needs two leading backslashes in the text: a pattern that accepts one leaves the
     // share name and the file name in the journal.

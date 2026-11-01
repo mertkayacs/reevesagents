@@ -160,9 +160,13 @@ function clean(value: unknown, limit: number): string {
 // Three shapes, each with its own pattern so the escape count stays readable: `/home/u/a/b`, `C:\Users\Alice\work`,
 // and `\\server\share\file.txt`. The last one needs two leading backslashes in the text, which means four in a
 // regex literal — folded into one pattern with the other two, that is where the first version got it wrong.
-const UNIX_PATH = /(^|[\s("'`=])((?:\/[\w.@+-]+){2,}\/?)/g
-const WINDOWS_PATH = /(^|[\s("'`=])([A-Za-z]:\\[\w.@+ -]+(?:\\[\w.@+ -]+){1,})/g
-const UNC_PATH = /(^|[\s("'`=])(\\\\[\w.@+ -]+(?:\\[\w.@+ -]+){1,})/g
+//
+// The components are **Unicode**: this journal is written by agents working in Polish, Ukrainian and Russian
+// checkouts, so `/home/Дмитро/Проект/secret.txt` is an ordinary path here. A `\w`-based class would treat it as
+// prose and leave the whole tree in the event.
+const UNIX_PATH = /(^|[\s("'`=])((?:\/[\p{L}\p{N}._@+-]+){2,}\/?)/gu
+const WINDOWS_PATH = /(^|[\s("'`=])([A-Za-z]:\\[\p{L}\p{N}.@+ -]+(?:\\[\p{L}\p{N}.@+ -]+){1,})/gu
+const UNC_PATH = /(^|[\s("'`=])(\\\\[\p{L}\p{N}.@+ -]+(?:\\[\p{L}\p{N}.@+ -]+){1,})/gu
 
 function shortenPath(match: string, lead: string, path: string): string {
   if (path.startsWith('//')) return match
