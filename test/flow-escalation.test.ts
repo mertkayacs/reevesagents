@@ -12,7 +12,7 @@ import { createFlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import { raiseEscalationApproval, applyEscalationDecision, FLOW_ESCALATION_ACTION } from '../src/core/flow-escalation.js'
-import { createRunApproval, listRunApprovals, resolveRunApproval } from '../src/core/approvals.js'
+import { createRunApproval, listRunApprovals, removeRunApproval, resolveRunApproval } from '../src/core/approvals.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => ''), spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
@@ -103,6 +103,43 @@ describe('raising the approval', () => {
     expect([first.id, duplicate.id]).toContain(tickets[0]!.id)
     expect(kept?.id).toBe(tickets[0]!.id)
     expect(duplicate.id).not.toBe(first.id)
+  })
+
+  it('refuses to remove a ticket that already carries a decision', () => {
+    // The cleanup path is the only caller; the guarantee lives in `removeRunApproval` itself, under the same lock as the
+    // unlink, so a resolution that lands between the caller's snapshot and the deletion is not thrown away.
+    const ticket = createRunApproval({
+      agent_id: 'dev-1', action: FLOW_ESCALATION_ACTION,
+      summary: 'flow run-1 escalated: rounds_exhausted — continue with a fresh budget, or stop the flow',
+      details: { key: 'flow-a:9', run_id: 'run-1', flow_id: 'flow-a', episode: 9, reason: 'rounds_exhausted', item_id: 'P1.1' },
+    })
+    resolveRunApproval(ticket.id, 'approved', 'go on')
+
+    expect(removeRunApproval(ticket.id)).toBe(false)
+    expect(listRunApprovals('run-1').find(entry => entry.id === ticket.id)!.status).toBe('approved')
+  })
+
+  it('never deletes a duplicate that was already decided', () => {
+    // A human approves the second ticket while the raiser still has it in its snapshot. `raiseEscalationApproval` must
+    // leave the decided ticket alone: the duplicate cleanup is for undecided copies only.
+    const first = createRunApproval({
+      agent_id: 'dev-1', action: FLOW_ESCALATION_ACTION,
+      summary: 'flow run-1 escalated: rounds_exhausted — continue with a fresh budget, or stop the flow',
+      details: { key: 'flow-a:1', run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' },
+    })
+    const second = createRunApproval({
+      agent_id: 'dev-1', action: FLOW_ESCALATION_ACTION,
+      summary: 'flow run-1 escalated: rounds_exhausted — continue with a fresh budget, or stop the flow',
+      details: { key: 'flow-a:1', run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' },
+    })
+    resolveRunApproval(second.id, 'denied', 'stop it')
+
+    raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })
+
+    const all = listRunApprovals('run-1').filter(entry => entry.action === FLOW_ESCALATION_ACTION)
+    // Both records survive: the decided one carries the human's answer, and the pending one is the ticket to act on.
+    expect(all.map(entry => entry.id).sort()).toEqual([first.id, second.id].sort())
+    expect(all.find(entry => entry.id === second.id)!.status).toBe('denied')
   })
 
   it('says what happened and what the human can do', () => {

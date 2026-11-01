@@ -196,6 +196,10 @@ export function removeRunApproval(approvalId: string): boolean {
   return withRunsLock(() => {
     const approval = listRunApprovals().find(item => item.id === approvalId)
     if (!approval) return false
+    // Only an undecided record may be removed, and the check happens under the same lock as the unlink: a ticket that
+    // a human resolved between the caller's snapshot and this call carries a decision, and deleting it would throw that
+    // decision away. A resolved duplicate is left alone — the operator sees a decided ticket, not a lost answer.
+    if (approval.status !== 'pending') return false
     try {
       unlinkSync(join(runApprovalsDir(approval.run_id), `${approval.id}.json`))
       return true
