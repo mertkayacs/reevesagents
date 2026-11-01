@@ -552,12 +552,17 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       return
     }
     if (!ingestAllowed(peer)) {
+      // Same reason as the other refusals: an unread body turns the answer into a reset.
+      try { req.resume() } catch { /* the stream is already gone */ }
       sendJson(res, 429, { error: 'too many notifications; slow down' })
       return
     }
     try {
       const body = await readJsonBody(req)
-      const created = appendNotification({ ...body, source: body.source === undefined ? 'external' : body.source })
+      // `source` is decided here, never by the caller: this route is the *external* ingest path, and a body that
+      // could claim `product` would let a loopback client forge `flow.escalated` (a "a human is required" state)
+      // simply by saying it comes from the product.
+      const created = appendNotification({ ...body, source: 'external' })
       sendJson(res, 201, created)
     } catch (err) {
       // Drain what is left of the body before answering: the client may still be writing, and a `res.end()` on a

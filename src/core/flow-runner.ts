@@ -381,15 +381,20 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
 // A flow event exists iff the badge would show a warning (§2.2): the same decision that escalated the flow writes
 // the notification, with a key that survives a retry and a `--replace` (§ `flow_id`).
 function emitFlowAttention(state: FlowState, decision: FlowDecision): void {
-  if (decision.kind !== 'escalate') return
-  const kind = decision.reason === 'review_timeout' ? 'flow.review_timeout' : 'flow.escalated'
+  // The state is the authority, not the decision's kind: a `composer_dirty` escalation is a `dispatch_spec`
+  // decision that ended in `escalated`, and gating on `kind` silently dropped exactly that case. The dedupe key
+  // carries the episode, so a later tick that still sees `escalated` does not duplicate the row.
+  const escalated = decision.kind === 'escalate' || state.state === 'escalated'
+  if (!escalated) return
+  const reason = decision.kind === 'escalate' ? decision.reason : (state.log.at(-1)?.detail ?? 'escalated')
+  const kind = reason.startsWith('review_timeout') ? 'flow.review_timeout' : 'flow.escalated'
   const parts = state.repo.split(/[\\/]+/).filter(Boolean)
   emitNotification({
     kind,
     title: kind === 'flow.review_timeout'
       ? `review timed out on ${state.run_id}`
       : `flow escalated on ${state.run_id}`,
-    detail: `reason ${decision.reason} · round ${state.rounds}/${state.max_rounds} · ${planTickSummaryOf(state)}`,
+    detail: `reason ${reason} · round ${state.rounds}/${state.max_rounds} · ${planTickSummaryOf(state)}`,
     run_id: state.run_id,
     project: parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : '',
     source: 'product',
@@ -718,7 +723,10 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       if (send.reason === 'composer_dirty') {
         // Somebody else's text is sitting in the composer: nothing was pasted, and repeating the paste is
         // the one answer that makes it worse. A human reads the pane.
-        return { state: escalateOnDirtyComposer(after, phase.decision, at), status: 'unconfirmed' }
+        // Saved like every other settled decision: an escalation that is computed but never written is an
+        // escalation nobody sees, and the next tick would re-decide it from a state that says otherwise.
+        const escalated = escalateOnDirtyComposer(after, phase.decision, at)
+        return { state: escalated, status: 'unconfirmed', path: saveFlow(escalated, { root: options.root }) }
       }
       if (send.reason === 'pane_changed' || send.reason === 'unconfirmed') {
         // The text is in the input box but the submit was not confirmed. Consume the decision so the
@@ -780,7 +788,9 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   // The settle is where an answer becomes the flow's state: publish its record only when this tick did not
   // reject it. A refused send leaves the round open for a retry, so nothing is recorded yet.
   if (done.status === 'applied') applyPlanDecision(before, observations, phase.decision)
-  if (done.status === 'applied') emitFlowAttention(done.state, phase.decision)
+  // Not only `applied`: `composer_dirty` escalates the flow and reports `unconfirmed`, and an escalation the human
+  // is never told about is the one failure this journal exists to prevent.
+  emitFlowAttention(done.state, phase.decision)
   if (done.status === 'applied') publishRoundNotes(before, observations, phase.decision, options)
   pruneClosedNotes(done.state, options)
   return {

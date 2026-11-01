@@ -391,6 +391,31 @@ describe('the runner with a plan on disk', () => {
     expect(flow.state).toBe('reviewing')
   })
 
+  it('tells a human when an escalation came from a dirty composer, not only from a decision', async () => {
+    // `composer_dirty` escalates the flow while the settle reports `unconfirmed`; the journal must still learn
+    // about it, or the one escalation a human has to act on is the one nobody is told about.
+    // Every item has a brief, so the ACCEPT dispatches the next one — the send is what hits the dirty composer.
+    const plan = planWithBriefs(['P1.1', 'P1.2', 'P1.3'])
+    seedFlow(plan)
+    const ports = {
+      paneBusy: () => 'idle' as const,
+      peek: () => 'VERDICT: ACCEPT',
+      send: () => ({ sent: false as const, reason: 'composer_dirty' as const }),
+    }
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: 'aaa111', tree_clean: true, plan: undefined, ports,
+      verdict_evidence: EVIDENCE,
+    })
+    expect(result.status).toBe('unconfirmed')
+    expect(readFlow('run-1').state).toBe('escalated')
+
+    const { readNotifications } = await import('../src/core/notifications.js')
+    const { events } = readNotifications()
+    const escalated = events.find(event => event.kind === 'flow.escalated')
+    expect(escalated).toBeTruthy()
+    expect(escalated!.detail).toContain('composer_dirty')
+  })
+
   it('counts a fix round against the item', () => {
     const plan = planWithBriefs(['P1.1'])
     seedFlow(plan)

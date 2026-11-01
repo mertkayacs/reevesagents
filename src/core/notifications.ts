@@ -142,6 +142,10 @@ export function notificationPaths(root = stateRoot()): NotificationPaths {
 
 // One line, bounded, redacted, and with no home path in it. A notification is history: it outlives the run and
 // may be quoted into a message, so it carries the same guarantees the notes channel already keeps (§11.3).
+// A single backslash, spelled out so the intent survives editing: `'\\'` in source is one character at runtime,
+// and `'\\\\'` would be two — which would make the check compare a two-character string with a one-character path.
+const BACKSLASH = '\\'
+
 function clean(value: unknown, limit: number): string {
   if (typeof value !== 'string') return ''
   const single = value.replace(/\r\n/g, '\n').replace(/\s*\n+\s*/g, ' · ').trim()
@@ -153,12 +157,18 @@ function clean(value: unknown, limit: number): string {
 // `displayPath` takes a whole path; a title may contain one inside a sentence. Anything that looks like an
 // absolute home path is therefore shortened to its last component, which is the only part a human needs and the
 // only part that cannot leak a directory tree.
-const ABSOLUTE_PATH = /(^|[\s("'`=])((?:\/[\w.@+-]+){2,}\/?)/g
+// Unix (`/home/u/a/b`) and Windows (`C:\\Users\\Alice\\work`, `\\\\server\\share\\x`) absolute paths. The second
+// form matters because the fleet supervisor and the Windows app both write into this journal, and a backslash path
+// is exactly as revealing as a slash one.
+const ABSOLUTE_PATH = /(^|[\s("'`=])((?:(?:\/[\w.@+-]+){2,}\/?)|(?:[A-Za-z]:\\[\w.@+ -]+(?:\\[\w.@+ -]+){1,})|(?:\\[\w.@+ -]+(?:\\[\w.@+ -]+){1,}))/g
 
 function displayPathInText(text: string): string {
   return text.replace(ABSOLUTE_PATH, (match, lead: string, path: string) => {
     if (path.startsWith('//')) return match
-    return `${lead}${displayPath(path)}`
+    // Keep the last component only: the file name is what a human needs, the tree is what must not leak.
+    const parts = path.split(/[\\/]+/).filter(Boolean)
+    const last = parts[parts.length - 1] ?? ''
+    return `${lead}${last}`
   })
 }
 
@@ -177,10 +187,13 @@ export function normalizeNotificationInput(raw: unknown): NotificationInput {
   }
   const title = clean(record.title, NOTIFICATION_LIMITS.title)
   if (!title) throw new NotificationError('a notification needs a title')
-  const project = clean(record.project, NOTIFICATION_LIMITS.project)
-  if (project.includes('/')) {
+  // Checked on the raw value, before the path shortener runs: `C:\Users\Alice` would otherwise be shortened to
+  // `Alice` and pass a check that is supposed to refuse the input.
+  const rawProject = typeof record.project === 'string' ? record.project.trim() : ''
+  if (rawProject.includes('/') || rawProject.includes(BACKSLASH)) {
     throw new NotificationError('project must be a name, not a path')
   }
+  const project = clean(record.project, NOTIFICATION_LIMITS.project)
   const source = record.source === undefined ? 'product' : String(record.source)
   if (source !== 'product' && source !== 'external') {
     throw new NotificationError(`unknown source "${source}"; expected product or external`)

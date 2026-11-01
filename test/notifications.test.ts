@@ -106,6 +106,19 @@ describe('the schema', () => {
     expect(event.detail).not.toContain(secret)
   })
 
+  it('shortens a Windows path too, and refuses it in project', () => {
+    const { event } = appendNotification(valid({
+      detail: 'failed at C:\\Users\\Alice\\work\\secret.md while reading',
+      title: 'open C:\\Users\\Alice\\private\\creds.txt',
+    }))
+    expect(event.detail).not.toContain('C:\\Users')
+    expect(event.detail).toContain('secret.md')
+    expect(event.title).not.toContain('C:\\Users')
+    expect(event.title).toContain('creds.txt')
+
+    expect(() => appendNotification(valid({ project: 'C:\\Users\\Alice' }))).toThrow(/project must be a name/)
+  })
+
   it('collapses newlines into one line and shortens an absolute path', () => {
     const { event } = appendNotification(valid({ detail: 'line one\nline two at /home/someone/projects/secret/file.ts' }))
     expect(event.detail).not.toContain('\n')
@@ -273,6 +286,25 @@ describe('the ingest route', () => {
       body: JSON.stringify({ kind: 'external', title: 'x'.repeat(NOTIFICATION_LIMITS.body + 1024) }),
     })
     expect(response.status).toBe(400)
+  })
+
+  it('never trusts a source claimed in the body', async () => {
+    // A loopback caller that could say `source: product` would forge `flow.escalated` — the route decides the
+    // source, and the schema then refuses the product-only kind.
+    const forged = await request('POST', `${base}/api/notifications`, {
+      headers: { origin: base },
+      body: JSON.stringify({ kind: 'flow.escalated', title: 'fake', source: 'product' }),
+    })
+    expect(forged.status).toBe(400)
+    expect(readNotifications().total).toBe(0)
+
+    const honest = await request('POST', `${base}/api/notifications`, {
+      headers: { origin: base },
+      body: JSON.stringify({ kind: 'external', title: 'fine', source: 'product' }),
+    })
+    // Accepted, but stored as external: the field is the route's, not the caller's.
+    expect(honest.status).toBe(201)
+    expect(readNotifications().events[0]!.source).toBe('external')
   })
 
   it('refuses a product-only kind from ingest', async () => {

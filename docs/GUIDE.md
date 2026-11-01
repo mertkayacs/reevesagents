@@ -220,9 +220,14 @@ closes or blocks is written to `~/.reeves/notifications.jsonl` (append-only, `06
 `kind` says what happened (`run.created`, `run.stopped`, `run.archived`, `agent.needs_human`, `agent.failed`,
 `agent.finished`, `probe.failed`, `flow.escalated`, `flow.review_timeout`, `plan.item_done`, `plan.item_blocked`,
 `external`) and `severity` says whether it needs you now: `error` — something failed, `warn` — a human is
-required, `info` — progress. The same journal feeds the Web UI's Logs dialog and the agent card's pulse; the
-pulse interval is `agent_pulse_ms` (`0` turns the pulse off). The two flow kinds and the two plan kinds are
-product-only: the ingest route refuses them, so a supervisor cannot fake "a human is required".
+required, `info` — progress. The two flow kinds and the two plan kinds are product-only: the ingest route refuses
+them, and it always stores an ingested event as `source: external`, so a supervisor cannot fake "a human is
+required".
+
+The journal is readable today from the CLI above and from `GET /api/notifications` / `GET /api/state` (which
+carries `{latest_seq, unread, latest_ts}`). The Web UI's Logs dialog and the agent-card pulse are block 15 and are
+not in this branch yet; `agent_pulse_ms` is the setting that dialog will use (`0` turns the pulse off), and until
+then it is a stored preference with no consumer.
 
 ### The plan as an object
 
