@@ -773,6 +773,19 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
     return withClaim(state, 'verdict_scrolled', { ...state.claim, verdict_count: observations.verdict_count })
   }
 
+  // The dev committed while the review was running: the verdict describes an older commit, so it
+  // is not applied to the new head. The new head goes to review once the reviewer is free.
+  //
+  // This runs *before* the freshness gate on purpose. A head that moved is a fact about the repository,
+  // not about the reviewer: after `dispatch_unconfirmed` the round's answer is already consumed, so a
+  // freshness check first would hold the tick in `awaiting_verdict` and let the dev's new commit sit
+  // unseen until the review timeout escalated the flow.
+  if (observations.head !== state.claim.head) {
+    const gate = reviewGate(state, observations)
+    if (gate) return gate
+    return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now, observations.notes_staging_path)
+  }
+
   // A file answer is bound to `(head, round)`, which is why it does not need the pane's verdict counter —
   // but an answer already acted on is not fresh again. Without the second half, `dispatch_unconfirmed`
   // (claim released, staging file kept) made every following tick rebuild and re-paste the same prompt.
@@ -784,14 +797,6 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
     // Nothing answered within the budget: a reviewer that crashed, hit a login screen or is stuck
     // on a modal never prints a verdict, so the flow escalates instead of waiting for ever.
     return timedOut ? expired() : hold(state, 'awaiting_verdict')
-  }
-
-  // The dev committed while the review was running: the verdict describes an older commit, so it
-  // is not applied to the new head. The new head goes to review once the reviewer is free.
-  if (observations.head !== state.claim.head) {
-    const gate = reviewGate(state, observations)
-    if (gate) return gate
-    return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now, observations.notes_staging_path)
   }
 
   // A verdict is only an answer if there is a review behind it: a reviewer that answers in one second

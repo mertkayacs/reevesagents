@@ -199,8 +199,9 @@ human is highlighted with the same warning colour as a stale run.
   nothing was pasted and the round was not spent, so the next `flow tick` retries.
   `dispatch_unconfirmed` — the text is in the pane but the Enter did not visibly start a turn; the claim is
   released, the engine presses Enter again only if the composer still holds exactly that text, and the
-  round's answer is not dispatched a second time: the flow waits for the dev to commit (a new head starts
-  the next round) or for you to look at the pane. A *refused* dispatch is different — nothing was pasted,
+  round's answer is not dispatched a second time: the flow waits for the dev to commit (a new head is picked
+  up even though the round's answer is already consumed, and it starts the next review) or for you to look
+  at the pane. A *refused* dispatch is different — nothing was pasted,
   so the next `flow tick` retries the same answer.
 - A flow whose run was stopped, deleted or swept is parked as `orphaned`: `flow status`
   prints the reason, nothing is ticked, and `flow stop` is how you close it. Deleting

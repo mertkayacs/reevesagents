@@ -566,6 +566,11 @@ fleet). A *refused* dispatch (`target_not_ready`, `busy`) does not set it: nothi
 is still the reviewer's to answer and the next tick may dispatch. A new commit changes the key, so the next
 round starts clean without any cleanup step.
 
+The head check outranks this one: a head that moved is a fact about the repository, not about the reviewer.
+Checking freshness first held the tick in `awaiting_verdict` after an `dispatch_unconfirmed`, so the dev's
+new commit went unseen until the review timeout escalated the flow; the moved head now always re-requests
+the review for the new commit.
+
 A rejected verdict does not touch the claim. The journal gets `review_unsubstantiated` with the numbers
 (`elapsed=2s notes=0/0b tool=0`), `unsubstantiated_attempts` in the state goes up, and the flow re-requests
 the review **once** with a prompt that says the previous answer was rejected and what has to change. When

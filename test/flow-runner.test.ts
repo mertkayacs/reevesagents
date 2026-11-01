@@ -711,6 +711,29 @@ describe('an answer consumed once', () => {
     expect(readFlow('run-1').answered_round).toBe(`${NOTES_HEAD}-r1`)
   })
 
+  it('sees the dev\'s new commit even when the round\'s answer is already consumed', () => {
+    // After `dispatch_unconfirmed` the answer is recorded as consumed, so it is not fresh any more. The
+    // head check must still run: the dev got the prompt, committed, and the flow has to notice that
+    // instead of waiting in `awaiting_verdict` until the review timeout escalates it.
+    seed(freshRound())
+    writeStaging('run-1', NOTES_HEAD, 1, ROUND_TEXT)
+    const unconfirmed = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed' as const })) })
+    expect(step(unconfirmed, { head: NOTES_HEAD }).status).toBe('unconfirmed')
+    expect(readFlow('run-1').answered_round).toBe(`${NOTES_HEAD}-r1`)
+    expect(readFlow('run-1').state).toBe('reviewing')
+
+    // The dev committed: a new head, same (consumed) answer still on disk.
+    const next = makePorts()
+    const moved = step(next, { head: 'fff9999' })
+
+    expect(moved.decision.reason).toBe('head_moved')
+    expect(moved.decision.next_state).toBe('reviewing')
+    expect(moved.state.claim.head).toBe('fff9999')
+    // The only send is the new review request to the reviewer — not a second fix prompt to the dev.
+    expect(moved.decision.target).toBe('review')
+    expect(moved.decision.message).toContain('fff9999')
+  })
+
   it('keeps the answer usable when the dispatch was refused, not unconfirmed', () => {
     // Nothing was pasted, so the round is still the reviewer's to answer: the next tick must dispatch.
     seed(freshRound())
