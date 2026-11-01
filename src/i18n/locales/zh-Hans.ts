@@ -215,6 +215,8 @@ export const zhHans = {
     'web.planStatus_done': '完成',
     'web.planStatus_blocked_owner': '已阻塞',
     'web.planStatus_skipped': '已跳过',
+    'web.planStatus_missing': '缺失',
+    'web.planMissingSince': '缺失自',
     'web.config': '配置',
     'web.configSubtitle': '编辑全局设置。',
     'web.connecting': '连接中',

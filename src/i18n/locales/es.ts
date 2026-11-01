@@ -213,6 +213,8 @@ export const es = {
     'web.planStatus_done': 'hecho',
     'web.planStatus_blocked_owner': 'bloqueado',
     'web.planStatus_skipped': 'omitido',
+    'web.planStatus_missing': 'ausente',
+    'web.planMissingSince': 'Ausente desde',
     'web.config': 'Configuración',
     'web.configSubtitle': 'Edita los ajustes globales.',
     'web.connecting': 'conectando',

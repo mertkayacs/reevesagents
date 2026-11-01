@@ -214,6 +214,8 @@ export const pt = {
     'web.planStatus_done': 'feito',
     'web.planStatus_blocked_owner': 'bloqueado',
     'web.planStatus_skipped': 'ignorado',
+    'web.planStatus_missing': 'ausente',
+    'web.planMissingSince': 'Ausente desde',
     'web.config': 'Configuração',
     'web.configSubtitle': 'Editar as definições globais.',
     'web.connecting': 'a ligar',

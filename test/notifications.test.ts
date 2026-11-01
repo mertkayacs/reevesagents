@@ -310,6 +310,14 @@ describe('the watermark', () => {
     expect(again.unread_by.find(entry => entry.agent_id === 'dev-1')!.latest_ts).toBe(newest.received_at)
   })
 
+  it('carries the watermark, so another tab sees a read on the state frame', () => {
+    const first = appendNotification(valid({ title: 'one' })).event
+    expect(notificationSummary().read_seq).toBe(0)
+    markNotificationsRead(first.seq)
+    // `latest_seq` did not move; only the watermark did, which is why the client watches it.
+    expect(notificationSummary()).toMatchObject({ latest_seq: first.seq, read_seq: first.seq, unread: 0 })
+  })
+
   it('counts unread against the watermark', () => {
     appendNotification(valid({ title: 'one' }))
     const second = appendNotification(valid({ title: 'two' })).event

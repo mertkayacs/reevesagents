@@ -362,6 +362,9 @@ function parseLine(line: string): NotificationEvent | null {
 
 export interface NotificationSummary {
   latest_seq: number
+  // The read watermark travels with the summary: marking read on one tab does not change `latest_seq`, so without
+  // this a second tab keeps rendering rows as unread after somebody has read them.
+  read_seq: number
   unread: number
   latest_ts: string | null
   // Which agents have unread news, so a card pulses on its own agent and not on every card in the sidebar. Grouped
@@ -384,6 +387,7 @@ export function notificationSummary(root = stateRoot()): NotificationSummary {
   }
   return {
     latest_seq: latest,
+    read_seq: readSeq,
     unread: unreadEvents.length,
     latest_ts: newest ? newest.received_at : null,
     unread_by: [...byTarget.values()].slice(-50),

@@ -215,6 +215,8 @@ export const ar = {
     'web.planStatus_done': 'تم',
     'web.planStatus_blocked_owner': 'محظور',
     'web.planStatus_skipped': 'تم تخطيه',
+    'web.planStatus_missing': 'مفقود',
+    'web.planMissingSince': 'مفقود منذ',
     'web.config': 'الإعدادات',
     'web.configSubtitle': 'حرّر الإعدادات العامة.',
     'web.connecting': 'جارٍ الاتصال',

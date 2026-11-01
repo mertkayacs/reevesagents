@@ -212,6 +212,8 @@ export const tr = {
     'web.planStatus_done': 'bitti',
     'web.planStatus_blocked_owner': 'engellendi',
     'web.planStatus_skipped': 'atlandı',
+    'web.planStatus_missing': 'eksik',
+    'web.planMissingSince': 'Eksik olduğu tarih',
     'web.config': 'Yapılandırma',
     'web.configSubtitle': 'Genel ayarları düzenle.',
     'web.connecting': 'bağlanıyor',

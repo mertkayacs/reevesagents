@@ -209,6 +209,8 @@ export const fr = {
     'web.planStatus_done': 'terminé',
     'web.planStatus_blocked_owner': 'bloqué',
     'web.planStatus_skipped': 'ignoré',
+    'web.planStatus_missing': 'absent',
+    'web.planMissingSince': 'Absent depuis',
     'web.config': 'Config',
     'web.configSubtitle': 'Modifier les réglages globaux.',
     'web.connecting': 'connexion',

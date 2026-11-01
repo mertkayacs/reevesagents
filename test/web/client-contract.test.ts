@@ -266,6 +266,26 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(server).toContain('withPulse(')
   })
 
+  it('pulses for the newest applicable event, and reschedules one timer', () => {
+    // An agent event and a run-level event can both apply to a card: the newest timestamp must win, not the last
+    // array element. And the timer must be rescheduled to the earliest expiry instead of being pinned once.
+    expect(js).toContain('if (!latest || entry.latest_ts > latest) latest = entry.latest_ts')
+    expect(js).toContain('if (pulseTimer) { globalThis.clearTimeout(pulseTimer); pulseTimer = null }')
+    expect(js).toContain('schedulePulseTick()\n    }, earliest + 25)')
+  })
+
+  it('refreshes the Logs list when another tab marks events read', () => {
+    // `latest_seq` does not move on "mark read"; the condition has to watch the watermark and the unread count too.
+    expect(js).toContain('previous.read_seq !== data.notifications.read_seq')
+    expect(js).toContain('previous.unread !== data.notifications.unread')
+  })
+
+  it('shows a missing plan row as missing, in the list and in the detail', () => {
+    expect(js).toContain("planStatusBadge(item.missing_since ? 'missing' : item.status)")
+    expect(js).toContain("t('web.planMissingSince')")
+    expect(js).toContain('web.planStatus_missing')
+  })
+
   it('draws the pulse from the server timestamp and respects agent_pulse_ms', () => {
     expect(js).toContain('function renderPulse(')
     expect(js).toContain('function schedulePulseTick(')

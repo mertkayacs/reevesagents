@@ -431,10 +431,15 @@
       for (const entry of data.notifications.unread_by || []) {
         if (entry.latest_ts && !pulseSeenAt.has(entry.latest_ts)) pulseSeenAt.set(entry.latest_ts, Date.now())
       }
-      // The dialog refreshes itself from the same stream: a new sequence means new rows, no polling needed.
-      if (el.insightsDialog.open && previous && previous.latest_seq !== data.notifications.latest_seq) {
-        void loadLogs()
-      }
+      // The dialog refreshes itself from the same stream. Marking read on another tab does not change
+      // `latest_seq` — only `read_seq` and `unread` — so the condition watches those as well, or this tab keeps
+      // showing rows highlighted as unread after somebody has read them.
+      const changed = previous && (
+        previous.latest_seq !== data.notifications.latest_seq
+        || previous.read_seq !== data.notifications.read_seq
+        || previous.unread !== data.notifications.unread
+      )
+      if (el.insightsDialog.open && changed) void loadLogs()
       schedulePulseTick()
     }
     applyLanguage(data.language)
@@ -1375,7 +1380,9 @@
       const title = document.createElement('span')
       title.className = 'plan-title'
       title.textContent = item.title
-      row.append(id, title, planStatusBadge(item.status))
+      // A row the document no longer lists keeps its status, but the badge says so explicitly: without it the row
+      // looks like ordinary open work that nobody is picking up.
+      row.append(id, title, planStatusBadge(item.missing_since ? 'missing' : item.status))
       row.addEventListener('click', () => showPlanDetail(item))
       el.planList.appendChild(row)
     }
@@ -1384,7 +1391,8 @@
   function showPlanDetail(item) {
     el.planDetail.replaceChildren()
     const rows = [
-      [`${t('web.planStatus')}`, t(`web.planStatus_${item.status}`)],
+      [`${t('web.planStatus')}`, item.missing_since ? t('web.planStatus_missing') : t(`web.planStatus_${item.status}`)],
+      ...(item.missing_since ? [[t('web.planMissingSince'), item.missing_since]] : []),
       [t('web.planCommit'), item.head || '—'],
       [t('web.planRounds'), String(item.rounds ?? 0)],
       [t('web.planNotes'), item.notes_ref || '—'],
@@ -1476,10 +1484,13 @@
     const pulseMs = Number(notifications.agent_pulse_ms ?? 0)
     if (pulseMs <= 0) return 0
     const entries = Array.isArray(notifications.unread_by) ? notifications.unread_by : []
+    // An agent event and a run-level event can both apply to this card: keep the *newest* timestamp, not the last
+    // one in the array, or a card can pulse for a stale approval while its own news is newer.
     let latest = null
     for (const entry of entries) {
-      if (entry.agent_id === agent.id) latest = entry.latest_ts
-      else if (entry.agent_id === '' && run && entry.run_id === run.id) latest = entry.latest_ts
+      const applies = entry.agent_id === agent.id || (entry.agent_id === '' && run && entry.run_id === run.id)
+      if (!applies) continue
+      if (!latest || entry.latest_ts > latest) latest = entry.latest_ts
     }
     if (!latest) return 0
     const seen = pulseSeenAt.get(latest)
@@ -1492,14 +1503,26 @@
     if (remaining > 0) card.style.setProperty('--pulse-remaining', `${remaining}ms`)
   }
 
+  // One timer for the *earliest* expiry, rescheduled whenever the summary changes: a timer pinned to the old
+  // `agent_pulse_ms` would outlive a shorter setting, and a timer started at the full length would repaint long after
+  // the last ring finished.
   function schedulePulseTick() {
-    if (pulseTimer) return
+    if (pulseTimer) { globalThis.clearTimeout(pulseTimer); pulseTimer = null }
     const { pulseMs } = pulseState()
     if (pulseMs <= 0) return
+    const entries = (insights.notifications && insights.notifications.unread_by) || []
+    let earliest = Number.POSITIVE_INFINITY
+    const now = Date.now()
+    for (const entry of entries) {
+      const remaining = core().pulseRemaining(entry.latest_ts, now, pulseMs)
+      if (remaining > 0 && remaining < earliest) earliest = remaining
+    }
+    if (!Number.isFinite(earliest)) return
     pulseTimer = setTimeout(() => {
       pulseTimer = null
       renderSidebar()
-    }, pulseMs)
+      schedulePulseTick()
+    }, earliest + 25)
   }
 
   function clearPulse() {

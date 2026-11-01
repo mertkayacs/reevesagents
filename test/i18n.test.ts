@@ -86,7 +86,7 @@ const INSIGHTS_KEYS = [
   'web.logsMarkRead', 'web.logsMarkedRead', 'web.logsRun', 'web.logsUnreadOnly', 'web.planStatus', 'web.planCommit',
   'web.planRounds', 'web.planNotes', 'web.planBrief', 'web.planStatus_pending', 'web.planStatus_needs_brief',
   'web.planStatus_queued', 'web.planStatus_in_work', 'web.planStatus_reviewing', 'web.planStatus_done',
-  'web.planStatus_blocked_owner', 'web.planStatus_skipped',
+  'web.planStatus_blocked_owner', 'web.planStatus_skipped', 'web.planStatus_missing', 'web.planMissingSince',
 ]
 
 describe('insights dialog key parity', () => {

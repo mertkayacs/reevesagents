@@ -208,6 +208,8 @@ export const de = {
     'web.planStatus_done': 'fertig',
     'web.planStatus_blocked_owner': 'blockiert',
     'web.planStatus_skipped': 'übersprungen',
+    'web.planStatus_missing': 'fehlt',
+    'web.planMissingSince': 'Fehlt seit',
     'web.config': 'Config',
     'web.configSubtitle': 'Globale Einstellungen bearbeiten.',
     'web.connecting': 'verbindet',

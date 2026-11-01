@@ -212,6 +212,8 @@ export const en = {
   'web.planStatus_done': 'done',
   'web.planStatus_blocked_owner': 'blocked',
   'web.planStatus_skipped': 'skipped',
+  'web.planStatus_missing': 'missing',
+  'web.planMissingSince': 'Missing since',
   'web.config': 'Config',
   'config.agentPulse': 'Agent pulse (ms)',
   'config.flowTick': 'Flow tick (ms)',

@@ -212,6 +212,8 @@ export const ru = {
     'web.planStatus_done': 'готово',
     'web.planStatus_blocked_owner': 'заблокирован',
     'web.planStatus_skipped': 'пропущен',
+    'web.planStatus_missing': 'отсутствует',
+    'web.planMissingSince': 'Нет в документе с',
     'web.config': 'Конфигурация',
     'config.agentPulse': 'Пульс агента (мс)',
     'config.flowTick': 'Тик флоу (мс)',
