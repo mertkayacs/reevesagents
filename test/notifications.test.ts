@@ -106,6 +106,22 @@ describe('the schema', () => {
     expect(event.detail).not.toContain(secret)
   })
 
+  it('shortens a path that follows any character, and leaves a URL alone', () => {
+    // `path:/home/...` is how half the tooling writes a path: a lead whitelist of whitespace and brackets misses
+    // it, and the whole tree reaches the journal.
+    const glued = appendNotification(valid({ detail: 'path:/home/dmytro/private/file.ts not found' })).event
+    expect(glued.detail).not.toContain('dmytro')
+    expect(glued.detail).toContain('file.ts')
+
+    const chained = appendNotification(valid({ detail: 'see->/home/dmytro/private/other.ts' })).event
+    expect(chained.detail).not.toContain('dmytro')
+    expect(chained.detail).toContain('other.ts')
+
+    // A URL is not a path: shortening it would corrupt the link.
+    const url = appendNotification(valid({ detail: 'GET https://example.com/api/state failed' })).event
+    expect(url.detail).toContain('https://example.com/api/state')
+  })
+
   it('shortens a path whose components are not ASCII', () => {
     // The checkouts here are Polish, Ukrainian and Russian: a `\w`-based pattern treats `Дмитро` as prose and leaves
     // the whole tree in the event.

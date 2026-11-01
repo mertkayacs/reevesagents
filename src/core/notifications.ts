@@ -164,11 +164,18 @@ function clean(value: unknown, limit: number): string {
 // The components are **Unicode**: this journal is written by agents working in Polish, Ukrainian and Russian
 // checkouts, so `/home/Дмитро/Проект/secret.txt` is an ordinary path here. A `\w`-based class would treat it as
 // prose and leave the whole tree in the event.
-const UNIX_PATH = /(^|[\s("'`=])((?:\/[\p{L}\p{N}._@+-]+){2,}\/?)/gu
-const WINDOWS_PATH = /(^|[\s("'`=])([A-Za-z]:\\[\p{L}\p{N}.@+ -]+(?:\\[\p{L}\p{N}.@+ -]+){1,})/gu
-const UNC_PATH = /(^|[\s("'`=])(\\\\[\p{L}\p{N}.@+ -]+(?:\\[\p{L}\p{N}.@+ -]+){1,})/gu
+// The lead is "any character that cannot be part of a path", not a short list of punctuation: a path also follows
+// `path:`, `file:`, `->` and a dozen other joins, and a whitelist silently misses each one. The exception is a
+// colon that introduces a `scheme://…` URL — that is not a path on this machine (see `shortenPath`).
+const LEAD = '(^|[^\\p{L}\\p{N}._@+\\-/\\\\])'
+const UNIX_PATH = new RegExp(`${LEAD}((?:\\/[\\p{L}\\p{N}._@+-]+){2,}\\/?)`, 'gu')
+const WINDOWS_PATH = new RegExp(`${LEAD}([A-Za-z]:\\\\[\\p{L}\\p{N}.@+ -]+(?:\\\\[\\p{L}\\p{N}.@+ -]+){1,})`, 'gu')
+const UNC_PATH = new RegExp(`${LEAD}(\\\\\\\\[\\p{L}\\p{N}.@+ -]+(?:\\\\[\\p{L}\\p{N}.@+ -]+){1,})`, 'gu')
 
 function shortenPath(match: string, lead: string, path: string): string {
+  // A URL is not a path on this machine: `https://host/x` reaches here with `lead: ':'` and a path that starts
+  // with `//`, and rewriting it would corrupt the link instead of protecting anything.
+  if (lead === ':' && path.startsWith('//')) return match
   if (path.startsWith('//')) return match
   // The last component only: the file name is what a human needs, the tree is what must not leak.
   const parts = path.split(/[\\/]+/).filter(Boolean)
