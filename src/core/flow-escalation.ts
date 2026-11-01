@@ -150,4 +150,3 @@ export function escalationSummary(approval: RunApproval): string {
   const item = typeof approval.details?.item_id === 'string' ? ` (${approval.details.item_id})` : ''
   return `flow escalated: ${reason}${item}`
 }
-
