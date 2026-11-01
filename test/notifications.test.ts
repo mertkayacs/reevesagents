@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { request as requestFn } from 'node:http'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -13,6 +14,45 @@ import {
 } from '../src/core/notifications.js'
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => ''), spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
+
+
+// HTTP through a fresh connection per request. `fetch` pools sockets, and this server closes a connection when it
+// refuses a request it did not read the body of, which surfaces as `UND_ERR_SOCKET` rather than the status under
+// test. One connection per call makes the assertion about the status, not about the pool.
+interface HttpResult { status: number, text: string }
+
+function request(method: string, url: string, init: { body?: string, headers?: Record<string, string> } = {}): Promise<HttpResult> {
+  return new Promise((resolve, reject) => {
+    const parsed = new (globalThis as unknown as {
+      URL: new (_input: string) => { hostname: string, port: string, pathname: string, search: string }
+    }).URL(url)
+    const body = init.body ?? ''
+    const req = requestFn({
+      hostname: parsed.hostname,
+      port: parsed.port,
+      path: `${parsed.pathname}${parsed.search}`,
+      method,
+      agent: false,
+      headers: {
+        connection: 'close',
+        ...(body ? { 'content-length': String(Buffer.byteLength(body)), 'content-type': 'application/json' } : {}),
+        ...init.headers,
+      },
+    }, res => {
+      let text = ''
+      res.setEncoding('utf-8')
+      res.on('data', (chunk: string) => { text += chunk })
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, text }))
+    })
+    req.on('error', reject)
+    if (body) req.write(body)
+    req.end()
+  })
+}
+
+async function json(response: HttpResult): Promise<any> {
+  return JSON.parse(response.text)
+}
 
 let root: string
 let savedRegistry: string | undefined
@@ -206,13 +246,12 @@ describe('the ingest route', () => {
   })
 
   it('accepts a loopback POST with an Origin and answers 201', async () => {
-    const response = await globalThis.fetch(`${base}/api/notifications`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: base },
+    const response = await request('POST', `${base}/api/notifications`, {
+      headers: { origin: base },
       body: JSON.stringify({ kind: 'external', title: 'fleet says hi', project: 'proj' }),
     })
     expect(response.status).toBe(201)
-    const body = await response.json() as { event: { kind: string, source: string, seq: number } }
+    const body = await json(response) as { event: { kind: string, source: string, seq: number } }
     expect(body.event).toMatchObject({ kind: 'external', source: 'external' })
     expect(body.event.seq).toBeGreaterThan(0)
   })
@@ -220,30 +259,25 @@ describe('the ingest route', () => {
   it('rejects a POST without Origin and one with a foreign Origin', async () => {
     // `connection: close` on the refusal cases: undici keeps the socket for a second request, and the server ends
     // the one it refused, which surfaces as a reset instead of the status.
-    const noOrigin = await globalThis.fetch(`${base}/api/notifications`, { method: 'POST', headers: { connection: 'close' } })
+    const noOrigin = await request('POST', `${base}/api/notifications`)
     expect(noOrigin.status).toBe(403)
 
-    const foreign = await globalThis.fetch(`${base}/api/notifications`, {
-      method: 'POST',
-      headers: { origin: 'http://evil.example', connection: 'close' },
-    })
+    const foreign = await request('POST', `${base}/api/notifications`, { headers: { origin: 'http://evil.example' } })
     expect(foreign.status).toBe(403)
     expect(readNotifications().total).toBe(0)
   })
 
   it('refuses a body over the limit', async () => {
-    const response = await globalThis.fetch(`${base}/api/notifications`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: base },
+    const response = await request('POST', `${base}/api/notifications`, {
+      headers: { origin: base },
       body: JSON.stringify({ kind: 'external', title: 'x'.repeat(NOTIFICATION_LIMITS.body + 1024) }),
     })
     expect(response.status).toBe(400)
   })
 
   it('refuses a product-only kind from ingest', async () => {
-    const response = await globalThis.fetch(`${base}/api/notifications`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: base },
+    const response = await request('POST', `${base}/api/notifications`, {
+      headers: { origin: base },
       body: JSON.stringify({ kind: 'flow.escalated', title: 'fake escalation' }),
     })
     // The route sets `source: external`, and the schema refuses a product-only kind from a non-product source.
@@ -254,9 +288,8 @@ describe('the ingest route', () => {
   it('rate-limits a flood', async () => {
     const statuses: number[] = []
     for (let index = 0; index < 70; index += 1) {
-      const response = await globalThis.fetch(`${base}/api/notifications`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', origin: base },
+      const response = await request('POST', `${base}/api/notifications`, {
+        headers: { origin: base },
         body: JSON.stringify({ kind: 'external', title: `flood ${index}` }),
       })
       statuses.push(response.status)
@@ -266,28 +299,26 @@ describe('the ingest route', () => {
   })
 
   it('serves the journal and marks it read', async () => {
-    await globalThis.fetch(`${base}/api/notifications`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: base },
+    await request('POST', `${base}/api/notifications`, {
+      headers: { origin: base },
       body: JSON.stringify({ kind: 'external', title: 'visible', run_id: 'run-9' }),
     })
-    const listed = await globalThis.fetch(`${base}/api/notifications?run=run-9`)
-    const body = await listed.json() as { events: { title: string }[], unread: number }
+    const listed = await request('GET', `${base}/api/notifications?run=run-9`)
+    const body = await json(listed) as { events: { title: string }[], unread: number }
     expect(body.events.map(event => event.title)).toEqual(['visible'])
 
-    const read = await globalThis.fetch(`${base}/api/notifications/read`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: base },
+    const read = await request('POST', `${base}/api/notifications/read`, {
+      headers: { origin: base },
       body: JSON.stringify({}),
     })
     expect(read.status).toBe(200)
-    const after = await (await globalThis.fetch(`${base}/api/notifications?unread=1`)).json() as { events: unknown[] }
+    const after = await json(await request('GET', `${base}/api/notifications?unread=1`)) as { events: unknown[] }
     expect(after.events).toEqual([])
   })
 
   it('carries the summary in the state payload', async () => {
     appendNotification(valid({ title: 'one' }))
-    const state = await (await globalThis.fetch(`${base}/api/state`)).json() as { notifications?: { unread: number, latest_seq: number } }
+    const state = await json(await request('GET', `${base}/api/state`)) as { notifications?: { unread: number, latest_seq: number } }
     expect(state.notifications).toMatchObject({ unread: 1 })
     expect(state.notifications!.latest_seq).toBeGreaterThan(0)
   })

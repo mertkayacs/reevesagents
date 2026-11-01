@@ -443,10 +443,14 @@ function resolveApprovalAction(id: string, body: Record<string, unknown>): unkno
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
   if (!isAllowedHostHeader(req.headers.host)) {
+    // Drain before answering: a refusal that leaves the request body unread makes Node tear the socket down, and
+    // the caller then sees a reset instead of the 403 it needs (a curl probe reports `000`, undici throws).
+    try { req.resume() } catch { /* the stream is already gone */ }
     send(res, 403, 'forbidden host', 'text/plain; charset=utf-8')
     return
   }
   if (isStateChangingMethod(req.method) && !isAllowedOrigin(req.headers.origin, ctx.port())) {
+    try { req.resume() } catch { /* the stream is already gone */ }
     send(res, 403, 'forbidden origin', 'text/plain; charset=utf-8')
     return
   }
