@@ -49,7 +49,7 @@ export function raiseEscalationApproval(request: EscalationRequest): RunApproval
     // More than one can exist when two tickers raced past the check below. They are duplicates of the *same* episode
     // and none of them carries a decision yet, so keeping the oldest and dropping the rest loses nothing and spares the
     // operator two identical tickets.
-    const [oldest] = [...pendingForKey].sort((a, b) => a.requested_at.localeCompare(b.requested_at))
+    const [oldest] = [...pendingForKey].sort(oldestFirst)
     for (const extra of pendingForKey) if (extra.id !== oldest!.id) removeRunApproval(extra.id)
     return oldest!
   }
@@ -75,7 +75,7 @@ export function raiseEscalationApproval(request: EscalationRequest): RunApproval
   const race = listRunApprovals(request.run_id, 'pending').filter(approval =>
     approval.action === FLOW_ESCALATION_ACTION && approval.details?.key === key)
   if (race.length <= 1) return created
-  const [oldest] = [...race].sort((a, b) => a.requested_at.localeCompare(b.requested_at))
+  const [oldest] = [...race].sort(oldestFirst)
   for (const extra of race) if (extra.id !== oldest!.id) removeRunApproval(extra.id)
   return oldest ?? created
 }
@@ -153,6 +153,13 @@ export function applyEscalationDecision(approval: RunApproval, note = ''): Escal
     }
   }
   return outcome
+}
+
+// Deterministic order even when two tickets share a millisecond: `requested_at` first, then the id, so "the oldest"
+// does not depend on the file listing order.
+function oldestFirst(a: RunApproval, b: RunApproval): number {
+  const byTime = a.requested_at.localeCompare(b.requested_at)
+  return byTime !== 0 ? byTime : a.id.localeCompare(b.id)
 }
 
 function closedDetail(reason: string, note: string): string {

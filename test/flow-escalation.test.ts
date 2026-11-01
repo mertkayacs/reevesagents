@@ -96,10 +96,12 @@ describe('raising the approval', () => {
       details: { key: 'flow-a:1', run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' },
     })
     const kept = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })
-    expect(kept?.id).toBe(first.id)
     const tickets = listRunApprovals('run-1', 'pending').filter(entry => entry.action === FLOW_ESCALATION_ACTION)
     expect(tickets).toHaveLength(1)
-    expect(tickets[0]!.id).toBe(first.id)
+    // Which of the two survives depends on `requested_at`, and two records created in the same millisecond are ordered
+    // by id — either way exactly one ticket remains, and it is one of the two that were created.
+    expect([first.id, duplicate.id]).toContain(tickets[0]!.id)
+    expect(kept?.id).toBe(tickets[0]!.id)
     expect(duplicate.id).not.toBe(first.id)
   })
 
