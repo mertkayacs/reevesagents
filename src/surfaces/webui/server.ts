@@ -12,7 +12,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './guards.js'
 import { buildWebState, listWebProviders } from './state.js'
-import { tickAllFlows } from '../../core/flow-ticker.js'
+import { shouldTick, tickAllFlows } from '../../core/flow-ticker.js'
 import {
   NotificationError, appendNotification, markNotificationsRead, notificationSummary, readNotifications,
 } from '../../core/notifications.js'
@@ -174,6 +174,9 @@ function createSseHub(): SseHub {
   const clients = new Set<ServerResponse>()
   let timer: ReturnType<typeof setInterval> | null = null
   let flowTimer: ReturnType<typeof setInterval> | null = null
+  // When the last flow pass ran, so the snapshot path obeys the same `flow_tick_ms` as the timer: `0` must mean
+  // "no autonomous tick at all", not "no timer but every frame ticks".
+  let lastFlowTick = 0
   let last = ''
 
   const snapshot = (): string => {
@@ -185,9 +188,13 @@ function createSseHub(): SseHub {
     // The autonomous tick, one step per flow per pass. It runs on the same clock as the sweep because a dashboard
     // that is open is the most likely place for it to be needed; `flow tick --all` is the cron equivalent, and the
     // claim protocol keeps the two from pasting the same prompt twice. A failing flow never stops the sweep.
-    try {
-      tickAllFlows()
-    } catch { /* one broken flow must not take the dashboard down */ }
+    const tickMs = loadConfig().global.flow_tick_ms
+    if (shouldTick({ state: 'idle' }, lastFlowTick || null, tickMs)) {
+      lastFlowTick = Date.now()
+      try {
+        tickAllFlows()
+      } catch { /* one broken flow must not take the dashboard down */ }
+    }
     // The journal summary rides along with the state frame: a badge that needs a second request would be a badge
     // that lags the screen it belongs to.
     return JSON.stringify({ ...buildWebState(), notifications: notificationSummary() })
@@ -211,6 +218,7 @@ function createSseHub(): SseHub {
     const tickMs = loadConfig().global.flow_tick_ms
     if (tickMs > 0 && !flowTimer) {
       flowTimer = setInterval(() => {
+        lastFlowTick = Date.now()
         try {
           tickAllFlows()
         } catch { /* see above */ }

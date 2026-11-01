@@ -219,8 +219,8 @@ closes or blocks is written to `~/.reeves/notifications.jsonl` (append-only, `06
 
 `kind` says what happened (`run.created`, `run.stopped`, `run.archived`, `agent.needs_human`, `agent.failed`,
 `agent.finished`, `probe.failed`, `flow.escalated`, `flow.review_timeout`, `plan.item_done`, `plan.item_blocked`,
-`external`) and `severity` says whether it needs you now: `error` — something failed, `warn` — a human is
-required, `info` — progress. The two flow kinds and the two plan kinds are product-only: the ingest route refuses
+`plan.item_needs_brief`, `external`) and `severity` says whether it needs you now: `error` — something failed, `warn` — a human is
+required, `info` — progress. The two flow kinds and the three plan kinds are product-only: the ingest route refuses
 them, and it always stores an ingested event as `source: external`, so a supervisor cannot fake "a human is
 required".
 

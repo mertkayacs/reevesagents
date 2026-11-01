@@ -361,9 +361,10 @@ the engine already requires before it closes a flow — no second, weaker gate.
 
 ### 5.1 Who ticks, and what a blocker looks like
 
-The plan decides *what* moves; a surface decides *when* (`docs/flows-design.md` §2.3). Three sites call
-`tickAllFlows()` — the Web UI SSE hub, its `/api/state` snapshot, and `flow tick --all` — and `flow_tick_ms`
-(`0` disables) is their cadence. The engine still holds no timer.
+The plan decides *what* moves; a surface decides *when* (`docs/flows-design.md` §2.3). `tickAllFlows()` is called
+from the Web UI's SSE hub — both its own timer and its state frame, each throttled to `flow_tick_ms` — and from
+`flow tick --all`. `GET /api/state` does **not** tick (an API poll must not paste into a pane), and `flow_tick_ms = 0`
+disables the autonomous tick everywhere, frame included. The engine still holds no timer.
 
 A blocker is a **view** value, never a field written into `task_status`: `flowBadge()` takes the plan's first
 unmovable item — a `blocked_owner` row, or an open row with no brief — and reports `attention: 'plan_waiting'` with
