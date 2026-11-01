@@ -305,17 +305,17 @@ above plus `schema_version`, `repo`, `roles`, `state`, `rounds`, `max_rounds`, `
 the bounded `log`. Every field added after the first release is optional on read, which is why
 `schema_version` is still 1.
 
-Two fields belong to the notification work and are **planned** (blocks 10–11 of
-`docs/notifications-design.md`), not in this build:
+Two fields carry the notification key and **ship in this build** (blocks 14 and 17):
 
-- `flow_id` — a uuid written once by `createFlowState` (`src/core/flow.ts:279`) and never reused. It is
-  the first component of every notification key: `flow start --replace` keeps the `run_id` of the run
-  it replaces but writes a new flow file, so a run-scoped key would collide with the closed flow's keys
-  and the durable dedupe index would suppress the new flow's first escalation;
-- `notify: { episode, key, kind, emitted_at, seq } | null` — the marker that makes a flow-attention
-  notification at-least-once and idempotent (that document, §2.2). `episode` is a per-flow counter
-  incremented on every transition into an attention state, so a second escalation or timeout on the
-  same commit after a `resume` is a new key rather than a suppressed duplicate;
+- `flow_id` — a uuid written once by `createFlowState` and never reused. It is the first component of every
+  notification key: `flow start --replace` keeps the `run_id` of the run it replaces but writes a new flow file, so
+  a run-scoped key would collide with the closed flow's keys and the durable dedupe index would suppress the new
+  flow's first escalation;
+- `notify_episode` — a per-flow counter incremented on every transition into `escalated`, so a second escalation
+  after a `resume` is a new key rather than a suppressed duplicate. The notification key is
+  `<flow_id>:<kind>:<notify_episode>`, and the same number is what the escalation approval checks before it lets a
+  human's decision touch the flow (§4.5).
+
 Both are optional on read, like every other field added after the first release.
 
 One field from the same work is **shipped** (block 09): `notes_ref` / `notes_counts` on a `log` entry,
@@ -615,6 +615,16 @@ reevesagents flow pause  --run <id> [--json]                        # shipped
 reevesagents flow resume --run <id> [--json]                        # shipped
 reevesagents flow stop   --run <id> [--yes] [--json]                # shipped
 reevesagents flow logs   --run <id> [-n N] [--json]                 # shipped
+reevesagents flow notes  --run <id> [--head <sha>] [-r N] [--json]  # shipped (block 09)
+reevesagents flow tick   --all [--json] [--dry-run]                 # shipped (block 15): one pass for cron
+reevesagents flow plan   --run <id> [--json]                        # shipped (block 12)
+reevesagents flow plan import --run <id> --file <path> [--dry-run]   # shipped
+reevesagents flow plan attach --run <id> --item <id> --spec <file> [--queue]  # shipped
+reevesagents flow plan status --item <id> [--run <id>] [--json]      # shipped
+reevesagents flow plan set   --run <id> --item <id> --status <s> [--yes] [--note <t>]  # shipped
+reevesagents flow plan next  --run <id> [--dry-run] [--json]         # shipped (block 13)
+reevesagents notifications list [--run <id>] [--unread] [--limit N]  # shipped (block 14)
+reevesagents notifications read [--seq N]                            # shipped
 ```
 
 `start` is the only way a flow is created (§4.6): it resolves the run and both agents, refuses an
@@ -763,15 +773,13 @@ so two concurrent resolves move the flow once), and only when the flow is still 
 | Engine, store, CLI `flow status` / `flow tick` | **shipped** (`src/core/flow.ts`, `flow-store.ts`, `flow-runner.ts`, `src/surfaces/cli/flow.ts`) |
 | The `pending`/`op_id` dispatch claim (§2.4) | **shipped** (`flow.ts` claim/release, `flow-runner.ts` claim -> act -> settle); a claim nobody settled escalates with `dispatch_unresolved` |
 | CLI `flow start` | **shipped** (`src/core/flow-start.ts`, `src/surfaces/cli/flow.ts`) |
-| TUI flow section on the run page | **shipped** (block 17) — `src/surfaces/tui/screens/Run.tsx` renders `flowLine()` from `src/core/flow-view.ts`: state, round/budget, active plan item, queue depth, attention with its item, and the next tick |
-| Escalation as an approval | **shipped** (block 17) — `src/core/flow-escalation.ts` raises one approval per episode (`action: flow_escalation`); approve resumes the flow and re-queues the item, deny closes it with `close_reason` |
 | TUI runs-list badge + attention | **shipped** (`src/core/flow-view.ts`, `src/core/flow-label.ts`, `src/surfaces/tui/screens/Runs.tsx`) |
 | Web run-card badge + attention | **shipped** (`src/surfaces/webui/state.ts` `WebRun.flow`, `client/app.js`, `client/app.css`) |
 | MCP `flow_status`, `flow_add_spec`, `flow_start` | **shipped** (`src/surfaces/mcp/server.ts`); no tool here ticks a flow on its own |
 | MCP `flow_step` | **shipped** (block 07) — one explicit step per call, same claim protocol as `flow tick`, answers `{changed:false, reason}` on a hold |
 | MCP `flow_control` | **shipped** (block 07) — `pause` / `resume` / `stop` (needs `confirm`) / `add_spec`, answers the status payload |
 | CLI `flow add-spec` / `pause` / `resume` / `stop` / `logs` | **shipped** (block 07) |
-| TUI Flow section on the run page (§4.2) | **shipped** (block 17) — `flowSectionLines()` renders state and round budget, the item in flight, queue depth, the waiting item, the attention line and the next tick; every line is capped at 78 columns |
+| TUI Flow section on the run page (§4.2) | **shipped** (block 17) — `flowSectionLines()` (`src/core/flow-view.ts`) renders state and round budget, the item in flight, queue depth, the waiting item, the attention line and the next tick; every line is capped at 78 columns |
 | `flow-escalated` approval pickup (§4.5) | **shipped** (block 17) — the tick raises one `flow_escalation` approval per episode, approve resumes the flow and re-queues the item, deny closes it with `close_reason`; the decision is only applied on the transition out of `pending` and only to the episode it belongs to |
 | `paused` / `orphaned` + the transition table | **shipped** (block 07) — `FLOW_TRANSITIONS` gates every operator and engine transition; `paused` is inert (a tick observes nothing and sends nothing), `orphaned` is written once with its reason, and the only automatic deletion is the cascade in `deleteRunHistory` |
 | Journal (`flow logs`) | **shipped** (block 07) — the bounded `log` array (`FLOW_LOG_LIMIT` = 50) is the journal: event, time, head, short reason, never a prompt body |
@@ -781,10 +789,12 @@ so two concurrent resolves move the flow once), and only when the flow is still 
 | Dispatch readiness (`target_not_ready`, `composer_dirty`, `dispatch_confirm_seconds`) | **shipped** (block 10) — `runtime.sendWhenIdle` probes the composer, cancels copy mode, and refuses instead of pasting twice |
 | The plan as an object (`plan.json`, import/attach/set) | **shipped** (block 12) — `src/core/plan.ts` parses the two real document shapes, mirrors them into `flows/<run-id>/plan.json`, and the flow state carries a one-line summary; `flow plan` / `plan import` / `plan attach` / `plan status` / `plan set` and the MCP `flow_plan` + `flow_plan_import` read and edit it. `done` is only ever set by a substantiated ACCEPT or an explicit human `set`, and a document that disagrees produces a conflict, never a silent rewrite |
 | Plan auto-advance and completion (`plan next`, `plan_incomplete`, per-item rounds) | **shipped** (block 13) — the tick takes the first item with a brief from the plan (`plan_item_dispatched`), an ACCEPT closes *that* item with its head, rounds and notes, a spent item budget blocks the item (`blocked_owner` / `rounds_exhausted`), `max_total_rounds` escalates the flow, and the flow refuses `done` while anything is open (`plan_incomplete`). A flow without a plan keeps the old `max_rounds` behaviour |
-| Notification log + agent pulse badge | **planned** — blocks 02–03 of `docs/notifications-design.md`; the two flow kinds (`flow.escalated`, `flow.review_timeout`) are emitted from this engine's `FlowAttention`, not from a second model of "needs a human", and the `notify` marker in the state (§3.1) is what makes that emission at-least-once and idempotent |
+| Notification journal (`notifications.jsonl`, `GET/POST /api/notifications`, `notifications list`) | **shipped** (block 14) — append-only ring with a read watermark, at-least-once with a durable `dedupe_key`; the two flow kinds are emitted from this engine's attention (`flow.escalated`, `flow.review_timeout`) plus `plan.item_done` / `plan.item_blocked` / `plan.item_needs_brief` |
+| Agent-card pulse + Plan/Logs dialog in the Web UI | **shipped** (block 16) — one dialog with a Plan tab (progress, waiting block, item detail) and a Logs tab (filters, mark-read, live refresh over SSE); the card pulse is `pulseRemaining` from the summary's `unread_by`, `agent_pulse_ms` (`0` disables) |
 
-Nothing above is described as working elsewhere in this document: the tables and the sections it
-cites keep `planned` marking, so the next block starts from the truth.
+Only one row above is still not implemented (a per-flow review prompt template); everything else describes code that
+runs, with the block that shipped it. A section of this document that still reads as a plan is history, not a promise:
+where the two disagree, the row above and the code win.
 
 ---
 
