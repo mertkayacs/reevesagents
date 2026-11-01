@@ -133,6 +133,31 @@ item, and both count toward "the plan is complete" (§6) — but only one of the
 single `closed` status would lose that, and the UI needs to show `12/23` (delivered) separately from
 `14/23 closed`.
 
+**The transitions are a table, not a free-for-all** (`PLAN_TRANSITIONS` in `src/core/plan.ts`, the same shape
+as the flow's `FLOW_TRANSITIONS`):
+
+| from | may become |
+| --- | --- |
+| `pending` | `needs_brief`, `queued`, `skipped`, `blocked_owner`, `done` (a manual close for work finished before the flow existed) |
+| `needs_brief` | `pending`, `queued`, `skipped`, `blocked_owner`, `done` |
+| `queued` | `pending`, `needs_brief`, `in_work`, `done`, `skipped`, `blocked_owner` |
+| `in_work` | `queued`, `reviewing`, `blocked_owner` |
+| `reviewing` | `in_work`, `queued`, `done`, `blocked_owner` |
+| `blocked_owner` | `pending`, `needs_brief`, `queued`, `skipped`, `done` |
+| `done`, `skipped` | — terminal |
+
+Two rules fall out of it, and both were review findings before they were written down:
+
+- **an item whose round is in flight cannot be closed by a human.** `in_work` and `reviewing` have no
+  `skipped`, and `set --status done` refuses while a round is running even though the table allows
+  `reviewing → done` — that edge exists for the engine (`closeItemOnAccept`), which closes the item when the
+  round's verdict accepts the commit. A manual `done` there would claim a review that may be about to ask for
+  changes.
+- **terminal means terminal.** `done` and `skipped` have no outgoing edge: `done` is a claim about a reviewed
+  commit, and flipping a checkbox or a status later must not create a claim the engine never made. Reopening
+  is a deliberate non-feature; a wrong close is corrected in the document and re-imported as a conflict, not
+  by rewriting history.
+
 `missing` and `conflict` are **flags**, not statuses (§3.3): an item that vanished from the document keeps its
 status and gains `missing_since`, so an import typo cannot silently turn delivered work into nothing.
 

@@ -8,9 +8,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  attachSpec, createPlan, deriveId, ensurePlanSummary, hashDocument, importInto, mutatePlan,
-  normalizeDocument, parsePlanDocument, planComplete, PLAN_LIMITS, planItemView, planPath, planProgress,
-  PlanError, planSummary, readPlan, resolveRepositoryPath, savePlan, setItemStatus,
+  attachSpec, canTransition, closeItemOnAccept, createPlan, deriveId, ensurePlanSummary, hashDocument,
+  importInto, mutatePlan, normalizeDocument, parsePlanDocument, planComplete, PLAN_LIMITS, planItemView,
+  planPath, planProgress, PLAN_TRANSITIONS, PlanError, planSummary, readPlan, resolveRepositoryPath,
+  savePlan, setItemStatus,
 } from '../src/core/plan.js'
 import { createFlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
@@ -521,5 +522,60 @@ describe('a torn summary', () => {
         delete process.env.REEVES_REGISTRY
       }
     })
+  })
+})
+
+describe('the status transition table', () => {
+  function planWith(status: 'pending' | 'queued' | 'in_work' | 'reviewing' | 'blocked_owner' | 'done' | 'skipped') {
+    const first = importNew('- [ ] **P1** — the edge port')
+    return {
+      ...first.plan,
+      items: first.plan.items.map(item => ({
+        ...item,
+        status,
+        head: status === 'done' ? 'abc1234' : null,
+      })),
+    }
+  }
+
+  it('refuses to close an item whose round is in flight', () => {
+    for (const busy of ['in_work', 'reviewing'] as const) {
+      const plan = planWith(busy)
+      expect(() => setItemStatus(plan, { id: 'P1', status: 'skipped', yes: true, now: NOW }))
+        .toThrow(/a round is in flight/)
+      expect(() => setItemStatus(plan, { id: 'P1', status: 'done', yes: true, note: 'x', now: NOW }))
+        .toThrow(/cannot move P1/)
+    }
+  })
+
+  it('never reopens a terminal item', () => {
+    for (const terminal of ['done', 'skipped'] as const) {
+      const plan = planWith(terminal)
+      for (const target of ['pending', 'queued', 'in_work', 'blocked_owner'] as const) {
+        expect(() => setItemStatus(plan, { id: 'P1', status: target, yes: true, note: 'x', now: NOW }))
+          .toThrow(/is terminal: an item closed on evidence does not reopen/)
+      }
+    }
+  })
+
+  it('allows the moves the plan needs: triage, unblocking, the engine path and a manual close', () => {
+    expect(canTransition('pending', 'queued')).toBe(true)
+    expect(canTransition('needs_brief', 'queued')).toBe(true)
+    expect(canTransition('blocked_owner', 'queued')).toBe(true)
+    expect(canTransition('queued', 'in_work')).toBe(true)
+    expect(canTransition('in_work', 'reviewing')).toBe(true)
+    expect(canTransition('reviewing', 'done')).toBe(true)
+    expect(canTransition('pending', 'done')).toBe(true)
+    // Every status is reachable from somewhere, and nothing leads out of the two terminal ones.
+    for (const status of ['done', 'skipped'] as const) expect(PLAN_TRANSITIONS[status]).toEqual([])
+  })
+
+  it('closes an item on an accepted verdict through the engine path', () => {
+    const plan = planWith('reviewing')
+    const closed = closeItemOnAccept(plan, { id: 'P1', head: 'def5678', rounds: 2, notes_ref: 'def5678-r2', now: NOW })
+    expect(closed.items[0]!.status).toBe('done')
+    expect(closed.items[0]!.head).toBe('def5678')
+    expect(closed.items[0]!.rounds).toBe(2)
+    expect(closed.items[0]!.notes_ref).toBe('def5678-r2')
   })
 })

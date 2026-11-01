@@ -194,6 +194,29 @@ describe('flow plan set and status', () => {
     expect(done.out).toContain('done')
   })
 
+  it('refuses to close an item while its round is running, and refuses to reopen a closed one', async () => {
+    await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
+    // Simulate a round in flight the way the engine would leave it.
+    const plan = readPlan('run-p')
+    const busy = { ...plan, items: plan.items.map(item => (item.id === 'P1.2.1' ? { ...item, status: 'in_work' as const } : item)) }
+    const { savePlan } = await import('../src/core/plan.js')
+    savePlan(busy)
+
+    const skipped = await failure(['flow', 'plan', 'set', '--run', 'run-p', '--item', 'P1.2.1', '--status', 'skipped', '--yes'])
+    expect(skipped.code).toBe(3)
+    expect(skipped.err).toContain('a round is in flight')
+
+    const done = await failure(['flow', 'plan', 'set', '--run', 'run-p', '--item', 'P1.2.1', '--status', 'done', '--yes', '--note', 'x'])
+    expect(done.code).toBe(3)
+    expect(done.err).toContain('a round is in flight')
+
+    // A closed item does not reopen.
+    await runCli(['flow', 'plan', 'set', '--run', 'run-p', '--item', 'P1.1.1', '--status', 'done', '--yes', '--note', 'by hand'])
+    const reopen = await failure(['flow', 'plan', 'set', '--run', 'run-p', '--item', 'P1.1.1', '--status', 'queued', '--yes'])
+    expect(reopen.code).toBe(3)
+    expect(reopen.err).toContain('is terminal')
+  })
+
   it('finds an item without --run and exits 2 for an unknown one', async () => {
     await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
     const { out } = await runCli(['flow', 'plan', 'status', '--item', 'P1.1.2'])

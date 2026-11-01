@@ -58,6 +58,46 @@ export const PLAN_STATUSES: readonly PlanStatus[] = [
 // was delivered, which is why the progress line counts them apart.
 const TERMINAL_STATUSES: readonly PlanStatus[] = ['done', 'skipped']
 
+// The one gate every status change goes through, the way `FLOW_TRANSITIONS` gates the flow lifecycle. It
+// exists because the eight statuses are not a free-for-all: an item in flight cannot be skipped out from
+// under its round, and a terminal item cannot be reopened — `done` is a claim about a commit that was
+// reviewed, and a checkbox a human flips later must not become a claim the engine never made.
+//
+// Read it as "from -> what it may become":
+//   pending      -> needs_brief, queued, skipped, blocked_owner, done   (the import/triage moves; a manual
+//                                                                        done covers work finished before the
+//                                                                        flow existed)
+//   needs_brief  -> pending, queued, skipped, blocked_owner, done       (a brief arrived, or a human triaged)
+//   queued       -> pending, needs_brief, in_work, done, skipped, blocked_owner
+//   in_work      -> queued, reviewing, blocked_owner                    (a round is running: no closing)
+//   reviewing    -> in_work, queued, done, blocked_owner                (done only through the ACCEPT path)
+//   blocked_owner-> pending, needs_brief, queued, skipped               (the human unblocked it)
+//   done         -> (nothing: terminal)
+//   skipped      -> (nothing: terminal)
+export const PLAN_TRANSITIONS: Record<PlanStatus, readonly PlanStatus[]> = {
+  pending: ['needs_brief', 'queued', 'skipped', 'blocked_owner', 'done'],
+  needs_brief: ['pending', 'queued', 'skipped', 'blocked_owner', 'done'],
+  queued: ['pending', 'needs_brief', 'in_work', 'done', 'skipped', 'blocked_owner'],
+  in_work: ['queued', 'reviewing', 'blocked_owner'],
+  reviewing: ['in_work', 'queued', 'done', 'blocked_owner'],
+  blocked_owner: ['pending', 'needs_brief', 'queued', 'skipped', 'done'],
+  done: [],
+  skipped: [],
+}
+
+export function canTransition(from: PlanStatus, to: PlanStatus): boolean {
+  return from === to || PLAN_TRANSITIONS[from].includes(to)
+}
+
+// The message a refused transition deserves: what was asked, and what was allowed instead.
+function transitionRefusal(item: PlanItem, to: PlanStatus): PlanError {
+  const allowed = PLAN_TRANSITIONS[item.status]
+  const why = allowed.length === 0
+    ? `${item.status} is terminal: an item closed on evidence does not reopen, and a manual reopen would be a claim the engine never made`
+    : `${item.status} may only become ${allowed.join(', ')}${BUSY_STATUSES.includes(item.status) ? ' — a round is in flight, so the item cannot be closed from here' : ''}`
+  return new PlanError(`cannot move ${item.id} from ${item.status} to ${to}: ${why}`, 'refused')
+}
+
 // Statuses where a round is in flight: the brief the round rendered must not be swapped underneath it.
 const BUSY_STATUSES: readonly PlanStatus[] = ['in_work', 'reviewing']
 
@@ -464,6 +504,16 @@ export function setItemStatus(plan: Plan, input: SetStatusInput): { plan: Plan, 
     throw new PlanError(`unknown status "${input.status}"; expected one of: ${PLAN_STATUSES.join(', ')}`, 'invalid')
   }
   if (input.status === item.status) return { plan, previous: item.status }
+  if (!canTransition(item.status, input.status)) throw transitionRefusal(item, input.status)
+  // The table allows `reviewing -> done` because the engine closes an item when the round's verdict accepts
+  // the commit. A human command must not take that shortcut: while a round is running, "done" would claim a
+  // review that may be about to ask for changes.
+  if (input.status === 'done' && BUSY_STATUSES.includes(item.status)) {
+    throw new PlanError(
+      `cannot move ${item.id} from ${item.status} to done: a round is in flight, so the item closes only when that round's review accepts the commit`,
+      'refused',
+    )
+  }
   const at = isoAt(input)
 
   if ((input.status === 'done' || input.status === 'skipped') && input.yes !== true) {
@@ -511,6 +561,11 @@ export function closeItemOnAccept(
   plan: Plan,
   input: { id: string, head: string, rounds: number, notes_ref: string | null, now: number, at?: string },
 ): Plan {
+  const item = plan.items.find(entry => entry.id === input.id)
+  if (!item) throw new PlanError(`no plan item ${input.id}`, 'not_found')
+  // The engine path obeys the same table: a verdict can close an item that is `reviewing` (or `queued`, when
+  // the round was already settled), not one that never started.
+  if (!canTransition(item.status, 'done')) throw transitionRefusal(item, 'done')
   const at = isoAt(input)
   return {
     ...plan,
