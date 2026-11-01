@@ -195,7 +195,7 @@ for the source document. Over the cap the import refuses with the actual number 
 | item gone from the document | `missing_since = now`, status kept, excluded from `next`, counted as `missing` in `flow plan` | a typo or a restructure must not erase delivered work |
 | `done` item now unchecked in the document | status stays `done`, a `PlanConflict` (`kind: "unticked"`, `line`, `at`) is appended and shown by `flow plan` | the human may be right, but the engine does not silently rewrite an ACCEPT — §3.5 |
 | item text edited | `title` updated, id unchanged (id-bearing plans) or a new `auto:` id (id-less plans), `spec` untouched | the brief was attached to an id, not to a sentence |
-| `[x]` in the document, mirror says `pending` | **not** promoted to `done`; a `PlanConflict` (`kind: "ticked_by_hand"`) is logged | a checkbox is not evidence; only ACCEPT is (§2.2) |
+| `[x]` in the document, mirror says `pending` | **not** promoted to `done`; on a **re-import** a `PlanConflict` (`kind: "ticked_by_hand"`) is logged. A first import logs nothing: there is no record to disagree with, and the id-bearing real plan opens with 83 ticked items — 83 conflicts would bury the one that matters | a checkbox is not evidence; only ACCEPT is (§2.2) |
 | `source_hash` unchanged | nothing at all is written, `imported_at` untouched | a re-import must be a no-op on an unchanged file |
 | document format not recognised | refuse with `unsupported_format`, the offending line number and the two accepted shapes | guessing a format is how a plan silently becomes empty |
 

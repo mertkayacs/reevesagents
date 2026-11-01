@@ -130,6 +130,28 @@ export interface FlowLogEntry {
   notes_counts?: { blocker: number, major: number, minor: number }
 }
 
+function parsePlanSummary(raw: unknown): FlowPlanSummary | null {
+  const record = raw as Record<string, unknown> | null
+  if (!record || typeof record !== 'object') return null
+  return {
+    imported_at: String(record.imported_at ?? ''),
+    source_hash: String(record.source_hash ?? ''),
+    done: typeof record.done === 'number' ? record.done : 0,
+    total: typeof record.total === 'number' ? record.total : 0,
+    waiting: typeof record.waiting === 'number' ? record.waiting : 0,
+  }
+}
+
+// Mirrors `PlanSummary` in `plan.ts` structurally rather than importing it: the plan module already imports
+// this one, and a type-only cycle through a value module is more fragile than two small shapes.
+export interface FlowPlanSummary {
+  imported_at: string
+  source_hash: string
+  done: number
+  total: number
+  waiting: number
+}
+
 export interface FlowState {
   schema_version: number
   run_id: string
@@ -170,6 +192,10 @@ export interface FlowState {
   orphan_reason: string | null
   // Set by `flow stop` only: the operator ended the pipeline, which is not the same as ACCEPT.
   close_reason: string | null
+  // A one-line snapshot of the plan (`docs/plan-model-design.md` §3.1): `flows/<run-id>/plan.json` is the
+  // record, this is the cache a surface can read without opening it. Optional in the file, so a flow
+  // written before plans existed reads as "no plan" instead of failing.
+  plan?: FlowPlanSummary | null
   // Bounded journal (§3.4): transitions, dispatches, verdicts, refusals and escalations, one entry
   // each, capped at FLOW_LOG_LIMIT. It never carries a prompt body — only the decision, the head,
   // the block id and a short reason, so the file stays readable and leak-free.
@@ -384,6 +410,7 @@ export function createFlowState(init: FlowInit): FlowState {
     paused_at: null,
     orphan_reason: null,
     close_reason: null,
+    plan: null,
     log: [],
     updated_at: init.at ?? isoNow(),
   }
@@ -441,6 +468,7 @@ export function parseFlowState(raw: unknown): FlowState {
     // Why the flow is parked: user-visible text, so it is bounded and never a prompt body.
     orphan_reason: text(record.orphan_reason).slice(0, 200) || null,
     close_reason: text(record.close_reason).slice(0, 200) || null,
+    plan: parsePlanSummary(record.plan),
     log: Array.isArray(record.log)
       ? record.log
         .map(asRecord)
