@@ -225,17 +225,27 @@ tree (`tree_dirty`), so a write-back that fires mid-round would block the flow. 
 
 ### 4.1 Attaching
 
-`flow plan attach --run <id> --item P1.7.1 --spec docs/briefs/P1.7.1.json`
+`flow plan attach --run <id> --item P1.7.1 --spec docs/briefs/P1.7.1.json [--queue] [--dry-run]`
 
 - reads and validates the file with the existing `BlockSpec` validator (JSON or markdown, the same two
   readers `add-spec` uses), so a broken brief fails in front of the person who wrote it — the documented
   invariant of `src/core/spec.ts:1-11`;
 - **the spec id must equal the item id**; a mismatch is refused (`spec_id_mismatch`, both values printed),
   because the queue's dedupe key is the spec id (`flow.ts:152`);
-- stores `spec` (the snapshot), `spec_path`, `spec_hash`, and sets the item `queued` if the plan says
-  `pending`/`needs_brief`;
-- queues it in the flow's `specs` (`addFlowSpecs`) **only** when `--queue` is passed; by default attach is a
-  plan-level act, and `flow plan next` does the queuing (§5).
+- stores `spec` (the snapshot), `spec_path`, `spec_hash`, and moves the item `pending` / `needs_brief` →
+  `queued` **in the plan**. That status means exactly "has a brief and is eligible for `plan next`"; it is a
+  fact about the plan, not about the flow's queue;
+- with `--queue` it *also* puts the spec into the flow's `specs` (`addFlowSpecs`) so the next tick can
+  dispatch it without a `plan next`. Without the flag the flow's `specs` is untouched and `flow plan next`
+  (§5) is what moves the item from eligible to queued-for-dispatch.
+
+An item that is `in_work` or `reviewing` cannot take a new brief: the round in flight is rendering the
+snapshot it started with, and swapping the record underneath it would dispatch one brief and review another.
+That attach is refused (`item_busy`) until the item comes back to `queued`.
+
+Two different things carry the word "queued" and the doc keeps them apart: the **plan status** `queued`
+(brief attached, eligible) and the **flow's `specs` entry** (a block the engine may dispatch next). Attach
+without `--queue` produces the first and not the second.
 
 ### 4.2 Snapshot, not a pointer
 
@@ -300,7 +310,7 @@ same output without writing (for `next` that means "do not queue, do not send").
 | --- | --- | --- | --- |
 | `flow plan --run <id>` | the block above | `{run_id, source_path, imported_at, source_hash, progress:{done,total,skipped,by_status}, waiting:{needs_brief:[id],blocked_owner:[id],missing:[id],conflicts:n}, next:{id,title,spec_path}|null, items:[…]}` | 0; 3 when a conflict exists (so a script notices) |
 | `flow plan import --run <id> --file <path> [--dry-run]` | `imported 23 items: 3 new, 1 missing, 1 conflict` | `{added:[id],missing:[id],conflicts:[…],unchanged:bool,source_hash}` | 0; 1 usage/bad path; 2 not found; 3 refused (too big, duplicate ids, unsupported format) — nothing written |
-| `flow plan attach --run <id> --item <id> --spec <file> [--dry-run]` | `attached P1.7.1 → docs/briefs/P1.7.1.json (queued)` | `{item:{id,status,spec_path,spec_hash}}` | 0; 2 unknown item; 3 refused (invalid spec, id mismatch) |
+| `flow plan attach --run <id> --item <id> --spec <file> [--queue] [--dry-run]` | without `--queue`: `attached P1.7.1 → docs/briefs/P1.7.1.json (brief ready; flow plan next queues it)`; with `--queue`: `attached P1.7.1 → docs/briefs/P1.7.1.json (queued for dispatch)` | `{item:{id,status,spec_path,spec_hash}, queued:bool}` — `queued` is the flow queue, `item.status` is the plan status | 0; 2 unknown item; 3 refused (invalid spec, id mismatch, item already `in_work`/`reviewing`) |
 | `flow plan next --run <id> [--dry-run]` | the item plus the rendered prompt head | `{item:{id,title},prompt:string|null,queued:bool,reason:"busy"|"plan_needs_brief"|"plan_blocked_owner"|null}` | 0; 0 with `reason` when it does nothing (a no-op is not an error); 2 no plan |
 | `flow plan status --item <id> [--run <id>]` | one item: status, head, rounds, notes ref, spec path, `updated_at` | the `PlanItem` | 0; 2 unknown item, or the id exists in more than one flow (both run ids printed — pass `--run` to disambiguate) |
 | `flow plan set --run <id> --item <id> --status <status> [--yes] [--note <text>] [--dry-run]` | `P1.4.2 blocked_owner → queued (manual, note: unblocked after the vendor call)` | `{item:{id,status,previous,owner_action,updated_at}}` | 0; 1 usage; 2 unknown item; 3 refused — `done` and `skipped` need `--yes`, `done` on an item with no accepted head needs `--yes` **and** a `--note`, and an unknown status is refused with the eight accepted values |
