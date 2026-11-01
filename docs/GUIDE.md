@@ -221,14 +221,16 @@ what is left. The design is `docs/plan-model-design.md`; two rules matter when y
   --yes --note <why>`. A `[x]` you type yourself is not evidence.
 
 - `reevesagents flow plan import --run <run> --file docs/implementation-plan.md [--dry-run]` — import or
-  re-import the document. New items are added as `pending`, items the document dropped are kept and marked
+  re-import the document. The path is resolved against the run's project directory (so it works from any
+  cwd) and must stay inside it: a file from your home directory is refused rather than stored as `~/…`. New items are added as `pending`, items the document dropped are kept and marked
   `missing` (never deleted), and a document that disagrees with the record adds a conflict. An unchanged
   file changes nothing. Exit code 3 means there are conflicts to read.
 - `reevesagents flow plan --run <run> [--json]` — progress (`12/23 done`), the buckets that wait for you
   (`needs_brief`, `blocked_owner`, `missing`, conflicts) and the next item in document order.
 - `reevesagents flow plan attach --run <run> --item P1.7.1 --spec docs/briefs/P1.7.1.json [--queue]` —
   attach the brief. It is validated by the same `BlockSpec` validator as `add-spec`, its `id` must equal the
-  item id, and it is stored as a *snapshot*: the dispatch stays reproducible, and an edited brief is refused
+  item id (a markdown brief takes the item id instead, because a heading slug cannot equal `P1.7.1`), and it
+  is stored as a *snapshot*: the dispatch stays reproducible, and an edited brief is refused
   rather than silently picked up. Without `--queue` the item becomes `queued` in the plan only — run
   `flow plan next` (block 13) to put it on the flow.
 - `reevesagents flow plan status --item P1.7.1 [--run <run>] [--json]` — one item: status, the commit that

@@ -160,9 +160,12 @@ so `flow status`, the TUI list and the Web run card can draw `plan 12/23` from t
 without opening `plan.json` on every tick or every render. `waiting` is the count of `owner_action` items —
 one number, not a list.
 
-**How the pointer is kept in step.** Every command that changes the plan calls `savePlan()`, which writes
-`plan.json` and then updates `FlowState.plan` — both inside one `withRunsLock` critical section, so under
-normal operation the two cannot disagree. What `flow plan import` does **not** touch is the *rest* of the
+**How the pointer is kept in step.** Every command that changes the plan goes through one function,
+`mutatePlan(runId, mutator)`: it takes `withRunsLock`, reads `plan.json` **inside** the lock, hands the plan to
+the mutator, writes `plan.json` and then updates `FlowState.plan` — all in that one critical section, so under
+normal operation the two cannot disagree. The read-modify-write is inside the lock on purpose: a CLI that read
+the plan, changed it and saved it in separate steps raced another CLI (or an MCP call) and lost one of the two
+updates, and the summary could describe a plan that no longer existed. What `flow plan import` does **not** touch is the *rest* of the
 flow state: `specs`, `claim`, `rounds`, `log`, the notes. That is what "writes only `plan.json`" means — the
 plan's record plus its one-line summary, never the pipeline's own fields.
 
@@ -231,7 +234,10 @@ tree (`tree_dirty`), so a write-back that fires mid-round would block the flow. 
   readers `add-spec` uses), so a broken brief fails in front of the person who wrote it — the documented
   invariant of `src/core/spec.ts:1-11`;
 - **the spec id must equal the item id**; a mismatch is refused (`spec_id_mismatch`, both values printed),
-  because the queue's dedupe key is the spec id (`flow.ts:152`);
+  because the queue's dedupe key is the spec id (`flow.ts:152`). A *markdown* brief is the exception and the
+  reason is structural: its id is derived from the heading, and no slug can equal an item id such as `P1.7.1`
+  (`p1-7-1` ≠ `P1.7.1`), so a markdown brief takes the item id it was attached to. A JSON brief still carries
+  its own id, and a mismatch there stays an error;
 - stores `spec` (the snapshot), `spec_path`, `spec_hash`, and moves the item `pending` / `needs_brief` →
   `queued` **in the plan**. That status means exactly "has a brief and is eligible for `plan next`"; it is a
   fact about the plan, not about the flow's queue;
@@ -351,6 +357,7 @@ meaningless without one. So:
 | CRLF / trailing whitespace / final newline | normalised before hashing (§3.4), so a checkout difference is a no-op |
 | multi-line items (plan B, lines 29 and 103) | a line starting with `- [` opens an item; following lines that are indented or start with `**` are appended to its title until the next item, heading or blank line; the folded text is what `title` holds |
 | ids that are not spec-safe (`P1.7.1` is fine; `1.2 a/b` is not) | an id-bearing document with an invalid id is refused, naming the line — the id must be usable as a `BlockSpec.id` |
+| a path outside the repository (`--file`/`--spec` from the home directory) | refused (`outside the repository`, exit 3), not shortened: `~/…` in `source_path` names the operator's home in every later payload, and a shortened path cannot be re-imported. The path is resolved against the **run's working directory**, so the command works from any cwd |
 | a plan edited while a round is running | import is allowed, but an item that is `in_work`/`reviewing` keeps its status even if its line vanished (`missing_since` is set, status untouched) — §3.3 |
 | `delete-history` on a run | the cascade removes `flows/<run-id>/` including `plan.json` (the notes directory is already handled this way, `flow-store.ts:103`) |
 

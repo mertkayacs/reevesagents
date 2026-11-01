@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
 import { saveFlow } from '../src/core/flow-store.js'
 import { readPlan } from '../src/core/plan.js'
+import { writeRun } from '../src/core/runs.js'
 
 const execFileSync = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ execFileSync, spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
@@ -52,6 +53,21 @@ beforeEach(() => {
     review_timeout_sec: 1800,
     at: '2026-11-02T09:00:00.000Z',
   }))
+  // The plan path is resolved against the run's working directory, so the test needs a run whose project is
+  // the temp directory.
+  writeRun({
+    id: 'run-p',
+    name: 'run-p',
+    status: 'running',
+    tmux_session: 'reeves-run-p',
+    reeves_window_id: '@0',
+    reeves_pane_id: '%0',
+    root_agent_id: 'dev-1',
+    working_dir: tmpDir,
+    preset_name: null,
+    started_at: '2026-11-02T09:00:00.000Z',
+    ended_at: null,
+  })
   writeFileSync(join(tmpDir, 'plan.md'), PLAN)
   writeFileSync(join(tmpDir, 'P1.2.1.json'), BRIEF)
 })
@@ -186,6 +202,30 @@ describe('flow plan set and status', () => {
     const missing = await failure(['flow', 'plan', 'status', '--item', 'NOPE'])
     expect(missing.code).toBe(2)
     expect(missing.err).toContain('no plan item NOPE')
+  })
+
+  it('refuses a document outside the project instead of storing a home path', async () => {
+    // The plan stores repository-relative paths; a file from the home directory is refused, not shortened.
+    const outside = mkdtempSync(join(tmpdir(), 'reeves-plan-outside-'))
+    writeFileSync(join(outside, 'plan.md'), PLAN)
+    try {
+      const failed = await failure(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(outside, 'plan.md')])
+      expect(failed.code).toBe(3)
+      expect(failed.err).toContain('outside the repository')
+      expect(failed.err).not.toContain(outside)      // the message names the path home-shortened
+      expect(() => readPlan('run-p')).toThrow(/no plan/)
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
+  })
+
+  it('attaches a markdown brief to an id-bearing item', async () => {
+    await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
+    writeFileSync(join(tmpDir, 'brief.md'), '# The edge port\n\nPublish it on 7810.\n')
+    const { out } = await runCli(['flow', 'plan', 'attach', '--run', 'run-p', '--item', 'P1.2.1', '--spec', join(tmpDir, 'brief.md')])
+    expect(out).toContain('attached  P1.2.1')
+    const plan = readPlan('run-p')
+    expect(plan.items.find(item => item.id === 'P1.2.1')!.spec?.id).toBe('P1.2.1')
   })
 
   it('shows a conflict when the document unticks a closed item, and exits 3', async () => {

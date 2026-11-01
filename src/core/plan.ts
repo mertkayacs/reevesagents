@@ -19,7 +19,7 @@
 
 import { createHash } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { flowsDir, flowPath, readFlow, saveFlow } from './flow-store.js'
 import { withRunsLock } from './runs.js'
 import { renderDispatchPrompt, SPEC_ID_PATTERN, validateSpec } from './spec.js'
@@ -294,6 +294,10 @@ export function importInto(plan: Plan | null, options: ImportOptions): ImportRes
   const added: string[] = []
   const missing: string[] = []
   const conflicts: PlanConflict[] = [...(plan?.conflicts ?? [])]
+  // What *this* import recorded. Collected as the list is written, not by slicing the merged list: once the
+  // bounded list is full the slice would drop the very conflict that was just found, and the import would
+  // report "no conflicts" while the state holds 50 stale ones.
+  const recorded: PlanConflict[] = []
 
   const items: PlanItem[] = []
   for (const parsed of document.items) {
@@ -328,14 +332,14 @@ export function importInto(plan: Plan | null, options: ImportOptions): ImportRes
     // Only a real disagreement is a conflict: an unchecked line under an open item, or a ticked line
     // under one the mirror has not closed. Anything else is the normal case and must stay quiet.
     if (previous.status === 'done' && !parsed.checked) {
-      pushConflict(conflicts, {
+      recordConflict(conflicts, recorded, {
         at,
         item_id: parsed.id,
         kind: 'unticked',
         detail: `line ${parsed.line}: the document unticks ${parsed.id}, but the mirror closed it on an ACCEPT`,
       })
     } else if (!firstImport && parsed.checked && previous.status !== 'done') {
-      pushConflict(conflicts, {
+      recordConflict(conflicts, recorded, {
         at,
         item_id: parsed.id,
         kind: 'ticked_by_hand',
@@ -357,17 +361,26 @@ export function importInto(plan: Plan | null, options: ImportOptions): ImportRes
     source_hash: document.source_hash,
     imported_at: at,
     items,
-    conflicts: conflicts.slice(-PLAN_LIMITS.conflicts),
+    conflicts: capConflicts(conflicts),
   }
-  return { plan: next, added, missing, conflicts: next.conflicts.slice((plan?.conflicts.length ?? 0)), unchanged: false, source_hash: document.source_hash }
+  return { plan: next, added, missing, conflicts: recorded, unchanged: false, source_hash: document.source_hash }
+}
+
+// The newest conflicts are the ones a human still has to look at; the oldest are the ones they had the time
+// to read. Capping therefore drops from the front — and `recorded` keeps what this run actually wrote, so the
+// caller reports the truth even when the list is already full.
+function capConflicts(conflicts: PlanConflict[]): PlanConflict[] {
+  return conflicts.length > PLAN_LIMITS.conflicts ? conflicts.slice(-PLAN_LIMITS.conflicts) : conflicts
 }
 
 // A conflict is recorded once per (item, kind): a re-import of the same disagreement must not fill the
-// bounded list with copies of itself.
-function pushConflict(conflicts: PlanConflict[], candidate: PlanConflict): void {
+// bounded list with copies of itself. Returns whether it was new.
+function recordConflict(conflicts: PlanConflict[], recorded: PlanConflict[], candidate: PlanConflict): boolean {
   const already = conflicts.some(entry => entry.item_id === candidate.item_id && entry.kind === candidate.kind)
-  if (already) return
+  if (already) return false
   conflicts.push(candidate)
+  recorded.push(candidate)
+  return true
 }
 
 // Ticking and unticking are two different disagreements: an item the document ticks without an ACCEPT is
@@ -548,7 +561,7 @@ export function attachSpec(plan: Plan, input: AttachInput): AttachResult {
 
   const validation = input.format === 'json'
     ? validateSpecFromJson(input.text)
-    : validateSpecFromMarkdown(input.text, input.spec_path)
+    : validateSpecFromMarkdown(input.text, input.spec_path, item.id)
   if (!validation.spec) {
     throw new PlanError(`the brief for ${input.id} was refused: ${validation.issues.map(issue => `${issue.field}: ${issue.message}`).join('; ')}`, 'refused')
   }
@@ -592,15 +605,20 @@ function parseJsonOrReport(text: string): unknown {
   }
 }
 
-function validateSpecFromMarkdown(text: string, sourcePath: string) {
-  return validateSpec(markdownSpec(text, sourcePath), { allowUnstructured: true })
+// A markdown brief is prose, not a record: its `id` is derived from the heading, and that slug can never equal
+// an item id such as `P1.7.1` (`p1-7-1` != `P1.7.1`). The item id is the identity here — the plan already
+// knows which item the brief belongs to, and `attach` was asked for that item — so it is passed in instead of
+// being re-derived and then rejected by the mismatch check. A JSON brief still carries its own id, and a
+// mismatch there remains an error: a structured record that names another block is a real mistake.
+function validateSpecFromMarkdown(text: string, sourcePath: string, itemId: string) {
+  return validateSpec(markdownSpec(text, sourcePath, itemId), { allowUnstructured: true })
 }
 
-function markdownSpec(text: string, sourcePath: string): Record<string, unknown> {
+function markdownSpec(text: string, sourcePath: string, itemId: string): Record<string, unknown> {
   const normalised = text.replace(/\r\n/g, '\n').trim()
   const heading = normalised.split('\n').find(line => /^#\s+\S/.test(line.trim()))
   const title = (heading ? heading.replace(/^#\s+/, '') : normalised.split('\n')[0] ?? '').trim()
-  return { id: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''), title, body: normalised, source_path: sourcePath }
+  return { id: itemId, title, body: normalised, source_path: sourcePath }
 }
 
 export function renderPlanItemPrompt(plan: Plan, id: string): string {
@@ -730,16 +748,54 @@ export function savePlan(plan: Plan, options: PlanStoreOptions = {}): string {
   return path
 }
 
-// The one-line summary the flow state carries. Written in the same lock as the plan file, so the two
-// cannot disagree in normal operation; a crash between them is repaired by the next reader (§3.1).
+// The one-line summary the flow state carries. Callers outside a mutation use `mutatePlan`, which writes both
+// files inside one lock; this one exists for a caller that already holds the lock (it must not take it twice:
+// the lock is not reentrant).
 export function writePlanSummary(plan: Plan, options: PlanStoreOptions = {}): void {
-  withRunsLock(() => {
-    let state: FlowState
-    try {
-      state = readFlow(plan.run_id, { root: options.root })
-    } catch {
-      return   // no flow file: a plan may exist for a run whose flow was removed; nothing to point at
-    }
-    saveFlow({ ...state, plan: planSummary(plan) }, { root: options.root })
+  withRunsLock(() => applyPlanSummary(plan, options))
+}
+
+function applyPlanSummary(plan: Plan, options: PlanStoreOptions): void {
+  let state: FlowState
+  try {
+    state = readFlow(plan.run_id, { root: options.root })
+  } catch {
+    return   // no flow file: a plan may exist for a run whose flow was removed; nothing to point at
+  }
+  saveFlow({ ...state, plan: planSummary(plan) }, { root: options.root })
+}
+
+// Read, change and write under **one** lock. The CLI and the MCP server were doing
+// read-plan → mutate → save-plan → update-summary as separate steps, so two of them racing lost one update
+// and could leave the summary describing a plan that no longer existed. `mutator` receives the plan that was
+// read inside the lock and returns the one to write (or the same object to write nothing); the two files are
+// then saved together, which is what §3.1 promises.
+export function mutatePlan<T>(
+  runId: string,
+  mutator: (_plan: Plan | null) => { plan: Plan, value: T } | { plan: null, value: T },
+  options: PlanStoreOptions = {},
+): T {
+  return withRunsLock(() => {
+    const current = planExists(runId, options) ? readPlan(runId, options) : null
+    const result = mutator(current)
+    if (result.plan === null) return result.value
+    savePlan(result.plan, options)
+    applyPlanSummary(result.plan, options)
+    return result.value
   })
+}
+
+// A path the plan stores must be inside the repository: `~/…` in `source_path` is a leak (it names the
+// operator's home in every later payload) and an absolute path outside the checkout is not something a plan
+// can mean. Refused rather than shortened, because a shortened path cannot be re-read by `plan import`.
+export function repositoryRelativePath(path: string, root = process.cwd()): string {
+  const absolute = path.startsWith('/') ? path : `${root}/${path}`
+  const relativePath = relative(root, absolute)
+  if (relativePath === '' || relativePath.startsWith('..') || relativePath.startsWith('/')) {
+    throw new PlanError(
+      `${displayPath(path)} is outside the repository (${displayPath(root)}); run the command from the project root or pass a path inside it`,
+      'refused',
+    )
+  }
+  return relativePath
 }

@@ -11,13 +11,15 @@
 // 2 not found, 3 refused (limits, duplicate ids, unsupported format, conflict on `flow plan`).
 
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { listFlowFiles } from '../../core/flow-store.js'
+import { readRun } from '../../core/runs.js'
 import { addFlowSpecs } from '../../core/flow-control.js'
 import type { Plan, PlanItem, PlanStatus, SetStatusInput } from '../../core/plan.js'
 import {
-  attachSpec, createPlan, importInto, PLAN_STATUSES, PlanError, planComplete, planExists, planPath,
-  planProgress, readPlan, renderPlanItemPrompt, savePlan, setItemStatus, writePlanSummary,
+  attachSpec, createPlan, importInto, mutatePlan, PLAN_STATUSES, PlanError, planComplete, planExists,
+  planPath, planProgress, readPlan, renderPlanItemPrompt, repositoryRelativePath, setItemStatus,
 } from '../../core/plan.js'
 import { resolveFlowRunId } from '../../core/flow-view.js'
 import { displayPath } from '../../utils/paths.js'
@@ -153,17 +155,21 @@ export function registerPlanCommands(flow: Command): void {
     .action((opts: { run?: string, file: string, dryRun?: boolean, json?: boolean }, cmd: Command) => {
       try {
         const runId = resolveFlowRunId(runOption(cmd))
-        const text = readDocument(opts.file)
-        const sourcePath = relativeSource(opts.file)
-        const existing = planExists(runId) ? readPlan(runId) : null
-        const result = existing
-          ? importInto(existing, { run_id: runId, source_path: sourcePath, text, now: Date.now() })
-          : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() })
-
-        if (opts.dryRun !== true) {
-          savePlan(result.plan)
-          writePlanSummary(result.plan)
-        }
+        const target = projectPath(opts.file, projectRoot(runId))
+        const text = readDocument(target.absolute)
+        const sourcePath = target.relative
+        // Parsed before the lock: a broken document must not hold the lock while it reports its line number.
+        const dryRun = opts.dryRun === true
+        const result = dryRun
+          ? parseOnly(runId, sourcePath, text)
+          : mutatePlan(runId, current => {
+            const imported = current
+              ? importInto(current, { run_id: runId, source_path: sourcePath, text, now: Date.now() })
+              : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() })
+            // Unchanged means unchanged: writing the same plan again would touch `imported_at` and the file's
+            // mtime for nothing.
+            return { plan: imported.unchanged ? null : imported.plan, value: imported }
+          })
         if (opts.json) {
           console.log(JSON.stringify({
             dry_run: opts.dryRun === true,
@@ -233,24 +239,31 @@ export function registerPlanCommands(flow: Command): void {
     .action((opts: { run?: string, item: string, spec: string, queue?: boolean, dryRun?: boolean, json?: boolean }, cmd: Command) => {
       try {
         const runId = resolveFlowRunId(runOption(cmd))
-        const imported = readPlan(runId)
-        const text = readDocument(opts.spec)
+        const target = projectPath(opts.spec, projectRoot(runId))
+        const text = readDocument(target.absolute)
         const format = opts.spec.toLowerCase().endsWith('.json') ? 'json' as const : 'markdown' as const
-        const result = attachSpec(imported, {
+        const specPath = target.relative
+        const attach = (plan: Parameters<typeof attachSpec>[0]) => attachSpec(plan, {
           id: opts.item,
           text,
           format,
-          spec_path: relativeSource(opts.spec),
+          spec_path: specPath,
           now: Date.now(),
         })
+        const dryRun = opts.dryRun === true
+        const result = dryRun
+          ? attach(readPlan(runId))
+          : mutatePlan(runId, current => {
+            if (!current) throw new PlanError(`no plan for run ${runId}`, 'not_found')
+            const attached = attach(current)
+            return { plan: attached.plan, value: attached }
+          })
         let queued = false
-        if (opts.dryRun !== true) {
-          savePlan(result.plan)
-          writePlanSummary(result.plan)
-          if (opts.queue === true) {
-            addFlowSpecs({ run_id: runId, files: format === 'json' ? [opts.spec] : undefined, markdown: format === 'markdown' ? [opts.spec] : undefined })
-            queued = true
-          }
+        if (!dryRun && opts.queue === true) {
+          // Outside the plan lock on purpose: `addFlowSpecs` takes the runs lock itself, and nesting the two
+          // is how a deadlock is born.
+          addFlowSpecs({ run_id: runId, files: format === 'json' ? [target.absolute] : undefined, markdown: format === 'markdown' ? [target.absolute] : undefined })
+          queued = true
         }
         if (opts.json) {
           console.log(JSON.stringify({
@@ -284,7 +297,6 @@ export function registerPlanCommands(flow: Command): void {
     .action((opts: { run?: string, item: string, status: string, yes?: boolean, note?: string, dryRun?: boolean, json?: boolean }, cmd: Command) => {
       try {
         const runId = resolveFlowRunId(runOption(cmd))
-        const imported = readPlan(runId)
         const input: SetStatusInput = {
           id: opts.item,
           status: opts.status as PlanStatus,
@@ -292,11 +304,16 @@ export function registerPlanCommands(flow: Command): void {
           yes: opts.yes === true,
           now: Date.now(),
         }
-        const result = setItemStatus(imported, input)
-        if (opts.dryRun !== true && result.plan !== imported) {
-          savePlan(result.plan)
-          writePlanSummary(result.plan)
-        }
+        const dryRun = opts.dryRun === true
+        const result = dryRun
+          ? setItemStatus(readPlan(runId), input)
+          : mutatePlan(runId, current => {
+            if (!current) throw new PlanError(`no plan for run ${runId}`, 'not_found')
+            const applied = setItemStatus(current, input)
+            // `setItemStatus` returns the same object when nothing changed: writing it again would bump the
+            // file's mtime and the summary for a no-op.
+            return { plan: applied.plan === current ? null : applied.plan, value: applied }
+          })
         const item = result.plan.items.find(entry => entry.id === opts.item)!
         if (opts.json) {
           console.log(JSON.stringify({
@@ -347,19 +364,37 @@ function findItem(itemId: string, run?: string): { plan: Plan, item: PlanItem } 
   return matches[0]!
 }
 
+// A plan path is a path in the *project*, so it is resolved against the run's working directory first: the
+// operator may run the CLI from anywhere, and `docs/implementation-plan.md` means the project's document.
+function projectRoot(runId: string): string {
+  try {
+    return readRun(runId).working_dir
+  } catch {
+    return process.cwd()
+  }
+}
+
+// One resolution for both jobs: the absolute path to read, and the repository-relative path to store. Doing
+// them separately is how the file was read from the shell's cwd while the state recorded the project's.
+function projectPath(file: string, root: string): { absolute: string, relative: string } {
+  const absolute = resolve(root, file)
+  return { absolute, relative: repositoryRelativePath(absolute, root) }
+}
+
+// `--dry-run` still parses and merges, so the operator sees what would change; only the write is skipped.
+function parseOnly(runId: string, sourcePath: string, text: string) {
+  const existing = planExists(runId) ? readPlan(runId) : null
+  return existing
+    ? importInto(existing, { run_id: runId, source_path: sourcePath, text, now: Date.now() })
+    : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() })
+}
+
 function readDocument(path: string): string {
   try {
     return readFileSync(path, 'utf-8')
   } catch {
     throw new PlanError(`cannot read ${displayPath(path)}`, 'invalid')
   }
-}
-
-// A repository-relative path is what the plan stores: an absolute home path would leak into a payload and
-// into the state file (§4.1 of docs/flows-design.md).
-function relativeSource(path: string): string {
-  const cwd = process.cwd()
-  return path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : displayPath(path)
 }
 
 function printPlan(plan: Plan): void {

@@ -3,14 +3,17 @@
 // The two documents here are the *shapes* the design describes, not the projects they came from: one with
 // explicit ids, one without and with folded lines. Tests are about the shapes.
 
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  attachSpec, createPlan, deriveId, hashDocument, importInto, normalizeDocument, parsePlanDocument,
-  planComplete, planPath, planProgress, planSummary, PlanError, readPlan, savePlan, setItemStatus,
+  attachSpec, createPlan, deriveId, hashDocument, importInto, mutatePlan, normalizeDocument,
+  parsePlanDocument, planComplete, PLAN_LIMITS, planPath, planProgress, planSummary, PlanError, readPlan,
+  repositoryRelativePath, savePlan, setItemStatus,
 } from '../src/core/plan.js'
+import { createFlowState } from '../src/core/flow.js'
+import { saveFlow } from '../src/core/flow-store.js'
 
 const NOW = Date.parse('2026-11-02T09:00:00.000Z')
 const AT = new Date(NOW).toISOString()
@@ -316,5 +319,111 @@ describe('the plan store', () => {
     withRoot(root => {
       expect(() => planPath('../escape', { root })).toThrow(/not a valid flow id/)
     })
+  })
+})
+
+describe('conflict accounting at the cap', () => {
+  // 51 items, all closed by hand, then a document that unticks every one of them: the last conflict found
+  // must be the one the import reports, even though the bounded list can only hold 50.
+  function planWithManyClosedItems(): ReturnType<typeof importNew>['plan'] {
+    const ids = Array.from({ length: PLAN_LIMITS.conflicts + 1 }, (_, index) => `P1.${index + 1}`)
+    const text = ids.map(id => `- [x] **${id}** — item ${id}`).join('\n')
+    const first = importNew(text)
+    return {
+      ...first.plan,
+      items: first.plan.items.map(item => ({ ...item, status: 'done' as const, head: 'abc1234' })),
+    }
+  }
+
+  it('records a new conflict even when the list is already full, and drops the oldest', () => {
+    const plan = planWithManyClosedItems()
+    const unticked = plan.items.map(item => `- [ ] **${item.id}** — ${item.title}`).join('\n')
+    const result = importInto(plan, { run_id: 'run-1', source_path: 'docs/implementation-plan.md', text: unticked, now: NOW + 60_000 })
+
+    // Every item is a new disagreement; the plan keeps the newest 50 and the result reports what it recorded.
+    expect(result.conflicts).toHaveLength(PLAN_LIMITS.conflicts + 1)
+    expect(result.plan.conflicts).toHaveLength(PLAN_LIMITS.conflicts)
+    const youngest = result.plan.conflicts.at(-1)!
+    expect(youngest.item_id).toBe(`P1.${PLAN_LIMITS.conflicts + 1}`)
+    // The oldest was dropped, the record is still capped.
+    expect(result.plan.conflicts.some(entry => entry.item_id === 'P1.1')).toBe(false)
+  })
+
+  it('reports nothing new when the same disagreement is re-imported', () => {
+    const plan = planWithManyClosedItems()
+    const unticked = plan.items.map(item => `- [ ] **${item.id}** — ${item.title}`).join('\n')
+    const first = importInto(plan, { run_id: 'run-1', source_path: 'p.md', text: unticked, now: NOW })
+    const second = importInto(first.plan, { run_id: 'run-1', source_path: 'p.md', text: `${unticked}\n`, now: NOW + 1000 })
+    expect(second.conflicts).toEqual([])
+  })
+})
+
+describe('mutatePlan', () => {
+  function withRoot<T>(fn: (_rootDir: string) => T): T {
+    const root = mkdtempSync(join(tmpdir(), 'reeves-plan-mutate-'))
+    try {
+      return fn(root)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+
+  it('writes the plan and the flow summary inside one lock, and returns the mutator value', () => {
+    withRoot(root => {
+      process.env.REEVES_REGISTRY = root
+      try {
+        saveFlow(createFlowState({
+          run_id: 'run-1', repo: root, roles: { dev: 'd', review: 'r' }, max_rounds: 3,
+          review_timeout_sec: 60, at: '2026-11-02T09:00:00.000Z',
+        }), { root })
+        const value = mutatePlan('run-1', current => {
+          const result = createPlan({ run_id: 'run-1', source_path: 'p.md', text: WITH_IDS, now: NOW })
+          return { plan: current ? null : result.plan, value: 'created' }
+        }, { root })
+
+        expect(value).toBe('created')
+        expect(readPlan('run-1', { root }).items).toHaveLength(4)
+        const state = JSON.parse(readFileSync(join(root, 'flows', 'run-1.json'), 'utf-8')) as { plan?: { total: number } }
+        expect(state.plan?.total).toBe(4)
+        // The lock is released: a second mutation runs immediately instead of waiting for the 5 s timeout.
+        expect(mutatePlan('run-1', current => ({ plan: null, value: current?.items.length ?? 0 }), { root })).toBe(4)
+      } finally {
+        delete process.env.REEVES_REGISTRY
+      }
+    })
+  })
+
+  it('writes nothing when the mutator returns no plan', () => {
+    withRoot(root => {
+      const before = Date.now()
+      mutatePlan('run-1', () => ({ plan: null, value: null }), { root })
+      expect(Date.now() - before).toBeLessThan(1000)
+      expect(() => readPlan('run-1', { root })).toThrow(/no plan/)
+    })
+  })
+})
+
+describe('repository-relative paths', () => {
+  it('accepts a path inside the project and refuses one outside it', () => {
+    expect(repositoryRelativePath('docs/implementation-plan.md', '/work/proj')).toBe('docs/implementation-plan.md')
+    expect(repositoryRelativePath('/work/proj/docs/plan.md', '/work/proj')).toBe('docs/plan.md')
+    expect(() => repositoryRelativePath('/home/someone/plan.md', '/work/proj')).toThrow(/outside the repository/)
+    expect(() => repositoryRelativePath('../elsewhere/plan.md', '/work/proj')).toThrow(/outside the repository/)
+  })
+})
+
+describe('markdown briefs', () => {
+  it('takes the item id, because a heading slug can never equal P1.7.1', () => {
+    const first = importNew(['- [ ] **P1.7.1** — the edge port'].join('\n'))
+    const attached = attachSpec(first.plan, {
+      id: 'P1.7.1',
+      text: '# The edge port\n\nPublish it on 7810.\n',
+      format: 'markdown',
+      spec_path: 'docs/briefs/P1.7.1.md',
+      now: NOW,
+    })
+    expect(attached.spec.id).toBe('P1.7.1')
+    expect(attached.spec.unstructured).toBe(true)
+    expect(attached.item.status).toBe('queued')
   })
 })

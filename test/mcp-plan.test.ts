@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
 import { saveFlow } from '../src/core/flow-store.js'
 import { readPlan } from '../src/core/plan.js'
+import { writeRun } from '../src/core/runs.js'
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => ''), spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
 vi.mock('../src/core/runtime.js', async (importOriginal) => ({
@@ -45,6 +46,19 @@ beforeEach(() => {
     review_timeout_sec: 1800,
     at: '2026-11-02T09:00:00.000Z',
   }))
+  writeRun({
+    id: RUN,
+    name: RUN,
+    status: 'running',
+    tmux_session: `reeves-${RUN}`,
+    reeves_window_id: '@0',
+    reeves_pane_id: '%0',
+    root_agent_id: 'dev-1',
+    working_dir: registry,
+    preset_name: null,
+    started_at: '2026-11-02T09:00:00.000Z',
+    ended_at: null,
+  })
   writeFileSync(join(registry, 'plan.md'), DOC)
 })
 

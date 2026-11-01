@@ -51,9 +51,9 @@ import { queueSpecFile } from '../../core/flow-queue.js'
 import { startFlow } from '../../core/flow-start.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
 import { stepFlow } from '../../core/flow-runner.js'
-import { createPlan, importInto, planExists, planPath, readPlan, savePlan, writePlanSummary } from '../../core/plan.js'
+import { createPlan, importInto, mutatePlan, planExists, planPath, readPlan, repositoryRelativePath } from '../../core/plan.js'
 import { readFileSync } from 'node:fs'
-import { relative } from 'node:path'
+import { resolve } from 'node:path'
 import { shortHomePath } from '../../utils/paths.js'
 import { redactSecrets } from '../../core/redact.js'
 import { detectHostProvider } from './host.js'
@@ -111,17 +111,22 @@ type ToolResult = ReturnType<typeof ok> | ReturnType<typeof fail>
 
 // The plan document is read from disk and stored with a repository-relative path: an absolute home path in
 // the state would leak into every payload (§4.1 of docs/flows-design.md).
+// The plan document lives in the project, which is the run's working directory — the server's own cwd is
+// whatever the host launched it from.
+function runWorkingDir(runId: string): string {
+  try {
+    return readRun(runId).working_dir
+  } catch {
+    return process.cwd()
+  }
+}
+
 function readPlanDocument(path: string): string {
   try {
     return readFileSync(path, 'utf-8')
   } catch {
     throw new Error(`cannot read ${shortHomePath(path)}`)
   }
-}
-
-function relativeToRepo(path: string): string {
-  const rel = relative(process.cwd(), path)
-  return rel.startsWith('..') ? shortHomePath(path) : rel
 }
 
 function asString(value: unknown, fallback = ''): string {
@@ -803,16 +808,23 @@ const TOOLS: ToolDef[] = [
     handler: (a) => {
       const runId = resolveFlowRunId(asString(a.run_id))
       const file = asString(a.file)
-      const sourcePath = relativeToRepo(file)
-      const text = readPlanDocument(file)
-      const existing = planExists(runId) ? readPlan(runId) : null
-      const result = existing
-        ? importInto(existing, { run_id: runId, source_path: sourcePath, text, now: Date.now() })
-        : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() })
-      if (a.dry_run !== true) {
-        savePlan(result.plan)
-        writePlanSummary(result.plan)
-      }
+      // A path outside the repository is refused, not shortened: `~/…` in `source_path` would name the
+      // operator's home in every later payload, and a shortened path cannot be re-imported.
+      const root = runWorkingDir(runId)
+      const absolute = resolve(root, file)
+      const sourcePath = repositoryRelativePath(absolute, root)
+      const text = readPlanDocument(absolute)
+      const dryRun = a.dry_run === true
+      const result = dryRun
+        ? (planExists(runId)
+          ? importInto(readPlan(runId), { run_id: runId, source_path: sourcePath, text, now: Date.now() })
+          : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() }))
+        : mutatePlan(runId, current => {
+          const imported = current
+            ? importInto(current, { run_id: runId, source_path: sourcePath, text, now: Date.now() })
+            : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() })
+          return { plan: imported.unchanged ? null : imported.plan, value: imported }
+        })
       return ok({
         run_id: runId,
         dry_run: a.dry_run === true,
