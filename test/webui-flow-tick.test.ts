@@ -192,6 +192,50 @@ describe('the Web UI does not tick when the tick is off', () => {
     }
   })
 
+  it('ships the same summary in the SSE frame, which is what a live dashboard actually reads', async () => {
+    // `/api/state` is the first load; every later update arrives as an SSE frame from `snapshot()`. Both must carry
+    // the pulse length and the per-target unread list, or the pulse works once and then stops.
+    await (await import('../src/core/config.js')).setConfigValues({ agent_pulse_ms: 4321 })
+    const { appendNotification } = await import('../src/core/notifications.js')
+    appendNotification({
+      kind: 'run.created', title: 'fresh', run_id: 'run-1', run_name: 'run-1', project: 'proj', agent_id: 'dev-1',
+    })
+
+    vi.resetModules()
+    const { startWebServer } = await import('../src/surfaces/webui/server.js')
+    const handle = await startWebServer({ port: 0 })
+    const stream = (() => {
+      const parsed = new (globalThis as unknown as { URL: new (_input: string) => { hostname: string, port: string, pathname: string } }).URL(`${handle.url}/api/events`)
+      let resolveFrame: (_value: string) => void = () => {}
+      const firstFrame = new Promise<string>(resolve => { resolveFrame = resolve })
+      const req = requestFn({
+        hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method: 'GET',
+        agent: false, headers: { accept: 'text/event-stream' },
+      }, res => {
+        let buffer = ''
+        res.setEncoding('utf-8')
+        res.on('data', (chunk: string) => {
+          buffer += chunk
+          if (buffer.includes('\n\n')) resolveFrame(buffer)
+        })
+      })
+      req.on('error', () => { /* closed below */ })
+      req.end()
+      return { firstFrame, close: () => req.destroy() }
+    })()
+    try {
+      const frame = await stream.firstFrame
+      const payload = JSON.parse(frame.replace(/^data: /, '').split('\n')[0]!) as {
+        notifications: { agent_pulse_ms: number, unread_by: { run_id: string, agent_id: string }[] }
+      }
+      expect(payload.notifications.agent_pulse_ms).toBe(4321)
+      expect(payload.notifications.unread_by).toContainEqual(expect.objectContaining({ run_id: 'run-1', agent_id: 'dev-1' }))
+    } finally {
+      stream.close()
+      await handle.close()
+    }
+  })
+
   it('still lets a manual tick work when the autonomous one is off', async () => {
     await (
       await import('../src/core/config.js')

@@ -258,6 +258,10 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain('notifications.agent_pulse_ms')
     expect(js).toContain('notifications.unread_by')
     expect(js).toContain("entry.agent_id === agent.id")
+    // The card must be rendered with the run too: a run-level event (`agent_id: ''`) pulses the run's cards, and
+    // without the second argument that branch could never fire.
+    expect(js).toContain('renderPulse(card, agent, run)')
+    expect(js).toContain("entry.agent_id === '' && run && entry.run_id === run.id")
     const server = readFileSync(join(process.cwd(), 'src/surfaces/webui/server.ts'), 'utf8')
     expect(server).toContain('withPulse(')
   })
