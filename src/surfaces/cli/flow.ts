@@ -13,10 +13,13 @@ import { flowPath, readFlow } from '../../core/flow-store.js'
 import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
 import type { FlowStepResult } from '../../core/flow-runner.js'
 import { stepFlow } from '../../core/flow-runner.js'
+import { tickAllFlows } from '../../core/flow-ticker.js'
 import { startFlow } from '../../core/flow-start.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
 import type { NotesCounts } from '../../core/flow-notes.js'
 import { listNotesHeads, readNotesRound } from '../../core/flow-notes.js'
+import { loadConfig } from '../../core/config.js'
+import { planExists, readPlan } from '../../core/plan.js'
 import { redactSecrets } from '../../core/redact.js'
 import { shortHomePath } from '../../utils/paths.js'
 import { finalizePlanCommands, registerPlanCommands } from './plan.js'
@@ -71,6 +74,16 @@ function printStatus(state: FlowState, path: string): void {
     console.log(`plan      ${state.plan.done}/${state.plan.total} done${state.plan.waiting > 0 ? ` · ${state.plan.waiting} waiting for you` : ''}  (imported ${state.plan.imported_at})`)
   }
   if (state.active_plan_item) console.log(`plan item ${state.active_plan_item} in flight`)
+  const waiting = planWaitingLine(state)
+  if (waiting) console.log(`waiting   ${waiting}`)
+  const tickMs = loadConfig().global.flow_tick_ms
+  if (tickMs > 0) {
+    const since = Date.now() - Date.parse(state.updated_at)
+    const nextIn = Math.max(0, Math.ceil((tickMs - since) / 1000))
+    console.log(`tick      last ${Number.isFinite(since) ? Math.max(0, Math.round(since / 1000)) : '?'}s ago · next in ${nextIn}s (flow_tick_ms ${tickMs})`)
+  } else {
+    console.log('tick      autonomous tick is off (flow_tick_ms 0): run `flow tick` yourself')
+  }
   console.log(`head      ${head}`)
   console.log(`verdict   ${verdict}  (baseline ${state.claim.verdict_count} in the reviewer pane)`)
   if (state.pending) {
@@ -137,6 +150,24 @@ function countsSuffix(counts: NotesCounts | null): string {
   if (counts.major > 0) parts.push(`${counts.major} MAJOR`)
   if (counts.minor > 0) parts.push(`${counts.minor} MINOR`)
   return parts.length > 0 ? `  · ${parts.join(', ')}` : ''
+}
+
+// The one line the operator acts on: which item needs a brief, which is blocked, and by whom.
+function planWaitingLine(state: FlowState): string | null {
+  try {
+    if (!planExists(state.run_id)) return null
+    const plan = readPlan(state.run_id)
+    const needsBrief = plan.items
+      .filter(item => item.missing_since === null && item.spec === null && item.status !== 'done' && item.status !== 'skipped')
+      .map(item => `${item.id} (needs a brief)`)
+    const blocked = plan.items
+      .filter(item => item.status === 'blocked_owner')
+      .map(item => `${item.id} (blocked${item.block_reason ? `: ${item.block_reason}` : ''})`)
+    const parts = [...needsBrief, ...blocked]
+    return parts.length > 0 ? parts.join(', ') : null
+  } catch {
+    return null
+  }
 }
 
 function fail(err: unknown): never {
@@ -221,14 +252,55 @@ export function registerFlow(program: Command): void {
       }
     })
 
+  // `--all`: one pass over every live flow, for cron and headless machines. The same function the Web UI loop
+  // calls, so a cron tick and a dashboard tick cannot behave differently.
+  flow
+    .command('tick-all')
+    .description('alias of `flow tick --all`: advance every live flow once and exit')
+    .option('--dry-run', 'print what each flow would do; send nothing and write nothing')
+    .option('--json', 'output JSON')
+    .action((opts: { dryRun?: boolean, json?: boolean }) => {
+      try {
+        const result = tickAllFlows({ dryRun: opts.dryRun === true })
+        if (opts.json) {
+          console.log(JSON.stringify(result, null, 2))
+          return
+        }
+        for (const entry of result.advanced) console.log(`${entry.run_id.padEnd(20)} ${entry.status.padEnd(11)} ${entry.reason}`)
+        for (const entry of result.held) console.log(`${entry.run_id.padEnd(20)} ${entry.status.padEnd(11)} ${entry.reason}`)
+        for (const entry of result.skipped) console.log(`${entry.run_id.padEnd(20)} skipped     ${entry.why}`)
+        console.log(`\n${result.advanced.length} advanced · ${result.held.length} held · ${result.skipped.length} skipped`)
+      } catch (err) {
+        fail(err)
+      }
+    })
+
   flow
     .command('tick')
-    .description('run one engine step: observe, decide, claim, send and settle unless --dry-run')
-    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .description('run one engine step: observe, decide, claim, send and settle unless --dry-run; --all walks every live flow')
+    .option('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('--all', 'advance every live flow once and exit: the cron path')
     .option('--json', 'output JSON')
     .option('--dry-run', 'print the decision; send nothing and write nothing')
-    .action((opts: { run: string, json?: boolean, dryRun?: boolean }) => {
+    .action((opts: { run?: string, all?: boolean, json?: boolean, dryRun?: boolean }) => {
       try {
+        if (opts.all === true) {
+          const all = tickAllFlows({ dryRun: opts.dryRun === true })
+          if (opts.json) {
+            console.log(JSON.stringify(all, null, 2))
+            return
+          }
+          for (const entry of [...all.advanced, ...all.held]) {
+            console.log(`${entry.run_id.padEnd(20)} ${entry.status.padEnd(11)} ${entry.reason}`)
+          }
+          for (const entry of all.skipped) console.log(`${entry.run_id.padEnd(20)} skipped     ${entry.why}`)
+          console.log(`\n${all.advanced.length} advanced · ${all.held.length} held · ${all.skipped.length} skipped`)
+          return
+        }
+        if (!opts.run) {
+          console.error('either --run <id> or --all is required')
+          process.exit(1)
+        }
         const runId = resolveFlowRunId(opts.run)
         const dryRun = opts.dryRun === true
         const result = stepFlow(runId, { dryRun })

@@ -24,7 +24,7 @@ describe('config editing', () => {
     expect(CONFIG_FIELDS.map(f => f.key)).toEqual([
       'web_theme', 'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms',
       'max_lifetime_ms', 'default_permissions', 'language', 'review_min_seconds',
-      'review_evidence_retries', 'dispatch_confirm_seconds', 'agent_pulse_ms',
+      'review_evidence_retries', 'dispatch_confirm_seconds', 'agent_pulse_ms', 'flow_tick_ms',
     ])
   })
 

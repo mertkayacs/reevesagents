@@ -32,7 +32,7 @@ export const NOTIFICATION_KINDS = [
   'probe.failed', 'flow.escalated', 'flow.review_timeout',
   // Two plan kinds: an item closing is the progress the owner asked to see, and a blocked item is the one thing a
   // plan cannot move by itself. Both are produced by the engine only.
-  'plan.item_done', 'plan.item_blocked',
+  'plan.item_done', 'plan.item_blocked', 'plan.item_needs_brief',
   'external',
 ] as const
 export type NotificationKind = typeof NOTIFICATION_KINDS[number]
@@ -40,7 +40,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number]
 // The flow kinds are the engine's own attention. An ingest caller that could write them would be able to fake a
 // "a human is required" state, so they are refused at the HTTP boundary (§2.2).
 export const PRODUCT_ONLY_KINDS: readonly NotificationKind[] = [
-  'flow.escalated', 'flow.review_timeout', 'plan.item_done', 'plan.item_blocked',
+  'flow.escalated', 'flow.review_timeout', 'plan.item_done', 'plan.item_blocked', 'plan.item_needs_brief',
 ]
 
 export const DEFAULT_SEVERITY: Record<NotificationKind, NotificationSeverity> = {
@@ -55,6 +55,7 @@ export const DEFAULT_SEVERITY: Record<NotificationKind, NotificationSeverity> = 
   'flow.review_timeout': 'warn',
   'plan.item_done': 'info',
   'plan.item_blocked': 'warn',
+  'plan.item_needs_brief': 'warn',
   external: 'info',
 }
 

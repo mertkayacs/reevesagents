@@ -27,5 +27,8 @@ export function flowBadgeText(t: FlowTranslate, badge: FlowBadge, options: { com
 
 export function flowAttentionText(t: FlowTranslate, badge: FlowBadge): string | null {
   if (!badge.attention) return null
-  return t(`flow.attention.${badge.attention}` as TranslationKey)
+  const base = t(`flow.attention.${badge.attention}` as TranslationKey)
+  // The item id is the actionable part: "plan: waiting for a brief" without `P1.7.2` sends the operator to the
+  // dialog to find out which one, and the badge is exactly where they look first.
+  return badge.plan ? `${base} (${badge.plan.item})` : base
 }

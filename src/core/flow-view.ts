@@ -10,6 +10,7 @@
 import type { FlowState, FlowStatus } from './flow.js'
 import { FlowStateError } from './flow.js'
 import { flowPath, listFlowFiles, readFlow } from './flow-store.js'
+import { readPlan } from './plan.js'
 import { redactSecrets } from './redact.js'
 import { shortHomePath } from '../utils/paths.js'
 
@@ -164,7 +165,14 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
 // The badge a run row shows. Derived on every read from the flow document, never stored in a run
 // record: a heuristic written into a lifecycle field outlives the reason that produced it, and the
 // next reader cannot tell "escalated" from "was escalated an hour ago".
-export type FlowAttention = 'escalated' | 'review_timeout'
+export type FlowAttention = 'escalated' | 'review_timeout' | 'plan_waiting'
+
+// What the plan is waiting for, when it is waiting for a human. Supplied by the caller that read `plan.json`:
+// the badge is a view, and the plan is a separate file (`docs/plan-model-design.md` §2.2).
+export interface PlanAttention {
+  reason: 'needs_brief' | 'blocked_owner'
+  item: string
+}
 
 export interface FlowBadge {
   status: FlowStatus
@@ -174,20 +182,49 @@ export interface FlowBadge {
   review_overdue: boolean
   // Why a human is needed, or null while the flow is moving on its own.
   attention: FlowAttention | null
+  // The item the plan is waiting for, when `attention` is `plan_waiting`.
+  plan: PlanAttention | null
 }
 
 // Same comparison the engine makes, so a badge can never say "overdue" while the tick still waits:
 // `>= timeout` on the ms difference, measured from `review_started_at`.
-export function flowBadge(state: FlowState, now: number = Date.now()): FlowBadge {
+export function flowBadge(
+  state: FlowState,
+  now: number = Date.now(),
+  plan: PlanAttention | null = null,
+): FlowBadge {
   const overdue = state.state === 'reviewing'
     && state.review_started_at !== null
     && now - state.review_started_at >= state.review_timeout_sec * 1000
+  // `escalated` and a timed-out review outrank the plan: they are pipeline problems, and the plan waiting is the
+  // normal "somebody has to write a brief" case. A parked or closed flow owns no plan attention.
+  const escalation = state.state === 'escalated' ? 'escalated' : overdue ? 'review_timeout' : null
+  const planAttention = escalation === null && plan !== null && (state.state === 'idle' || state.state === 'reviewing' || state.state === 'fixing')
+    ? 'plan_waiting' as const
+    : null
   return {
     status: state.state,
     rounds: state.rounds,
     max_rounds: state.max_rounds,
     review_overdue: overdue,
-    attention: state.state === 'escalated' ? 'escalated' : overdue ? 'review_timeout' : null,
+    attention: escalation ?? planAttention,
+    plan: planAttention === null ? null : plan,
+  }
+}
+
+// The plan's attention, read from `flows/<run-id>/plan.json` when there is one: the first open item that cannot
+// move without a human. Returns null for "nothing the plan is waiting for".
+export function planAttentionOf(runId: string, root?: string): PlanAttention | null {
+  try {
+    const plan = readPlan(runId, { root })
+    for (const item of plan.items) {
+      if (item.missing_since !== null) continue
+      if (item.status === 'blocked_owner') return { reason: 'blocked_owner', item: item.id }
+      if (item.spec === null && item.status !== 'done' && item.status !== 'skipped') return { reason: 'needs_brief', item: item.id }
+    }
+    return null
+  } catch {
+    return null
   }
 }
 
@@ -195,7 +232,7 @@ export function flowBadge(state: FlowState, now: number = Date.now()): FlowBadge
 // skips a damaged file instead of breaking the board, while `flow status` still reports it (§3.3).
 export function readFlowBadge(runId: string, now: number = Date.now(), root?: string): FlowBadge | null {
   try {
-    return flowBadge(readFlow(runId, { root }), now)
+    return flowBadge(readFlow(runId, { root }), now, planAttentionOf(runId, root))
   } catch {
     return null
   }

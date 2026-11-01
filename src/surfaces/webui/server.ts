@@ -12,6 +12,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './guards.js'
 import { buildWebState, listWebProviders } from './state.js'
+import { tickAllFlows } from '../../core/flow-ticker.js'
 import {
   NotificationError, appendNotification, markNotificationsRead, notificationSummary, readNotifications,
 } from '../../core/notifications.js'
@@ -172,6 +173,7 @@ interface SseHub {
 function createSseHub(): SseHub {
   const clients = new Set<ServerResponse>()
   let timer: ReturnType<typeof setInterval> | null = null
+  let flowTimer: ReturnType<typeof setInterval> | null = null
   let last = ''
 
   const snapshot = (): string => {
@@ -180,6 +182,12 @@ function createSseHub(): SseHub {
     sweepAgentsThrottled()
     sweepOrphanSessionsThrottled()
     autoCleanupRuns()
+    // The autonomous tick, one step per flow per pass. It runs on the same clock as the sweep because a dashboard
+    // that is open is the most likely place for it to be needed; `flow tick --all` is the cron equivalent, and the
+    // claim protocol keeps the two from pasting the same prompt twice. A failing flow never stops the sweep.
+    try {
+      tickAllFlows()
+    } catch { /* one broken flow must not take the dashboard down */ }
     // The journal summary rides along with the state frame: a badge that needs a second request would be a badge
     // that lags the screen it belongs to.
     return JSON.stringify({ ...buildWebState(), notifications: notificationSummary() })
@@ -198,9 +206,21 @@ function createSseHub(): SseHub {
     last = snapshot()
     timer = setInterval(tick, POLL_MS)
     timer.unref()
+    // A slower, independent cadence for the flows: `flow_tick_ms` (default a minute, `0` disables it). Separate
+    // from the screen poll so a slow tick cannot make the dashboard feel slow.
+    const tickMs = loadConfig().global.flow_tick_ms
+    if (tickMs > 0 && !flowTimer) {
+      flowTimer = setInterval(() => {
+        try {
+          tickAllFlows()
+        } catch { /* see above */ }
+      }, tickMs)
+      flowTimer.unref()
+    }
   }
   const stop = (): void => {
     if (timer) { clearInterval(timer); timer = null }
+    if (flowTimer) { clearInterval(flowTimer); flowTimer = null }
   }
 
   return {

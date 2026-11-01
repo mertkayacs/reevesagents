@@ -23,6 +23,7 @@ const DEFAULT_GLOBAL: GlobalConfig = {
   // arrives in under `review_min_seconds` with no findings is not a review, and the dispatch window has
   // to outlast a provider's slow first turn.
   agent_pulse_ms: 5000,
+  flow_tick_ms: 60000,
   review_min_seconds: 30,
   review_evidence_retries: 1,
   dispatch_confirm_seconds: 90,
@@ -74,6 +75,8 @@ function mergeDefaults(raw: unknown): Config {
     // stays in force, so this is nonneg-int rather than posint.
     // `0` disables the pulse, so this is nonneg-int rather than posint; a fraction is not a duration anyone meant.
     if (typeof g.agent_pulse_ms === 'number' && Number.isInteger(g.agent_pulse_ms) && g.agent_pulse_ms >= 0) merged.global.agent_pulse_ms = g.agent_pulse_ms
+    // `0` turns the autonomous tick off while `flow tick` keeps working, so nonneg-int rather than posint.
+    if (typeof g.flow_tick_ms === 'number' && Number.isInteger(g.flow_tick_ms) && g.flow_tick_ms >= 0) merged.global.flow_tick_ms = g.flow_tick_ms
     if (typeof g.review_min_seconds === 'number' && g.review_min_seconds >= 0) merged.global.review_min_seconds = g.review_min_seconds
     if (typeof g.review_evidence_retries === 'number' && g.review_evidence_retries > 0) merged.global.review_evidence_retries = g.review_evidence_retries
     if (typeof g.dispatch_confirm_seconds === 'number' && g.dispatch_confirm_seconds > 0) merged.global.dispatch_confirm_seconds = g.dispatch_confirm_seconds
@@ -132,6 +135,7 @@ export const CONFIG_FIELDS: readonly ConfigFieldSpec[] = [
   { key: 'review_evidence_retries', kind: 'posint', label: 'review evidence retries' },
   { key: 'dispatch_confirm_seconds', kind: 'posint', label: 'dispatch confirm (s)' },
   { key: 'agent_pulse_ms', kind: 'nonneg-int', label: 'agent pulse (ms)' },
+  { key: 'flow_tick_ms', kind: 'nonneg-int', label: 'flow tick (ms)' },
 ]
 
 function configFieldSpec(key: string): ConfigFieldSpec {

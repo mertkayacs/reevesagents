@@ -380,6 +380,28 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
 
 // A flow event exists iff the badge would show a warning (§2.2): the same decision that escalated the flow writes
 // the notification, with a key that survives a retry and a `--replace` (§ `flow_id`).
+// A plan that cannot move because nobody wrote a brief is a human task, not a broken pipeline: it gets a warning
+// event and the item's name, and the flow stays in a working state (§2.2 of the notification design).
+function emitPlanAttention(state: FlowState, observations: FlowObservations, decision: FlowDecision): void {
+  const plan = observations.plan
+  if (!plan || decision.reason !== 'plan_incomplete') return
+  const detail = decision.log_detail ?? ''
+  const briefItem = /needs a brief for ([\w.@:-]+)/.exec(detail)?.[1]
+  const blockedItem = /([\w.@:-]+) is blocked_owner/.exec(detail)?.[1]
+  if (!briefItem && !blockedItem) return
+  const item = briefItem ?? blockedItem!
+  const kind = briefItem ? 'plan.item_needs_brief' : 'plan.item_blocked'
+  emitNotification({
+    kind,
+    title: briefItem ? `plan item ${item} needs a brief` : `plan item ${item} is blocked`,
+    detail: briefItem ? 'attach one with `flow plan attach`; the engine does not invent scope' : detail,
+    run_id: state.run_id,
+    project: projectOfRepo(state.repo),
+    source: 'product',
+    dedupe_key: `${state.flow_id}:${kind}:${item}`,
+  })
+}
+
 function emitFlowAttention(state: FlowState, decision: FlowDecision): void {
   // The state is the authority, not the decision's kind: a `composer_dirty` escalation is a `dispatch_spec`
   // decision that ended in `escalated`, and gating on `kind` silently dropped exactly that case. The dedupe key
@@ -640,7 +662,19 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   const claim = withStateLock<ClaimPhaseResult>(() => {
     const state = readFlow(runId, { root: options.root })
     const decision = flowTick(state, observations)
-    if (!decisionChangesState(state, decision)) return { state, decision, dispatch: null, settled: null }
+    if (!decisionChangesState(state, decision)) {
+      // A hold that says something new (the plan is waiting for a brief, an item is blocked) is journalled once;
+      // the same hold on the next tick is silent, so an autonomous driver cannot turn the journal into noise. The
+      // state itself is untouched — a hold changes nothing, which is why this branch used to write nothing at all
+      // and the reason never reached the log.
+      const quiet = decision.kind === 'none' && !decision.log_detail
+      const detail = decision.log_detail ?? decision.reason
+      if (quiet || state.log.at(-1)?.detail === detail) {
+        return { state, decision, dispatch: null, settled: null }
+      }
+      const noted = applyDecisionToState(state, decision, at)
+      return { state, decision, dispatch: null, settled: { state: noted, path: saveFlow(noted, { root: options.root }) } }
+    }
     const { message, target } = decision
     if (!message || !target) {
       const next = applyDecisionToState(state, decision, at)
@@ -676,6 +710,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     // budget blocks one) — and `decisionChangesState` only looks at the flow's own fields.
     applyPlanDecision(before, observations, phase.decision)
     emitFlowAttention(phase.settled?.state ?? before, phase.decision)
+    emitPlanAttention(before, observations, phase.decision)
     if (phase.settled) {
       publishRoundNotes(before, observations, phase.decision, options)
       pruneClosedNotes(phase.settled.state, options)
@@ -791,6 +826,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   // Not only `applied`: `composer_dirty` escalates the flow and reports `unconfirmed`, and an escalation the human
   // is never told about is the one failure this journal exists to prevent.
   emitFlowAttention(done.state, phase.decision)
+  emitPlanAttention(before, observations, phase.decision)
   if (done.status === 'applied') publishRoundNotes(before, observations, phase.decision, options)
   pruneClosedNotes(done.state, options)
   return {
