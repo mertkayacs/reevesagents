@@ -165,6 +165,10 @@ The **human** table is what `plan set` follows, and it is a strict subset:
 
 Three rules fall out, and each was a review finding before it was written down:
 
+- **a blocked item stops the picker; an unbriefed one does not.** `blocked_owner` is a decision the owner has
+  already taken about that point of the plan, so the picker stops on it rather than routing around it; an item
+  without a brief is work not yet described and is reported instead. A spec queued by hand (`add-spec`) outranks
+  both: it is an explicit instruction and the plan fills the queue only when the queue is empty.
 - **a human cannot claim or release a round in flight.** `queued → in_work` is the engine's transition when
   it claims a dispatch; done by hand it would make an item look active while nothing was ever sent. Worse in
   the other direction: `in_work → queued` would free an item whose round is still running, and the next
@@ -335,7 +339,10 @@ the engine already requires before it closes a flow — no second, weaker gate.
 - an item that spends its budget becomes `blocked_owner` with `block_reason: rounds_exhausted`; the flow does
   **not** move to the next item (otherwise a bad item is silently buried in the list). A human decides: `flow
   plan set --item <id> --status queued` to continue, or `--status skipped`.
-- spending `max_total_rounds` escalates the **flow** (`total_rounds_exhausted`).
+- spending `max_total_rounds` escalates the **flow** (`total_rounds_exhausted`), and the boundary is the round
+  itself: a fuse of 5 permits rounds 1–5 and escalates on the sixth attempt, not before the fifth;
+- a plan file that exists but cannot be parsed is an **error**, not "no plan": the tick refuses instead of
+  taking the legacy branch, because that branch would let an ACCEPT close the flow with items still open.
 
 `flow plan next` is the **only** automatic way an item becomes work:
 

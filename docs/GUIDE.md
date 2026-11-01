@@ -217,6 +217,9 @@ closed it. `flow plan` shows `done/total`, what waits for you, and which item is
 same one-line summary, and each item's row carries its commit, its rounds and a reference to the review notes of
 the round that closed it.
 
+A plan file that exists but cannot be read stops the tick with an error naming it: the flow will not fall back to
+"there is no plan", because that is how a flow closes with items still open.
+
 Two budgets: `--max-rounds` is the budget of **one item** (how many fix rounds it may spend before it blocks as
 `blocked_owner` with `rounds_exhausted`), and `--max-total-rounds` (default `4 × max-rounds`, at most 100) is the
 flow's fuse. A flow without a plan ignores the fuse and keeps the old meaning of `--max-rounds`.

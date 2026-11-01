@@ -298,15 +298,14 @@ function evidencePolicy(): EvidencePolicy {
   }
 }
 
-// A damaged or absent plan is "no plan": the flow then behaves exactly as it did before plans existed, which is
-// better than refusing to tick because a document mirror is unreadable.
+// An **absent** plan means "no plan" and the flow behaves as it did before plans existed. A plan that is present
+// but unreadable is a different thing entirely: swallowing the error would make the ACCEPT path take the legacy
+// branch and close the flow with items still open, which is the one outcome the plan exists to prevent. So the
+// error is raised, the tick writes nothing, and the operator fixes the file.
 export function readPlanView(state: FlowState): PlanTickView | null {
-  try {
-    if (!planExists(state.run_id)) return null
-    return planTickView(readPlan(state.run_id), { perItem: state.max_rounds, total: state.max_total_rounds })
-  } catch {
-    return null
-  }
+  if (!planExists(state.run_id)) return null
+  const plan = readPlan(state.run_id)   // throws PlanError for a damaged file, which `stepFlow` surfaces
+  return planTickView(plan, { perItem: state.max_rounds, total: state.max_total_rounds })
 }
 
 // Apply what the decision asked the plan to record. Runs after the flow state is saved, and is idempotent in

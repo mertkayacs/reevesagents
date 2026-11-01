@@ -5,7 +5,7 @@
 // `plan.json` in a temp registry, which is what proves the item an ACCEPT closes is the item that was sent.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState, flowTick } from '../src/core/flow.js'
@@ -112,6 +112,19 @@ describe('picking the next item', () => {
     expect(next.kind === 'needs_brief' ? next.item.id : null).toBe('P1.1')
   })
 
+  it('stops on a blocked item instead of routing around it', () => {
+    // A ready item later in the document must not hide a blocked one earlier: `blocked_owner` is a decision the
+    // owner already made, and jumping over it turns that decision into a suggestion.
+    const plan = planWithBriefs(['P1.2', 'P1.3'])
+    const withBlocked: Plan = {
+      ...plan,
+      items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'blocked_owner' as const } : item)),
+    }
+    const next = planNext(planTickView(withBlocked, { perItem: 2, total: 8 }))
+    expect(next.kind).toBe('blocked_owner')
+    expect(next.kind === 'blocked_owner' ? next.item.id : null).toBe('P1.1')
+  })
+
   it('does not start a second item while one is in flight', () => {
     const plan = planWithBriefs(['P1.1', 'P1.2'])
     const busy: Plan = {
@@ -187,13 +200,31 @@ describe('the engine with a plan', () => {
     expect(decision.next_plan_status).toMatchObject({ id: 'P1.1', status: 'blocked_owner', block_reason: 'rounds_exhausted' })
   })
 
-  it('escalates when the flow spent its total budget', () => {
+  it('allows the last round the fuse permits, and escalates on the next one', () => {
     const plan = planWithBriefs(['P1.1', 'P1.2'])
-    const state = reviewingState({ active_plan_item: 'P1.1', rounds: 5 })
+    // `max_total_rounds` is 5: four spent rounds still allow the fifth.
+    const fourSpent = reviewingState({ active_plan_item: 'P1.1', rounds: 4, claim: { head: 'aaa111', verdict: null, verdict_count: 1 } })
+    const allowed = flowTick(fourSpent, observationsFor(fourSpent, plan, { verdict: 'CHANGES_REQUESTED' }))
+    expect(allowed.kind).toBe('dispatch_fix')
+
+    const fiveSpent = reviewingState({ active_plan_item: 'P1.1', rounds: 5 })
+    const escalated = flowTick(fiveSpent, observationsFor(fiveSpent, plan, { verdict: 'CHANGES_REQUESTED' }))
+    expect(escalated.reason).toBe('total_rounds_exhausted')
+    expect(escalated.next_state).toBe('escalated')
+  })
+
+  it('dispatches a spec queued outside the plan before taking the next item', () => {
+    // `add-spec` is allowed with a plan; without this the spec would sit in `state.specs` for ever, journalled
+    // as `off_plan_spec` and never sent.
+    const plan = planWithBriefs(['P1.1', 'P1.2'])
+    const offPlan = { id: 'X9', title: 'side task', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }
+    const state = reviewingState({ active_plan_item: 'P1.1', specs: [offPlan], dispatched_specs: [] })
     const decision = flowTick(state, observationsFor(state, plan))
 
-    expect(decision.reason).toBe('total_rounds_exhausted')
-    expect(decision.next_state).toBe('escalated')
+    expect(decision.kind).toBe('dispatch_spec')
+    expect(decision.reason).toBe('spec_dispatched')
+    expect(decision.spec_id).toBe('X9')
+    expect(decision.next_active_plan_item).toBeNull()
   })
 
   it('holds on the plan, naming every item that waits for a brief', () => {
@@ -335,6 +366,29 @@ describe('the runner with a plan on disk', () => {
     expect(item.block_reason).toBe('rounds_exhausted')
     // The fix round was not spent: the item is blocked *instead of* another round.
     expect(item.rounds).toBe(2)
+  })
+
+  it('records the item\'s own rounds when it closes, not the flow\'s', () => {
+    const plan = planWithBriefs(['P1.1', 'P1.2'])
+    const withRounds: Plan = {
+      ...plan,
+      items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'in_work' as const, rounds: 2 } : item)),
+    }
+    // The flow has spent five rounds, the item two: the item's row records two.
+    const state = reviewingState({ active_plan_item: 'P1.1', rounds: 5 })
+    const decision = flowTick(state, observationsFor(state, withRounds, { verdict: 'ACCEPT' }))
+
+    expect(decision.next_plan_close).toMatchObject({ id: 'P1.1', rounds: 2 })
+  })
+
+  it('refuses to tick on a damaged plan instead of behaving as if there were none', () => {
+    seedFlow(planWithBriefs(['P1.1']))
+    writeFileSync(planPath('run-1'), '{ not json')
+    expect(() => stepFlow('run-1', { now: NOW, at: AT, head: 'aaa111', tree_clean: true, plan: undefined, ports: portsFor('VERDICT: ACCEPT'), verdict_evidence: EVIDENCE }))
+      .toThrow(/not valid JSON|plan/)
+    // Nothing was closed and nothing was dispatched on the strength of a missing plan.
+    const flow = readFlow('run-1')
+    expect(flow.state).toBe('reviewing')
   })
 
   it('counts a fix round against the item', () => {

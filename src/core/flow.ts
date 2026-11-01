@@ -802,7 +802,10 @@ function reviewGate(state: FlowState, observations: FlowObservations): FlowDecis
 function planCloseOf(state: FlowState, observations: FlowObservations): FlowDecision['next_plan_close'] {
   const id = state.active_plan_item
   if (!id) return undefined
-  return { id, head: state.claim.head, rounds: state.rounds, notes_ref: observations.notes_ref ?? null }
+  // The item's own rounds, not the flow's: after a few items the flow counter is several times the item's, and
+  // `flow plan status` would report a number that never happened for this row.
+  const item = observations.plan?.items.find(entry => entry.id === id)
+  return { id, head: state.claim.head, rounds: item?.rounds ?? 0, notes_ref: observations.notes_ref ?? null }
 }
 
 function withPlanClose(state: FlowState, observations: FlowObservations, decision: FlowDecision): FlowDecision {
@@ -825,6 +828,16 @@ function planAcceptDecision(
       ...escalate(state, observations, 'total_rounds_exhausted'),
       log_detail: `total rounds spent: ${state.rounds}/${plan.max_total_rounds} · ${planTickSummary(plan)}`,
     })
+  }
+
+  // A spec queued by hand (outside the plan) is an explicit instruction and outranks the picker: it would
+  // otherwise sit in `state.specs` for ever, journalled as `off_plan_spec` and never sent. The plan fills the
+  // queue only when the queue is empty, which is what "the plan is the default source of work" means.
+  const queued = nextSpec(state)
+  if (queued) {
+    const gate = dispatchGate(state, observations)
+    if (gate) return close(gate)
+    return close(specDispatch(state, queued, observations))
   }
 
   const next = planNext(plan, { skip: state.active_plan_item })
@@ -883,10 +896,12 @@ function planBudgetDecision(
   observations: FlowObservations,
   plan: PlanTickView,
 ): FlowDecision | null {
-  if (totalBudgetSpent(plan, state.rounds + 1)) {
+  // `state.rounds` is what has been spent: the next round is allowed while `rounds < max_total_rounds`, so a
+  // fuse of 5 permits rounds 1..5 and escalates on the sixth attempt, not before the fifth.
+  if (totalBudgetSpent(plan, state.rounds)) {
     return {
       ...escalate(state, observations, 'total_rounds_exhausted'),
-      log_detail: `total rounds spent: ${state.rounds + 1}/${plan.max_total_rounds} · ${planTickSummary(plan)}`,
+      log_detail: `total rounds spent: ${state.rounds}/${plan.max_total_rounds} · ${planTickSummary(plan)}`,
     }
   }
   const id = state.active_plan_item

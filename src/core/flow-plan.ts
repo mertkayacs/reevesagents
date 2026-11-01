@@ -100,10 +100,13 @@ export function planNext(view: PlanTickView, options: { skip?: string | null } =
   const open = planOpenItems(view).filter(item => item.id !== options.skip)
   const inFlight = open.find(item => item.status === 'in_work' || item.status === 'reviewing')
   if (inFlight) return { kind: 'in_flight', item: inFlight }
-  const ready = open.find(item => item.spec !== null && item.status !== 'blocked_owner')
-  if (ready) return { kind: 'item', item: ready }
+  // A blocked item stops the picker *before* the ready ones: `blocked_owner` is a decision the owner already
+  // made about this point of the plan, and routing around it turns that decision into a suggestion. A missing
+  // brief is different — it is work not yet described, and the owner's rule is to report it and move on.
   const blocked = open.find(item => item.status === 'blocked_owner')
   if (blocked) return { kind: 'blocked_owner', item: blocked }
+  const ready = open.find(item => item.spec !== null)
+  if (ready) return { kind: 'item', item: ready }
   const needsBrief = open.find(item => !item.spec)
   if (needsBrief) return { kind: 'needs_brief', item: needsBrief }
   return { kind: 'none' }
