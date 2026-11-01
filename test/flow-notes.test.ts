@@ -94,6 +94,10 @@ describe('sanitising', () => {
       expect(cleaned, text).not.toContain('/srv/users/alice')
       expect(cleaned, text).toContain('private.ts')
     }
+    // A colon is not a blanket exemption: only a real `scheme://` URL survives.
+    const afterColon = sanitizeNotesText('MAJOR path:/srv/users/alice/private.ts:3 — x')
+    expect(afterColon).not.toContain('/srv/users/alice')
+    expect(afterColon).toContain('private.ts')
     // A URL is not a path on this machine.
     expect(sanitizeNotesText('see https://127.0.0.1:8080/api/state for details'))
       .toBe('see https://127.0.0.1:8080/api/state for details')

@@ -1497,7 +1497,9 @@ instead of silently degraded. The pane fallback is exactly today's behaviour and
 verdict scan → hold. The durable step is not an optimisation: the staging file is removed when the record
 is published, and a tick that held (a busy dev pane) has already published, so without it the round could
 never be answered and would run into the review timeout. Sanitising covers a path written as
-`file=/home/…`, `` `/home/…` ``, `"/home/…"` or `(/home/…)`; a `scheme://` URL is left alone. The file wins even
+`file=/home/…`, `` `/home/…` ``, `"/home/…"` or `(/home/…)`, and a colon is not an exemption by itself —
+only a real `scheme://…` URL (the path part starts with `//` and the text before the colon is a scheme
+name) is kept as written, so `path:/home/…` is shortened like any other absolute path. The file wins even
 when the pane disagrees, because the file is the answer the reviewer chose to persist; the pane value
 is still recorded (`claim.verdict_count`) so the counter baseline keeps working.
 

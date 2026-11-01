@@ -55,8 +55,9 @@ const VERDICT_LINE_PATTERN = /(?:VERDICT|ВЕРДИКТ)\s*[:\-—]?\s*(ACCEPT|C
 // class is "anything that is not part of a path", because a path in a finding is routinely written as
 // `file=/home/…`, `` `/home/…` ``, `"/home/…"` or `(/home/…)` — the earlier version only accepted
 // whitespace and `(`, and let those three through. Windows drive letters are not a target here (the
-// state tree is POSIX), `~` is left alone because it is already the shorthand we print, and a `:`
-// immediately before the slash is skipped by the replacer so `https://…` is not rewritten.
+// state tree is POSIX) and `~` is left alone because it is already the shorthand we print. A colon is
+// *not* a blanket exemption: the replacer skips only a real `scheme://` URL, so `path:/home/…` is
+// shortened like any other absolute path.
 const ABSOLUTE_PATH_PATTERN = /(^|[^A-Za-z0-9_/.-])((?:\/[^\s:;,'"()[\]`<>]+)+)/g
 
 export interface NotesOptions {
@@ -136,10 +137,14 @@ function assertRound(round: number): number {
 // One pass over a line: every absolute path becomes its `displayPath` form (which is `~/…` under the
 // home directory and the last component outside it), and the whole text goes through the redactor. The
 // replacement is per *token*, so a finding keeps its wording and its `file:line` reference.
+const URL_SCHEME_PATTERN = /[A-Za-z][A-Za-z0-9+.-]*$/
+
 export function sanitizeNotesText(text: string): string {
-  const shortened = text.replace(ABSOLUTE_PATH_PATTERN, (match, lead: string, path: string) => {
-    // `scheme://host/path` is a URL, not a file on this machine: keep it as written.
-    if (lead === ':') return match
+  const shortened = text.replace(ABSOLUTE_PATH_PATTERN, (match, lead: string, path: string, offset: number) => {
+    // A URL is not a path on this machine and is kept as written — but only a real one: `scheme://…`
+    // (the path part starts with `//` and the text before the colon is a scheme name). A bare colon is
+    // not an exemption, or `path:/home/alice/private.ts` would be copied into the record untouched.
+    if (lead === ':' && path.startsWith('//') && URL_SCHEME_PATTERN.test(text.slice(0, offset))) return match
     return `${lead}${displayPath(path)}`
   })
   return redactSecrets(shortened)
