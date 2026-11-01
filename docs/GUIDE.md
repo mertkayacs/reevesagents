@@ -208,6 +208,36 @@ human is highlighted with the same warning colour as a stale run.
   the run's history record deletes the flow file too — that is the only automatic
   deletion.
 
+### The plan as an object
+
+`reevesagents flow plan …` mirrors the project's own plan document (the `- [ ]` / `- [x]` list in
+`docs/implementation-plan.md`) into `~/.reeves/flows/<run-id>/plan.json`, so the flow knows what is done and
+what is left. The design is `docs/plan-model-design.md`; two rules matter when you use it:
+
+- the document decides **which items exist**, the mirror decides **what happened to them**. Editing the
+  document cannot close an item, and a closed item is never reopened by a tick — the disagreement is
+  reported as a *conflict* instead.
+- `done` means an ACCEPT of the commit that closed the item, or an explicit `flow plan set … --status done
+  --yes --note <why>`. A `[x]` you type yourself is not evidence.
+
+- `reevesagents flow plan import --run <run> --file docs/implementation-plan.md [--dry-run]` — import or
+  re-import the document. New items are added as `pending`, items the document dropped are kept and marked
+  `missing` (never deleted), and a document that disagrees with the record adds a conflict. An unchanged
+  file changes nothing. Exit code 3 means there are conflicts to read.
+- `reevesagents flow plan --run <run> [--json]` — progress (`12/23 done`), the buckets that wait for you
+  (`needs_brief`, `blocked_owner`, `missing`, conflicts) and the next item in document order.
+- `reevesagents flow plan attach --run <run> --item P1.7.1 --spec docs/briefs/P1.7.1.json [--queue]` —
+  attach the brief. It is validated by the same `BlockSpec` validator as `add-spec`, its `id` must equal the
+  item id, and it is stored as a *snapshot*: the dispatch stays reproducible, and an edited brief is refused
+  rather than silently picked up. Without `--queue` the item becomes `queued` in the plan only — run
+  `flow plan next` (block 13) to put it on the flow.
+- `reevesagents flow plan status --item P1.7.1 [--run <run>] [--json]` — one item: status, the commit that
+  closed it, its rounds, its notes reference and its brief.
+- `reevesagents flow plan set --run <run> --item P1.7.1 --status <status> [--yes] [--note <text>]` — move an
+  item by hand. `done` and `skipped` need `--yes`, and a `done` without an accepted commit also needs a
+  `--note`; the manual close is recorded in the plan's conflicts so `flow plan` shows how it was closed.
+
+
 ## Keeping cost down
 
 - Put a cheap or free model in front as the router, and let it wake the

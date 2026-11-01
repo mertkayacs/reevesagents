@@ -51,6 +51,9 @@ import { queueSpecFile } from '../../core/flow-queue.js'
 import { startFlow } from '../../core/flow-start.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
 import { stepFlow } from '../../core/flow-runner.js'
+import { createPlan, importInto, planExists, planPath, readPlan, savePlan, writePlanSummary } from '../../core/plan.js'
+import { readFileSync } from 'node:fs'
+import { relative } from 'node:path'
 import { shortHomePath } from '../../utils/paths.js'
 import { redactSecrets } from '../../core/redact.js'
 import { detectHostProvider } from './host.js'
@@ -105,6 +108,21 @@ function fail(message: string) {
 }
 
 type ToolResult = ReturnType<typeof ok> | ReturnType<typeof fail>
+
+// The plan document is read from disk and stored with a repository-relative path: an absolute home path in
+// the state would leak into every payload (§4.1 of docs/flows-design.md).
+function readPlanDocument(path: string): string {
+  try {
+    return readFileSync(path, 'utf-8')
+  } catch {
+    throw new Error(`cannot read ${shortHomePath(path)}`)
+  }
+}
+
+function relativeToRepo(path: string): string {
+  const rel = relative(process.cwd(), path)
+  return rel.startsWith('..') ? shortHomePath(path) : rel
+}
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
@@ -723,6 +741,88 @@ const TOOLS: ToolDef[] = [
           },
           queue: flowQueueSummary(queued.state),
         })
+      })
+    },
+  },
+  {
+    name: 'flow_plan',
+    description: 'Read the plan imported from the project document: progress, the items that wait for a human, the next item, and — with `item_id` — one item with the commit that closed it, its rounds and its brief. Read-only: it imports nothing and ticks nothing. Answers `{error}` when no plan was imported for the run.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        item_id: { type: 'string', description: 'Optional plan item id, e.g. P1.7.1, to read one item instead of the whole plan.' },
+      },
+      required: ['run_id'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      if (!planExists(runId)) return fail(`no plan for run ${runId}: import the project document first`)
+      const plan = readPlan(runId)
+      const itemId = asString(a.item_id)
+      if (itemId) {
+        const item = plan.items.find(entry => entry.id === itemId)
+        if (!item) return fail(`no plan item ${itemId} in run ${runId}`)
+        return ok({ run_id: runId, item, conflicts: plan.conflicts.filter(entry => entry.item_id === itemId) })
+      }
+      const done = plan.items.filter(item => item.status === 'done').length
+      const next = plan.items.find(item => item.missing_since === null && item.status !== 'done' && item.status !== 'skipped')
+      return ok({
+        run_id: runId,
+        source_path: plan.source_path,
+        imported_at: plan.imported_at,
+        source_hash: plan.source_hash,
+        progress: { done, total: plan.items.length },
+        waiting: {
+          needs_brief: plan.items.filter(item => item.status === 'needs_brief').map(item => item.id),
+          blocked_owner: plan.items.filter(item => item.status === 'blocked_owner').map(item => item.id),
+          missing: plan.items.filter(item => item.missing_since !== null).map(item => item.id),
+          conflicts: plan.conflicts.length,
+        },
+        next: next ? { id: next.id, title: next.title, status: next.status, spec_path: next.spec_path } : null,
+        // The items themselves, without the brief bodies: a payload is a transcript, the file is the record.
+        items: plan.items.map(item => ({
+          id: item.id, title: item.title, status: item.status, head: item.head, rounds: item.rounds,
+          notes_ref: item.notes_ref, spec_path: item.spec_path, owner_action: item.owner_action, line: item.line,
+        })),
+      })
+    },
+  },
+  {
+    name: 'flow_plan_import',
+    description: 'Import (or re-import) the project plan document into a flow. Adds new items, retires the ones the document dropped, retitles, and never demotes a closed item: a document that disagrees with the record produces an entry in `conflicts` instead. `dry_run: true` parses and reports without writing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        file: { type: 'string', description: 'The plan document, e.g. docs/implementation-plan.md.' },
+        dry_run: { type: 'boolean', description: 'Parse and report; write nothing.' },
+      },
+      required: ['run_id', 'file'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const file = asString(a.file)
+      const sourcePath = relativeToRepo(file)
+      const text = readPlanDocument(file)
+      const existing = planExists(runId) ? readPlan(runId) : null
+      const result = existing
+        ? importInto(existing, { run_id: runId, source_path: sourcePath, text, now: Date.now() })
+        : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() })
+      if (a.dry_run !== true) {
+        savePlan(result.plan)
+        writePlanSummary(result.plan)
+      }
+      return ok({
+        run_id: runId,
+        dry_run: a.dry_run === true,
+        unchanged: result.unchanged,
+        added: result.added,
+        missing: result.missing,
+        conflicts: result.conflicts,
+        source_hash: result.source_hash,
+        total: result.plan.items.length,
+        path: shortHomePath(planPath(runId)),
       })
     },
   },

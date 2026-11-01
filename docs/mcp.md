@@ -78,6 +78,9 @@ own CLI only if you explicitly want that worker to spawn more agents.
 - `flow_start`: attach a dev -> review -> fix flow to an existing run.
 - `flow_status`: read the dev -> review -> fix pipeline attached to one run.
 - `flow_add_spec`: queue a block spec file on that pipeline.
+- `flow_plan`: read the plan imported from the project document — progress, what waits for a human, the
+  next item, and one item with `item_id`.
+- `flow_plan_import`: import or re-import that document into a flow; `dry_run` parses and reports.
 - `flow_step`: run one engine step (the `flow tick` equivalent) — the only flow tool that can send.
 - `flow_control`: pause, resume, stop or queue a block, with an explicit `action`.
 
@@ -150,6 +153,19 @@ resolved path, so a symlink that lands outside is refused too — while an
 absolute path is taken as written. Refused without touching the flow file: a
 missing or empty file, a spec without requirements or checks, a block id already
 queued or dispatched, and a closed flow (`escalated` or `done`).
+
+### `flow_plan { run_id, item_id? }`
+
+Reads `~/.reeves/flows/<run-id>/plan.json`. Answers `{ run_id, progress: { done, total }, waiting: {
+needs_brief, blocked_owner, missing, conflicts }, next, items }`, and with `item_id` a single `item` plus its
+conflicts. Items carry no brief body: the payload is a transcript, the file is the record. Answers
+`{ error }` when no plan was imported — the tool never imports anything on its own.
+
+### `flow_plan_import { run_id, file, dry_run? }`
+
+The `flow plan import` equivalent. Adds new items, retires the ones the document dropped (as `missing`, not
+deleted), retitles, and never demotes a closed item: a document that disagrees produces `conflicts` instead
+of rewriting a status. `dry_run: true` parses and reports without writing.
 
 ### `flow_step { run_id, dry_run? }`
 
