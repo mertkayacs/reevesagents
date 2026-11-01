@@ -23,6 +23,7 @@ import { registerConfig } from './config.js'
 import { registerPresets, registerSavePreset, registerDeletePreset, registerStartPreset } from './presets.js'
 import { registerFlow } from './flow.js'
 import { registerWeb } from './web.js'
+import { registerNotifications } from './notifications.js'
 
 const program = new Command()
 
@@ -73,6 +74,7 @@ registerSavePreset(program)
 registerDeletePreset(program)
 registerStartPreset(program)
 registerFlow(program)
+registerNotifications(program)
 registerWeb(program)
 registerMcp(program)
 

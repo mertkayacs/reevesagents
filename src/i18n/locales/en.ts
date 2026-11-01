@@ -179,6 +179,7 @@ export const en = {
   'web.cancel': 'Cancel',
   'web.closed': 'closed',
   'web.config': 'Config',
+  'config.agentPulse': 'Agent pulse (ms)',
   'web.themeDark': 'Dark',
   'web.themeLight': 'Light',
   'web.configSubtitle': 'Edit global settings.',

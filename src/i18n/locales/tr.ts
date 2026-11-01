@@ -176,6 +176,7 @@ export const tr = {
     'web.authHelp': 'Varsayılan, oturum açılmış CLI oturumunu kullanır. API anahtarı, anahtar tabanlı kimlik doğrulamayı zorunlu kılar.',
     'web.cancel': 'İptal',
     'web.closed': 'kapalı',
+    'config.agentPulse': 'Aracı nabzı (ms)',
     'web.config': 'Yapılandırma',
     'web.configSubtitle': 'Genel ayarları düzenle.',
     'web.connecting': 'bağlanıyor',

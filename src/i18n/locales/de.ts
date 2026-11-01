@@ -172,6 +172,7 @@ export const de = {
     'web.authHelp': 'Standard nutzt die angemeldete CLI-Session. API-Schlüssel erzwingt schlüsselbasierte Auth.',
     'web.cancel': 'Abbrechen',
     'web.closed': 'geschlossen',
+    'config.agentPulse': 'Agenten-Puls (ms)',
     'web.config': 'Config',
     'web.configSubtitle': 'Globale Einstellungen bearbeiten.',
     'web.connecting': 'verbindet',

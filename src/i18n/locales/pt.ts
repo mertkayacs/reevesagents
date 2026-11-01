@@ -178,6 +178,7 @@ export const pt = {
     'web.authHelp': 'O padrão usa a sessão de CLI iniciada. A chave de API força a autenticação por chave.',
     'web.cancel': 'Cancelar',
     'web.closed': 'fechado',
+    'config.agentPulse': 'Pulso do agente (ms)',
     'web.config': 'Configuração',
     'web.configSubtitle': 'Editar as definições globais.',
     'web.connecting': 'a ligar',

@@ -176,6 +176,7 @@ export const it = {
     'web.authHelp': 'Il valore predefinito usa la sessione CLI connessa. La chiave API forza l\'autenticazione con chiave.',
     'web.cancel': 'Annulla',
     'web.closed': 'chiuso',
+    'config.agentPulse': 'Impulso agente (ms)',
     'web.config': 'Configurazione',
     'web.configSubtitle': 'Modifica le impostazioni globali.',
     'web.connecting': 'connessione',

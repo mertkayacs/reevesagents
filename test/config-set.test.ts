@@ -24,7 +24,7 @@ describe('config editing', () => {
     expect(CONFIG_FIELDS.map(f => f.key)).toEqual([
       'web_theme', 'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms',
       'max_lifetime_ms', 'default_permissions', 'language', 'review_min_seconds',
-      'review_evidence_retries', 'dispatch_confirm_seconds',
+      'review_evidence_retries', 'dispatch_confirm_seconds', 'agent_pulse_ms',
     ])
   })
 
@@ -76,5 +76,19 @@ describe('config editing', () => {
     expect(parseConfigValue('web_theme', 'light')).toBe('light')
     expect(() => parseConfigValue('max_agents', 'abc')).toThrow(/must be a number/)
     expect(() => parseConfigValue('bogus', '1')).toThrow(/unknown config field/)
+  })
+})
+
+describe('agent_pulse_ms', () => {
+  it('accepts 0 (pulse off) and a whole number of milliseconds', async () => {
+    const { setConfigValues } = await import('../src/core/config.js')
+    expect(setConfigValues({ agent_pulse_ms: 0 }).global.agent_pulse_ms).toBe(0)
+    expect(setConfigValues({ agent_pulse_ms: 5000 }).global.agent_pulse_ms).toBe(5000)
+  })
+
+  it('refuses a negative value and a fraction', async () => {
+    const { setConfigValues } = await import('../src/core/config.js')
+    expect(() => setConfigValues({ agent_pulse_ms: -1 })).toThrow(/agent pulse/)
+    expect(() => setConfigValues({ agent_pulse_ms: 1.5 })).toThrow(/agent pulse/)
   })
 })

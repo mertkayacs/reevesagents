@@ -173,6 +173,7 @@ export const fr = {
     'web.authHelp': 'Par défaut, la session CLI connectée est utilisée. La clé API force l\'authentification par clé.',
     'web.cancel': 'Annuler',
     'web.closed': 'fermé',
+    'config.agentPulse': 'Pulsation de l’agent (ms)',
     'web.config': 'Config',
     'web.configSubtitle': 'Modifier les réglages globaux.',
     'web.connecting': 'connexion',

@@ -179,6 +179,7 @@ export const ar = {
     'web.authHelp': 'الافتراضي يستخدم جلسة CLI المسجَّل دخولها. مفتاح API يفرض المصادقة بالمفتاح.',
     'web.cancel': 'إلغاء',
     'web.closed': 'مغلق',
+    'config.agentPulse': 'نبض الوكيل (مللي ثانية)',
     'web.config': 'الإعدادات',
     'web.configSubtitle': 'حرّر الإعدادات العامة.',
     'web.connecting': 'جارٍ الاتصال',

@@ -179,6 +179,7 @@ export const zhHans = {
     'web.authHelp': '默认使用已登录的 CLI 会话。API 密钥强制使用基于密钥的认证。',
     'web.cancel': '取消',
     'web.closed': '已关闭',
+    'config.agentPulse': '智能体脉冲（毫秒）',
     'web.config': '配置',
     'web.configSubtitle': '编辑全局设置。',
     'web.connecting': '连接中',
