@@ -1461,7 +1461,9 @@ record:
    fast, no findings — see the evidence rule in `docs/flows-design.md` §3.5) keeps its staging copy and
    publishes nothing, so the reviewer's second answer to the same `(head, round)` becomes the record
    instead of being shadowed by the rejected one;
-6. if any step fails, the staging file is kept (so a retry can read it) and the journal records
+6. `answered_round` in the flow state remembers which `(head, round)` a dispatch was built from, so one
+   answer is consumed once even though its file survives an `dispatch_unconfirmed` claim release;
+7. if any step fails, the staging file is kept (so a retry can read it) and the journal records
    `notes_invalid <reason>`; a staging file older than a day is removed by the next tick.
 
 That ordering is the whole answer to "the engine cannot control what the model writes": it does not

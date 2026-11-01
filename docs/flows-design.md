@@ -558,6 +558,14 @@ round is published only when the tick **accepts** its answer: a rejected (too fa
 its staging copy and writes nothing, so the reviewer's second answer to the same `(head, round)` can become
 the record instead of being shadowed by the rejected one.
 
+**An answer is consumed once.** A file answer is bound to `(head, round)` and therefore fresh without the
+pane's verdict counter — but the state also records `answered_round`, the key a dispatch was built from.
+`dispatch_unconfirmed` releases the claim while keeping the staging file, and without that record every
+following tick rebuilt the identical fix prompt and pasted it again (a duplicate a reviewer caught in the
+fleet). A *refused* dispatch (`target_not_ready`, `busy`) does not set it: nothing was pasted, so the round
+is still the reviewer's to answer and the next tick may dispatch. A new commit changes the key, so the next
+round starts clean without any cleanup step.
+
 A rejected verdict does not touch the claim. The journal gets `review_unsubstantiated` with the numbers
 (`elapsed=2s notes=0/0b tool=0`), `unsubstantiated_attempts` in the state goes up, and the flow re-requests
 the review **once** with a prompt that says the previous answer was rejected and what has to change. When

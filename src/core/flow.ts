@@ -156,6 +156,11 @@ export interface FlowState {
   // How many verdicts of the current review have been rejected as unsubstantiated (§Evidence). Reset to
   // zero whenever a substantiated verdict is consumed, so a later round gets its own allowance.
   unsubstantiated_attempts: number
+  // `<head>-r<round>` of the last notes-file answer a dispatch was built from. The key is head-scoped, so a
+  // new commit starts clean; it exists because a file answer was otherwise fresh on *every* tick — after
+  // `dispatch_unconfirmed` (claim released, staging file kept) the next tick rebuilt and re-pasted the same
+  // fix prompt. A *refused* dispatch does not set it: nothing was pasted, so the answer stays usable.
+  answered_round: string | null
   // Where `resume` returns the flow to, and when the pause happened. Null unless `state` is
   // `paused`: a resume that guessed would silently restart a pipeline in the wrong state.
   paused_from: FlowStatus | null
@@ -309,6 +314,8 @@ export interface FlowDecision {
   // The value the state's `unsubstantiated_attempts` takes when this decision is applied: incremented by a
   // rejected review, reset to zero by one that is accepted.
   next_unsubstantiated_attempts?: number
+  // The round key a dispatch was built from, recorded so the same file answer is not consumed twice.
+  next_answered_round?: string | null
   // The status, round count and claim after this decision is applied. Carried in the decision so
   // the transition is computed once, purely, instead of being re-derived by the writer.
   next_state: FlowStatus
@@ -372,6 +379,7 @@ export function createFlowState(init: FlowInit): FlowState {
     dispatched_specs: [],
     pending: null,
     unsubstantiated_attempts: 0,
+    answered_round: null,
     paused_from: null,
     paused_at: null,
     orphan_reason: null,
@@ -421,6 +429,7 @@ export function parseFlowState(raw: unknown): FlowState {
       : [],
     pending: parsePendingDispatch(record.pending),
     unsubstantiated_attempts: count(record.unsubstantiated_attempts),
+    answered_round: typeof record.answered_round === 'string' ? record.answered_round : null,
     // A paused file always names where it came from; a missing field defaults to `idle`, which is
     // the only target a flow without a recorded origin could safely resume into.
     paused_from: status === 'paused'
@@ -650,6 +659,7 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
     head: state.claim.head,
     notes,
     next_unsubstantiated_attempts: 0,
+    next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
     message: renderFixPrompt({
       head: state.claim.head,
       notes,
@@ -672,6 +682,7 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     target: 'dev',
     spec_id: spec.id,
     next_unsubstantiated_attempts: 0,
+    next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
     message: renderDispatchPrompt(spec),
   }
 }
@@ -762,7 +773,13 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
     return withClaim(state, 'verdict_scrolled', { ...state.claim, verdict_count: observations.verdict_count })
   }
 
-  const fresh = observations.verdict !== null && (fromFile || observations.verdict_count > state.claim.verdict_count)
+  // A file answer is bound to `(head, round)`, which is why it does not need the pane's verdict counter —
+  // but an answer already acted on is not fresh again. Without the second half, `dispatch_unconfirmed`
+  // (claim released, staging file kept) made every following tick rebuild and re-paste the same prompt.
+  const fileRound = `${state.claim.head}-r${reviewRoundFor(state)}`
+  const fileAnswered = fromFile && state.answered_round === fileRound
+  const fresh = observations.verdict !== null && !fileAnswered
+    && (fromFile || observations.verdict_count > state.claim.verdict_count)
   if (!fresh) {
     // Nothing answered within the budget: a reviewer that crashed, hit a login screen or is stuck
     // on a modal never prints a verdict, so the flow escalates instead of waiting for ever.
@@ -810,6 +827,12 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
   const gate = reviewGate(state, observations)
   if (gate) return gate
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
+}
+
+// The round the notes of this tick belong to — the same number the runner builds the file paths with
+// (`reviewRound` in flow-runner is `rounds + 1`), so the `answered_round` key matches the files on disk.
+function reviewRoundFor(state: FlowState): number {
+  return state.rounds + 1
 }
 
 // Is this verdict evidence of a review? Both halves are required: enough wall time since the request, and
@@ -982,6 +1005,7 @@ function withDelta(
     // it, and the log is bounded, so the reason must survive the entry being pushed out.
     orphan_reason: decision.kind === 'orphan' ? (decision.notes ?? null) : state.orphan_reason,
     unsubstantiated_attempts: decision.next_unsubstantiated_attempts ?? state.unsubstantiated_attempts,
+    answered_round: decision.next_answered_round === undefined ? state.answered_round : decision.next_answered_round,
     log: appendLog(state, {
       at,
       event: options.event,

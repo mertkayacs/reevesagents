@@ -685,3 +685,44 @@ describe('verdict evidence', () => {
     expect(result.state.log.at(-1)).toMatchObject({ event: 'dispatch_refused', detail: 'target_not_ready' })
   })
 })
+
+describe('an answer consumed once', () => {
+  // A normal review: ninety seconds old, one finding, a verdict — the shape the evidence rule accepts.
+  const ROUND_TEXT = `# round 1\n\nMAJOR src/core/flow.ts:120 — the claim is not re-read\n\nВЕРДИКТ: CHANGES_REQUESTED\n`
+  const freshRound = (): FlowState => reviewingState({ review_started_at: NOW - 90_000 })
+  it('does not rebuild the same dispatch after an unconfirmed one', () => {
+    // `dispatch_unconfirmed` releases the claim but keeps the staging file, so without a record of the
+    // consumed answer the next tick rebuilt the identical fix prompt and pasted it again — the duplicate
+    // that a reviewer caught in the fleet.
+    seed(freshRound())
+    writeStaging('run-1', NOTES_HEAD, 1, ROUND_TEXT)
+    const first = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed' as const })) })
+
+    const unconfirmed = step(first, { head: NOTES_HEAD })
+    expect(unconfirmed.status).toBe('unconfirmed')
+    expect(first.send).toHaveBeenCalledTimes(1)
+
+    // The next tick sees the same file and must not paste it again — this is the behaviour, checked
+    // before the bookkeeping that produces it.
+    const second = makePorts()
+    const held = step(second, { head: NOTES_HEAD })
+    expect(second.send).not.toHaveBeenCalled()
+    expect(held.decision.reason).toBe('awaiting_verdict')
+    expect(readFlow('run-1').answered_round).toBe(`${NOTES_HEAD}-r1`)
+  })
+
+  it('keeps the answer usable when the dispatch was refused, not unconfirmed', () => {
+    // Nothing was pasted, so the round is still the reviewer's to answer: the next tick must dispatch.
+    seed(freshRound())
+    writeStaging('run-1', NOTES_HEAD, 1, ROUND_TEXT)
+    const refused = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'target_not_ready' as const })) })
+
+    expect(step(refused, { head: NOTES_HEAD }).status).toBe('refused')
+
+    const retry = makePorts()
+    const applied = step(retry, { head: NOTES_HEAD })
+    expect(applied.decision.kind).toBe('dispatch_fix')
+    expect(retry.send).toHaveBeenCalledTimes(1)
+    expect(readFlow('run-1').answered_round).toBe(`${NOTES_HEAD}-r1`)
+  })
+})
