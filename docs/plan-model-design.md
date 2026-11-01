@@ -17,44 +17,45 @@ the agents work from, mirrored in state, with statuses that only ACCEPT can move
    validates the spec with the existing `BlockSpec` validator and stores a *snapshot* of the record; no
    brief means `needs_brief`, and the tick escalates instead of inventing scope.
 3. **`done` is only ever set by an ACCEPT of the commit that closed the item, or by an explicit human
-   command** (`flow plan set --item <id> --status done --yes`); a partial result that satisfies some
+   command** (`flow plan set --run <id> --item <id> --status done --yes --note <why>`); a partial result that satisfies some
    requirements is `in_work`, never `done`.
 
 ## 1. Inventory: what the plans actually look like
 
-### 1.1 `~/projects/salon-dashboard/docs/implementation-plan.md`
+### 1.1 Plan A — milestone ids
 
-477 lines, 83 checked and 82 unchecked items. Three shapes coexist:
+A 477-line plan, 83 checked and 82 unchecked items. Three shapes coexist:
 
 | what | where | note |
 | --- | --- | --- |
-| a hand-maintained progress table | `:31-42` (`## Общий прогресс`) | `| M0 — Основа … | 5 | 37 | ✅ | 37/37 |`, and a total row `**65/137 (47%)**` — the owner already wants "how much is left", computed by hand |
-| milestone headings | `:44` `# M0 — …` | `#`, not `##`, so a level-based parser must accept both |
-| items with an explicit id | `:46-57` `- [x] **T0.1.1** — \`pnpm-workspace.yaml\` …` | `**ID**` in bold, then an em dash, then prose; ids like `T0.1.1`, `P0.1.1` |
-| status emojis in prose | `:3`, `:31-42` | ✅ / 🔄 / ⬜ / ⛔ are human shorthand, not a status field |
+| a hand-maintained progress table | lines 31–42 | `| <milestone> | <sprints> | <tasks> | <status> | 37/37 |`, with a total row such as `**65/137 (47%)**` — the owner already wants "how much is left", computed by hand |
+| milestone headings | line 44 | `#` and not `##`, so a level-based parser must accept both |
+| items with an explicit id | lines 46–57 | `- [x] **T0.1.1** — <text>`, then prose; ids of the `T0.1.1` / `P0.1.1` kind |
+| status emojis in prose | line 3, lines 31–42 | ✅ / 🔄 / ⬜ / ⛔ are human shorthand, not a status field |
 
 The item line is regular: `^- \[( |x)\] \*\*(ID)\*\* — (text)$`. The progress table is *derived* data the
 owner maintains by hand — a known source of drift, and the reason the engine should compute it instead.
 
-### 1.2 `~/projects/referat-ok.com.ua/docs/implementation-plan.md`
+### 1.2 Plan B — stage headings, no ids
 
 141 lines, 33 checked and 2 unchecked items, **and no ids at all**:
 
 | what | where | note |
 | --- | --- | --- |
-| stage headings | `:3`, `:14`, `:23`, `:49`, `:57`, `:128` | `## Этап N — …` (a different word, a different structure) |
-| items without ids | `:5-8`, `:16-20` | `- [x] Скопировать актуальные files и SQL dump.` — no bold id, no em dash |
-| multi-line open items | `:29`, `:103` | `- [ ] Решить судьбу legacy-таблиц … — **решение принято` continues on the next line |
-| result notes | `:10-12` | `> Результаты: …` — a blockquote that belongs to the stage, not to an item |
+| stage headings | lines 3, 14, 23, 49, 57, 128 | `## <Stage> N — …` — a localised word and a different structure |
+| items without ids | lines 5–8, 16–20 | `- [x] <text>.` — no bold id, no em dash |
+| multi-line open items | lines 29, 103 | `- [ ] <text> — **<decision` continues on the following line |
+| result notes | lines 10–12 | `> <results>: …` — a blockquote that belongs to the stage, not to an item |
 
-So the two live documents agree on the checkbox and disagree on everything else. The model therefore cannot
-require an id in the document; it needs a rule that produces stable ids (§3.2).
+So the two real documents agree on the checkbox and disagree on everything else. Neither is named here on
+purpose: the design is about the *shapes*, and a plan is a project's private document. The model therefore
+cannot require an id in the document; it needs a rule that produces stable ids (§3.2).
 
 ### 1.3 What the flow already has
 
 | need | existing module (`file:line`) | what is missing |
 | --- | --- | --- |
-| a validated unit of work | `src/core/spec.ts:13` `BlockSpec` (`id`, `title`, `goal`, `requirements`, `checks`, `report`, `body?`, `source_path?`, `unstructured?`), `:57` `SPEC_ID_PATTERN`, `:59` `SPEC_LIMITS` | nothing — a plan item's brief **is** a `BlockSpec` |
+| a validated unit of work | `src/core/spec.ts:13` `BlockSpec` (`id`, `title`, `goal`, `requirements`, `checks`, `report`, `body?`, `source_path?`, `unstructured?`), `:50` `SPEC_ID_PATTERN`, `:52` `SPEC_LIMITS` | nothing — a plan item's brief **is** a `BlockSpec` |
 | a queue | `src/core/flow.ts:151` `specs`, `:152` `dispatched_specs`, `:725` `nextSpec()` (first spec not yet dispatched) | the queue is flat and one-shot: no ids from a document, no ordering beyond insertion, no `skipped`, no "why is this not queued" |
 | queuing over a surface | `src/core/flow-control.ts:174` `addFlowSpecs`, `:159` `AddSpecsInput`; CLI `add-spec` `src/surfaces/cli/flow.ts:239` | attaching a spec to an *item* (today a spec arrives with its own id and is queued immediately) |
 | the commit under review | `src/core/flow.ts:148` `claim` (`head`, `verdict`, `verdict_count`) | the claim is per flow; nothing records "which item this head belongs to" |
@@ -95,6 +96,13 @@ PlanItem {
   missing_since: string | null // the document no longer lists it (§3.3)
   line: number | null          // 1-based line in the document at import time
 }
+
+PlanConflict {
+  at: string                   // ISO
+  item_id: string
+  kind: "unticked" | "ticked_by_hand" | "duplicate_id" | "spec_changed"
+  detail: string               // one line, no document text beyond the item id and line number
+}
 ```
 
 `items` is an array in document order, not a map: order **is** the priority, and `flow plan next` takes the
@@ -116,7 +124,7 @@ enumerating statuses. `owner_action` is derived on write, never accepted from a 
 | `queued` | brief attached, dispatch expected | `plan attach`, `plan next` | `in_work`, `needs_brief` |
 | `in_work` | a dispatch for it is in flight or the dev is fixing | engine (dispatch/fix decisions) | `reviewing`, `blocked_owner` |
 | `reviewing` | a review of its head is running | engine (`request_review`) | `done`, `in_work` (changes), `blocked_owner` |
-| `done` | ACCEPT of the closing commit, or a human said so | engine **only** on a substantiated ACCEPT; `plan set --status done --yes` | — (terminal for the run) |
+| `done` | ACCEPT of the closing commit, or a human said so | engine **only** on a substantiated ACCEPT; `plan set --status done --yes --note <why>` | — (terminal for the run) |
 | `blocked_owner` | the dev or the reviewer reported a decision only the owner can take | engine, from an escalation carrying `owner_decision`; or `plan set` | `queued`, `skipped` |
 | `skipped` | deliberately not doing it | `plan set --status skipped` (needs `--yes`) | — (terminal) |
 
@@ -135,12 +143,23 @@ status and gains `missing_since`, so an import typo cannot silently turn deliver
 `~/.reeves/flows/<run-id>/plan.json` — a sibling of the notes directory that already exists
 (`flows/<run-id>/notes/…`, `src/core/flow-store.ts:103`), not a field inside `flows/<run-id>.json`.
 
-Sizes, measured on the two real plans: salon-dashboard has 165 items; a `PlanItem` with a title, an id, a
+Sizes, measured on the two real plans: the id-bearing one has 165 items; a `PlanItem` with a title, an id, a
 status and timestamps is ~260 bytes of JSON, so 165 items ≈ 43 KB, and a plan that also carries snapshot
 specs (`BlockSpec` with `requirements`/`checks`: 0.5–3 KB each) reaches 150–400 KB. The flow state file is
 read and rewritten under a lock on **every tick** (`withRunsLock`, `flow-store.ts` `saveFlow`), and
 `docs/flows-design.md` promises it stays a readable document. Putting a few hundred kilobytes of stable
 plan data into it would triple every write and bury the ten interesting fields under the plan.
+
+The flow state keeps only a **summary pointer**, never the items:
+
+```
+FlowState.plan: { imported_at, source_hash, done, total, waiting } | null
+```
+
+so `flow status`, the TUI list and the Web run card can draw `plan 12/23` from the state they already read,
+without opening `plan.json` on every tick or every render. `waiting` is the count of `owner_action` items —
+one number, not a list. The summary is written by whoever writes the plan, in the same locked step, and a
+`plan.json` that disagrees with it is repaired from the file (the file is the record, the pointer is a cache).
 
 So: two files, two owners, two `schema_version`s. `deleteRunHistory` cascades over both (§9), and
 `flow plan import` writes only `plan.json`.
@@ -150,9 +169,9 @@ for the source document. Over the cap the import refuses with the actual number 
 
 ### 3.2 Item identity
 
-1. If the line matches `^- \[( |x)\] \*\*(ID)\*\* — (text)` — the salon-dashboard shape — the id is the bold
+1. If the line matches `^- \[( |x)\] \*\*(ID)\*\* — (text)` — the id-bearing shape — the id is the bold
    token, validated against `SPEC_ID_PATTERN` (`src/core/spec.ts:50`) so it can double as a spec id.
-2. Otherwise — the referat-ok shape — the id is `auto:` + the first 8 hex of `sha256(normalised title)`. It
+2. Otherwise — the id-less shape — the id is `auto:` + the first 8 hex of `sha256(normalised title)`. It
    survives moving the line, reordering stages, and re-ticking; it does not survive rewording, which
    produces a *new* item and leaves the old one `missing`.
 3. Two items with the same id in one document is a **refused import** with both line numbers; the alternative
@@ -261,7 +280,11 @@ must not let a flow declare itself finished.
 
 ## 7. CLI
 
-All five take `--run <id>` (resolved the way `resolveFlowRunId` already does) and `--json`.
+Six commands. `plan`, `import`, `attach`, `next` and `set` take `--run <id>` (resolved the way
+`resolveFlowRunId` already does); `plan status` is the exception — it takes `--item <id>` plus an *optional*
+`--run <id>` and, without it, finds the flow that owns the item, because an item id is only unique inside a
+plan. All six accept `--json`; `attach`, `set`
+and `import` accept `--dry-run`, which prints the same output without writing.
 
 | command | stdout (human) | `--json` | exit codes |
 | --- | --- | --- | --- |
@@ -269,7 +292,12 @@ All five take `--run <id>` (resolved the way `resolveFlowRunId` already does) an
 | `flow plan import --run <id> --file <path> [--dry-run]` | `imported 23 items: 3 new, 1 missing, 1 conflict` | `{added:[id],missing:[id],conflicts:[…],unchanged:bool,source_hash}` | 0; 1 usage/bad path; 2 not found; 3 refused (too big, duplicate ids, unsupported format) — nothing written |
 | `flow plan attach --run <id> --item <id> --spec <file>` | `attached P1.7.1 → docs/briefs/P1.7.1.json (queued)` | `{item:{id,status,spec_path,spec_hash}}` | 0; 2 unknown item; 3 refused (invalid spec, id mismatch) |
 | `flow plan next --run <id> [--dry-run]` | the item plus the rendered prompt head | `{item:{id,title},prompt:string|null,queued:bool,reason:"busy"|"plan_needs_brief"|"plan_blocked_owner"|null}` | 0; 0 with `reason` when it does nothing (a no-op is not an error); 2 no plan |
-| `flow plan status --item <id>` | one item: status, head, rounds, notes ref, spec path, `updated_at` | the `PlanItem` | 0; 2 unknown item |
+| `flow plan status --item <id> [--run <id>]` | one item: status, head, rounds, notes ref, spec path, `updated_at` | the `PlanItem` | 0; 2 unknown item, or the id exists in more than one flow (both run ids printed — pass `--run` to disambiguate) |
+| `flow plan set --run <id> --item <id> --status <status> [--yes] [--note <text>]` | `P1.4.2 blocked_owner → queued (manual, note: unblocked after the vendor call)` | `{item:{id,status,previous,owner_action,updated_at}}` | 0; 1 usage; 2 unknown item; 3 refused — `done` and `skipped` need `--yes`, `done` on an item with no accepted head needs `--yes` **and** a `--note`, and an unknown status is refused with the eight accepted values |
+
+`flow plan set` is the only command that moves an item by hand, and it is the only path that can set `done`
+without an ACCEPT (§2.2): that is why it needs `--yes` and a `--note`, and why the note lands in the journal
+next to the previous status. Nothing else in the engine may write `done`.
 
 `--json` never carries the spec `body` or the notes text — the payload is a transcript, the file is the
 record (the rule from `docs/notifications-design.md` §11.3).
@@ -301,7 +329,7 @@ meaningless without one. So:
 | duplicate ids | refused import listing both line numbers (§3.2) |
 | a document rewritten into another format | only the two shapes in §1 are accepted; anything else is `unsupported_format` with a sample line — an empty plan is never the fallback |
 | CRLF / trailing whitespace / final newline | normalised before hashing (§3.4), so a checkout difference is a no-op |
-| multi-line items (referat-ok `:29`, `:103`) | a line starting with `- [` opens an item; following lines that are indented or start with `**` are appended to its title until the next item, heading or blank line; the folded text is what `title` holds |
+| multi-line items (plan B, lines 29 and 103) | a line starting with `- [` opens an item; following lines that are indented or start with `**` are appended to its title until the next item, heading or blank line; the folded text is what `title` holds |
 | ids that are not spec-safe (`P1.7.1` is fine; `1.2 a/b` is not) | an id-bearing document with an invalid id is refused, naming the line — the id must be usable as a `BlockSpec.id` |
 | a plan edited while a round is running | import is allowed, but an item that is `in_work`/`reviewing` keeps its status even if its line vanished (`missing_since` is set, status untouched) — §3.3 |
 | `delete-history` on a run | the cascade removes `flows/<run-id>/` including `plan.json` (the notes directory is already handled this way, `flow-store.ts:103`) |
@@ -310,7 +338,7 @@ meaningless without one. So:
 
 | block | scope | done when | verified by |
 | --- | --- | --- | --- |
-| **12 — model + import + CLI** | `src/core/plan.ts` (`Plan`, `PlanItem`, statuses, normalisation, hashing, parser for the two shapes), `plan.json` store beside the flow store, `flow plan`, `flow plan import`, `flow plan status`, `flow plan attach`; MCP `flow_plan` (read) and `flow_plan_import` | a real import of both projects' plans produces the ids and statuses of §1; a re-import of an unchanged file writes nothing; a conflict is reported, not applied; CLI exits per §7 | unit tests on the two real documents (fixtures copied into `test/fixtures/`), `flow plan --json` golden payloads, a dry-run on a temp registry; `pnpm run typecheck`, `lint`, full `vitest`, `check:package` |
+| **12 — model + import + CLI** | `src/core/plan.ts` (`Plan`, `PlanItem`, statuses, normalisation, hashing, parser for the two shapes), `plan.json` store beside the flow store, `flow plan`, `flow plan import`, `flow plan status`, `flow plan attach`, `flow plan set`; MCP `flow_plan` (read) and `flow_plan_import` | a real import of both projects' plans produces the ids and statuses of §1; a re-import of an unchanged file writes nothing; a conflict is reported, not applied; `plan set` is the only manual status path and refuses `done` without `--yes --note`; CLI exits per §7 | unit tests on the two real documents (fixtures copied into `test/fixtures/`), `flow plan --json` golden payloads, a dry-run on a temp registry; `pnpm run typecheck`, `lint`, full `vitest`, `check:package` |
 | **13 — advance + completion** | `flow plan next`, the tick taking the next queued item instead of `nextSpec`, `plan_incomplete` hold, `done` on a substantiated ACCEPT, per-item `rounds`/`head`/`notes_ref`, `plan_needs_brief` / `plan_blocked_owner` escalations | a flow with a three-item plan walks them in document order, one at a time; an item cannot become `done` without ACCEPT; a plan with a `needs_brief` item escalates instead of inventing scope; the flow refuses `done` while any item is open | engine tests with a faked plan + the existing `FlowPorts`; a live two-item smoke on a temp registry (dev pane idle, review pane idle) showing two dispatches and one `plan_incomplete`; full gate |
 | **14 — notification journal** | `src/core/notifications.ts`, `GET/POST /api/notifications`, `POST /api/notifications/read`, `agent_pulse_ms`, `flow.escalated`/`flow.review_timeout` emission with the `flow_id:kind:episode` key | the journal survives a restart, dedupes an episode, rotates by count and size, and `flow.escalated` arrives once per escalation | `notifications-design.md` §3 tests (append under the lock, ring, dedupe index, first run), HTTP tests against a temp config, a restart test that re-reads the file; full gate |
 | **15 — UI: plan + logs + badge** | the Plan dialog of §8, the Logs dialog of `notifications-design.md` §5, the `plan 12/23` chip and the pulse on the agent card | the chip opens the plan, the progress bar matches `flow plan --json`, an item opens its notes, the Logs dialog filters by run and marks all read, and neither dialog is reachable without a backend | DOM tests on the built client (`test/webui-*.test.ts`), a payload golden test, manual check on a throwaway server with a temp registry — **no probe on the shared tmux server** |
