@@ -77,7 +77,11 @@ function makePorts(overrides: Partial<FlowPorts> = {}): FlowPorts & { send: Retu
 // its own tests — without the flags every case here would park the flow as `orphaned`.
 function step(ports: FlowPorts, overrides: Partial<StepFlowOptions> = {}): FlowStepResult {
   return stepFlow('run-1', {
-    ports, head: 'bbb222', tree_clean: true, now: NOW, at: AT, run_present: true, agents_present: true, ...overrides,
+    ports, head: 'bbb222', tree_clean: true, now: NOW, at: AT, run_present: true, agents_present: true,
+    // A normal review: one minute behind it and a finding on record, so the evidence rule passes. The
+    // tests about the rule itself override this.
+    verdict_evidence: { elapsed_ms: 60_000, notes_bytes: 240, notes_findings: 1, pane_tool_lines: 4 },
+    ...overrides,
   })
 }
 
@@ -310,33 +314,36 @@ describe('stepFlow', () => {
   })
 })
 
+// A substantiated review: a minute of work and a recorded finding.
+const EVIDENCE = { elapsed_ms: 60_000, notes_bytes: 240, notes_findings: 1, pane_tool_lines: 4 }
+
 describe('a full round', () => {
   it('goes review -> changes requested -> fix -> new head -> accept', () => {
     let state = makeState()
 
     state = applyDecisionToState(state, flowTick(state, {
       now: NOW, head: 'bbb222', tree_clean: true, dev_pane: 'idle', review_pane: 'idle',
-      verdict: null, verdict_count: 0,
+      verdict: null, verdict_count: 0, verdict_evidence: EVIDENCE,
     }), AT)
     expect(state.state).toBe('reviewing')
 
     state = applyDecisionToState(state, flowTick(state, {
       now: NOW, head: 'bbb222', tree_clean: true, dev_pane: 'idle', review_pane: 'idle',
-      verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_notes: 'MAJOR: x',
+      verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_notes: 'MAJOR: x', verdict_evidence: EVIDENCE,
     }), AT)
     expect(state.state).toBe('fixing')
     expect(state.rounds).toBe(1)
 
     state = applyDecisionToState(state, flowTick(state, {
       now: NOW, head: 'ccc333', tree_clean: true, dev_pane: 'idle', review_pane: 'idle',
-      verdict: 'CHANGES_REQUESTED', verdict_count: 2,
+      verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_evidence: EVIDENCE,
     }), AT)
     expect(state.state).toBe('reviewing')
     expect(state.claim.head).toBe('ccc333')
 
     const decision = flowTick(state, {
       now: NOW, head: 'ccc333', tree_clean: true, dev_pane: 'idle', review_pane: 'idle',
-      verdict: 'ACCEPT', verdict_count: 3,
+      verdict: 'ACCEPT', verdict_count: 3, verdict_evidence: EVIDENCE,
     })
     expect(decision.reason).toBe('flow_done')
     expect(saveFlow(applyDecisionToState(state, decision, AT))).toBeTruthy()
@@ -490,5 +497,140 @@ describe('the notes channel in the runner', () => {
     expect(result.state.state).toBe('done')
     expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(true)
     expect(existsSync(durablePath('run-1', 'def5678', 1, root))).toBe(false)
+  })
+})
+
+describe('verdict evidence', () => {
+  const FAST_REVIEW = { elapsed_ms: 1_500, notes_bytes: 0, notes_findings: 0, pane_tool_lines: 0 }
+  const MINUTE = { elapsed_ms: 60_000, notes_bytes: 240, notes_findings: 1, pane_tool_lines: 4 }
+
+  function reviewingWithEvidence(evidence: typeof FAST_REVIEW): void {
+    seed(makeState({
+      state: 'reviewing',
+      review_started_at: NOW,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0 },
+    }))
+    void evidence
+  }
+
+  it('does not apply a verdict that arrives in a second with nothing recorded, and asks again once', () => {
+    reviewingWithEvidence(FAST_REVIEW)
+    const ports = makePorts({ peek: () => verdictCapture(1) })
+
+    const result = step(ports, { head: 'aaa111', verdict_evidence: FAST_REVIEW, evidence_policy: { min_seconds: 30, retries: 1 } })
+
+    // The answer was rejected: a new review request went out, nothing was dispatched to the dev.
+    expect(result.decision.kind).toBe('request_review')
+    expect(result.decision.reason).toBe('review_unsubstantiated')
+    expect(result.decision.message).toContain('rejected')
+    expect(result.status).toBe('applied')
+    const after = readFlow('run-1')
+    expect(after.state).toBe('reviewing')
+    expect(after.unsubstantiated_attempts).toBe(1)
+    expect(after.claim.head).toBe('aaa111')
+    // The journal carries the numbers a human needs.
+    expect(after.log.at(-1)!.detail).toContain('elapsed=2s notes=0/0b tool=0')
+  })
+
+  it('escalates when the reviewer keeps stamping', () => {
+    seed(makeState({
+      state: 'reviewing',
+      review_started_at: NOW,
+      unsubstantiated_attempts: 1,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0 },
+    }))
+    const ports = makePorts({ peek: () => verdictCapture(1) })
+
+    const result = step(ports, { head: 'aaa111', verdict_evidence: FAST_REVIEW, evidence_policy: { min_seconds: 30, retries: 1 } })
+
+    expect(result.decision.reason).toBe('review_unsubstantiated')
+    expect(result.state.state).toBe('escalated')
+    expect(result.state.log.at(-1)!.detail).toContain('the reviewer is not reviewing')
+    expect(ports.send).not.toHaveBeenCalled()
+  })
+
+  it('accepts a normal review: a minute of work with a finding on record', () => {
+    reviewingWithEvidence(MINUTE)
+    const ports = makePorts({ peek: () => verdictCapture(1) })
+
+    const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE, evidence_policy: { min_seconds: 30, retries: 1 } })
+
+    expect(result.decision.kind).toBe('dispatch_fix')
+    expect(result.status).toBe('applied')
+    expect(result.state.rounds).toBe(1)
+  })
+
+  it('lets review_min_seconds = 0 disable only the time half', () => {
+    reviewingWithEvidence(FAST_REVIEW)
+    const ports = makePorts({ peek: () => verdictCapture(1) })
+    const policy = { min_seconds: 0, retries: 1 }
+
+    // Instant but with a finding: accepted.
+    const fast = step(ports, {
+      head: 'aaa111',
+      verdict_evidence: { ...FAST_REVIEW, notes_findings: 1, notes_bytes: 120 },
+      evidence_policy: policy,
+    })
+    expect(fast.decision.kind).toBe('dispatch_fix')
+
+    // Instant and empty: still rejected, because the notes half is not optional.
+    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    const empty = step(ports, { head: 'aaa111', verdict_evidence: FAST_REVIEW, evidence_policy: policy })
+    expect(empty.decision.reason).toBe('review_unsubstantiated')
+  })
+
+  it('accepts an ACCEPT that says explicitly it found nothing, but only from a file', () => {
+    // File answered: explicit "no findings" is evidence.
+    // The review started a minute ago: the time half of the rule only asks that the reviewer had the time.
+    seed(makeState({
+      state: 'reviewing',
+      review_started_at: NOW - 60_000,
+      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
+    }))
+    writeStaging('run-1', NOTES_HEAD, 1, 'No findings: the diff is a docstring change.\n\nВЕРДИКТ: ACCEPT\n')
+    // The evidence is *not* injected here: the runner derives it from the file, which is the point of the
+    // rule — the explicit "no findings" line is what makes an empty review admissible.
+    const fromFile = step(makePorts(), { head: NOTES_HEAD, verdict_evidence: undefined })
+    expect(fromFile.decision.kind).toBe('none')
+    expect(fromFile.state.state).toBe('done')
+
+    // Pane answered: the same words in a pane are not evidence.
+    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    const fromPane = step(makePorts({ peek: () => 'No findings: docstring only\nVERDICT: ACCEPT\n' }), {
+      head: 'aaa111',
+      verdict_evidence: { ...MINUTE, notes_findings: 0, notes_bytes: 0 },
+    })
+    expect(fromPane.decision.reason).toBe('review_unsubstantiated')
+  })
+
+  it('escalates instead of pasting when the composer holds somebody else\'s text', () => {
+    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    const ports = makePorts({
+      peek: () => verdictCapture(1),
+      send: vi.fn(() => ({ sent: false as const, reason: 'composer_dirty' as const })),
+    })
+
+    const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE })
+
+    expect(result.state.state).toBe('escalated')
+    expect(result.state.log.at(-1)!.detail).toContain('composer holds text that is not ours')
+    // Nothing was pasted: the refusal happened before any write.
+    expect(ports.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds without consuming the round when the target is not ready', () => {
+    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    const ports = makePorts({
+      peek: () => verdictCapture(1),
+      send: vi.fn(() => ({ sent: false as const, reason: 'target_not_ready' as const })),
+    })
+
+    const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE })
+
+    expect(result.status).toBe('refused')
+    expect(result.state.state).toBe('reviewing')
+    expect(result.state.rounds).toBe(0)
+    expect(result.state.pending).toBeNull()
+    expect(result.state.log.at(-1)).toMatchObject({ event: 'dispatch_refused', detail: 'target_not_ready' })
   })
 })

@@ -21,10 +21,12 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { PaneBusyState } from './activity.js'
-import type { FlowDecision, FlowObservations, FlowState } from './flow.js'
+import type { EvidencePolicy, FlowDecision, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
+import { DEFAULT_EVIDENCE_POLICY } from './flow.js'
 import {
   applyDecisionToState,
   applyUnconfirmedDispatch,
+  escalateOnDirtyComposer,
   claimPendingDispatch,
   decisionChangesState,
   flowTick,
@@ -37,6 +39,7 @@ import {
   readDurable, readStaging, stagingPath, writePaneCapture,
 } from './flow-notes.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
+import { loadConfig } from './config.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
 import { paneBusy, peekAgentRaw, sendWhenIdle } from './runtime.js'
@@ -100,6 +103,10 @@ export interface ObserveFlowOptions {
   agents_present?: boolean
   // The state root the notes files live under; defaults to the live one.
   root?: string
+  // The evidence policy (`review_min_seconds`, `review_evidence_retries`); defaults to the shipped one.
+  evidence_policy?: EvidencePolicy
+  // Evidence for this tick, when the caller already knows it. The default measures it from the round.
+  verdict_evidence?: VerdictEvidence
   // Read the notes of this round from here instead of disk (a test seam: the pipeline's own tests
   // describe a valid, an invalid and a missing file without writing one).
   notes?: NotesRead
@@ -252,6 +259,42 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
   }
 }
 
+// Is the verdict this tick sees backed by a review? Three numbers, and the notes are the strongest: a
+// reviewer that read the diff names findings, and a one-second answer names none. The pane's tool lines are
+// a support signal only — providers format their ledgers differently — so nothing depends on them alone.
+const TOOL_LINE_PATTERN = /^(?:\s*[│|]?\s*[●◦•·]\s|\s*[│|]\s*(?:run|exec|shell|read|write|edit|grep|search)\b)|\bexec_command\b|\brun_shell\b/i
+
+export function measureEvidence(state: FlowState, observations: FlowObservations): VerdictEvidence {
+  const elapsed = state.review_started_at === null ? 0 : Math.max(0, observations.now - state.review_started_at)
+  const notes = observations.notes_text ?? ''
+  const paneText = observations.pane_text ?? ''
+  return {
+    elapsed_ms: elapsed,
+    notes_bytes: Buffer.byteLength(notes, 'utf-8'),
+    notes_findings: notes ? notes.split('\n').filter(line => /^(BLOCKER|MAJOR|MINOR)\b/.test(line.trim())).length : 0,
+    pane_tool_lines: paneText.split('\n').filter(line => TOOL_LINE_PATTERN.test(line)).length,
+  }
+}
+
+// `review_min_seconds` / `review_evidence_retries` are product policy from the global config.
+function evidencePolicy(): EvidencePolicy {
+  try {
+    const global = loadConfig().global
+    return {
+      min_seconds: global.review_min_seconds ?? DEFAULT_EVIDENCE_POLICY.min_seconds,
+      retries: global.review_evidence_retries ?? DEFAULT_EVIDENCE_POLICY.retries,
+    }
+  } catch {
+    return DEFAULT_EVIDENCE_POLICY
+  }
+}
+
+const EXPLICIT_CLEAN_PATTERN = /(?:no findings|nothing to report|nothing found|замечаний нет|нет замечаний)/i
+
+function observations_explicit_clean(text: string): boolean {
+  return EXPLICIT_CLEAN_PATTERN.test(text)
+}
+
 export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}): FlowObservations {
   const ports = options.ports ?? defaultFlowPorts
   const head = options.head ?? readGitHead(state.repo)
@@ -271,7 +314,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
   // The file wins when it is valid: it is the answer the reviewer chose to persist, and it is bound to
   // this round. The pane count is still reported so the baseline keeps working for the pane path.
   const fromFile = notes.source === 'file' && notes.text !== undefined
-  return {
+  const observations: FlowObservations = {
     now: options.now ?? Date.now(),
     head,
     tree_clean: treeClean,
@@ -283,6 +326,10 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     run_present: options.run_present ?? presence.run_present,
     agents_present: options.agents_present ?? presence.agents_present,
     verdict_source: fromFile ? 'file' : 'pane',
+    // "Nothing to report" is evidence only when the reviewer chose to say it in the record: a bare
+    // ACCEPT in a pane is exactly the one-second stamp the evidence rule rejects.
+    // The phrase lives in the file body, not in the finding lines: `notes.raw` is the whole staging text.
+    verdict_explicit_clean: fromFile && observations_explicit_clean(notes.raw ?? notes.text ?? ''),
     notes_text: fromFile ? notes.text : undefined,
     notes_ref: fromFile ? notes.ref : undefined,
     notes_counts: fromFile ? notes.counts : undefined,
@@ -290,7 +337,12 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     notes_raw: fromFile ? notes.raw : undefined,
     notes_staging_path: notes.staging_path,
     pane_text: reviewPane === 'unknown' ? undefined : paneText,
+    evidence_policy: options.evidence_policy ?? evidencePolicy(),
   }
+  // The evidence is measured on the finished observation: it needs the notes text and the capture, so it
+  // cannot be built before them. A caller that has already measured it (the flow's own tests) passes it.
+  observations.verdict_evidence = options.verdict_evidence ?? measureEvidence(state, observations)
+  return observations
 }
 
 // What one step did. The statuses name the four outcomes a caller has to distinguish, because they
@@ -524,6 +576,11 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       if (send.sent) {
         const next = applyDecisionToState(after, phase.decision, at)
         return { state: next, status: 'applied', path: saveFlow(next, { root: options.root }) }
+      }
+      if (send.reason === 'composer_dirty') {
+        // Somebody else's text is sitting in the composer: nothing was pasted, and repeating the paste is
+        // the one answer that makes it worse. A human reads the pane.
+        return { state: escalateOnDirtyComposer(after, phase.decision, at), status: 'unconfirmed' }
       }
       if (send.reason === 'pane_changed' || send.reason === 'unconfirmed') {
         // The text is in the input box but the submit was not confirmed. Consume the decision so the

@@ -44,6 +44,8 @@ export interface FlowStatusPayload {
   // The dispatch in flight: a claim written by a tick that has not settled it yet. This is why a
   // flow can be sitting still while a send is in progress.
   pending: { kind: string, target: string, at: number } | null
+  // What the last review could prove: the numbers the evidence rule looked at. Never the notes text.
+  last_evidence: { elapsed_ms: number, notes_findings: number, notes_bytes: number, pane_tool_lines: number } | null
   // The newest round's notes, as a reference and counters — never the text (§11.3 of the notification
   // design: the payload is a transcript, the file is the record).
   last_notes: { ref: string, counts: { blocker: number, major: number, minor: number } } | null
@@ -84,6 +86,20 @@ export function flowQueueSummary(state: FlowState): FlowQueueEntry[] {
     }))
 }
 
+// `review_unsubstantiated` entries carry `elapsed=<n>s notes=<findings>/<bytes>b tool=<lines>` in their
+// detail (see `evidenceNumbers` in flow.ts); the payload lifts the four numbers out of it so a surface
+// does not have to parse prose.
+function parseEvidence(detail: string): { elapsed_ms: number, notes_findings: number, notes_bytes: number, pane_tool_lines: number } | null {
+  const match = /elapsed=(\d+)s notes=(\d+)\/(\d+)b tool=(\d+)/.exec(detail)
+  if (!match) return null
+  return {
+    elapsed_ms: Number(match[1]) * 1000,
+    notes_findings: Number(match[2]),
+    notes_bytes: Number(match[3]),
+    pane_tool_lines: Number(match[4]),
+  }
+}
+
 export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id)): FlowStatusPayload {
   const queue = flowQueueSummary(state)
   const log = state.log.slice(-5).map(entry => ({
@@ -108,6 +124,15 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
     pending: state.pending
       ? { kind: state.pending.kind, target: state.pending.target, at: state.pending.at }
       : null,
+    // The last decision that saw a verdict carries the numbers the evidence rule used; a state written
+    // before this field existed simply has none.
+    last_evidence: (() => {
+      for (let index = state.log.length - 1; index >= 0; index -= 1) {
+        const entry = state.log[index]!
+        if (entry.event === 'review_unsubstantiated') return parseEvidence(entry.detail)
+      }
+      return null
+    })(),
     // The newest log entry that consumed a notes file. The text stays in the file.
     last_notes: (() => {
       for (let index = state.log.length - 1; index >= 0; index -= 1) {

@@ -22,7 +22,9 @@ describe('config editing', () => {
   it('CONFIG_FIELDS lists every editable global field in order', async () => {
     const { CONFIG_FIELDS } = await import('../src/core/config.js')
     expect(CONFIG_FIELDS.map(f => f.key)).toEqual([
-      'web_theme', 'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms', 'max_lifetime_ms', 'default_permissions', 'language',
+      'web_theme', 'peek_interval_ms', 'peek_lines', 'max_depth', 'max_agents', 'ready_delay_ms',
+      'max_lifetime_ms', 'default_permissions', 'language', 'review_min_seconds',
+      'review_evidence_retries', 'dispatch_confirm_seconds',
     ])
   })
 

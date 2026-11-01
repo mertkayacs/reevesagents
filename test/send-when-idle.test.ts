@@ -105,7 +105,9 @@ async function seed(agentOverrides: Partial<AgentRecord> = {}) {
   return import('../src/core/runtime.js')
 }
 
-const FAST = { timings: { pasteSettleMs: 0, submitWaitMs: 0 } }
+// Small timing overrides: no real waits, and a confirm window counted in simulated time (the driver delays
+// instantly, so 20 polls = 20 s of the window at 1 s each).
+const FAST = { timings: { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 0, confirmPollMs: 1000 } }
 
 // Real pane shapes (see test/activity.test.ts): the gate needs a positive idle signal, and a
 // send reads the pane three times — gate, pre-Enter re-check, post-Enter confirm.
@@ -214,14 +216,16 @@ describe('sendWhenIdle', () => {
     expect(driver.pasted()).toEqual(['hello'])
   })
 
-  it('waits the full confirm window by default', async () => {
+  it('waits the dispatch window by default, polling for the busy marker', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
     driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_BUSY]
 
     expect(sendWhenIdle('agent-1', 'hello', { driver })).toEqual({ sent: true })
-    // 9 s after the paste, 6 s after the Enter: the timings the design settled on.
-    expect(driver.delays).toEqual([9000, 6000])
+    // 9 s after the paste; the very first look into the confirm window already found the busy marker, so
+    // no poll delay was needed. The window itself is `dispatch_confirm_seconds` (90 s) and is covered by
+    // the cold-pane test below.
+    expect(driver.delays).toEqual([9000])
   })
 
   it('refuses a stale pane, a headless agent and a missing agent', async () => {
@@ -249,5 +253,135 @@ describe('sendWhenIdle', () => {
     sendWhenIdle('agent-1', 'hello', { driver, ...FAST })
     const { readAgent } = await import('../src/core/runs.js')
     expect(readAgent('run-1', 'agent-1').task_status).toBe('working')
+  })
+})
+
+// Pane shapes for the readiness rules (incident of 2026-11-01).
+const CODEX_STARTING = [
+  '  Loading Codex…',
+  '  starting up',
+].join('\n')
+
+const CODEX_NO_ASK_LINE = [
+  '› ',
+  '  GPT-6-Luna high · ~/projects/reevesagents-flow',
+].join('\n')
+
+const CODEX_FOREIGN_COMPOSER = [
+  '› a prompt somebody typed by hand',
+  '  ← for agents · ? for shortcuts',
+].join('\n')
+
+const CODEX_OUR_TEXT = [
+  '› hello',
+  '  ← for agents · ? for shortcuts',
+].join('\n')
+
+const CODEX_COPY_MODE = [
+  '  ◦ Working (3s • esc to interrupt)',
+  '  [12/345]',
+  '› Ask Codex to do anything',
+].join('\n')
+
+describe('readiness and the composer', () => {
+  it('pastes nothing into a pane that has no composer yet', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_STARTING]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unknown' })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(0)
+  })
+
+  it('refuses with target_not_ready when the input box is there but no composer hint is', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_NO_ASK_LINE]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'target_not_ready' })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(0)
+  })
+
+  it('refuses a composer that already holds somebody else\'s text', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_FOREIGN_COMPOSER]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'composer_dirty' })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(0)
+  })
+
+  it('submits our own text without pasting it twice', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    // The pane already shows our text, then turns busy after the Enter.
+    driver.captures = [CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: true })
+    expect(driver.pasted()).toEqual([])          // no second paste
+    expect(driver.count('send-keys')).toBe(1)    // exactly one Enter
+  })
+
+  it('cancels copy mode before it types anything', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_COPY_MODE, CODEX_IDLE, CODEX_IDLE, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: true })
+    const cancels = driver.calls.filter(call => call.args[0] === 'send-keys' && call.args.includes('-X'))
+    expect(cancels).toHaveLength(1)
+    expect(driver.pasted()).toEqual(['hello'])
+  })
+
+  it('waits for a cold pane that starts its turn late, and gives up when the window is too short', async () => {
+    const { sendWhenIdle } = await seed()
+    // The pane only turns busy on the 70th look inside the confirm window.
+    const cold = new PaneDriver()
+    const busyAfter = 70
+    cold.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_IDLE]
+    let looks = 0
+    const original = cold.tmux.bind(cold)
+    cold.tmux = (args: string[], input?: string) => {
+      if (args[0] === 'capture-pane') {
+        looks += 1
+        return looks >= busyAfter ? CODEX_BUSY : CODEX_IDLE
+      }
+      return original(args, input)
+    }
+
+    expect(sendWhenIdle('agent-1', 'hello', {
+      driver: cold, timings: { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 90_000, confirmPollMs: 1000 },
+    })).toEqual({ sent: true })
+
+    // The same pane with a 20-second window: unconfirmed, and no blind repeat.
+    const short = new PaneDriver()
+    short.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_IDLE]
+    let shortLooks = 0
+    const shortOriginal = short.tmux.bind(short)
+    short.tmux = (args: string[], input?: string) => {
+      if (args[0] === 'capture-pane') {
+        shortLooks += 1
+        return shortLooks >= busyAfter ? CODEX_BUSY : CODEX_IDLE
+      }
+      return shortOriginal(args, input)
+    }
+    expect(sendWhenIdle('agent-1', 'hello', {
+      driver: short, timings: { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 20_000, confirmPollMs: 1000 },
+    })).toEqual({ sent: false, reason: 'unconfirmed' })
+    // One Enter only: the composer no longer holds our text after the paste, so nothing is repeated.
+    expect(short.count('send-keys')).toBe(1)
+  })
+
+  it('does not repeat the Enter when the composer is empty after the window', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    // After the paste the composer is empty (the provider consumed the text) and the pane never turns busy.
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_NO_ASK_LINE, CODEX_NO_ASK_LINE]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed' })
+    expect(driver.count('send-keys')).toBe(1)
   })
 })

@@ -79,6 +79,8 @@ function printStatus(state: FlowState, path: string): void {
     console.log(`orphaned  ${state.orphan_reason ?? 'the run or its agents are gone'} — \`flow stop\` closes it`)
   }
   if (state.close_reason) console.log(`closed    ${state.close_reason}`)
+  const lastUnsubstantiated = [...state.log].reverse().find(entry => entry.event === 'review_unsubstantiated')
+  if (lastUnsubstantiated) console.log(`evidence  ${lastUnsubstantiated.detail}`)
   const review = state.review_started_at === null
     ? 'not waiting'
     : `started ${new Date(state.review_started_at).toISOString()}, timeout ${state.review_timeout_sec}s`

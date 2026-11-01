@@ -37,7 +37,9 @@ import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { paneInSession, realDriver, sessionInGroup, STALE_WINDOW_ERROR, VIEWER_SESSION_PATTERN, windowInSession, type RuntimeDriver } from './tmux.js'
 import { reapPaneProcess } from './process.js'
-import { BUSY_SCAN_LINES, detectPaneBusy, type PaneBusyState } from './activity.js'
+import {
+  BUSY_SCAN_LINES, composerText, detectPaneBusy, detectPaneReady, paneInCopyMode, type PaneBusyState,
+} from './activity.js'
 import { redactSecrets } from './redact.js'
 import { providerDisplayName } from '../utils/display.js'
 
@@ -643,11 +645,26 @@ export interface IdleSendTimings {
   // A provider prompt appears seconds after the paste, so the confirm window is generous.
   pasteSettleMs: number
   submitWaitMs: number
+  // How long the pane may take to turn busy after the Enter, polled in `confirmPollMs` steps. The
+  // default comes from `dispatch_confirm_seconds` (90 s): a cold provider can take most of a minute to
+  // start its first turn, and the fixed six-second window used to call that a failed dispatch.
+  confirmMs?: number
+  confirmPollMs?: number
 }
 
-export const DEFAULT_IDLE_SEND_TIMINGS: IdleSendTimings = { pasteSettleMs: 9000, submitWaitMs: 6000 }
+export const DEFAULT_IDLE_SEND_TIMINGS: IdleSendTimings = {
+  pasteSettleMs: 9000,
+  submitWaitMs: 6000,
+  confirmMs: 90_000,
+  confirmPollMs: 1_000,
+}
 
-export type SendRefusal = 'busy' | 'unknown' | 'stale_pane' | 'headless' | 'pane_changed' | 'unconfirmed'
+export type SendRefusal =
+  | 'busy' | 'unknown' | 'stale_pane' | 'headless' | 'pane_changed' | 'unconfirmed'
+  // The composer is not initialised yet (no provider hint): nothing was pasted, retry later.
+  | 'target_not_ready'
+  // The composer already holds text that is not ours: pasting would stack onto it.
+  | 'composer_dirty'
 export type SendOutcome = { sent: true } | { sent: false; reason: SendRefusal }
 
 export interface IdleSendOptions extends RuntimeOptions {
@@ -681,16 +698,45 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // 'unknown', and "the window is gone" is the more useful thing to report.
   if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return { sent: false, reason: 'stale_pane' }
 
-  const gate = paneBusy(agent.id, options)
+  // Copy mode eats Enter as a scroll, and the paste lands nowhere usable: cancel it first, then probe
+  // again. A pane that is still in copy mode after the cancel is not ready, so nothing is typed.
+  let paneText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  if (paneInCopyMode(paneText)) {
+    try {
+      driver.tmux(['send-keys', '-t', agent.tmux_pane_id, '-X', 'cancel'])
+    } catch {
+      return { sent: false, reason: 'stale_pane' }
+    }
+    waitBlocking(driver, timings.pasteSettleMs)
+    paneText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+    if (paneInCopyMode(paneText)) return { sent: false, reason: 'target_not_ready' }
+  }
+
+  const gate = detectPaneBusy(paneText, agent.provider)
   if (gate === 'busy') return { sent: false, reason: 'busy' }
   if (gate === 'unknown') return { sent: false, reason: 'unknown' }
 
-  try {
-    pasteTextToPane(driver, agent.tmux_pane_id, text)
-  } catch {
-    return { sent: false, reason: 'stale_pane' }
+  // The input box exists — but is it *initialised*? A provider draws its composer hints only once it is
+  // ready; a fresh pane with none of them is `target_not_ready`, and pasting into it loses the prompt
+  // (incident of 2026-11-01). A provider with no verified hints keeps the older behaviour.
+  if (detectPaneReady(paneText, agent.provider) === 'not_ready') return { sent: false, reason: 'target_not_ready' }
+
+  // What is already sitting in the composer? Empty means "paste". Our own text means a previous paste
+  // landed and only the submit is missing — one Enter, never a second paste. Anything else is somebody
+  // else's text: pasting again stacks onto it (nine copies of one prompt in one pane), so refuse.
+  const composer = composerText(paneText, agent.provider)
+  if (composer === null) return { sent: false, reason: 'unknown' }
+  const alreadyOurs = composer !== '' && normalizeComposer(composer) === normalizeComposer(text)
+  if (composer !== '' && !alreadyOurs) return { sent: false, reason: 'composer_dirty' }
+
+  if (!alreadyOurs) {
+    try {
+      pasteTextToPane(driver, agent.tmux_pane_id, text)
+    } catch {
+      return { sent: false, reason: 'stale_pane' }
+    }
   }
-  lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
+  if (!alreadyOurs) lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
   // Best effort: the text is already pasted, so a bookkeeping failure must never abort the
   // submit and leave the prompt sitting in the input box with nothing recorded.
   if (!agent.ended_at && agent.task_status === 'queued') {
@@ -711,8 +757,49 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   } catch {
     return { sent: false, reason: 'stale_pane' }
   }
-  waitBlocking(driver, timings.submitWaitMs)
-  return paneBusy(agent.id, options) === 'busy' ? { sent: true } : { sent: false, reason: 'unconfirmed' }
+  // A configurable window, not a fixed nap: a cold provider can spend most of a minute before its first
+  // turn shows a busy marker, and the flow calls that a failed dispatch.
+  const confirmMs = Math.max(timings.confirmMs ?? timings.submitWaitMs, 0)
+  const pollMs = Math.max(timings.confirmPollMs ?? 1000, 1)
+  if (waitForBusy(agent, options, driver, confirmMs, pollMs)) return { sent: true }
+
+  // The Enter was pressed and the pane never turned busy. One more Enter is allowed *only* while the
+  // composer still holds exactly our text — a submit that did not land, not a blind repeat.
+  const after = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  const stillOurs = normalizeComposer(composerText(after, agent.provider) ?? '') === normalizeComposer(text)
+  if (!stillOurs) return { sent: false, reason: 'unconfirmed' }
+  try {
+    driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])
+  } catch {
+    return { sent: false, reason: 'stale_pane' }
+  }
+  const retryWindow = Math.min(confirmMs, 5000)
+  return waitForBusy(agent, options, driver, retryWindow, pollMs) ? { sent: true } : { sent: false, reason: 'unconfirmed' }
+}
+
+// The window is measured in *simulated* time — the sum of the waits this function asked for — not on the
+// wall clock: an injected driver delays instantly, and a wall-clock deadline would spin for ninety real
+// seconds in every test (and in any caller that injects a driver for a dry run).
+function waitForBusy(
+  agent: AgentRecord,
+  options: RuntimeOptions,
+  driver: RuntimeDriver,
+  totalMs: number,
+  pollMs: number,
+): boolean {
+  let waited = 0
+  while (true) {
+    if (paneBusy(agent.id, options) === 'busy') return true
+    if (waited + pollMs > totalMs) return false
+    waitBlocking(driver, pollMs)
+    waited += pollMs
+  }
+}
+
+// Composer comparison ignores whitespace runs and the box's own wrapping: the same prompt re-drawn by the
+// provider must still read as ours, while a different text must not.
+function normalizeComposer(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
 }
 
 export function sendText(agentId: string, text: string, options: RuntimeOptions = {}): void {

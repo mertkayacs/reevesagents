@@ -46,6 +46,9 @@ function makeObservations(overrides: Partial<FlowObservations> = {}): FlowObserv
     review_pane: 'idle',
     verdict: null,
     verdict_count: 0,
+    // A substantiated review by default: one minute of work and one recorded finding. Tests about the
+    // evidence rule override this; every other test describes a normal round.
+    verdict_evidence: { elapsed_ms: 60_000, notes_bytes: 240, notes_findings: 1, pane_tool_lines: 4 },
     ...overrides,
   }
 }

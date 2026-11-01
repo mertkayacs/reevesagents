@@ -153,6 +153,9 @@ export interface FlowState {
   // The dispatch in flight, or null. Optional in the file: a flow written before the claim existed
   // reads as "nothing in flight", which is the pre-claim behaviour and why the version stays 1.
   pending: FlowPendingDispatch | null
+  // How many verdicts of the current review have been rejected as unsubstantiated (§Evidence). Reset to
+  // zero whenever a substantiated verdict is consumed, so a later round gets its own allowance.
+  unsubstantiated_attempts: number
   // Where `resume` returns the flow to, and when the pause happened. Null unless `state` is
   // `paused`: a resume that guessed would silently restart a pipeline in the wrong state.
   paused_from: FlowStatus | null
@@ -223,10 +226,39 @@ export interface FlowObservations {
   // Why this round's notes file was unusable, when one existed: journalled once, on the decision that
   // consumed the pane answer instead. Never a prompt text, only the reason.
   notes_invalid?: string
+  // What the tick can prove about the review behind the verdict it is about to apply (incident of
+  // 2026-11-01: a reviewer that lived sixteen hours answered `ВЕРДИКТ: ACCEPT` in one second, with no
+  // tool call, and the engine would have closed the plan on it).
+  verdict_evidence?: VerdictEvidence
+  // The reviewer's answer states explicitly that it found nothing — only possible in a notes file, never
+  // in a pane.
+  verdict_explicit_clean?: boolean
+  // The policy the tick applies; the runner reads it from the global config, a test passes it directly.
+  evidence_policy?: EvidencePolicy
   // The raw staging text (untruncated), so the runner can publish the durable record without reading
   // the file a second time.
   notes_raw?: string
 }
+
+// What a tick can measure about the review behind a verdict.
+export interface VerdictEvidence {
+  // From the review request to the moment the verdict was first seen.
+  elapsed_ms: number
+  // The notes of this round, in bytes and in finding lines (0 when the answer came from the pane).
+  notes_bytes: number
+  notes_findings: number
+  // How many lines of the reviewer's capture look like tool work. A support signal, never the only one:
+  // panes format differently and a provider can change its ledger.
+  pane_tool_lines: number
+}
+
+// `review_min_seconds` and `review_evidence_retries` (global config), passed in so the engine stays pure.
+export interface EvidencePolicy {
+  min_seconds: number
+  retries: number
+}
+
+export const DEFAULT_EVIDENCE_POLICY: EvidencePolicy = { min_seconds: 30, retries: 1 }
 
 export type FlowActionKind = 'request_review' | 'dispatch_fix' | 'dispatch_spec' | 'escalate' | 'orphan' | 'none'
 
@@ -253,6 +285,9 @@ export type FlowReason =
   | 'review_timeout'
   | 'dispatch_pending'
   | 'dispatch_unresolved'
+  | 'review_unsubstantiated'
+  | 'target_not_ready'
+  | 'composer_dirty'
   | 'head_moved'
   | 'review_requested'
   | 'fix_dispatched'
@@ -268,6 +303,12 @@ export interface FlowDecision {
   notes_counts?: { blocker: number, major: number, minor: number }
   // The reason a notes file of this round existed but was unusable; goes into the journal entry.
   notes_invalid?: string
+  // Journal text for decisions whose `notes` must not be logged (a fix dispatch carries the reviewer's
+  // remarks there, and those stay out of the bounded journal).
+  log_detail?: string
+  // The value the state's `unsubstantiated_attempts` takes when this decision is applied: incremented by a
+  // rejected review, reset to zero by one that is accepted.
+  next_unsubstantiated_attempts?: number
   // The status, round count and claim after this decision is applied. Carried in the decision so
   // the transition is computed once, purely, instead of being re-derived by the writer.
   next_state: FlowStatus
@@ -330,6 +371,7 @@ export function createFlowState(init: FlowInit): FlowState {
     specs: init.specs ?? [],
     dispatched_specs: [],
     pending: null,
+    unsubstantiated_attempts: 0,
     paused_from: null,
     paused_at: null,
     orphan_reason: null,
@@ -378,6 +420,7 @@ export function parseFlowState(raw: unknown): FlowState {
       ? record.dispatched_specs.map(text).filter(entry => entry !== '')
       : [],
     pending: parsePendingDispatch(record.pending),
+    unsubstantiated_attempts: count(record.unsubstantiated_attempts),
     // A paused file always names where it came from; a missing field defaults to `idle`, which is
     // the only target a flow without a recorded origin could safely resume into.
     paused_from: status === 'paused'
@@ -477,6 +520,8 @@ export function renderReviewPrompt(parts: {
   // The staging file the reviewer must write. Passed in rather than composed here: the runner owns the
   // state root, and a prompt that guesses a path is a prompt that writes nowhere.
   notes_path?: string
+  // A re-request after a verdict was rejected as unsubstantiated: say so, and say what has to change.
+  strict?: boolean
 }): string {
   const lines = [
     `Review commit ${parts.head} in ${parts.repo}.`,
@@ -486,6 +531,15 @@ export function renderReviewPrompt(parts: {
     'Answer with one line "VERDICT: ACCEPT" or "VERDICT: CHANGES_REQUESTED", then your findings,',
     'one per line, each starting with BLOCKER, MAJOR or MINOR. Keep it under 30 lines.',
   ]
+  if (parts.strict) {
+    lines.push(
+      '',
+      'Your previous answer to this round was rejected: it arrived without a review behind it (too fast,',
+      'no findings recorded). Do the review now: read the diff, run the checks the block names, and answer',
+      'with the finding lines this prompt asks for. An APPROVE with nothing to report must say so explicitly',
+      '(`no findings`) in the notes file — a bare verdict is not accepted.',
+    )
+  }
   if (parts.notes_path) {
     // The file is the primary channel (§11 of docs/notifications-design.md): a pane answer scrolls away,
     // a file is the round's record. The instruction is one paragraph, not a new contract — the same
@@ -546,6 +600,7 @@ function reviewRequest(
   reason: FlowReason,
   now: number,
   notesPath?: string,
+  strict = false,
 ): FlowDecision {
   return {
     kind: 'request_review',
@@ -566,6 +621,7 @@ function reviewRequest(
       round: state.rounds + 1,
       max_rounds: state.max_rounds,
       notes_path: notesPath,
+      strict,
     }),
   }
 }
@@ -593,6 +649,7 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
     target: 'dev',
     head: state.claim.head,
     notes,
+    next_unsubstantiated_attempts: 0,
     message: renderFixPrompt({
       head: state.claim.head,
       notes,
@@ -614,6 +671,7 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_claim: { ...state.claim, verdict: observations.verdict, verdict_count: observations.verdict_count },
     target: 'dev',
     spec_id: spec.id,
+    next_unsubstantiated_attempts: 0,
     message: renderDispatchPrompt(spec),
   }
 }
@@ -719,6 +777,10 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
     return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now, observations.notes_staging_path)
   }
 
+  // A verdict is only an answer if there is a review behind it: a reviewer that answers in one second
+  // with nothing recorded is either stamping or broken, and both must stop here rather than close the plan.
+  if (!isVerdictSubstantiated(observations)) return unsubstantiated(state, observations)
+
   if (observations.verdict === 'ACCEPT') {
     const spec = nextSpec(state)
     if (!spec) {
@@ -726,6 +788,7 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
         next_state: 'done',
         next_review_started_at: null,
         next_claim: { ...state.claim, verdict: 'ACCEPT', verdict_count: observations.verdict_count },
+        next_unsubstantiated_attempts: 0,
       }), observations)
     }
     const gate = dispatchGate(state, observations)
@@ -747,6 +810,77 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
   const gate = reviewGate(state, observations)
   if (gate) return gate
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
+}
+
+// Is this verdict evidence of a review? Both halves are required: enough wall time since the request, and
+// either a finding line or an explicit statement that nothing was found — the latter only from a notes
+// file, because a pane answer has no room for it and an ACCEPT there is exactly the one-second stamp the
+// incident produced. `review_min_seconds = 0` disables only the time half.
+function isVerdictSubstantiated(observations: FlowObservations): boolean {
+  const policy = observations.evidence_policy ?? DEFAULT_EVIDENCE_POLICY
+  const evidence = observations.verdict_evidence
+  const elapsedOk = policy.min_seconds <= 0
+    || (evidence !== undefined && evidence.elapsed_ms >= policy.min_seconds * 1000)
+  const notesOk = (evidence?.notes_findings ?? 0) >= 1 || observations.verdict_explicit_clean === true
+  return elapsedOk && notesOk
+}
+
+function evidenceNumbers(observations: FlowObservations): string {
+  const evidence = observations.verdict_evidence
+  if (!evidence) return 'elapsed=unknown notes=0 tool=0'
+  return `elapsed=${Math.round(evidence.elapsed_ms / 1000)}s notes=${evidence.notes_findings}/${evidence.notes_bytes}b tool=${evidence.pane_tool_lines}`
+}
+
+// A verdict the tick refuses to act on. One rejection re-requests the review with a prompt that says what
+// was wrong; the next one escalates, because a reviewer that keeps stamping will not start reviewing on
+// its own and a human has to look.
+function unsubstantiated(state: FlowState, observations: FlowObservations): FlowDecision {
+  const policy = observations.evidence_policy ?? DEFAULT_EVIDENCE_POLICY
+  const attempts = state.unsubstantiated_attempts + 1
+  const detail = evidenceNumbers(observations)
+  if (attempts > policy.retries) {
+    return {
+      ...escalate(state, observations, 'review_unsubstantiated'),
+      notes: `the reviewer is not reviewing: ${detail}`,
+      log_detail: `the reviewer is not reviewing: ${detail}`,
+      next_unsubstantiated_attempts: attempts,
+    }
+  }
+  const retry = reviewRequest(
+    state,
+    state.claim.head,
+    observations.verdict_count,
+    'review_unsubstantiated',
+    observations.now,
+    observations.notes_staging_path,
+    true,
+  )
+  return {
+    ...retry,
+    // The clock restarts with the new request: the rejected answer must not count as elapsed time.
+    next_review_started_at: observations.now,
+    notes: `review rejected as unsubstantiated: ${detail}`,
+    log_detail: `review rejected as unsubstantiated: ${detail}`,
+    next_unsubstantiated_attempts: attempts,
+  }
+}
+
+// The pane's composer holds text that is not ours. Pasting again would stack onto it — that is how nine
+// copies of one prompt ended up in a pane — so the flow stops and a human looks at the pane. The decision
+// that would have been dispatched is dropped; nothing was pasted.
+export function escalateOnDirtyComposer(state: FlowState, decision: FlowDecision, at = isoNow()): FlowState {
+  const stuck: FlowDecision = {
+    ...decision,
+    kind: 'escalate',
+    reason: 'composer_dirty',
+    message: undefined,
+    target: undefined,
+    next_state: 'escalated',
+    next_review_started_at: null,
+    notes: 'the pane composer holds text that is not ours; nothing was pasted',
+    log_detail: 'composer_dirty: the pane composer holds text that is not ours; nothing was pasted',
+  }
+  return applyDecisionToState(state, stuck, at)
 }
 
 // The run (or one of its role agents) is gone: the flow is parked instead of being ticked against
@@ -810,6 +944,7 @@ export function decisionChangesState(state: FlowState, decision: FlowDecision): 
 }
 
 function logDetail(decision: FlowDecision): string {
+  if (decision.log_detail) return decision.log_detail
   const parts: string[] = [decision.reason]
   if (decision.head) parts.push(decision.head)
   if (decision.spec_id) parts.push(decision.spec_id)
@@ -846,6 +981,7 @@ function withDelta(
     // The reason a flow was parked is part of the state, not only of the log: `flow status` reads
     // it, and the log is bounded, so the reason must survive the entry being pushed out.
     orphan_reason: decision.kind === 'orphan' ? (decision.notes ?? null) : state.orphan_reason,
+    unsubstantiated_attempts: decision.next_unsubstantiated_attempts ?? state.unsubstantiated_attempts,
     log: appendLog(state, {
       at,
       event: options.event,

@@ -75,6 +75,64 @@ export function paneTail(paneText: string, count = BUSY_TAIL_LINES): string[] {
   return count > 0 ? lines.slice(-count) : lines
 }
 
+// Readiness: is the composer *initialised*, not merely free of a busy marker? A provider draws its
+// input box only once it has finished starting up; a fresh pane with no box yet looks exactly like a
+// pane whose hint we failed to parse, and pasting into it loses the prompt (incident of 2026-11-01).
+// These hints are what the provider prints inside a live composer — see the module header for the
+// capture rule. A provider without a hint keeps the older, weaker behaviour: its idle classification is
+// the only signal available, and the gate stays fail-closed through `detectPaneBusy` alone.
+const READY_HINTS: Partial<Record<Provider, readonly RegExp[]>> = {
+  // Hermes draws `❯` plus a status line; both the `ctx --` variant and the `☤ provider · …` variant
+  // have been seen, so either counts. Codex draws the ask line and a `← for agents` hint.
+  hermes: [/ctx\s+--/i, /^\s*☤/m],
+  codex: [/Ask Codex to do anything/i, /←\s*for agents/i],
+}
+
+export type PaneReadiness = 'ready' | 'not_ready' | 'unknown'
+
+// Combined probe: `ready` requires the idle input box *and* one of the provider's composer hints. A
+// pane that shows the box but none of the hints is `not_ready` — the refusal the flow journals as
+// `target_not_ready` — while a pane with no box at all stays `unknown`, which the older gate already
+// refuses.
+export function detectPaneReady(paneText: string, provider: Provider): PaneReadiness {
+  if (!providerHasBusyDetector(provider)) return 'unknown'
+  const busy = detectPaneBusy(paneText, provider)
+  if (busy === 'busy') return 'unknown'   // callers check busy first; keeping them apart avoids a lie
+  if (busy !== 'idle') return 'unknown'
+  const hints = READY_HINTS[provider]
+  if (!hints || hints.length === 0) return 'ready'
+  const text = paneTail(paneText, BUSY_SCAN_LINES).join('\n')
+  return hints.some(marker => marker.test(text)) ? 'ready' : 'not_ready'
+}
+
+// The text currently sitting in the input box, with the prompt marker removed. `null` when no input
+// line can be identified at all — the caller must then refuse rather than guess.
+export function composerText(paneText: string, provider: Provider): string | null {
+  if (!providerHasBusyDetector(provider)) return null
+  const lines = paneTail(paneText, BUSY_SCAN_LINES)
+  const marker = provider === 'hermes' ? /^\s*❯\s?/ : provider === 'codex' ? /^\s*›\s?/ : null
+  if (!marker) return null
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]!
+    if (!marker.test(line)) continue
+    // A placeholder is not typed text: `› Ask Codex to do anything` is what an *empty* composer draws.
+    const rest = line.replace(marker, '').trim()
+    if (/^Ask Codex to do anything$/i.test(rest)) return ''
+    return rest
+  }
+  return null
+}
+
+// tmux draws a position badge (`[12/345]`) in the top-right corner while a pane is in copy mode; in
+// that mode keystrokes scroll instead of typing, so an Enter would never submit. The badge is the only
+// marker a raw capture carries, hence the heuristic — and a pane that scrolls instead of typing is
+// caught again by the readiness probe after the cancel.
+const COPY_MODE_PATTERN = /\[\d+\/\d+\]/
+
+export function paneInCopyMode(paneText: string): boolean {
+  return COPY_MODE_PATTERN.test(stripAnsi(paneText))
+}
+
 export function detectPaneBusy(paneText: string, provider: Provider): PaneBusyState {
   const signals = SIGNALS[provider]
   // No verified signals for this provider, or nothing captured: refuse to guess.

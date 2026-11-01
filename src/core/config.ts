@@ -19,6 +19,12 @@ const DEFAULT_GLOBAL: GlobalConfig = {
   default_permissions: 'ask',
   language: DEFAULT_LANGUAGE,
   web_theme: 'dark',
+  // Flow engine thresholds (block 10). Both are product policy, not per-flow tuning: a review that
+  // arrives in under `review_min_seconds` with no findings is not a review, and the dispatch window has
+  // to outlast a provider's slow first turn.
+  review_min_seconds: 30,
+  review_evidence_retries: 1,
+  dispatch_confirm_seconds: 90,
 }
 
 export function configPath(): string {
@@ -63,6 +69,11 @@ function mergeDefaults(raw: unknown): Config {
     if (g.default_permissions === 'skip' || g.default_permissions === 'ask') merged.global.default_permissions = g.default_permissions as Permissions
     if (isLanguageCode(g.language)) merged.global.language = g.language
     if (g.web_theme === 'dark' || g.web_theme === 'light') merged.global.web_theme = g.web_theme
+    // `0` is meaningful for the minimum review time: it disables the *time* check while the notes check
+    // stays in force, so this is nonneg-int rather than posint.
+    if (typeof g.review_min_seconds === 'number' && g.review_min_seconds >= 0) merged.global.review_min_seconds = g.review_min_seconds
+    if (typeof g.review_evidence_retries === 'number' && g.review_evidence_retries > 0) merged.global.review_evidence_retries = g.review_evidence_retries
+    if (typeof g.dispatch_confirm_seconds === 'number' && g.dispatch_confirm_seconds > 0) merged.global.dispatch_confirm_seconds = g.dispatch_confirm_seconds
   }
 
   return merged
@@ -114,6 +125,9 @@ export const CONFIG_FIELDS: readonly ConfigFieldSpec[] = [
   { key: 'max_lifetime_ms', kind: 'nonneg-int', label: 'max agent lifetime (ms)' },
   { key: 'default_permissions', kind: 'permissions', label: 'default permissions' },
   { key: 'language', kind: 'language', label: 'language' },
+  { key: 'review_min_seconds', kind: 'nonneg-int', label: 'review min seconds' },
+  { key: 'review_evidence_retries', kind: 'posint', label: 'review evidence retries' },
+  { key: 'dispatch_confirm_seconds', kind: 'posint', label: 'dispatch confirm (s)' },
 ]
 
 function configFieldSpec(key: string): ConfigFieldSpec {
