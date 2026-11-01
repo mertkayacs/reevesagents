@@ -218,6 +218,12 @@ function createSseHub(): SseHub {
     const tickMs = loadConfig().global.flow_tick_ms
     if (tickMs > 0 && !flowTimer) {
       flowTimer = setInterval(() => {
+        // Re-read the setting on every beat: `flow_tick_ms = 0` may be set while a dashboard is already open, and
+        // an interval created before that must stop advancing flows too — otherwise the off switch only works for
+        // clients that connect after it.
+        const current = loadConfig().global.flow_tick_ms
+        if (current <= 0) return
+        if (!shouldTick({ state: 'idle' }, lastFlowTick || null, current)) return
         lastFlowTick = Date.now()
         try {
           tickAllFlows()

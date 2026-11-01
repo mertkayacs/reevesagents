@@ -69,6 +69,30 @@ function sseFirstFrame(url: string, timeoutMs = 5000): Promise<string> {
   })
 }
 
+// A stream that stays open: the hub stops its timers when the last client disconnects, so a test that closes the
+// connection immediately measures nothing.
+function openSse(url: string): { firstFrame: Promise<string>, close: () => void } {
+  const parsed = new (globalThis as unknown as {
+    URL: new (_input: string) => { hostname: string, port: string, pathname: string }
+  }).URL(url)
+  let resolveFrame: (_value: string) => void = () => {}
+  const firstFrame = new Promise<string>(resolve => { resolveFrame = resolve })
+  const req = requestFn({
+    hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method: 'GET',
+    agent: false, headers: { accept: 'text/event-stream' },
+  }, res => {
+    let buffer = ''
+    res.setEncoding('utf-8')
+    res.on('data', (chunk: string) => {
+      buffer += chunk
+      if (buffer.includes('\n\n')) resolveFrame(buffer)
+    })
+  })
+  req.on('error', () => { /* the close() below is what ends it */ })
+  req.end()
+  return { firstFrame, close: () => req.destroy() }
+}
+
 function httpGet(url: string): Promise<{ status: number, text: string }> {
   return new Promise((resolve, reject) => {
     const parsed = new (globalThis as unknown as {
@@ -161,5 +185,47 @@ describe('the Web UI does not tick when the tick is off', () => {
     // The CLI path is not gated by the setting: it *is* the automation.
     const result = tickAllFlows({ now: NOW })
     expect(result.advanced.length + result.held.length).toBe(1)
+  })
+})
+
+describe('the interval stops when the setting is turned off', () => {
+  it('does not tick again after flow_tick_ms becomes 0 while a dashboard is connected', async () => {
+    // The interval is created when the first client connects; an off switch that only affects *new* connections
+    // would leave the flow moving behind an open dashboard.
+    const config = await import('../src/core/config.js')
+    config.setConfigValues({ flow_tick_ms: 40 })
+
+    vi.resetModules()
+    const calls = { count: 0 }
+    vi.doMock('../src/core/flow-ticker.js', async (importOriginal) => {
+      const original = await importOriginal<typeof import('../src/core/flow-ticker.js')>()
+      return {
+        ...original,
+        tickAllFlows: (...args: Parameters<typeof original.tickAllFlows>) => {
+          calls.count += 1
+          return original.tickAllFlows(...args)
+        },
+      }
+    })
+
+    const { startWebServer } = await import('../src/surfaces/webui/server.js')
+    const handle = await startWebServer({ port: 0 })
+    try {
+      // Connect and keep the stream open, so the hub's timers keep running.
+      const stream = openSse(`${handle.url}/api/events`)
+      await stream.firstFrame
+      await new Promise(resolve => setTimeout(resolve, 200))
+      const beforeSwitch = calls.count
+      expect(beforeSwitch).toBeGreaterThan(0)
+
+      config.setConfigValues({ flow_tick_ms: 0 })
+      await new Promise(resolve => setTimeout(resolve, 200))
+      // No new passes after the switch: the beat re-reads the setting and returns.
+      expect(calls.count).toBe(beforeSwitch)
+      stream.close()
+    } finally {
+      await handle.close()
+      vi.doUnmock('../src/core/flow-ticker.js')
+    }
   })
 })

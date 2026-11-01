@@ -241,13 +241,14 @@ What happens without you is one of three things, and only the first is "progress
 
 - **the plan moves** — the ticker takes the next item that has a brief, dispatches it, and closes it on an
   accepted review. A reviewer asking for changes is normal work, not a stop.
-- **the plan waits** — nothing can be taken: the item at the head of the line has no brief (`waiting: P1.7.2
-  (needs a brief)` in `flow status`, and the run badge says `plan: waiting for a brief (P1.7.2)`), or it is
-  `blocked_owner` (a human already decided to hold it), or the remaining items are `missing` from the document —
-they exist in the mirror but the file no longer lists them, so nothing may be dispatched.
-  The flow holds, stays in a working state, and does not escalate. To continue: attach the brief
-  (`flow plan attach`) or decide the item (`flow plan set --item <id> --status queued|skipped`) — the next tick
-  picks it up.
+- **the plan waits** — nothing can be taken. An item without a brief is skipped, not obeyed: the picker takes the
+  next one that has a brief, so a single missing brief does not stop the plan. The flow waits only when no
+  remaining item can move — every open item lacks a brief, or the head is `blocked_owner` (a human already decided
+  to hold it), or the remaining items are `missing` from the document (they exist in the mirror but the file no
+  longer lists them). `flow status` names them (`waiting: P1.7.2 (needs a brief)`) and the run badge says
+  `plan: waiting for a brief (P1.7.2)`. The flow holds, stays in a working state, and does not escalate. To
+  continue: attach the brief (`flow plan attach`) or decide the item (`flow plan set --item <id> --status
+  queued|skipped`) — the next tick picks it up.
 - **the flow escalates** — this is not a plan stop but a pipeline one: the reviewer did not answer within
   `review_timeout_sec`, the round budgets ran out (`rounds_exhausted` / `total_rounds_exhausted`), or the
   reviewer kept answering without evidence (`review_unsubstantiated`). `flow status` shows `escalated` and the
