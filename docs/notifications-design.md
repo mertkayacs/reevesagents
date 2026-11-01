@@ -969,6 +969,18 @@ Three things in that snippet are load-bearing:
 
 ## 5. UI: the Logs dialog
 
+**Shipped (block 16)** as one dialog with two tabs, `#insights-dialog`, opened by `#logs-btn` (header, right after
+About). The Plan tab is the default when the selected run has a plan, otherwise Logs. Ids: `#insights-tab-plan`,
+`#insights-tab-logs`, `#plan-progress-bar`/`#plan-progress-fill`/`#plan-progress-text`, `#plan-filter-all|open|waiting`,
+`#plan-list`, `#plan-waiting`, `#plan-detail`, `#plan-empty`, `#logs-list`, `#logs-filter-run`, `#logs-unread`,
+`#logs-mark-read`, `#logs-empty`, `#logs-error`, `#logs-announcer` (`aria-live="polite"`). Live refresh rides the
+existing SSE state frame — a new `notifications.latest_seq` reloads `GET /api/notifications`, no second poller. The
+plan payload comes from a new read-only `GET /api/plan?run=<id>` that reuses `planItemView` (no brief bodies).
+
+The agent-card pulse is `.card-pulse`: its length is computed by `insights-core.js` (`pulseRemaining`) from the newest
+unread event's **server** `received_at`, so a reload keeps the remainder; `agent_pulse_ms = 0` draws nothing, and the
+whole animation is suppressed under `prefers-reduced-motion`.
+
 ### 5.1 Markup
 
 `index.html`, after `about-btn` (line 29):

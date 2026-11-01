@@ -200,3 +200,73 @@ describe('web client flow chip', () => {
     expect(css).toContain('var(--warn)')
   })
 })
+
+describe('insights dialog (Plan + Logs) and the card pulse', () => {
+  const html = readClientFile('index.html')
+  const js = readClientFile('app.js')
+  const css = readClientFile('app.css')
+
+  it('puts one button after About, and one dialog with two tabs', () => {
+    expect(html).toContain('id="logs-btn"')
+    // The button sits after About and before New agent, which is the header order the block asks for.
+    expect(html.indexOf('id="logs-btn"')).toBeGreaterThan(html.indexOf('id="about-btn"'))
+    expect(html.indexOf('id="logs-btn"')).toBeLessThan(html.indexOf('id="new-agent-btn"'))
+
+    expect(html).toContain('id="insights-dialog"')
+    expect(html).toContain('id="insights-tab-plan"')
+    expect(html).toContain('id="insights-tab-logs"')
+    expect(html).toContain('role="tablist"')
+    expect(html).toContain('role="tabpanel"')
+  })
+
+  it('has the Plan tab: progress, filter chips, item list, waiting block, empty state', () => {
+    expect(html).toContain('id="plan-progress-text"')
+    expect(html).toContain('role="progressbar"')
+    expect(html).toContain('id="plan-filter-all"')
+    expect(html).toContain('id="plan-filter-open"')
+    expect(html).toContain('id="plan-filter-waiting"')
+    expect(html).toContain('id="plan-list"')
+    expect(html).toContain('id="plan-waiting"')
+    expect(html).toContain('id="plan-detail"')
+    expect(html).toContain('id="plan-empty"')
+    expect(js).toContain('function renderPlan(')
+    expect(js).toContain('function showPlanDetail(')
+  })
+
+  it('has the Logs tab: run filter, unread toggle, list, mark-read, live refresh, empty state', () => {
+    expect(html).toContain('id="logs-list"')
+    expect(html).toContain('id="logs-filter-run"')
+    expect(html).toContain('id="logs-unread"')
+    expect(html).toContain('id="logs-mark-read"')
+    expect(html).toContain('id="logs-empty"')
+    expect(html).toContain('aria-live="polite"')
+    expect(js).toContain('function renderLogs(')
+    expect(js).toContain('function markAllRead(')
+    // Live refresh rides the existing SSE state frame: a new sequence loads the journal, no polling loop.
+    expect(js).toContain('previous.latest_seq !== data.notifications.latest_seq')
+  })
+
+  it('opens the dialog with the plan tab when the run has a plan', () => {
+    expect(js).toContain('function openInsightsDialog(')
+    expect(js).toContain("api('GET', `/api/plan?run=")
+    expect(js).toContain("const wanted = tab || (insights.plan ? 'plan' : 'logs')")
+  })
+
+  it('draws the pulse from the server timestamp and respects agent_pulse_ms', () => {
+    expect(js).toContain('function renderPulse(')
+    expect(js).toContain('function schedulePulseTick(')
+    expect(js).toContain('pulseRemaining(')
+    expect(css).toContain('.card-pulse')
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)')
+    expect(css).toContain('@media (max-width: 520px)')
+  })
+
+  it('writes external text with textContent only', () => {
+    // The journal carries strings from other machines; an innerHTML there would be an injection point.
+    const insightsSection = js.slice(js.indexOf('function renderLogs('), js.indexOf('function markAllRead('))
+    expect(insightsSection).toContain('textContent')
+    expect(insightsSection).not.toContain('innerHTML')
+    const planSection = js.slice(js.indexOf('function renderPlan('), js.indexOf('function showPlanDetail('))
+    expect(planSection).not.toContain('innerHTML')
+  })
+})

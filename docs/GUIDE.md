@@ -210,6 +210,19 @@ human is highlighted with the same warning colour as a stale run.
   the run's history record deletes the flow file too — that is the only automatic
   deletion.
 
+### What you see in the Web UI
+
+The **Logs** button in the header (right after About) opens a dialog with two tabs:
+
+- **Plan** — the selected run's plan: a `done/total` bar, a *waiting for you* block (items without a brief, blocked
+  items), the items in document order with status badges, and a click on any item shows its commit, rounds, review
+  notes reference and brief path. Filters: all / open / waiting. A run without a plan shows "No plan yet".
+- **Logs** — the notification journal: time, run, agent and what was reported, with a run filter and "unread only",
+  plus *Mark all read*. It refreshes itself from the live stream, so there is nothing to reload.
+
+The agent cards pulse while a run has unread news; the pulse length is `agent_pulse_ms` (`0` turns it off), and it
+stops when you mark the log read. On a narrow window the log rows collapse to time and message.
+
 ### The notification journal
 
 Every run that starts, every approval that waits for you, every flow that escalates and every plan item that

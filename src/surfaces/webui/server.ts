@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url'
 import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './guards.js'
 import { buildWebState, listWebProviders } from './state.js'
 import { shouldTick, tickAllFlows } from '../../core/flow-ticker.js'
+import { planExists, planItemView, planProgress, readPlan } from '../../core/plan.js'
+import { resolveFlowRunId } from '../../core/flow-view.js'
 import {
   NotificationError, appendNotification, markNotificationsRead, notificationSummary, readNotifications,
 } from '../../core/notifications.js'
@@ -59,6 +61,7 @@ const DEFAULT_WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), 'web')
 const STATIC_ROUTES: Record<string, { file: string; type: string }> = {
   '/app.css': { file: 'app.css', type: 'text/css; charset=utf-8' },
   '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
+  '/insights-core.js': { file: 'insights-core.js', type: 'text/javascript; charset=utf-8' },
   '/xterm.css': { file: 'xterm.css', type: 'text/css; charset=utf-8' },
   '/xterm.js': { file: 'xterm.js', type: 'text/javascript; charset=utf-8' },
   '/addon-fit.js': { file: 'addon-fit.js', type: 'text/javascript; charset=utf-8' },
@@ -545,6 +548,42 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       sendJson(res, 200, presetsPayload())
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/plan') {
+    // Read-only plan payload for the Plan tab: the same fields the CLI's `flow plan --json` shows, without the
+    // brief bodies (a payload is a transcript, the file is the record).
+    const query = new Map<string, string>()
+    for (const pair of ((req.url ?? '').split('?')[1] ?? '').split('&')) {
+      if (!pair) continue
+      const [rawKey, rawValue = ''] = pair.split('=')
+      query.set(decodeURIComponent(rawKey ?? ''), decodeURIComponent(rawValue))
+    }
+    const runId = query.get('run') ?? ''
+    if (!runId) {
+      sendJson(res, 400, { error: 'run is required' })
+      return
+    }
+    try {
+      const resolved = resolveFlowRunId(runId)
+      if (!planExists(resolved)) {
+        sendJson(res, 200, { run_id: resolved, plan: null })
+        return
+      }
+      const plan = readPlan(resolved)
+      sendJson(res, 200, {
+        run_id: resolved,
+        plan: {
+          source_path: plan.source_path,
+          imported_at: plan.imported_at,
+          progress: planProgress(plan),
+          items: plan.items.map(planItemView),
+          conflicts: plan.conflicts,
+        },
+      })
+    } catch (err) {
+      sendJson(res, 404, { error: errMessage(err) })
     }
     return
   }

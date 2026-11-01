@@ -77,6 +77,46 @@ describe('i18n language catalog', () => {
   })
 })
 
+// The Insights dialog keys (Plan + Logs tabs): a locale that only has the English source would silently show
+// English inside a translated UI, so the parity check covers them the same way it covers `flow.*`.
+const INSIGHTS_KEYS = [
+  'web.logs', 'web.insightsTitle', 'web.insightsSubtitle', 'web.tabPlan', 'web.tabLogs', 'web.logsAllRuns',
+  'web.planFilterAll', 'web.planFilterOpen', 'web.planFilterWaiting', 'web.planWaitingTitle', 'web.planNeedsBrief',
+  'web.planBlockedOwner', 'web.planEmptyTitle', 'web.planEmptyBody', 'web.logsEmptyTitle', 'web.logsEmptyBody',
+  'web.logsMarkRead', 'web.logsMarkedRead', 'web.logsRun', 'web.logsUnreadOnly', 'web.planStatus', 'web.planCommit',
+  'web.planRounds', 'web.planNotes', 'web.planBrief', 'web.planStatus_pending', 'web.planStatus_needs_brief',
+  'web.planStatus_queued', 'web.planStatus_in_work', 'web.planStatus_reviewing', 'web.planStatus_done',
+  'web.planStatus_blocked_owner', 'web.planStatus_skipped',
+]
+
+describe('insights dialog key parity', () => {
+  // A locale may spell a word exactly as English does ("Plan", "Run", "Status"); listed per key so the rule stays
+  // strict everywhere else. German/French/Italian/Portuguese/Spanish happen to share these three.
+  const SAME_AS_ENGLISH = new Set<string>([
+    'de.web.tabPlan', 'es.web.tabPlan', 'fr.web.tabPlan', 'it.web.tabPlan', 'pt.web.tabPlan',
+    'de.web.logsRun', 'es.web.logsRun', 'fr.web.logsRun', 'it.web.logsRun', 'pt.web.logsRun',
+    'de.web.planStatus_reviewing', 'es.web.planStatus_reviewing', 'fr.web.planStatus_reviewing',
+    'it.web.planStatus_reviewing', 'pt.web.planStatus_reviewing',
+    // "Plan" is the same word in several languages and is kept as the product's own name.
+    'de.web.tabPlan', 'es.web.tabPlan', 'fr.web.tabPlan', 'it.web.tabPlan', 'pt.web.tabPlan', 'tr.web.tabPlan',
+  ])
+
+  it('defines every Insights key in all ten locales, and none of them is the English source', () => {
+    expect(INSIGHTS_KEYS.length).toBeGreaterThanOrEqual(30)
+    for (const key of INSIGHTS_KEYS) {
+      expect((en as Record<string, string>)[key], `en is missing ${key}`).toBeTruthy()
+    }
+    for (const [code, keys] of Object.entries(LOCALE_KEYS)) {
+      for (const key of INSIGHTS_KEYS) {
+        expect(keys[key], `${code} is missing ${key}`).toBeTruthy()
+        // Two locales legitimately spell a short word as English does; the rest must differ.
+        if (SAME_AS_ENGLISH.has(`${code}.${key}`)) continue
+        expect(keys[key], `${code}.${key} still holds the English source`).not.toBe((en as Record<string, string>)[key])
+      }
+    }
+  })
+})
+
 describe('i18n key parity', () => {
   // A locale may legitimately spell a word exactly as English does; it is listed here with the
   // reason instead of weakening the rule for every key.
