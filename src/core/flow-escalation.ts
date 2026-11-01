@@ -8,7 +8,7 @@
 // Approve → the item goes back to `pending` with a fresh budget and the flow resumes.
 // Deny    → the flow closes as `done` with a `close_reason`, which is `flow stop` with a reason.
 
-import { createRunApproval, listRunApprovals } from './approvals.js'
+import { createRunApproval, listRunApprovals, removeRunApproval } from './approvals.js'
 import type { RunApproval } from './approvals.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import type { FlowState } from './flow.js'
@@ -43,9 +43,16 @@ export function raiseEscalationApproval(request: EscalationRequest): RunApproval
   const state = readFlow(request.run_id)
   if (state.state !== 'escalated') return null
   const key = escalationKey(request)
-  const existing = listRunApprovals(request.run_id, 'pending').find(approval =>
+  const pendingForKey = listRunApprovals(request.run_id, 'pending').filter(approval =>
     approval.action === FLOW_ESCALATION_ACTION && approval.details?.key === key)
-  if (existing) return existing
+  if (pendingForKey.length > 0) {
+    // More than one can exist when two tickers raced past the check below. They are duplicates of the *same* episode
+    // and none of them carries a decision yet, so keeping the oldest and dropping the rest loses nothing and spares the
+    // operator two identical tickets.
+    const [oldest] = [...pendingForKey].sort((a, b) => a.requested_at.localeCompare(b.requested_at))
+    for (const extra of pendingForKey) if (extra.id !== oldest!.id) removeRunApproval(extra.id)
+    return oldest!
+  }
     // The approval needs an agent id in this data model; a flow escalation is run-scoped, so the run's dev agent is
     // the honest owner — it is the agent whose work the operator is deciding about.
   const agentId = state.roles.dev
@@ -63,12 +70,14 @@ export function raiseEscalationApproval(request: EscalationRequest): RunApproval
       },
     risk: 'medium',
   })
+  // The same race, seen from the other side: this call just created a record, and another one may have appeared
+  // meanwhile. Keep the oldest and drop ours if it lost.
   const race = listRunApprovals(request.run_id, 'pending').filter(approval =>
     approval.action === FLOW_ESCALATION_ACTION && approval.details?.key === key)
   if (race.length <= 1) return created
-  // Two tickers created a ticket for the same episode: keep the oldest, report it, and leave the other pending for a
-  // human to close — deleting another process's record is worse than a duplicate the operator can dismiss.
-  return [...race].sort((a, b) => a.requested_at.localeCompare(b.requested_at))[0]!
+  const [oldest] = [...race].sort((a, b) => a.requested_at.localeCompare(b.requested_at))
+  for (const extra of race) if (extra.id !== oldest!.id) removeRunApproval(extra.id)
+  return oldest ?? created
 }
 
 export interface EscalationOutcome {

@@ -736,22 +736,25 @@ changes a written contract, so the change is deliberate and recorded:
 
 ### 4.5 Escalation rides the approvals mechanism
 
-On `escalated` (round budget spent), the runner calls `createRunApproval`
-(`src/core/approvals.ts:141`) with `action: "flow-escalated"`, the flow id and the review notes
-in `details`. The human decision already has a UI (`Approvals` page, `list_approvals`,
-`approve`/`deny`). No new notification channel, no second "needs attention" concept.
+On `escalated` the tick calls `raiseEscalationApproval` (`src/core/flow-escalation.ts:39`), which creates one approval
+per **episode** with `action: "flow_escalation"` and `details: { key, run_id, flow_id, episode, reason, item_id }`. The
+key (`<flow_id>:<episode>`) is what makes it idempotent: a ticker that sees the same escalated flow again finds the
+open ticket instead of creating a second one, and two tickers that race into creating one keep the oldest and drop
+their own duplicate.
 
-What exists today is only the *record*: `resolveRunApproval` (`src/core/approvals.ts:192`)
-writes the decision and knows nothing about flows, and it should stay that way — approvals are a
-generic mechanism. The reaction belongs to the runner, on its next tick: it looks for a resolved
-`flow-escalated` approval belonging to this flow, and then
+The decision is carried into the flow by `resolveRunApproval` (`src/core/approvals.ts:238`) the moment the human
+answers — no wait for the next tick, because nothing else has to observe it:
 
-- `approved` → `resume` with a fresh round budget, log `resumed_by_approval`;
-- `denied` → park as `paused`, log `denied_by_approval`.
+- `approved` → the flow returns to `idle` with a fresh round counter, the item goes back to `queued`, and the journal
+  records `escalation_approved`;
+- `denied` → the flow closes as `done` with a `close_reason` (`escalation denied: <reason> · <note>`) and the item is
+  closed through `queued → skipped`; the journal records `escalation_denied`.
 
-The engine stays the only writer of flow state, and a tick is the only thing that reads a
-decision — which also means an escalation is picked up by the same headless `flow tick` recipe
-as everything else (§2.3).
+Two guards make that safe: the side effect runs only on the transition out of `pending` (decided inside the runs lock,
+so two concurrent resolves move the flow once), and only when the flow is still `escalated` with the same
+`notify_episode` — an old ticket cannot act on a newer episode.
+
+`flow stop --reason` remains the manual close; an escalation is the case where the engine asks instead of stopping.
 
 ### 4.6 Surfaces: shipped vs planned (state of the branch)
 

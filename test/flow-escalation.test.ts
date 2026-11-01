@@ -12,7 +12,7 @@ import { createFlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import { raiseEscalationApproval, applyEscalationDecision, FLOW_ESCALATION_ACTION } from '../src/core/flow-escalation.js'
-import { listRunApprovals, resolveRunApproval } from '../src/core/approvals.js'
+import { createRunApproval, listRunApprovals, resolveRunApproval } from '../src/core/approvals.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => ''), spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
@@ -80,6 +80,27 @@ describe('raising the approval', () => {
     // A new episode is a new approval: `flow resume` then another escalation is a second decision.
     const second = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 2, reason: 'rounds_exhausted', item_id: 'P1.1' })
     expect(second?.id).not.toBe(first!.id)
+  })
+
+  it('drops its own duplicate when two raisers create the same ticket', () => {
+    // Simulate the race: both raisers pass the "no ticket yet" check, then both create. The second keeps the oldest and
+    // removes the record it just made, so the operator sees one ticket, not two.
+    const first = createRunApproval({
+      agent_id: 'dev-1', action: FLOW_ESCALATION_ACTION,
+      summary: 'flow run-1 escalated: rounds_exhausted — continue with a fresh budget, or stop the flow',
+      details: { key: 'flow-a:1', run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' },
+    })
+    const duplicate = createRunApproval({
+      agent_id: 'dev-1', action: FLOW_ESCALATION_ACTION,
+      summary: 'flow run-1 escalated: rounds_exhausted — continue with a fresh budget, or stop the flow',
+      details: { key: 'flow-a:1', run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' },
+    })
+    const kept = raiseEscalationApproval({ run_id: 'run-1', flow_id: 'flow-a', episode: 1, reason: 'rounds_exhausted', item_id: 'P1.1' })
+    expect(kept?.id).toBe(first.id)
+    const tickets = listRunApprovals('run-1', 'pending').filter(entry => entry.action === FLOW_ESCALATION_ACTION)
+    expect(tickets).toHaveLength(1)
+    expect(tickets[0]!.id).toBe(first.id)
+    expect(duplicate.id).not.toBe(first.id)
   })
 
   it('says what happened and what the human can do', () => {

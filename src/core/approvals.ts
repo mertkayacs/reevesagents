@@ -2,6 +2,7 @@
 // and another agent (or a human) approves or denies it. Stored beside run state
 // under ~/.reeves/runs/<run-id>/approvals.
 
+import { unlinkSync } from 'node:fs'
 import {
   chmodSync,
   mkdirSync,
@@ -186,6 +187,21 @@ export function createRunApproval(input: CreateRunApprovalInput): RunApproval {
       source: 'product',
     })
     return redactApproval(approval)
+  })
+}
+
+// Remove one approval record. Used only by the escalation raiser to drop *its own* duplicate when two tickers raced
+// into creating a ticket for the same episode — a foreign record is never deleted here.
+export function removeRunApproval(approvalId: string): boolean {
+  return withRunsLock(() => {
+    const approval = listRunApprovals().find(item => item.id === approvalId)
+    if (!approval) return false
+    try {
+      unlinkSync(join(runApprovalsDir(approval.run_id), `${approval.id}.json`))
+      return true
+    } catch {
+      return false
+    }
   })
 }
 
