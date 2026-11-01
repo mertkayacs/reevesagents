@@ -6,6 +6,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   attachSpec, canSetStatus, canTransition, closeItemOnAccept, createPlan, deriveId, ensurePlanSummary,
@@ -606,5 +607,46 @@ describe('the status transition table', () => {
     expect(closed.items[0]!.head).toBe('def5678')
     expect(closed.items[0]!.rounds).toBe(2)
     expect(closed.items[0]!.notes_ref).toBe('def5678-r2')
+  })
+})
+
+// The design's two tables are the readable form of `PLAN_TRANSITIONS`/`HUMAN_TRANSITIONS`; a doc that drifts
+// from the code is worse than no doc, and it already drifted once (the status table used to carry its own
+// "leaves to" column that disagreed with the human table). This test reads the markdown and compares.
+describe('the design document matches the tables in the code', () => {
+  // `join(__dirname, …)` instead of `new URL(…, import.meta.url)`: the lint config has no `URL` global, and a
+  // doc test is not worth a config change.
+  const doc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'plan-model-design.md'), 'utf-8')
+
+  function table(after: string): Record<string, string[]> {
+    const block = doc.split(after)[1]!.split('\n\n')[0]!
+    const result: Record<string, string[]> = {}
+    for (const line of block.split('\n')) {
+      const match = /^\| `([a-z_]+)`(?:, `([a-z_]+)`)? \| (.*) \|$/.exec(line)
+      if (!match) continue
+      const cell = match[3]!.trim()
+      const targets = cell.startsWith('—') ? [] : (cell.match(/`[a-z_]+`/g) ?? []).map(token => token.slice(1, -1)).sort()
+      result[match[1]!] = targets
+      if (match[2]) result[match[2]] = targets
+    }
+    return result
+  }
+
+  it('documents exactly the engine transitions', () => {
+    const documented = table('| from | may become |')
+    const code = Object.fromEntries(Object.entries(PLAN_TRANSITIONS).map(([from, to]) => [from, [...to].sort()]))
+    expect(documented).toEqual(code)
+  })
+
+  it('documents exactly the human transitions', () => {
+    const documented = table('| from | a human may set |')
+    const code = Object.fromEntries(Object.entries(HUMAN_TRANSITIONS).map(([from, to]) => [from, [...to].sort()]))
+    expect(documented).toEqual(code)
+  })
+
+  it('keeps the status table free of a second, competing transition column', () => {
+    const statuses = doc.split('### 2.2 Statuses')[1]!.split('### ')[0]!
+    expect(statuses).not.toContain('leaves to |')
+    expect(statuses).toContain('| status | meaning | who sets it |')
   })
 })

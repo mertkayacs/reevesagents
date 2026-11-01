@@ -117,16 +117,21 @@ enumerating statuses. `owner_action` is derived on write, never accepted from a 
 
 ### 2.2 Statuses
 
-| status | meaning | set by | leaves to |
-| --- | --- | --- | --- |
-| `pending` | in the plan, not queued (no brief yet or not reached) | import, `plan next`, a fix that reopened it | `needs_brief`, `queued`, `skipped` |
-| `needs_brief` | has no brief; the engine will not guess | import/attach bookkeeping, `plan next` | `queued` (after attach), `skipped` |
-| `queued` | brief attached, dispatch expected | `plan attach`, `plan next` | `in_work`, `needs_brief` |
-| `in_work` | a dispatch for it is in flight or the dev is fixing | engine (dispatch/fix decisions) | `reviewing`, `blocked_owner` |
-| `reviewing` | a review of its head is running | engine (`request_review`) | `done`, `in_work` (changes), `blocked_owner` |
-| `done` | ACCEPT of the closing commit, or a human said so | engine **only** on a substantiated ACCEPT; `plan set --status done --yes --note <why>` | — (terminal for the run) |
-| `blocked_owner` | the dev or the reviewer reported a decision only the owner can take | engine, from an escalation carrying `owner_decision`; or `plan set` | `queued`, `skipped` |
-| `skipped` | deliberately not doing it | `plan set --status skipped` (needs `--yes`) | — (terminal) |
+| status | meaning | who sets it |
+| --- | --- | --- |
+| `pending` | in the plan, not queued (no brief yet or not reached) | import; `plan set` (triage, or un-setting `needs_brief`) |
+| `needs_brief` | has no brief; the engine will not guess | `plan next` when the first eligible item has no snapshot spec; `plan set` |
+| `queued` | brief attached, dispatch expected | `plan attach`, `plan next`, the engine re-queuing after a refused dispatch |
+| `in_work` | a dispatch for it is in flight or the dev is fixing | **engine only** (claim of a dispatch, fix decisions) |
+| `reviewing` | a review of its head is running | **engine only** (`request_review`) |
+| `done` | ACCEPT of the closing commit, or a human said so | engine **only** on a substantiated ACCEPT (`closeItemOnAccept`); `plan set --status done --yes [--note <why>]` |
+| `blocked_owner` | the dev or the reviewer reported a decision only the owner can take | the engine, from an escalation carrying `owner_decision`; `plan set` |
+| `skipped` | deliberately not doing it | `plan set --status skipped --yes` |
+
+The "who sets it" column is deliberately not a "leaves to" column: the legal moves live in exactly two places
+below (the engine table and the human table), and duplicating them here is how the two drifted apart once
+already — this table used to claim `blocked_owner` could only reach `queued`/`skipped`, while the human table
+allowed `blocked_owner → pending`, `→ needs_brief` and `→ done`.
 
 Rationale for the two terminal states: `done` and `skipped` both stop `flow plan next` from looking at the
 item, and both count toward "the plan is complete" (§6) — but only one of them claims work was delivered. A
