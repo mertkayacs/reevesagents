@@ -1493,6 +1493,11 @@ A file that fails 1–3 is *not* used and the pane path takes over — the failu
 journal as `notes_invalid <reason>`, so a reviewer that keeps writing the wrong shape is visible
 instead of silently degraded. The pane fallback is exactly today's behaviour and is not removed.
 
+The notes file also carries **evidence**: the engine refuses a verdict that arrives inside
+`review_min_seconds` with no finding line, and the file's findings are what make an ACCEPT admissible
+(an explicit "no findings" in the file counts, a bare one in a pane does not). See §3.5 of
+`docs/flows-design.md`.
+
 **Read order on a reviewing tick:** valid staging file → the **durable** record of the same round → pane
 verdict scan → hold. The durable step is not an optimisation: the staging file is removed when the record
 is published, and a tick that held (a busy dev pane) has already published, so without it the round could

@@ -189,6 +189,16 @@ human is highlighted with the same warning colour as a stale run.
   last prompt (`flow tick` reports `cancelled`). If a prompt is being typed at that
   moment the command waits for it and, past 15 seconds, answers "a dispatch is in
   flight — try again in a moment" without changing anything.
+- **When a flow stops on its own, the journal says why** (`reevesagents flow logs --run <id>`):
+  `review_unsubstantiated` — the reviewer answered too fast or without recording a finding; the engine
+  re-asked once with a stricter prompt and then escalated, so look at the reviewer's agent: `flow notes`
+  shows what it actually wrote, and a second `flow tick` after a `flow resume` retries the round.
+  `composer_dirty` — the pane's input box already held text that was not the flow's; nothing was pasted,
+  the flow is escalated, and a human has to clear or send that text before resuming.
+  `target_not_ready` — the pane has not drawn its composer yet (a fresh agent, a modal, a login screen);
+  nothing was pasted and the round was not spent, so the next `flow tick` retries.
+  `dispatch_unconfirmed` — the text is in the pane but the Enter did not visibly start a turn; the claim is
+  released, and the engine presses Enter again only if the composer still holds exactly that text.
 - A flow whose run was stopped, deleted or swept is parked as `orphaned`: `flow status`
   prints the reason, nothing is ticked, and `flow stop` is how you close it. Deleting
   the run's history record deletes the flow file too — that is the only automatic

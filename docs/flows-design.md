@@ -537,6 +537,46 @@ moving target.
 
 ---
 
+### 3.5 Evidence and readiness (block 10)
+
+Two rules that came out of two live incidents on 2026-11-01, and that the engine has to enforce itself
+because a human watching the pane is exactly what the pipeline is meant to replace.
+
+**A verdict needs evidence.** A reviewer that had lived sixteen hours answered `ВЕРДИКТ: ACCEPT` in one
+or two seconds, with no tool call, three times in a row; the engine would have closed the plan on it. So
+before a verdict is applied, the tick measures three numbers — `elapsed_ms` since the review request,
+`notes_findings` / `notes_bytes` of the round's notes file, and `pane_tool_lines` as a support signal
+only — and accepts the answer when **both** halves hold:
+
+- `elapsed_ms >= review_min_seconds * 1000` (`0` disables only this half), and
+- at least one `BLOCKER|MAJOR|MINOR` line, **or** an explicit "no findings" statement *in a notes file* —
+  a bare ACCEPT in a pane is never admissible, because that is the shape the stamping took.
+
+A rejected verdict does not touch the claim. The journal gets `review_unsubstantiated` with the numbers
+(`elapsed=2s notes=0/0b tool=0`), `unsubstantiated_attempts` in the state goes up, and the flow re-requests
+the review **once** with a prompt that says the previous answer was rejected and what has to change. When
+the counter passes `review_evidence_retries` (default 1) the flow escalates with the same reason and a text
+a human can act on ("the reviewer is not reviewing: …"). A substantiated verdict resets the counter, so
+every round gets its own allowance.
+
+**A pane must be ready before it is written to.** A freshly added Codex agent gave no busy signal for 45 s;
+the supervisor called the dispatch failed — after pasting into a composer that did not exist yet. And a pane
+in tmux copy mode ate the Enter. So the dispatch path now, in `runtime.sendWhenIdle`:
+
+1. cancels copy mode (`send-keys -X cancel`) and re-reads the pane; still in copy mode → `target_not_ready`;
+2. requires the provider's **composer** hints on top of the idle input box (`Ask Codex to do anything` /
+   `← for agents`; Hermes `ctx --` / the `☤` status line); a provider with no verified hints keeps the older
+   idle-only gate;
+3. reads the composer: empty → paste; exactly our pending text (normalised) → one Enter, **no second paste**;
+   anything else → `composer_dirty`, which escalates and pastes nothing — a blind re-paste is how nine copies
+   of one prompt ended up in one pane;
+4. waits for the busy marker inside `dispatch_confirm_seconds` (default 90) instead of a fixed nap, and if
+   the pane never turns busy, presses Enter again **only** while the composer still holds exactly our text.
+
+Both thresholds are global config keys (`review_min_seconds`, `review_evidence_retries`,
+`dispatch_confirm_seconds`), so they are visible in `reevesagents config`, the MCP `get_config`, the TUI
+settings and the Web config panel without a per-flow flag.
+
 ## 4. How it meets the surfaces
 
 ### 4.1 CLI (`src/surfaces/cli/flow.ts`, registered in `index.ts:41`–`:71` so `--help` order stays intentional)
@@ -710,6 +750,8 @@ as everything else (§2.3).
 | Journal (`flow logs`) | **shipped** (block 07) — the bounded `log` array (`FLOW_LOG_LIMIT` = 50) is the journal: event, time, head, short reason, never a prompt body |
 | Review prompt template stored per flow | **not implemented** — the request is rendered by a fixed renderer with the same tokens |
 | Review notes as files (`notes/<head>-r<N>.md`, `notes_ref` in the journal, `flow notes`) | **planned** — block 09; designed in `docs/notifications-design.md` §11, together with the rule that the file is the primary channel and the pane scan is the fallback |
+| Verdict evidence (`review_unsubstantiated`) | **shipped** (block 10) — `unsubstantiated_attempts` in the state, one re-request with a stricter prompt, then escalation; numbers in the journal and in `flow status` |
+| Dispatch readiness (`target_not_ready`, `composer_dirty`, `dispatch_confirm_seconds`) | **shipped** (block 10) — `runtime.sendWhenIdle` probes the composer, cancels copy mode, and refuses instead of pasting twice |
 | Notification log + agent pulse badge | **planned** — blocks 02–03 of `docs/notifications-design.md`; the two flow kinds (`flow.escalated`, `flow.review_timeout`) are emitted from this engine's `FlowAttention`, not from a second model of "needs a human", and the `notify` marker in the state (§3.1) is what makes that emission at-least-once and idempotent |
 
 Nothing above is described as working elsewhere in this document: the tables and the sections it
