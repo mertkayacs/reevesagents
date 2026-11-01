@@ -323,13 +323,29 @@ the engine already requires before it closes a flow — no second, weaker gate.
 
 ## 5. Auto-advance
 
+**Rounds belong to the item, not to the flow** (block 13's decision, answering O2):
+
+- `max_rounds` is the budget of **one item** — how many fix rounds that item may spend before it blocks. A flow
+  carries dozens of items; one counter for all of them either cuts a healthy item or lets a bad one eat the
+  budget.
+- `max_total_rounds` (default `4 × max_rounds`, capped at 100) is the flow's fuse, so a pathological reviewer
+  cannot keep it walking from item to item for ever.
+- a flow **without** a plan keeps the old meaning exactly: `max_rounds` is its round budget and
+  `max_total_rounds` is not read. That is the schema-v1 compatibility rule, and it has its own regression test.
+- an item that spends its budget becomes `blocked_owner` with `block_reason: rounds_exhausted`; the flow does
+  **not** move to the next item (otherwise a bad item is silently buried in the list). A human decides: `flow
+  plan set --item <id> --status queued` to continue, or `--status skipped`.
+- spending `max_total_rounds` escalates the **flow** (`total_rounds_exhausted`).
+
 `flow plan next` is the **only** automatic way an item becomes work:
 
 1. skip `done`, `skipped`, `missing`;
 2. take the first item in document order with `status: queued` (brief attached);
-3. if the first non-terminal item is `needs_brief` or `blocked_owner`, **stop** — do not jump over it to a
-   later item. A plan is an order; jumping around it silently reorders the project. The item is reported as
-   `owner_action` and the flow holds (`plan_needs_brief` / `plan_blocked_owner`);
+3. an item without a brief is **reported, not dispatched and not blocking**: the picker skips it and takes the
+   first item after it that has a brief, while every unbriefed item stays visible in the "waiting for a brief"
+   line. Block 13 settled this: a plan of twenty items where the fourth has no brief must not freeze the other
+   sixteen. `blocked_owner` is different — it is a decision the owner already made to stop this item, and the
+   picker stops on it rather than routing around it;
 4. one active item per flow: if any item is `in_work`/`reviewing`, `next` returns `busy` and does nothing.
 
 `--dry-run` prints the item and the rendered prompt without queuing or sending.
@@ -345,7 +361,10 @@ waiting   needs_brief: P1.7.1, P1.7.2, P2.1.4 · blocked_owner: P1.4.2 · brief 
 next      P1.7.3 — "Wire the booking edge port"  (brief docs/briefs/P1.7.3.json)
 ```
 
-Completion: the flow may reach `done` only when every item is `done` or `skipped`. Otherwise the tick
+Completion: the flow may reach `done` only when every item is `done` or `skipped`; while anything is open the
+tick holds with `plan_incomplete` and a detail that names what it is waiting for (the open ids, the items
+needing a brief, the blocked ones). An item without a brief is a **hold**, not an escalation: a half-written
+document is not a broken pipeline, and the owner's rule is that such an item shows up in the report. Otherwise the tick
 returns `hold('plan_incomplete')` with the counts, and `flow stop --yes` remains the manual close (it needs
 no plan state). `missing` items count as incomplete and are named — an import that lost half the document
 must not let a flow declare itself finished.

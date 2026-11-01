@@ -210,6 +210,17 @@ human is highlighted with the same warning colour as a stale run.
 
 ### The plan as an object
 
+**How a project runs on its plan:** `flow plan import` once (and again after the document changes) →
+`flow plan attach` a brief for each item you want done → `flow plan next` (or simply let the ticks run: after an
+ACCEPT the engine takes the next item by itself) → review, ACCEPT, and the item closes with the commit that
+closed it. `flow plan` shows `done/total`, what waits for you, and which item is next; `flow status` shows the
+same one-line summary, and each item's row carries its commit, its rounds and a reference to the review notes of
+the round that closed it.
+
+Two budgets: `--max-rounds` is the budget of **one item** (how many fix rounds it may spend before it blocks as
+`blocked_owner` with `rounds_exhausted`), and `--max-total-rounds` (default `4 × max-rounds`, at most 100) is the
+flow's fuse. A flow without a plan ignores the fuse and keeps the old meaning of `--max-rounds`.
+
 `reevesagents flow plan …` mirrors the project's own plan document (the `- [ ]` / `- [x]` list in
 `docs/implementation-plan.md`) into `~/.reeves/flows/<run-id>/plan.json`, so the flow knows what is done and
 what is left. The design is `docs/plan-model-design.md`; two rules matter when you use it:
@@ -235,6 +246,10 @@ what is left. The design is `docs/plan-model-design.md`; two rules matter when y
   `flow plan next` (block 13) to put it on the flow.
 - `reevesagents flow plan status --item P1.7.1 [--run <run>] [--json]` — one item: status, the commit that
   closed it, its rounds, its notes reference and its brief.
+- `reevesagents flow plan next --run <run> [--dry-run]` — the item the plan wants next, and why: it takes the
+  first item in document order that has a brief, queues its block on the flow, and the next `flow tick` sends
+  it. An item without a brief is reported ("waiting for a brief"), never dispatched and never invented; one
+  task per flow, so an item already in flight stops the picker. `--dry-run` only prints.
 - `reevesagents flow plan set --run <run> --item P1.7.1 --status <status> [--yes] [--note <text>]` — move an
   item by hand. `done` and `skipped` need `--yes`, and a `done` without an accepted commit also needs a
   `--note`; the manual close is recorded in the plan's conflicts so `flow plan` shows how it was closed.
