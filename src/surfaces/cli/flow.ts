@@ -153,6 +153,18 @@ function countsSuffix(counts: NotesCounts | null): string {
 }
 
 // The one line the operator acts on: which item needs a brief, which is blocked, and by whom.
+// What the operator should expect to happen without them. This used to say "nothing ticks a flow on its own",
+// which stopped being true when the Web UI started advancing flows (§2.3): the hint has to match the setting the
+// process would use, or it teaches the wrong thing at the exact moment somebody is watching.
+function tickHint(): string {
+  const tickMs = loadConfig().global.flow_tick_ms
+  if (tickMs <= 0) {
+    return '`flow tick --run <id>` moves it; the autonomous tick is off (flow_tick_ms 0)'
+  }
+  const every = tickMs % 1000 === 0 ? `${tickMs / 1000}s` : `${tickMs}ms`
+  return `an open Web UI dashboard advances it every ${every} (flow_tick_ms); \`flow tick --run <id>\` or \`flow tick --all\` moves it now`
+}
+
 function planWaitingLine(state: FlowState): string | null {
   try {
     if (!planExists(state.run_id)) return null
@@ -226,7 +238,7 @@ export function registerFlow(program: Command): void {
         console.log(`queue     ${pendingCount(started.state)} pending`)
         console.log(`repo      ${shortHomePath(started.state.repo)}`)
         console.log(`file      ${shortHomePath(started.path)}`)
-        console.log('next      `flow tick --run <id>` moves it; nothing ticks a flow on its own')
+        console.log(`next      ${tickHint()}`)
       } catch (err) {
         fail(err)
       }

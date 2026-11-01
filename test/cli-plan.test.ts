@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
 import { saveFlow } from '../src/core/flow-store.js'
 import { readPlan } from '../src/core/plan.js'
-import { writeRun } from '../src/core/runs.js'
+import { writeAgent, writeRun } from '../src/core/runs.js'
 
 const execFileSync = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ execFileSync, spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
@@ -42,7 +42,12 @@ beforeEach(() => {
   process.env.REEVES_REGISTRY = tmpDir
   process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
   execFileSync.mockReset()
-  execFileSync.mockImplementation(() => '')
+  // git must answer two questions: the HEAD (a flow starts from a commit) and the worktree state (clean).
+  execFileSync.mockImplementation((file: string, args: string[] = []) => {
+    if (file === 'git' && args.includes('rev-parse')) return 'aaa111\n'
+    if (file === 'git' && args.includes('status')) return ''
+    return ''
+  })
   // A flow to attach the plan to: the CLI refuses a plan on a run with no flow.
   mkdirSync(join(tmpDir, 'flows'), { recursive: true })
   saveFlow(createFlowState({
@@ -114,6 +119,41 @@ async function runCli(args: string[]): Promise<{ out: string, err: string, code:
 async function failure(args: string[]): Promise<{ code: number, out: string, err: string }> {
   return runCli(args)
 }
+
+describe('flow start', () => {
+  // The plan tests already own `run-p`; a start needs a run without a flow.
+  beforeEach(() => {
+    for (const id of ['dev-s', 'rev-s']) {
+      writeAgent({
+        id, run_id: 'run-s', nickname: id, provider: 'codex', model: '', role: 'worker', working_dir: tmpDir,
+        task: 't', task_status: 'working', task_note: '', tmux_session: 'reeves-run-s', tmux_window_id: '@3',
+        tmux_pane_id: '%3', rc_enabled: false, permissions: 'ask', inbox: [], last_seen: 1,
+        started_at: '2026-11-02T09:00:00.000Z', ended_at: null,
+      })
+    }
+    writeRun({
+      id: 'run-s', name: 'run-s', status: 'running', tmux_session: 'reeves-run-s', reeves_window_id: '@0',
+      reeves_pane_id: '%0', root_agent_id: 'dev-s', working_dir: tmpDir, preset_name: null,
+      started_at: '2026-11-02T09:00:00.000Z', ended_at: null,
+    })
+  })
+
+  it('tells the truth about who advances the flow', async () => {
+    const result = await runCli(['flow', 'start', '--run', 'run-s', '--dev', 'dev-s', '--review', 'rev-s'])
+    const out = result.out + result.err
+    // The default is the autonomous tick: an open dashboard advances the flow every `flow_tick_ms`.
+    expect(out).toContain('an open Web UI dashboard advances it every 60s')
+    expect(out).not.toContain('nothing ticks a flow')
+  })
+
+  it('says the tick is off when the setting is 0', async () => {
+    await (await import('../src/core/config.js')).setConfigValues({ flow_tick_ms: 0 })
+    const result = await runCli(['flow', 'start', '--run', 'run-s', '--dev', 'dev-s', '--review', 'rev-s'])
+    const out = result.out + result.err
+    expect(out).toContain('the autonomous tick is off (flow_tick_ms 0)')
+    expect(out).toContain('`flow tick --run <id>` moves it')
+  })
+})
 
 describe('flow plan', () => {
   it('imports the document and prints the progress a human asked for', async () => {
