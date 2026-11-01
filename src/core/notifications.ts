@@ -167,10 +167,9 @@ function clean(value: unknown, limit: number): string {
 // The lead is "any character that cannot be part of a path", not a short list of punctuation: a path also follows
 // `path:`, `file:`, `->` and a dozen other joins, and a whitelist silently misses each one. The exception is a
 // colon that introduces a `scheme://…` URL — that is not a path on this machine (see `shortenPath`).
-const LEAD = '(^|[^\\p{L}\\p{N}._@+\\-/\\\\])'
-const UNIX_PATH = new RegExp(`${LEAD}((?:\\/{1,}[\\p{L}\\p{N}._@+-]+){2,}\\/?)`, 'gu')
-const WINDOWS_PATH = new RegExp(`${LEAD}([A-Za-z]:\\\\[\\p{L}\\p{N}.@+ -]+(?:\\\\[\\p{L}\\p{N}.@+ -]+){1,})`, 'gu')
-const UNC_PATH = new RegExp(`${LEAD}(\\\\\\\\[\\p{L}\\p{N}.@+ -]+(?:\\\\[\\p{L}\\p{N}.@+ -]+){1,})`, 'gu')
+const UNIX_PATH = /(^|[^\p{L}\p{N}._@+\-/\\])((?:\/{1,}[\p{L}\p{N}._@+-]+(?: [\p{L}\p{N}._@+-]+(?=\/))*){2,}\/?)/gu
+const WINDOWS_PATH = /(^|[^\p{L}\p{N}._@+\-/\\])([A-Za-z]:\\[\p{L}\p{N}.@+ -]+(?:\\[\p{L}\p{N}.@+ -]+){1,})/gu
+const UNC_PATH = /(^|[^\p{L}\p{N}._@+\-/\\])(\\\\[\p{L}\p{N}.@+ -]+(?:\\[\p{L}\p{N}.@+ -]+){1,})/gu
 
 // The schemes whose `//…` part is a *local* path. Everything else with `scheme://` is a URL and is left alone: it
 // points somewhere else, and rewriting it would corrupt a link rather than protect anything.

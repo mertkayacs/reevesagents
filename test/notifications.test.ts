@@ -128,6 +128,15 @@ describe('the schema', () => {
     expect(fileUrl.detail).toContain('file.ts')
   })
 
+  it('shortens a path whose directory has a space', () => {
+    // `My Project` is an ordinary checkout name here: a component class without a space stops the match at `My`
+    // and leaves the rest of the tree in the event.
+    const { event } = appendNotification(valid({ detail: 'at path:/home/dmytro/My Project/private/file.ts failed' }))
+    expect(event.detail).not.toContain('dmytro')
+    expect(event.detail).not.toContain('My Project')
+    expect(event.detail).toContain('file.ts')
+  })
+
   it('shortens a path whose components are not ASCII', () => {
     // The checkouts here are Polish, Ukrainian and Russian: a `\w`-based pattern treats `Дмитро` as prose and leaves
     // the whole tree in the event.
