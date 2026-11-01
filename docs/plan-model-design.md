@@ -158,11 +158,21 @@ FlowState.plan: { imported_at, source_hash, done, total, waiting } | null
 
 so `flow status`, the TUI list and the Web run card can draw `plan 12/23` from the state they already read,
 without opening `plan.json` on every tick or every render. `waiting` is the count of `owner_action` items —
-one number, not a list. The summary is written by whoever writes the plan, in the same locked step, and a
-`plan.json` that disagrees with it is repaired from the file (the file is the record, the pointer is a cache).
+one number, not a list.
 
-So: two files, two owners, two `schema_version`s. `deleteRunHistory` cascades over both (§9), and
-`flow plan import` writes only `plan.json`.
+**How the pointer is kept in step.** Every command that changes the plan calls `savePlan()`, which writes
+`plan.json` and then updates `FlowState.plan` — both inside one `withRunsLock` critical section, so under
+normal operation the two cannot disagree. What `flow plan import` does **not** touch is the *rest* of the
+flow state: `specs`, `claim`, `rounds`, `log`, the notes. That is what "writes only `plan.json`" means — the
+plan's record plus its one-line summary, never the pipeline's own fields.
+
+The two writes can still be torn apart by a crash between them, which is exactly why the pointer is a
+**cache**: any plan command that reads it recomputes the summary from `plan.json` and rewrites the flow file
+when the numbers differ, and a reader that cannot take the lock (`flow status` on a busy run) answers from
+`plan.json` alone rather than printing stale counters. `source_hash` in the summary is what makes the check
+cheap: equal hash and equal counts means nothing to repair.
+
+So: two files, two owners, two `schema_version`s, one lock. `deleteRunHistory` cascades over both (§9).
 
 Caps: `PLAN_MAX_ITEMS` = 1000, `PLAN_MAX_BYTES` = 512 KiB for `plan.json`, `PLAN_MAX_DOCUMENT_BYTES` = 1 MiB
 for the source document. Over the cap the import refuses with the actual number and changes nothing.
@@ -283,17 +293,17 @@ must not let a flow declare itself finished.
 Six commands. `plan`, `import`, `attach`, `next` and `set` take `--run <id>` (resolved the way
 `resolveFlowRunId` already does); `plan status` is the exception — it takes `--item <id>` plus an *optional*
 `--run <id>` and, without it, finds the flow that owns the item, because an item id is only unique inside a
-plan. All six accept `--json`; `attach`, `set`
-and `import` accept `--dry-run`, which prints the same output without writing.
+plan. All six accept `--json`; `import`, `attach`, `next` and `set` accept `--dry-run`, which prints the
+same output without writing (for `next` that means "do not queue, do not send").
 
 | command | stdout (human) | `--json` | exit codes |
 | --- | --- | --- | --- |
 | `flow plan --run <id>` | the block above | `{run_id, source_path, imported_at, source_hash, progress:{done,total,skipped,by_status}, waiting:{needs_brief:[id],blocked_owner:[id],missing:[id],conflicts:n}, next:{id,title,spec_path}|null, items:[…]}` | 0; 3 when a conflict exists (so a script notices) |
 | `flow plan import --run <id> --file <path> [--dry-run]` | `imported 23 items: 3 new, 1 missing, 1 conflict` | `{added:[id],missing:[id],conflicts:[…],unchanged:bool,source_hash}` | 0; 1 usage/bad path; 2 not found; 3 refused (too big, duplicate ids, unsupported format) — nothing written |
-| `flow plan attach --run <id> --item <id> --spec <file>` | `attached P1.7.1 → docs/briefs/P1.7.1.json (queued)` | `{item:{id,status,spec_path,spec_hash}}` | 0; 2 unknown item; 3 refused (invalid spec, id mismatch) |
+| `flow plan attach --run <id> --item <id> --spec <file> [--dry-run]` | `attached P1.7.1 → docs/briefs/P1.7.1.json (queued)` | `{item:{id,status,spec_path,spec_hash}}` | 0; 2 unknown item; 3 refused (invalid spec, id mismatch) |
 | `flow plan next --run <id> [--dry-run]` | the item plus the rendered prompt head | `{item:{id,title},prompt:string|null,queued:bool,reason:"busy"|"plan_needs_brief"|"plan_blocked_owner"|null}` | 0; 0 with `reason` when it does nothing (a no-op is not an error); 2 no plan |
 | `flow plan status --item <id> [--run <id>]` | one item: status, head, rounds, notes ref, spec path, `updated_at` | the `PlanItem` | 0; 2 unknown item, or the id exists in more than one flow (both run ids printed — pass `--run` to disambiguate) |
-| `flow plan set --run <id> --item <id> --status <status> [--yes] [--note <text>]` | `P1.4.2 blocked_owner → queued (manual, note: unblocked after the vendor call)` | `{item:{id,status,previous,owner_action,updated_at}}` | 0; 1 usage; 2 unknown item; 3 refused — `done` and `skipped` need `--yes`, `done` on an item with no accepted head needs `--yes` **and** a `--note`, and an unknown status is refused with the eight accepted values |
+| `flow plan set --run <id> --item <id> --status <status> [--yes] [--note <text>] [--dry-run]` | `P1.4.2 blocked_owner → queued (manual, note: unblocked after the vendor call)` | `{item:{id,status,previous,owner_action,updated_at}}` | 0; 1 usage; 2 unknown item; 3 refused — `done` and `skipped` need `--yes`, `done` on an item with no accepted head needs `--yes` **and** a `--note`, and an unknown status is refused with the eight accepted values |
 
 `flow plan set` is the only command that moves an item by hand, and it is the only path that can set `done`
 without an ACCEPT (§2.2): that is why it needs `--yes` and a `--note`, and why the note lands in the journal
