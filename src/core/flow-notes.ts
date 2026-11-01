@@ -51,10 +51,13 @@ const HEAD_PATTERN = /^[0-9a-f]{7,40}$/i
 const ROUND_PATTERN = /^\d+$/
 const FINDING_PATTERN = /^(BLOCKER|MAJOR|MINOR)\b/
 const VERDICT_LINE_PATTERN = /(?:VERDICT|ВЕРДИКТ)\s*[:\-—]?\s*(ACCEPT|CHANGES_REQUESTED)\s*$/i
-// A token that starts with `/` and contains at least one more separator: an absolute path. Windows
-// drive letters are not a target here (the state tree is POSIX), but `~` is left alone on purpose — it
-// is already the shorthand we print.
-const ABSOLUTE_PATH_PATTERN = /(?:^|[\s(])(\/[^\s:;,'"()[\]]+\/?)+/g
+// A token that starts with `/` and contains at least one more separator: an absolute path. The lead
+// class is "anything that is not part of a path", because a path in a finding is routinely written as
+// `file=/home/…`, `` `/home/…` ``, `"/home/…"` or `(/home/…)` — the earlier version only accepted
+// whitespace and `(`, and let those three through. Windows drive letters are not a target here (the
+// state tree is POSIX), `~` is left alone because it is already the shorthand we print, and a `:`
+// immediately before the slash is skipped by the replacer so `https://…` is not rewritten.
+const ABSOLUTE_PATH_PATTERN = /(^|[^A-Za-z0-9_/.-])((?:\/[^\s:;,'"()[\]`<>]+)+)/g
 
 export interface NotesOptions {
   // Defaults to the state root, like every other store here.
@@ -134,8 +137,9 @@ function assertRound(round: number): number {
 // home directory and the last component outside it), and the whole text goes through the redactor. The
 // replacement is per *token*, so a finding keeps its wording and its `file:line` reference.
 export function sanitizeNotesText(text: string): string {
-  const shortened = text.replace(ABSOLUTE_PATH_PATTERN, (match, path: string) => {
-    const lead = match.startsWith(path) ? '' : match.slice(0, match.length - path.length)
+  const shortened = text.replace(ABSOLUTE_PATH_PATTERN, (match, lead: string, path: string) => {
+    // `scheme://host/path` is a URL, not a file on this machine: keep it as written.
+    if (lead === ':') return match
     return `${lead}${displayPath(path)}`
   })
   return redactSecrets(shortened)
@@ -227,8 +231,32 @@ function refuseSymlink(path: string): void {
 }
 
 export type StagingRead =
-  | { ok: true, text: string, verdict: FlowVerdict, counts: NotesCounts }
+  | { ok: true, text: string, verdict: FlowVerdict, counts: NotesCounts, source: 'staging' }
   | { ok: false, reason: NotesMiss | string }
+
+// The durable record of one round, validated the same way. It answers ticks *after* the staging file was
+// published and removed — which is every tick that held on a busy dev pane after the file arrived, so
+// without this the round could never be answered at all. Already sanitised on disk; the text is
+// re-sanitised by the readers.
+export function readDurable(
+  runId: string,
+  head: string,
+  round: number,
+  options: NotesOptions = {},
+): StagingRead {
+  const path = durablePath(runId, assertHead(head), assertRound(round), options.root)
+  refuseSymlink(path)
+  let raw: string
+  try {
+    if (!statSync(path).isFile()) return { ok: false, reason: 'not a regular file' }
+    raw = readFileSync(path, 'utf-8')
+  } catch {
+    return { ok: false, reason: 'missing' }
+  }
+  const validation = validateNotesText(raw)
+  if (validation.reason || !validation.verdict) return { ok: false, reason: validation.reason ?? 'invalid' }
+  return { ok: true, text: raw, verdict: validation.verdict, counts: validation.counts, source: 'staging' }
+}
 
 // Read and validate the staging file of one round. Never throws for the ordinary misses — a missing or
 // unusable file is an answer the tick journals, not an exception that stops the pipeline.
@@ -256,7 +284,7 @@ export function readStaging(
   }
   const validation = validateNotesText(raw)
   if (validation.reason || !validation.verdict) return { ok: false, reason: validation.reason ?? 'invalid' }
-  return { ok: true, text: raw, verdict: validation.verdict, counts: validation.counts }
+  return { ok: true, text: raw, verdict: validation.verdict, counts: validation.counts, source: 'staging' }
 }
 
 export interface PublishResult {

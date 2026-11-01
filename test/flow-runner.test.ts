@@ -422,6 +422,28 @@ describe('the notes channel in the runner', () => {
     expect(ports.send).toHaveBeenCalledTimes(1)
   })
 
+  it('answers from the published record on the tick after a held one', () => {
+    // The publish happens before the decision, so a tick that held on a busy dev pane has already
+    // consumed the staging file. Without reading the durable record the round would never be answered
+    // again and would run into the review timeout.
+    seed(reviewingState())
+    writeStaging('run-1', NOTES_HEAD, 1, fileText)
+    const busy = makePorts({ paneBusy: id => (id === 'dev-1' ? 'busy' : 'idle') })
+
+    const held = step(busy, { head: NOTES_HEAD })
+    expect(held.decision.reason).toBe('dev_busy')
+    expect(held.status).toBe('skipped')
+    // Published already, and the staging copy is gone.
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(true)
+    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(false)
+
+    const idle = makePorts()
+    const applied = step(idle, { head: NOTES_HEAD })
+    expect(applied.decision.kind).toBe('dispatch_fix')
+    expect(applied.decision.message).toContain('MAJOR src/core/flow.ts:120')
+    expect(idle.send).toHaveBeenCalledTimes(1)
+  })
+
   it('falls back to the pane when the notes file is unusable, and says why in the journal', () => {
     seed(reviewingState())
     writeStaging('run-1', NOTES_HEAD, 1, 'MAJOR x.ts:1 — no verdict line here\n')

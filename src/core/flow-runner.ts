@@ -34,7 +34,7 @@ import { readFlow, saveFlow } from './flow-store.js'
 import type { NotesOptions } from './flow-notes.js'
 import {
   durablePath, findingsText, isCommitId, notesRef, pruneClosedFlowNotes, pruneNotes, publishNotes,
-  readStaging, stagingPath, writePaneCapture,
+  readDurable, readStaging, stagingPath, writePaneCapture,
 } from './flow-notes.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
@@ -224,7 +224,14 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
   if (state.state !== 'reviewing') return { source: 'pane', staging_path: staging }
   const head = state.claim.head
   if (!isCommitId(head)) return { source: 'pane', staging_path: staging }
-  const read = readStaging(state.run_id, head, round, { root: options.root })
+  // Staging first — it is what the reviewer wrote — then the **durable** record of the same round: once a
+  // valid staging file has been published its copy is gone, and every later tick of this round (the ones
+  // that held on a busy dev pane) must still see that answer. Without the fallback the round would never
+  // be answered and would run into the review timeout. When neither answers, the *staging* verdict stands
+  // so the journal reports why the file was unusable rather than a bare "missing".
+  const stagingRead = readStaging(state.run_id, head, round, { root: options.root })
+  const durableRead = stagingRead.ok ? null : readDurable(state.run_id, head, round, { root: options.root })
+  const read = stagingRead.ok ? stagingRead : (durableRead && durableRead.ok ? durableRead : stagingRead)
   if (read.ok) {
     return {
       source: 'file',
@@ -233,7 +240,8 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
       ref: notesRef(head, round),
       counts: read.counts,
       staging_path: staging,
-      raw: read.text,
+      // Only a staging text is published later; a durable one is already the record.
+      raw: stagingRead.ok ? read.text : undefined,
     }
   }
   return {

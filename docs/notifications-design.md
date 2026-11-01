@@ -1493,7 +1493,11 @@ A file that fails 1–3 is *not* used and the pane path takes over — the failu
 journal as `notes_invalid <reason>`, so a reviewer that keeps writing the wrong shape is visible
 instead of silently degraded. The pane fallback is exactly today's behaviour and is not removed.
 
-**Read order on a reviewing tick:** valid findings file → pane verdict scan → hold. The file wins even
+**Read order on a reviewing tick:** valid staging file → the **durable** record of the same round → pane
+verdict scan → hold. The durable step is not an optimisation: the staging file is removed when the record
+is published, and a tick that held (a busy dev pane) has already published, so without it the round could
+never be answered and would run into the review timeout. Sanitising covers a path written as
+`file=/home/…`, `` `/home/…` ``, `"/home/…"` or `(/home/…)`; a `scheme://` URL is left alone. The file wins even
 when the pane disagrees, because the file is the answer the reviewer chose to persist; the pane value
 is still recorded (`claim.verdict_count`) so the counter baseline keeps working.
 

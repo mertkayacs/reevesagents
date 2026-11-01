@@ -81,6 +81,24 @@ describe('sanitising', () => {
     expect(cleaned).toContain('app.ts')
   })
 
+  it('shortens a path behind =, a backtick, a quote or a bracket, and leaves a URL alone', () => {
+    // A finding is written as `file=/home/…`, `` `/home/…` ``, `"/home/…"` or `(/home/…)`; the first
+    // version of the pattern only accepted whitespace and `(`, so three of the four leaked.
+    for (const text of [
+      'MAJOR file=/srv/users/alice/private.ts:3 — x',
+      'MAJOR `/srv/users/alice/private.ts`:3 — x',
+      'MAJOR "/srv/users/alice/private.ts":3 — x',
+      'MAJOR (/srv/users/alice/private.ts):3 — x',
+    ]) {
+      const cleaned = sanitizeNotesText(text)
+      expect(cleaned, text).not.toContain('/srv/users/alice')
+      expect(cleaned, text).toContain('private.ts')
+    }
+    // A URL is not a path on this machine.
+    expect(sanitizeNotesText('see https://127.0.0.1:8080/api/state for details'))
+      .toBe('see https://127.0.0.1:8080/api/state for details')
+  })
+
   it('keeps a relative file:line reference intact', () => {
     expect(sanitizeNotesText('MAJOR src/core/flow.ts:120 — fine')).toBe('MAJOR src/core/flow.ts:120 — fine')
   })
