@@ -44,6 +44,9 @@ export interface FlowStatusPayload {
   // The dispatch in flight: a claim written by a tick that has not settled it yet. This is why a
   // flow can be sitting still while a send is in progress.
   pending: { kind: string, target: string, at: number } | null
+  // The newest round's notes, as a reference and counters — never the text (§11.3 of the notification
+  // design: the payload is a transcript, the file is the record).
+  last_notes: { ref: string, counts: { blocker: number, major: number, minor: number } } | null
   // Parked-state facts, so a surface can explain a flow that is not moving: `paused` shows where a
   // resume would put it, `orphaned` shows why it was parked, `done` shows whether a human closed it.
   paused_from: string | null
@@ -105,6 +108,16 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
     pending: state.pending
       ? { kind: state.pending.kind, target: state.pending.target, at: state.pending.at }
       : null,
+    // The newest log entry that consumed a notes file. The text stays in the file.
+    last_notes: (() => {
+      for (let index = state.log.length - 1; index >= 0; index -= 1) {
+        const entry = state.log[index]!
+        if (entry.notes_ref) {
+          return { ref: entry.notes_ref, counts: entry.notes_counts ?? { blocker: 0, major: 0, minor: 0 } }
+        }
+      }
+      return null
+    })(),
     paused_from: state.paused_from,
     paused_at: state.paused_at,
     // Both reasons are text a human wrote or a short engine string; the redactor still runs so a

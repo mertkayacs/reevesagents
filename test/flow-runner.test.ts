@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FlowState } from '../src/core/flow.js'
 import { PENDING_TTL_SEC, applyDecisionToState, createFlowState, flowTick } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { durablePath, panePath, publishNotes, stagingPath } from '../src/core/flow-notes.js'
 import type { FlowPorts, FlowStepResult, StepFlowOptions } from '../src/core/flow-runner.js'
 import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
 
@@ -339,5 +340,133 @@ describe('a full round', () => {
     })
     expect(decision.reason).toBe('flow_done')
     expect(saveFlow(applyDecisionToState(state, decision, AT))).toBeTruthy()
+  })
+})
+
+// A real commit id: the notes path is derived from it, and a six-character fixture (`aaa111`) is not a
+// commit id, so those states deliberately have no notes channel.
+const NOTES_HEAD = 'abc1234'
+
+function reviewingState(overrides: Partial<FlowState> = {}): FlowState {
+  return makeState({
+    state: 'reviewing',
+    review_started_at: NOW,
+    claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
+    ...overrides,
+  })
+}
+
+function publishNotesForTest(runId: string, head: string, round: number): void {
+  publishNotes(runId, head, round, 'MAJOR old.ts:1 — stale\nВЕРДИКТ: CHANGES_REQUESTED\n', { root })
+  const when = new Date(Date.now() - 60_000)
+  utimesSync(durablePath(runId, head, round, root), when, when)
+}
+
+function writeStaging(runId: string, head: string, round: number, text: string): string {
+  const path = stagingPath(runId, head, round, root)
+  mkdirSync(join(path, '..'), { recursive: true })
+  writeFileSync(path, text, 'utf-8')
+  return path
+}
+
+describe('the notes channel in the runner', () => {
+  const findings = 'MAJOR src/core/flow.ts:120 — the claim is not re-read\nMINOR docs/x.md:4 — wording'
+  const fileText = `# round 1\n\n${findings}\n\nВЕРДИКТ: CHANGES_REQUESTED\n`
+
+  it('answers the round from the notes file even when the pane shows nothing', () => {
+    seed(reviewingState())
+    writeStaging('run-1', NOTES_HEAD, 1, fileText)
+    const ports = makePorts()   // peek() returns '' — no verdict in the pane at all
+
+    const result = step(ports, { head: NOTES_HEAD })
+
+    expect(result.decision.kind).toBe('dispatch_fix')
+    expect(result.status).toBe('applied')
+    // The prompt carries the findings, and the journal carries the reference, not the text.
+    expect(result.decision.message).toContain('MAJOR src/core/flow.ts:120')
+    const after = readFlow('run-1')
+    const entry = after.log.at(-1)!
+    expect(entry.event).toBe('dispatch_fix')
+    expect(entry.notes_ref).toBe(`notes/${NOTES_HEAD}-r1.md`)
+    expect(entry.notes_counts).toEqual({ blocker: 0, major: 1, minor: 1 })
+    expect(JSON.stringify(after)).not.toContain('the claim is not re-read')
+    // The durable record and the capture exist; the staging file is gone.
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(true)
+    expect(existsSync(panePath('run-1', NOTES_HEAD, 1, root))).toBe(true)
+    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(false)
+  })
+
+  it('names the staging file in the review prompt, on the tick that requests the review', () => {
+    // The request is created from `idle`, not from `reviewing`, so the path has to be resolved for
+    // every tick — a prompt that names nothing is a prompt no reviewer can follow.
+    seed(makeState({ state: 'idle', claim: { head: 'aaa1111', verdict: null, verdict_count: 0 } }))
+
+    const result = step(makePorts(), { head: NOTES_HEAD })
+
+    expect(result.decision.kind).toBe('request_review')
+    expect(result.decision.message).toContain(stagingPath('run-1', NOTES_HEAD, 1, root))
+    expect(result.decision.message).toContain('ВЕРДИКТ')
+  })
+
+  it('acts on the notes file even when the reviewer pane cannot be classified', () => {
+    // The file is an independent channel: an unparsable pane is exactly the case it exists for. The
+    // dispatch still requires an idle dev pane, which the ports below report.
+    seed(reviewingState())
+    writeStaging('run-1', NOTES_HEAD, 1, fileText)
+    const ports = makePorts({ paneBusy: id => (id === 'rev-1' ? 'unknown' : 'idle') })
+
+    const result = step(ports, { head: NOTES_HEAD })
+
+    expect(result.decision.kind).toBe('dispatch_fix')
+    expect(result.decision.reason).toBe('fix_dispatched')
+    expect(ports.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the pane when the notes file is unusable, and says why in the journal', () => {
+    seed(reviewingState())
+    writeStaging('run-1', NOTES_HEAD, 1, 'MAJOR x.ts:1 — no verdict line here\n')
+    const ports = makePorts({ peek: () => verdictCapture(1) })
+
+    const result = step(ports, { head: NOTES_HEAD })
+
+    expect(result.decision.kind).toBe('dispatch_fix')
+    const entry = readFlow('run-1').log.at(-1)!
+    expect(entry.detail).toContain('notes_invalid')
+    expect(entry.detail).toContain('no verdict line at the end')
+    // The staging file is kept for a retry, and no durable record was published from it.
+    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(true)
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(false)
+  })
+
+  it('keeps the two rounds of one head apart', () => {
+    seed(reviewingState())
+    writeStaging('run-1', NOTES_HEAD, 1, fileText)
+    step(makePorts(), { head: NOTES_HEAD })
+    // The fix was dispatched: the flow is now in round 1 and waits for a new head.
+    expect(readFlow('run-1').state).toBe('fixing')
+
+    const round2 = `MAJOR other.ts:9 — still wrong\nВЕРДИКТ: CHANGES_REQUESTED\n`
+    writeStaging('run-1', NOTES_HEAD, 2, round2)
+    seed(reviewingState({ rounds: 1, claim: { head: NOTES_HEAD, verdict: 'CHANGES_REQUESTED', verdict_count: 1 } }))
+    const second = step(makePorts(), { head: NOTES_HEAD })
+
+    expect(second.decision.kind).toBe('dispatch_fix')
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(true)
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 2, root))).toBe(true)
+    expect(readFlow('run-1').log.at(-1)!.notes_ref).toBe(`notes/${NOTES_HEAD}-r2.md`)
+  })
+
+  it('prunes the closed flow\'s notes down to the newest round', () => {
+    // An ACCEPT with no queued block closes the flow; the tick that closes it also trims the history.
+    seed(reviewingState())
+    writeStaging('run-1', NOTES_HEAD, 1, 'ВЕРДИКТ: ACCEPT\n')
+    // An older head (a previous round of the same flow), to be pruned: pruneClosedFlowNotes keeps the
+    // newest head's newest round only.
+    publishNotesForTest('run-1', 'def5678', 1)
+    const result = step(makePorts({ peek: () => verdictCapture(1) }), { head: NOTES_HEAD })
+
+    expect(result.state.state).toBe('done')
+    expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(true)
+    expect(existsSync(durablePath('run-1', 'def5678', 1, root))).toBe(false)
   })
 })

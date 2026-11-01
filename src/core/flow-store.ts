@@ -18,6 +18,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { stateRoot } from './state-path.js'
+import { rmSync } from 'node:fs'
 import { displayPath } from '../utils/paths.js'
 import type { FlowState } from './flow.js'
 import { FLOW_SCHEMA_VERSION, FlowStateError, parseFlowState } from './flow.js'
@@ -99,6 +100,9 @@ export function flowExists(runId: string, options: FlowStoreOptions = {}): boole
 // this function must never take that lock itself. Returns whether a file was there.
 export function deleteFlowFileForRun(runId: string, root = stateRoot()): boolean {
   const path = flowPath(runId, root)
+  // The notes live beside the flow file (`flows/<run-id>/notes`), so the cascade takes them too: a
+  // record whose flow is gone has no reader left (§3.3, §11.3).
+  try { rmSync(join(dirname(path), runId), { recursive: true, force: true }) } catch { /* best effort */ }
   try {
     unlinkSync(path)
     return true

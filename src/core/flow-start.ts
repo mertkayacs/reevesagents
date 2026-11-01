@@ -22,6 +22,7 @@ import type { BlockSpec } from './spec.js'
 import { readSpecFile } from './flow-queue.js'
 import { readGitHead } from './flow-runner.js'
 import { flowExists, flowPath, readFlow, saveFlow } from './flow-store.js'
+import { removeNotesDir } from './flow-notes.js'
 import type { FlowStoreOptions } from './flow-store.js'
 import { isRunsLockTimeout, listAgents, listRuns, withRunsLock } from './runs.js'
 import { displayPath } from '../utils/paths.js'
@@ -133,6 +134,9 @@ export function startFlow(input: StartFlowInput, options: StartFlowOptions = {})
           )
         }
       }
+      // A replaced flow is a new flow: it must not inherit round references (or notes) from the one it
+      // replaces, so the directory goes before the new state is written.
+      if (existed) removeNotesDir(run.id, options.root)
       const created = createFlowState({
         run_id: run.id,
         repo,

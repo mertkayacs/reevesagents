@@ -18,7 +18,7 @@
 // the engine, which escalates it after `PENDING_TTL_SEC` instead of re-sending.
 
 import { randomUUID } from 'node:crypto'
-import { statSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { PaneBusyState } from './activity.js'
 import type { FlowDecision, FlowObservations, FlowState } from './flow.js'
@@ -31,12 +31,18 @@ import {
   releaseDispatch,
 } from './flow.js'
 import { readFlow, saveFlow } from './flow-store.js'
+import type { NotesOptions } from './flow-notes.js'
+import {
+  durablePath, findingsText, isCommitId, notesRef, pruneClosedFlowNotes, pruneNotes, publishNotes,
+  readStaging, stagingPath, writePaneCapture,
+} from './flow-notes.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
 import { paneBusy, peekAgentRaw, sendWhenIdle } from './runtime.js'
 import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
+import type { FlowVerdict } from './verdict.js'
 
 // Everything the engine must not know about. Injected so a test can describe a pane, a commit and
 // a reviewer without tmux, git or a nine-second paste settle.
@@ -92,6 +98,24 @@ export interface ObserveFlowOptions {
   // Registry facts, so a test can describe a live or an archived run without one.
   run_present?: boolean
   agents_present?: boolean
+  // The state root the notes files live under; defaults to the live one.
+  root?: string
+  // Read the notes of this round from here instead of disk (a test seam: the pipeline's own tests
+  // describe a valid, an invalid and a missing file without writing one).
+  notes?: NotesRead
+}
+
+// What the caller observed about this round's notes file, in the shape the engine wants.
+export interface NotesRead {
+  source: 'file' | 'pane'
+  // The verdict of the round, when the file answered. It is the answer the reviewer chose to persist.
+  verdict?: FlowVerdict
+  text?: string
+  ref?: string
+  counts?: { blocker: number, major: number, minor: number }
+  staging_path?: string
+  invalid?: string
+  raw?: string
 }
 
 // Is the flow's run still there, and are both of its role agents still part of it? An archived run
@@ -158,31 +182,106 @@ export function unobservedFlow(now: number): FlowObservations {
   }
 }
 
+// The round in flight: reviews are numbered from one per flow, and the request that started this one
+// used `rounds + 1` (see `reviewRequest` in flow.ts). Reading a different number than the prompt wrote
+// would look at the wrong file.
+export function reviewRound(state: FlowState): number {
+  return state.rounds + 1
+}
+
+// Where the notes of the round in flight live. The prompt names the staging path and the journal names
+// the durable one; both are derived here so the two can never disagree.
+export function roundNotesPaths(state: FlowState, options: { root?: string } = {}): {
+  staging: string
+  durable: string
+  ref: string
+} {
+  const head = state.claim.head
+  const round = reviewRound(state)
+  if (!isCommitId(head)) return { staging: '', durable: '', ref: '' }
+  return {
+    staging: stagingPath(state.run_id, head, round, options.root),
+    durable: durablePath(state.run_id, head, round, options.root),
+    ref: notesRef(head, round),
+  }
+}
+
+// The notes of the round in flight, in the order §11.2 states: the staging file first, the pane only
+// when the file is missing or unusable. A file that exists but fails validation is reported (so the
+// journal can say why) and does not stop the pane fallback.
+function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedHead: string): NotesRead {
+  if (options.notes) return options.notes
+  const round = reviewRound(state)
+  // The prompt names the staging file of the head the review is *requested for* — which is the head this
+  // tick observed, not necessarily the claim head (a dev may have moved it). A state whose head is not a
+  // commit id can never have a notes file: the name would be unsafe and the prompt never asked for one.
+  const requestHead = isCommitId(observedHead)
+    ? observedHead.trim()
+    : isCommitId(state.claim.head) ? state.claim.head : ''
+  const staging = requestHead ? stagingPath(state.run_id, requestHead, round, options.root) : undefined
+  // Only the *reading* of an answer is limited to `reviewing`: the path is needed on every tick that
+  // might request a review, idle and fixing included.
+  if (state.state !== 'reviewing') return { source: 'pane', staging_path: staging }
+  const head = state.claim.head
+  if (!isCommitId(head)) return { source: 'pane', staging_path: staging }
+  const read = readStaging(state.run_id, head, round, { root: options.root })
+  if (read.ok) {
+    return {
+      source: 'file',
+      verdict: read.verdict,
+      text: findingsText(read.text),
+      ref: notesRef(head, round),
+      counts: read.counts,
+      staging_path: staging,
+      raw: read.text,
+    }
+  }
+  return {
+    source: 'pane',
+    staging_path: staging,
+    // `missing` is the ordinary case (no file written yet); anything else is worth a journal line.
+    invalid: read.reason === 'missing' ? undefined : read.reason,
+  }
+}
+
 export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}): FlowObservations {
   const ports = options.ports ?? defaultFlowPorts
   const head = options.head ?? readGitHead(state.repo)
   const treeClean = options.tree_clean ?? isGitTreeClean(state.repo)
   const devPane: PaneBusyState = state.roles.dev ? ports.paneBusy(state.roles.dev) : 'unknown'
   const reviewPane: PaneBusyState = state.roles.review ? ports.paneBusy(state.roles.review) : 'unknown'
+  const paneText = reviewPane === 'unknown' ? '' : ports.peek(state.roles.review, VERDICT_SCAN_LINES)
   // An unreadable reviewer pane carries no verdict evidence at all: report "no verdict" and let
   // the engine hold on `review_pane_unknown` instead of reading a failed capture as zero verdicts.
   const scan = reviewPane === 'unknown'
     ? { count: 0, last: null, notes: '' }
-    : scanVerdict(ports.peek(state.roles.review, VERDICT_SCAN_LINES))
+    : scanVerdict(paneText)
   const presence = options.run_present === undefined || options.agents_present === undefined
     ? registryPresence(state)
     : { run_present: options.run_present, agents_present: options.agents_present }
+  const notes = readRoundNotes(state, options, head)
+  // The file wins when it is valid: it is the answer the reviewer chose to persist, and it is bound to
+  // this round. The pane count is still reported so the baseline keeps working for the pane path.
+  const fromFile = notes.source === 'file' && notes.text !== undefined
   return {
     now: options.now ?? Date.now(),
     head,
     tree_clean: treeClean,
     dev_pane: devPane,
     review_pane: reviewPane,
-    verdict: scan.last,
+    verdict: fromFile ? (notes.verdict ?? null) : scan.last,
     verdict_count: scan.count,
-    verdict_notes: scan.notes,
+    verdict_notes: fromFile ? notes.text : scan.notes,
     run_present: options.run_present ?? presence.run_present,
     agents_present: options.agents_present ?? presence.agents_present,
+    verdict_source: fromFile ? 'file' : 'pane',
+    notes_text: fromFile ? notes.text : undefined,
+    notes_ref: fromFile ? notes.ref : undefined,
+    notes_counts: fromFile ? notes.counts : undefined,
+    notes_invalid: fromFile ? undefined : notes.invalid,
+    notes_raw: fromFile ? notes.raw : undefined,
+    notes_staging_path: notes.staging_path,
+    pane_text: reviewPane === 'unknown' ? undefined : paneText,
   }
 }
 
@@ -277,6 +376,51 @@ function isParked(state: FlowState): boolean {
   return state.state === 'paused' || state.state === 'orphaned'
 }
 
+
+// Persist this round's notes. Two separate jobs, and the order matters:
+// - the **raw capture** is written on every reviewing tick, because it is the fallback evidence for a
+//   round whose file never appears or never validates;
+// - the **durable record** is published only from a valid staging file, and only once — a second tick
+//   that sees the same file must not rewrite it (it is the round's record, not a cache), so an existing
+//   durable file is left alone. Publication sanitises, so the record on disk is the one a transcript may
+//   quote.
+function persistRoundNotes(state: FlowState, observations: FlowObservations, options: StepFlowOptions): void {
+  if (state.state !== 'reviewing') return
+  const head = state.claim.head
+  if (!head || !isCommitId(head)) return
+  const round = reviewRound(state)
+  const store: NotesOptions = { root: options.root }
+  if (observations.pane_text !== undefined) {
+    try {
+      writePaneCapture(state.run_id, head, round, observations.pane_text, store)
+    } catch {
+      // The capture is evidence, not state: a failure here must not stop the tick that decides.
+    }
+  }
+  if (observations.notes_ref && observations.notes_raw !== undefined) {
+    const path = durablePath(state.run_id, head, round, options.root)
+    if (!existsSync(path)) {
+      try {
+        publishNotes(state.run_id, head, round, observations.notes_raw, store)
+        pruneNotes(state.run_id, store)
+      } catch {
+        // A publish failure leaves the staging file where the next tick finds it.
+      }
+    }
+  }
+}
+
+// A closed flow has no next round: keep the newest round as the evidence a human reads and drop the
+// rest. Runs on the tick that closes the flow and again on every later tick (cheap and idempotent).
+function pruneClosedNotes(state: FlowState, options: StepFlowOptions): void {
+  if (state.state !== 'done' && state.state !== 'escalated' && state.state !== 'orphaned') return
+  try {
+    pruneClosedFlowNotes(state.run_id, { root: options.root })
+  } catch {
+    // Retention is housekeeping; it must never fail a tick.
+  }
+}
+
 // One engine step: claim, act, settle.
 export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStepResult {
   const ports = options.ports ?? defaultFlowPorts
@@ -293,6 +437,10 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   // decision and the write have to be atomic with each other.
   const before = readFlow(runId, { root: options.root })
   const observations = isParked(before) ? unobservedFlow(now) : observeFlow(before, options)
+  if (!isParked(before)) {
+    persistRoundNotes(before, observations, options)
+    pruneClosedNotes(before, options)
+  }
 
   // Phase one — claim. Re-reading inside the lock is what makes two tickers safe: the decision comes
   // from the file as it is now, so the second ticker sees the first one's claim and holds.
@@ -329,6 +477,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   const phase = claim.value
   const { dispatch } = phase
   if (!dispatch) {
+    if (phase.settled) pruneClosedNotes(phase.settled.state, options)
     return {
       observations,
       decision: phase.decision,

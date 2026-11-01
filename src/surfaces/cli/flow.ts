@@ -15,6 +15,8 @@ import type { FlowStepResult } from '../../core/flow-runner.js'
 import { stepFlow } from '../../core/flow-runner.js'
 import { startFlow } from '../../core/flow-start.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
+import type { NotesCounts } from '../../core/flow-notes.js'
+import { listNotesHeads, readNotesRound } from '../../core/flow-notes.js'
 import { redactSecrets } from '../../core/redact.js'
 import { shortHomePath } from '../../utils/paths.js'
 import { requireDestructiveConfirmation } from './helpers.js'
@@ -116,6 +118,16 @@ function printTick(result: FlowStepResult, dryRun: boolean): void {
   console.log(`result    ${result.status}`)
   console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
   if (result.path) console.log(`file      ${shortHomePath(result.path)}`)
+}
+
+// `· 2 MAJOR, 1 MINOR`, or '' when the round carried no findings (an ACCEPT).
+function countsSuffix(counts: NotesCounts | null): string {
+  if (!counts) return ''
+  const parts: string[] = []
+  if (counts.blocker > 0) parts.push(`${counts.blocker} BLOCKER`)
+  if (counts.major > 0) parts.push(`${counts.major} MAJOR`)
+  if (counts.minor > 0) parts.push(`${counts.minor} MINOR`)
+  return parts.length > 0 ? `  · ${parts.join(', ')}` : ''
 }
 
 function fail(err: unknown): never {
@@ -323,6 +335,69 @@ export function registerFlow(program: Command): void {
     })
 
   flow
+    .command('notes')
+    .description('print the reviewer findings of one round: the durable notes file of that head')
+    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('--head <sha>', 'commit the review was requested for (defaults to the flow claim head)')
+    .option('-r, --round <n>', 'review round (defaults to the newest round that has notes)', (value: string) => Number(value))
+    .option('--json', 'output JSON')
+    .action((opts: { run: string, head?: string, round?: number, json?: boolean }) => {
+      try {
+        const runId = resolveFlowRunId(opts.run)
+        const state = readFlow(runId)
+        const head = (opts.head ?? state.claim.head).trim()
+        if (!head) throw new Error(`run ${runId} has no commit under review; pass --head <sha>`)
+        const found = readNotesRound(runId, { head, round: opts.round })
+
+        if (found.ok) {
+          const { round } = found
+          if (opts.json) {
+            console.log(JSON.stringify({
+              run_id: runId,
+              head: round.head,
+              round: round.round,
+              ref: round.ref,
+              counts: round.counts,
+              path: shortHomePath(round.path),
+              notes: round.text,
+            }, null, 2))
+            return
+          }
+          console.log(`flow      ${runId}`)
+          console.log(`head      ${round.head.slice(0, 12)}  round ${round.round}${countsSuffix(round.counts)}`)
+          console.log(`file      ${shortHomePath(round.path)}`)
+          console.log('')
+          console.log(round.text.trimEnd())
+          return
+        }
+
+        // A round that was requested and answered from the pane only has no file: that is data, and a
+        // script asking for it should not have to treat it as a failure.
+        if (found.reason === 'missing' && (found.rounds?.length ?? 0) === 0) {
+          if (opts.json) {
+            console.log(JSON.stringify({ run_id: runId, head, notes: null, reason: 'missing' }, null, 2))
+            return
+          }
+          console.log(`no notes for ${runId} (head ${head.slice(0, 12)}): no round published a notes file`)
+          return
+        }
+        if (found.reason === 'missing' && found.round !== undefined && found.rounds) {
+          // A round that never happened is a mistake, not data.
+          console.error(`round ${found.round} does not exist for ${head.slice(0, 12)} (rounds: ${found.rounds.join(', ')})`)
+          process.exit(1)
+          return
+        }
+        const heads = listNotesHeads(runId)
+        console.error(heads.length > 0
+          ? `no notes for head ${head.slice(0, 12)} in ${runId} (heads with notes: ${heads.map(h => h.slice(0, 12)).join(', ')})`
+          : `no notes for ${runId} yet`)
+        process.exit(1)
+      } catch (err) {
+        fail(err)
+      }
+    })
+
+  flow
     .command('logs')
     .description('the tail of one flow journal: transitions, dispatches, verdicts, refusals')
     .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
@@ -339,6 +414,8 @@ export function registerFlow(program: Command): void {
           at: entry.at,
           event: entry.event,
           detail: redactSecrets(entry.detail),
+          notes_ref: entry.notes_ref ?? null,
+          notes_counts: entry.notes_counts ?? null,
         }))
         if (opts.json) {
           console.log(JSON.stringify(entries, null, 2))
@@ -348,7 +425,12 @@ export function registerFlow(program: Command): void {
           console.log('(no events)')
           return
         }
-        for (const entry of entries) console.log(`${entry.at}  ${entry.event.padEnd(20)} ${entry.detail}`)
+        for (const entry of entries) {
+          // "round 2 → notes/<head>-r2.md · 2 MAJOR, 1 MINOR" is the line a human actually needs: which
+          // round, where its findings are, and how bad they were.
+          const notes = entry.notes_ref ? `  → ${entry.notes_ref}${countsSuffix(entry.notes_counts)}` : ''
+          console.log(`${entry.at}  ${entry.event.padEnd(20)} ${entry.detail}${notes}`)
+        }
       } catch (err) {
         fail(err)
       }

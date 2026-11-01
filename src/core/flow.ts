@@ -124,6 +124,10 @@ export interface FlowLogEntry {
   at: string
   event: string
   detail: string
+  // Present when the entry consumed a round's notes: the reference relative to the flow directory
+  // (`notes/<head>-r<N>.md`) and the counts. The text itself never enters the journal.
+  notes_ref?: string
+  notes_counts?: { blocker: number, major: number, minor: number }
 }
 
 export interface FlowState {
@@ -201,6 +205,27 @@ export interface FlowObservations {
   // must not park a live flow, so only an explicit `false` orphans it (§3.3).
   run_present?: boolean
   agents_present?: boolean
+  // Where the verdict came from. `file` means the reviewer wrote this round's notes to disk and the
+  // engine read them; that answer is bound to `(head, round)`, so the pane's verdict counter is not
+  // the memory for it and the counter checks below do not apply. Absent means the pane.
+  verdict_source?: 'file' | 'pane'
+  // Sanitised findings of the round, when a notes file answered: what the fix prompt receives.
+  notes_text?: string
+  // Reference (`notes/<head>-r<N>.md`) and counts of the same file, for the journal.
+  notes_ref?: string
+  notes_counts?: { blocker: number, major: number, minor: number }
+  // The raw reviewer capture of this tick, so the runner can persist it as the fallback evidence
+  // without a second capture-pane call.
+  pane_text?: string
+  // Absolute path of the staging file this round should write. The runner owns the state root, so it
+  // resolves the path and the engine only renders it into the prompt.
+  notes_staging_path?: string
+  // Why this round's notes file was unusable, when one existed: journalled once, on the decision that
+  // consumed the pane answer instead. Never a prompt text, only the reason.
+  notes_invalid?: string
+  // The raw staging text (untruncated), so the runner can publish the durable record without reading
+  // the file a second time.
+  notes_raw?: string
 }
 
 export type FlowActionKind = 'request_review' | 'dispatch_fix' | 'dispatch_spec' | 'escalate' | 'orphan' | 'none'
@@ -237,6 +262,12 @@ export type FlowReason =
 export interface FlowDecision {
   kind: FlowActionKind
   reason: FlowReason
+  // The notes file this decision consumed, when a round answered from disk. The journal records the
+  // reference and the counts, never the text (§11.3 of docs/notifications-design.md).
+  notes_ref?: string
+  notes_counts?: { blocker: number, major: number, minor: number }
+  // The reason a notes file of this round existed but was unusable; goes into the journal entry.
+  notes_invalid?: string
   // The status, round count and claim after this decision is applied. Carried in the decision so
   // the transition is computed once, purely, instead of being re-derived by the writer.
   next_state: FlowStatus
@@ -362,7 +393,20 @@ export function parseFlowState(raw: unknown): FlowState {
       ? record.log
         .map(asRecord)
         .filter((entry): entry is Record<string, unknown> => entry !== null)
-        .map(entry => ({ at: text(entry.at), event: text(entry.event), detail: text(entry.detail) }))
+        .map(entry => {
+          const parsed: FlowLogEntry = { at: text(entry.at), event: text(entry.event), detail: text(entry.detail) }
+          const ref = text(entry.notes_ref)
+          if (ref) parsed.notes_ref = ref
+          const counts = asRecord(entry.notes_counts)
+          if (counts) {
+            parsed.notes_counts = {
+              blocker: count(counts.blocker),
+              major: count(counts.major),
+              minor: count(counts.minor),
+            }
+          }
+          return parsed
+        })
         .slice(-FLOW_LOG_LIMIT)
       : [],
     updated_at: text(record.updated_at) || isoNow(),
@@ -425,15 +469,35 @@ function normalizeSpec(raw: unknown): BlockSpec | null {
 
 // The review request the reviewer is expected to answer with a single VERDICT line, which is what
 // `verdict.ts` parses. Fixed scaffolding, verbatim body — the same rule as the dispatch prompt.
-export function renderReviewPrompt(parts: { head: string; repo: string; round: number; max_rounds: number }): string {
-  return [
+export function renderReviewPrompt(parts: {
+  head: string
+  repo: string
+  round: number
+  max_rounds: number
+  // The staging file the reviewer must write. Passed in rather than composed here: the runner owns the
+  // state root, and a prompt that guesses a path is a prompt that writes nowhere.
+  notes_path?: string
+}): string {
+  const lines = [
     `Review commit ${parts.head} in ${parts.repo}.`,
     `This is round ${parts.round} of ${parts.max_rounds}; the worktree is clean and the work is committed.`,
     '',
     'Read the diff of this commit against its parent. Do not edit, commit or run install commands.',
     'Answer with one line "VERDICT: ACCEPT" or "VERDICT: CHANGES_REQUESTED", then your findings,',
     'one per line, each starting with BLOCKER, MAJOR or MINOR. Keep it under 30 lines.',
-  ].join('\n')
+  ]
+  if (parts.notes_path) {
+    // The file is the primary channel (§11 of docs/notifications-design.md): a pane answer scrolls away,
+    // a file is the round's record. The instruction is one paragraph, not a new contract — the same
+    // lines the parser expects, in the same order, with the verdict last.
+    lines.push(
+      '',
+      `Also write those same lines to ${parts.notes_path} — one finding per line,`,
+      'each starting with BLOCKER, MAJOR or MINOR followed by file:line, then what is wrong and what to do,',
+      'and end the file with the line "ВЕРДИКТ: ACCEPT" or "ВЕРДИКТ: CHANGES_REQUESTED".',
+    )
+  }
+  return lines.join('\n')
 }
 
 // Remarks are passed through verbatim (the reviewer may write in any language); only the
@@ -481,6 +545,7 @@ function reviewRequest(
   verdictCount: number,
   reason: FlowReason,
   now: number,
+  notesPath?: string,
 ): FlowDecision {
   return {
     kind: 'request_review',
@@ -500,8 +565,18 @@ function reviewRequest(
       repo: state.repo,
       round: state.rounds + 1,
       max_rounds: state.max_rounds,
+      notes_path: notesPath,
     }),
   }
+}
+
+// Attach the notes of the round this decision just consumed. The journal then says "round 2 →
+// notes/<head>-r2.md · 2 MAJOR, 1 MINOR" instead of only "fix dispatched", and the text stays in the
+// file (§11.3 of docs/notifications-design.md).
+function withNotes(decision: FlowDecision, observations: FlowObservations): FlowDecision {
+  const annotated = observations.notes_invalid ? { ...decision, notes_invalid: observations.notes_invalid } : decision
+  if (!observations.notes_ref) return annotated
+  return { ...annotated, notes_ref: observations.notes_ref, notes_counts: observations.notes_counts }
 }
 
 function fixDispatch(state: FlowState, observations: FlowObservations): FlowDecision {
@@ -589,7 +664,7 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
-  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now)
+  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
 }
 
 function tickReviewing(state: FlowState, observations: FlowObservations): FlowDecision {
@@ -600,13 +675,20 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   }
 
   const timedOut = observations.now - state.review_started_at >= state.review_timeout_sec * 1000
+  // A verdict read from this round's notes file is bound to `(head, round)` — round N of head H is a
+  // different file from round N of any other head, and a consumed round is followed by a new request
+  // (a new round) — so the pane counter is not the memory for it and must not gate it: after a fix the
+  // pane still shows the old verdict, and comparing counters would either refuse a fresh file answer or
+  // accept an old one twice.
+  const fromFile = observations.verdict_source === 'file'
 
-  // An unreadable reviewer pane makes every verdict observation meaningless: hold instead of
-  // reading a capture that failed as "zero verdicts" and re-baselining on it. An expired deadline
-  // still wins, because it is a fact about the request and not about what this tick can see — a
-  // reviewer whose pane cannot be read is one of the ways a hang looks.
+  // An unreadable reviewer pane makes every *pane* verdict observation meaningless: hold instead of
+  // reading a capture that failed as "zero verdicts" and re-baselining on it. A file answer does not
+  // come from the pane at all — that is the point of the channel — so it is not gated by this; the
+  // dispatch itself still needs a positively idle dev pane further down. An expired deadline still
+  // wins, because it is a fact about the request and not about what this tick can see.
   const expired = (): FlowDecision => escalate(state, observations, 'review_timeout')
-  if (observations.review_pane === 'unknown') {
+  if (!fromFile && observations.review_pane === 'unknown') {
     return timedOut ? expired() : hold(state, 'review_pane_unknown')
   }
 
@@ -618,11 +700,11 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
 
   // Fewer verdicts visible than the baseline is a scrolled window, not "no verdict" — the
   // capture is bounded, so an old verdict can leave it. Re-baseline and stay put.
-  if (observations.verdict_count < state.claim.verdict_count) {
+  if (!fromFile && observations.verdict_count < state.claim.verdict_count) {
     return withClaim(state, 'verdict_scrolled', { ...state.claim, verdict_count: observations.verdict_count })
   }
 
-  const fresh = observations.verdict !== null && observations.verdict_count > state.claim.verdict_count
+  const fresh = observations.verdict !== null && (fromFile || observations.verdict_count > state.claim.verdict_count)
   if (!fresh) {
     // Nothing answered within the budget: a reviewer that crashed, hit a login screen or is stuck
     // on a modal never prints a verdict, so the flow escalates instead of waiting for ever.
@@ -634,29 +716,29 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   if (observations.head !== state.claim.head) {
     const gate = reviewGate(state, observations)
     if (gate) return gate
-    return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now)
+    return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now, observations.notes_staging_path)
   }
 
   if (observations.verdict === 'ACCEPT') {
     const spec = nextSpec(state)
     if (!spec) {
-      return withNext(state, 'flow_done', {
+      return withNotes(withNext(state, 'flow_done', {
         next_state: 'done',
         next_review_started_at: null,
         next_claim: { ...state.claim, verdict: 'ACCEPT', verdict_count: observations.verdict_count },
-      })
+      }), observations)
     }
     const gate = dispatchGate(state, observations)
     if (gate) return gate
-    return specDispatch(state, spec, observations)
+    return withNotes(specDispatch(state, spec, observations), observations)
   }
 
   // CHANGES_REQUESTED: the budget is checked before the dispatch, so the flow stops on the round
   // it cannot afford instead of looping until a human notices.
-  if (state.rounds >= state.max_rounds) return escalate(state, observations)
+  if (state.rounds >= state.max_rounds) return withNotes(escalate(state, observations), observations)
   const gate = dispatchGate(state, observations)
   if (gate) return gate
-  return fixDispatch(state, observations)
+  return withNotes(fixDispatch(state, observations), observations)
 }
 
 function tickFixing(state: FlowState, observations: FlowObservations): FlowDecision {
@@ -664,7 +746,7 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
-  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now)
+  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
 }
 
 // The run (or one of its role agents) is gone: the flow is parked instead of being ticked against
@@ -764,7 +846,16 @@ function withDelta(
     // The reason a flow was parked is part of the state, not only of the log: `flow status` reads
     // it, and the log is bounded, so the reason must survive the entry being pushed out.
     orphan_reason: decision.kind === 'orphan' ? (decision.notes ?? null) : state.orphan_reason,
-    log: appendLog(state, { at, event: options.event, detail: options.detail ?? logDetail(decision) }),
+    log: appendLog(state, {
+      at,
+      event: options.event,
+      detail: options.detail
+        ?? [logDetail(decision), decision.notes_invalid ? `notes_invalid ${decision.notes_invalid}` : '']
+          .filter(Boolean).join(' '),
+      // Only a decision that consumed a round's notes carries these; the text stays out of the journal.
+      ...(decision.notes_ref ? { notes_ref: decision.notes_ref } : {}),
+      ...(decision.notes_counts ? { notes_counts: decision.notes_counts } : {}),
+    }),
     updated_at: at,
   }
 }

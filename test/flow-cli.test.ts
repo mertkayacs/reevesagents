@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import type { AgentRecord, RunRecord } from '../src/core/types.js'
 import { createFlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { publishNotes } from '../src/core/flow-notes.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
 // `flow start`, `flow status` and `flow tick` driven through the real commander program with a temp
@@ -542,5 +543,108 @@ describe('flow logs', () => {
     const entries = JSON.parse(out)
 
     expect(entries.map((entry: { event: string }) => entry.event)).toEqual(['flow_paused', 'flow_resumed'])
+  })
+})
+
+describe('flow notes', () => {
+  const HEAD = 'abc1234'
+  const findings = 'MAJOR src/core/flow.ts:120 — the claim is not re-read\nMINOR docs/x.md:4 — wording'
+  const text = `# round\n\n${findings}\n\nВЕРДИКТ: CHANGES_REQUESTED\n`
+
+  function seedHeadFlow(head = HEAD): void {
+    seedRun()
+    const state = createFlowState({
+      run_id: 'run-c1',
+      repo: '/repo',
+      roles: { dev: 'dev-1', review: 'rev-1' },
+      head,
+      at: '2026-01-01T00:00:00.000Z',
+    })
+    saveFlow({ ...state, claim: { head, verdict: null, verdict_count: 0 } })
+  }
+
+  it('prints a round with its counts and file', async () => {
+    seedHeadFlow()
+    publishNotes('run-c1', HEAD, 2, text)
+
+    const { out } = await runCli(['flow', 'notes', '--run', 'run-c1', '-r', '2'])
+
+    expect(out).toContain(`head      ${HEAD.slice(0, 12)}  round 2  · 1 MAJOR, 1 MINOR`)
+    expect(out).toContain('MAJOR src/core/flow.ts:120')
+    expect(out).toContain('notes/abc1234-r2.md')
+  })
+
+  it('defaults to the claim head and the newest round, and answers JSON', async () => {
+    seedHeadFlow()
+    publishNotes('run-c1', HEAD, 1, text)
+    publishNotes('run-c1', HEAD, 3, text)
+
+    const { out } = await runCli(['flow', 'notes', '--run', 'run-c1', '--json'])
+    const payload = JSON.parse(out)
+
+    expect(payload).toMatchObject({ run_id: 'run-c1', head: HEAD, round: 3, ref: `notes/${HEAD}-r3.md` })
+    expect(payload.counts).toEqual({ blocker: 0, major: 1, minor: 1 })
+    expect(payload.notes).toContain('MAJOR src/core/flow.ts:120')
+    expect(payload.path).toContain('notes/abc1234-r3.md')
+  })
+
+  it('answers "no notes" without failing when no round published a file', async () => {
+    seedHeadFlow()
+
+    const { out } = await runCli(['flow', 'notes', '--run', 'run-c1'])
+    expect(out).toContain('no notes for run-c1')
+
+    const json = await runCli(['flow', 'notes', '--run', 'run-c1', '--json'])
+    expect(JSON.parse(json.out)).toMatchObject({ notes: null, reason: 'missing' })
+  })
+
+  it('fails on a round that never happened, naming the rounds it knows', async () => {
+    seedHeadFlow()
+    publishNotes('run-c1', HEAD, 1, text)
+
+    const failure = await runCli(['flow', 'notes', '--run', 'run-c1', '-r', '7']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+    expect(failure?.cli_err).toContain('round 7 does not exist')
+    expect(failure?.cli_err).toContain('rounds: 1')
+  })
+
+  it('redacts a secret that a round managed to write', async () => {
+    // The record is sanitised on read as well as on write, so a hand-edited file cannot leak here.
+    seedHeadFlow()
+    const key = ['sk', 'ant', 'abcdefghijklmnopqrstuvwxyz'].join('-')
+    saveFlow({
+      ...readFlow('run-c1'),
+      claim: { head: HEAD, verdict: null, verdict_count: 0 },
+    })
+    publishNotes('run-c1', HEAD, 1, text)
+    // Overwrite the durable file the way an older build (or a human) could have.
+    const path = join(tmpDir, 'flows', 'run-c1', 'notes', `${HEAD}-r1.md`)
+    writeFileSync(path, `MAJOR a.ts:1 — leaks ${key}\nВЕРДИКТ: CHANGES_REQUESTED\n`, 'utf-8')
+
+    const { out } = await runCli(['flow', 'notes', '--run', 'run-c1'])
+    expect(out).not.toContain(key)
+    expect(out).toContain('[REDACTED]')
+  })
+
+  it('shows the reference and the counters in `flow logs`', async () => {
+    seedHeadFlow()
+    const state = readFlow('run-c1')
+    saveFlow({
+      ...state,
+      state: 'fixing',
+      rounds: 1,
+      log: [{
+        at: '2026-01-02T00:00:00.000Z',
+        event: 'dispatch_fix',
+        detail: 'fix_dispatched abc1234',
+        notes_ref: `notes/${HEAD}-r1.md`,
+        notes_counts: { blocker: 0, major: 1, minor: 1 },
+      }],
+    })
+
+    const { out } = await runCli(['flow', 'logs', '--run', 'run-c1'])
+    expect(out).toContain(`→ notes/${HEAD}-r1.md  · 1 MAJOR, 1 MINOR`)
   })
 })

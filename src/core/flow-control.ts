@@ -23,6 +23,7 @@ import type { FlowStoreOptions } from './flow-store.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import { isRunsLockTimeout, withRunsLock } from './runs.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
+import { pruneClosedFlowNotes } from './flow-notes.js'
 
 export interface FlowControlOptions extends FlowStoreOptions {
   // Timestamp written into the log entry; the clock is the caller's so a test can pin it.
@@ -141,7 +142,7 @@ export function stopFlow(runId: string, options: FlowControlOptions = {}): FlowC
     if (state.state === 'done') {
       throw new FlowStateError(`flow for run ${state.run_id} is already closed (${state.close_reason ?? 'done'})`)
     }
-    return applyOperatorTransition(state, {
+    const stopped = applyOperatorTransition(state, {
       to: 'done',
       action: 'stop',
       event: 'flow_stopped',
@@ -149,6 +150,9 @@ export function stopFlow(runId: string, options: FlowControlOptions = {}): FlowC
       at,
       patch: { close_reason: 'stopped by the operator' },
     })
+    // The flow will not review again: keep the newest round as evidence, drop the rest (§11.3).
+    try { pruneClosedFlowNotes(state.run_id, { root: options.root }) } catch { /* housekeeping only */ }
+    return stopped
   })
 }
 
