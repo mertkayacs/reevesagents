@@ -3,17 +3,17 @@
 // The two documents here are the *shapes* the design describes, not the projects they came from: one with
 // explicit ids, one without and with folded lines. Tests are about the shapes.
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  attachSpec, createPlan, deriveId, hashDocument, importInto, mutatePlan, normalizeDocument,
-  parsePlanDocument, planComplete, PLAN_LIMITS, planPath, planProgress, planSummary, PlanError, readPlan,
-  repositoryRelativePath, savePlan, setItemStatus,
+  attachSpec, createPlan, deriveId, ensurePlanSummary, hashDocument, importInto, mutatePlan,
+  normalizeDocument, parsePlanDocument, planComplete, PLAN_LIMITS, planItemView, planPath, planProgress,
+  PlanError, planSummary, readPlan, resolveRepositoryPath, savePlan, setItemStatus,
 } from '../src/core/plan.js'
 import { createFlowState } from '../src/core/flow.js'
-import { saveFlow } from '../src/core/flow-store.js'
+import { readFlow, saveFlow } from '../src/core/flow-store.js'
 
 const NOW = Date.parse('2026-11-02T09:00:00.000Z')
 const AT = new Date(NOW).toISOString()
@@ -403,15 +403,6 @@ describe('mutatePlan', () => {
   })
 })
 
-describe('repository-relative paths', () => {
-  it('accepts a path inside the project and refuses one outside it', () => {
-    expect(repositoryRelativePath('docs/implementation-plan.md', '/work/proj')).toBe('docs/implementation-plan.md')
-    expect(repositoryRelativePath('/work/proj/docs/plan.md', '/work/proj')).toBe('docs/plan.md')
-    expect(() => repositoryRelativePath('/home/someone/plan.md', '/work/proj')).toThrow(/outside the repository/)
-    expect(() => repositoryRelativePath('../elsewhere/plan.md', '/work/proj')).toThrow(/outside the repository/)
-  })
-})
-
 describe('markdown briefs', () => {
   it('takes the item id, because a heading slug can never equal P1.7.1', () => {
     const first = importNew(['- [ ] **P1.7.1** — the edge port'].join('\n'))
@@ -425,5 +416,110 @@ describe('markdown briefs', () => {
     expect(attached.spec.id).toBe('P1.7.1')
     expect(attached.spec.unstructured).toBe(true)
     expect(attached.item.status).toBe('queued')
+  })
+})
+
+describe('the item view', () => {
+  it('carries the shape of the brief, never its body, requirements or checks', () => {
+    const first = importNew(WITH_IDS)
+    const attached = attachSpec(first.plan, {
+      id: 'P1.2.1',
+      text: JSON.stringify({
+        id: 'P1.2.1', title: 'the edge port', goal: 'g', requirements: ['only one port'], checks: ['curl /health'], report: ['port'],
+      }),
+      format: 'json',
+      spec_path: 'docs/briefs/P1.2.1.json',
+      now: NOW,
+    })
+    const view = planItemView(attached.item)
+    expect(view.spec).toEqual({ id: 'P1.2.1', title: 'the edge port', unstructured: false })
+    expect(JSON.stringify(view)).not.toContain('only one port')
+    expect(JSON.stringify(view)).not.toContain('curl /health')
+    expect(view.spec_path).toBe('docs/briefs/P1.2.1.json')
+  })
+})
+
+describe('path containment on real paths', () => {
+  function withRoot<T>(fn: (_rootDir: string) => T): T {
+    const root = mkdtempSync(join(tmpdir(), 'reeves-plan-paths-'))
+    try {
+      return fn(root)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+
+  it('accepts a file inside the project and returns its resolved path', () => {
+    withRoot(root => {
+      mkdirSync(join(root, 'docs'), { recursive: true })
+      writeFileSync(join(root, 'docs', 'plan.md'), WITH_IDS)
+      const resolved = resolveRepositoryPath('docs/plan.md', root)
+      expect(resolved.relative).toBe('docs/plan.md')
+      expect(resolved.absolute).toBe(join(realpathSync(root), 'docs', 'plan.md'))
+    })
+  })
+
+  it('refuses a file inside the project that is a symlink to a file outside it', () => {
+    withRoot(root => {
+      const outside = mkdtempSync(join(tmpdir(), 'reeves-plan-outside-'))
+      try {
+        writeFileSync(join(outside, 'secret-plan.md'), WITH_IDS)
+        mkdirSync(join(root, 'docs'), { recursive: true })
+        symlinkSync(join(outside, 'secret-plan.md'), join(root, 'docs', 'plan.md'))
+        // Lexically inside, really outside: the reader would happily read the outside file.
+        expect(() => resolveRepositoryPath('docs/plan.md', root)).toThrow(/outside the repository/)
+      } finally {
+        rmSync(outside, { recursive: true, force: true })
+      }
+    })
+  })
+
+  it('refuses a missing file and a path outside the project', () => {
+    withRoot(root => {
+      expect(() => resolveRepositoryPath('docs/nope.md', root)).toThrow(/does not exist/)
+      expect(() => resolveRepositoryPath('/etc/hosts', root)).toThrow(/outside the repository/)
+    })
+  })
+})
+
+describe('a torn summary', () => {
+  function withRoot<T>(fn: (_rootDir: string) => T): T {
+    const root = mkdtempSync(join(tmpdir(), 'reeves-plan-repair-'))
+    try {
+      return fn(root)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+
+  it('is repaired by the next no-op mutation and by a read path', () => {
+    withRoot(root => {
+      process.env.REEVES_REGISTRY = root
+      try {
+        saveFlow(createFlowState({
+          run_id: 'run-1', repo: root, roles: { dev: 'd', review: 'r' }, max_rounds: 3,
+          review_timeout_sec: 60, at: '2026-11-02T09:00:00.000Z',
+        }), { root })
+        // A crash between the two writes: the plan exists, the summary never landed.
+        const created = createPlan({ run_id: 'run-1', source_path: 'p.md', text: WITH_IDS, now: NOW })
+        mutatePlan('run-1', current => ({ plan: current ? null : created.plan, value: null }), { root })
+        const stale = JSON.parse(readFileSync(join(root, 'flows', 'run-1.json'), 'utf-8')) as { plan: unknown }
+        saveFlow({ ...readFlow('run-1', { root }), plan: null }, { root })
+        void stale
+
+        // A no-op mutation repairs it.
+        mutatePlan('run-1', () => ({ plan: null, value: null }), { root })
+        const repaired = JSON.parse(readFileSync(join(root, 'flows', 'run-1.json'), 'utf-8')) as { plan?: { total: number } }
+        expect(repaired.plan?.total).toBe(4)
+
+        // And a torn summary is repaired by the read path too.
+        saveFlow({ ...readFlow('run-1', { root }), plan: null }, { root })
+        ensurePlanSummary('run-1', { root })
+        const again = JSON.parse(readFileSync(join(root, 'flows', 'run-1.json'), 'utf-8')) as { plan?: { total: number } }
+        expect(again.plan?.total).toBe(4)
+      } finally {
+        delete process.env.REEVES_REGISTRY
+      }
+    })
   })
 })

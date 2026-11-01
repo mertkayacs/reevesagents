@@ -51,9 +51,11 @@ import { queueSpecFile } from '../../core/flow-queue.js'
 import { startFlow } from '../../core/flow-start.js'
 import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
 import { stepFlow } from '../../core/flow-runner.js'
-import { createPlan, importInto, mutatePlan, planExists, planPath, readPlan, repositoryRelativePath } from '../../core/plan.js'
+import {
+  createPlan, ensurePlanSummary, importInto, mutatePlan, planExists, planItemView, planPath, readPlan,
+  resolveRepositoryPath,
+} from '../../core/plan.js'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { shortHomePath } from '../../utils/paths.js'
 import { redactSecrets } from '../../core/redact.js'
 import { detectHostProvider } from './host.js'
@@ -763,12 +765,14 @@ const TOOLS: ToolDef[] = [
     handler: (a) => {
       const runId = resolveFlowRunId(asString(a.run_id))
       if (!planExists(runId)) return fail(`no plan for run ${runId}: import the project document first`)
+      ensurePlanSummary(runId)
       const plan = readPlan(runId)
       const itemId = asString(a.item_id)
       if (itemId) {
         const item = plan.items.find(entry => entry.id === itemId)
         if (!item) return fail(`no plan item ${itemId} in run ${runId}`)
-        return ok({ run_id: runId, item, conflicts: plan.conflicts.filter(entry => entry.item_id === itemId) })
+        // The view, not the record: a payload never carries the brief body (§11.3 of the notification design).
+        return ok({ run_id: runId, item: planItemView(item), conflicts: plan.conflicts.filter(entry => entry.item_id === itemId) })
       }
       const done = plan.items.filter(item => item.status === 'done').length
       const next = plan.items.find(item => item.missing_since === null && item.status !== 'done' && item.status !== 'skipped')
@@ -786,10 +790,7 @@ const TOOLS: ToolDef[] = [
         },
         next: next ? { id: next.id, title: next.title, status: next.status, spec_path: next.spec_path } : null,
         // The items themselves, without the brief bodies: a payload is a transcript, the file is the record.
-        items: plan.items.map(item => ({
-          id: item.id, title: item.title, status: item.status, head: item.head, rounds: item.rounds,
-          notes_ref: item.notes_ref, spec_path: item.spec_path, owner_action: item.owner_action, line: item.line,
-        })),
+        items: plan.items.map(planItemView),
       })
     },
   },
@@ -811,9 +812,11 @@ const TOOLS: ToolDef[] = [
       // A path outside the repository is refused, not shortened: `~/…` in `source_path` would name the
       // operator's home in every later payload, and a shortened path cannot be re-imported.
       const root = runWorkingDir(runId)
-      const absolute = resolve(root, file)
-      const sourcePath = repositoryRelativePath(absolute, root)
-      const text = readPlanDocument(absolute)
+      // Real-path containment: a symlink inside the project that points outside it is refused, and the path
+      // read here is the one that was checked.
+      const target = resolveRepositoryPath(file, root)
+      const sourcePath = target.relative
+      const text = readPlanDocument(target.absolute)
       const dryRun = a.dry_run === true
       const result = dryRun
         ? (planExists(runId)

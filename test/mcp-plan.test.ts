@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
 import { saveFlow } from '../src/core/flow-store.js'
-import { readPlan } from '../src/core/plan.js'
+import { attachSpec, readPlan, savePlan } from '../src/core/plan.js'
 import { writeRun } from '../src/core/runs.js'
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => ''), spawnSync: vi.fn(() => ({ status: 1, stdout: '' })) }))
@@ -126,6 +126,34 @@ describe('flow_plan', () => {
     const missing = call('flow_plan', { run_id: RUN, item_id: 'NOPE' })
     expect(missing.isError).toBe(true)
     expect(payload(missing).error).toContain('no plan item NOPE')
+  })
+
+  it('never returns the brief body, only its shape', () => {
+    call('flow_plan_import', { run_id: RUN, file: join(registry, 'plan.md') })
+    // A real brief on a real item: without one, "no body" would be trivially true.
+    const attached = attachSpec(readPlan(RUN), {
+      id: 'P1.1.1',
+      text: JSON.stringify({
+        id: 'P1.1.1', title: 'workspace', goal: 'scaffold the repo',
+        requirements: ['pnpm workspace'], checks: ['pnpm lint'], report: ['files'],
+      }),
+      format: 'json',
+      spec_path: 'docs/briefs/P1.1.1.json',
+      now: Date.now(),
+    })
+    savePlan(attached.plan)
+
+    const whole = payload(call('flow_plan', { run_id: RUN }))
+    const one = payload(call('flow_plan', { run_id: RUN, item_id: 'P1.1.1' }))
+
+    for (const body of [whole, one]) {
+      const text = JSON.stringify(body)
+      expect(text).not.toContain('pnpm workspace')
+      expect(text).not.toContain('scaffold the repo')
+      expect(text).not.toContain('pnpm lint')
+    }
+    expect(one.item.spec).toEqual({ id: 'P1.1.1', title: 'workspace', unstructured: false })
+    expect(one.item.spec_path).toBe('docs/briefs/P1.1.1.json')
   })
 
   it('keeps the flow state summary in step with the plan', () => {

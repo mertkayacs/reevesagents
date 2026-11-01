@@ -11,7 +11,6 @@
 // 2 not found, 3 refused (limits, duplicate ids, unsupported format, conflict on `flow plan`).
 
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { listFlowFiles } from '../../core/flow-store.js'
 import { readRun } from '../../core/runs.js'
@@ -19,7 +18,8 @@ import { addFlowSpecs } from '../../core/flow-control.js'
 import type { Plan, PlanItem, PlanStatus, SetStatusInput } from '../../core/plan.js'
 import {
   attachSpec, createPlan, importInto, mutatePlan, PLAN_STATUSES, PlanError, planComplete, planExists,
-  planPath, planProgress, readPlan, renderPlanItemPrompt, repositoryRelativePath, setItemStatus,
+  planItemView, planPath, planProgress, readPlan, renderPlanItemPrompt, resolveRepositoryPath,
+  setItemStatus, ensurePlanSummary,
 } from '../../core/plan.js'
 import { resolveFlowRunId } from '../../core/flow-view.js'
 import { displayPath } from '../../utils/paths.js'
@@ -33,6 +33,13 @@ function runOption(cmd: Command): string {
   const value = own ?? fromParent
   if (!value) throw new PlanError('--run <id> is required', 'invalid')
   return value
+}
+
+// `--json` is declared on the parent `plan` as well, so commander hands the flag to the parent even for a
+// subcommand — the same trap as `--run`. Read both levels, or `flow plan status --json --item X` prints the
+// human block and a script chokes on it.
+function jsonOption(cmd: Command, opts: { json?: boolean }): boolean {
+  return opts.json === true || (cmd.parent?.opts() as { json?: boolean } | undefined)?.json === true
 }
 
 function failPlan(err: unknown): never {
@@ -96,19 +103,7 @@ export function planPayload(plan: Plan, path: string) {
         ready: next.status === 'queued' && next.spec !== null,
       }
       : null,
-    items: plan.items.map(item => ({
-      id: item.id,
-      title: item.title,
-      status: item.status,
-      spec_path: item.spec_path,
-      head: item.head,
-      rounds: item.rounds,
-      notes_ref: item.notes_ref,
-      owner_action: item.owner_action,
-      missing_since: item.missing_since,
-      line: item.line,
-      updated_at: item.updated_at,
-    })),
+    items: plan.items.map(planItemView),
     conflicts: plan.conflicts,
     path,
   }
@@ -133,6 +128,9 @@ export function registerPlanCommands(flow: Command): void {
       try {
         if (!opts.run) throw new PlanError('--run <id> is required (use `flow plan import --run <id> …` for the other verbs)', 'invalid')
         const runId = resolveFlowRunId(opts.run)
+        // A crash between the two writes of an earlier command leaves the summary stale; reporting from the
+        // plan while repairing the cache is cheaper than explaining a wrong `plan 1/3` on the run card.
+        ensurePlanSummary(runId)
         const imported = readPlan(runId)
         if (opts.json) {
           console.log(JSON.stringify(planPayload(imported, displayPath(planPath(runId))), null, 2))
@@ -153,6 +151,7 @@ export function registerPlanCommands(flow: Command): void {
     .option('--dry-run', 'parse and report; write nothing')
     .option('--json', 'output JSON')
     .action((opts: { run?: string, file: string, dryRun?: boolean, json?: boolean }, cmd: Command) => {
+      const json = jsonOption(cmd, opts)
       try {
         const runId = resolveFlowRunId(runOption(cmd))
         const target = projectPath(opts.file, projectRoot(runId))
@@ -170,7 +169,7 @@ export function registerPlanCommands(flow: Command): void {
             // mtime for nothing.
             return { plan: imported.unchanged ? null : imported.plan, value: imported }
           })
-        if (opts.json) {
+        if (json) {
           console.log(JSON.stringify({
             dry_run: opts.dryRun === true,
             unchanged: result.unchanged,
@@ -206,11 +205,17 @@ export function registerPlanCommands(flow: Command): void {
     .option('--run <id>', 'run id, needed only when the item id exists in more than one flow')
     .option('--json', 'output JSON')
     .action((opts: { item: string, run?: string, json?: boolean }, cmd: Command) => {
+      const json = jsonOption(cmd, opts)
       try {
         const own = opts.run ?? (cmd.parent?.opts() as { run?: string } | undefined)?.run
         const found = findItem(opts.item, own)
-        if (opts.json) {
-          console.log(JSON.stringify({ run_id: found.plan.run_id, item: found.item, conflicts: found.plan.conflicts.filter(entry => entry.item_id === found.item.id) }, null, 2))
+        if (json) {
+          // The view, not the record: the brief body stays in the file (see `planItemView`).
+          console.log(JSON.stringify({
+            run_id: found.plan.run_id,
+            item: planItemView(found.item),
+            conflicts: found.plan.conflicts.filter(entry => entry.item_id === found.item.id),
+          }, null, 2))
           return
         }
         const item = found.item
@@ -237,6 +242,7 @@ export function registerPlanCommands(flow: Command): void {
     .option('--dry-run', 'validate and report; write nothing')
     .option('--json', 'output JSON')
     .action((opts: { run?: string, item: string, spec: string, queue?: boolean, dryRun?: boolean, json?: boolean }, cmd: Command) => {
+      const json = jsonOption(cmd, opts)
       try {
         const runId = resolveFlowRunId(runOption(cmd))
         const target = projectPath(opts.spec, projectRoot(runId))
@@ -265,7 +271,7 @@ export function registerPlanCommands(flow: Command): void {
           addFlowSpecs({ run_id: runId, files: format === 'json' ? [target.absolute] : undefined, markdown: format === 'markdown' ? [target.absolute] : undefined })
           queued = true
         }
-        if (opts.json) {
+        if (json) {
           console.log(JSON.stringify({
             dry_run: opts.dryRun === true,
             item: { id: result.item.id, status: result.item.status, spec_path: result.item.spec_path, spec_hash: result.item.spec_hash },
@@ -295,6 +301,7 @@ export function registerPlanCommands(flow: Command): void {
     .option('--dry-run', 'validate and report; write nothing')
     .option('--json', 'output JSON')
     .action((opts: { run?: string, item: string, status: string, yes?: boolean, note?: string, dryRun?: boolean, json?: boolean }, cmd: Command) => {
+      const json = jsonOption(cmd, opts)
       try {
         const runId = resolveFlowRunId(runOption(cmd))
         const input: SetStatusInput = {
@@ -315,7 +322,7 @@ export function registerPlanCommands(flow: Command): void {
             return { plan: applied.plan === current ? null : applied.plan, value: applied }
           })
         const item = result.plan.items.find(entry => entry.id === opts.item)!
-        if (opts.json) {
+        if (json) {
           console.log(JSON.stringify({
             dry_run: opts.dryRun === true,
             item: { id: item.id, status: item.status, previous: result.previous, owner_action: item.owner_action, updated_at: item.updated_at },
@@ -374,11 +381,11 @@ function projectRoot(runId: string): string {
   }
 }
 
-// One resolution for both jobs: the absolute path to read, and the repository-relative path to store. Doing
-// them separately is how the file was read from the shell's cwd while the state recorded the project's.
+// One resolution for both jobs: the checked path to read, and the repository-relative path to store. The
+// core resolves symlinks on both sides, so a link inside the project that points outside it is refused, and
+// the path the caller reads is the one that was checked.
 function projectPath(file: string, root: string): { absolute: string, relative: string } {
-  const absolute = resolve(root, file)
-  return { absolute, relative: repositoryRelativePath(absolute, root) }
+  return resolveRepositoryPath(file, root)
 }
 
 // `--dry-run` still parses and merges, so the operator sees what would change; only the write is skipped.

@@ -5,7 +5,7 @@
 // the question is whether the surface exposes it honestly.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
@@ -213,6 +213,36 @@ describe('flow plan set and status', () => {
       expect(failed.code).toBe(3)
       expect(failed.err).toContain('outside the repository')
       expect(failed.err).not.toContain(outside)      // the message names the path home-shortened
+      expect(() => readPlan('run-p')).toThrow(/no plan/)
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
+  })
+
+  it('never prints the brief body in --json, only its shape', async () => {
+    await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
+    await runCli(['flow', 'plan', 'attach', '--run', 'run-p', '--item', 'P1.2.1', '--spec', join(tmpDir, 'P1.2.1.json')])
+
+    const one = await runCli(['flow', 'plan', 'status', '--item', 'P1.2.1', '--json'])
+    const body = JSON.parse(one.out) as { item: { spec: { id: string, unstructured: boolean } | null } }
+    expect(body.item.spec).toEqual({ id: 'P1.2.1', title: 'the edge port', unstructured: false })
+    expect(one.out).not.toContain('one port')
+    expect(one.out).not.toContain('curl /health')
+
+    const all = await runCli(['flow', 'plan', '--run', 'run-p', '--json'])
+    expect(all.out).not.toContain('one port')
+    expect(all.out).not.toContain('curl /health')
+  })
+
+  it('refuses a symlink that points outside the project', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'reeves-plan-link-'))
+    writeFileSync(join(outside, 'plan.md'), PLAN)
+    mkdirSync(join(tmpDir, 'docs'), { recursive: true })
+    symlinkSync(join(outside, 'plan.md'), join(tmpDir, 'docs', 'plan.md'))
+    try {
+      const failed = await failure(['flow', 'plan', 'import', '--run', 'run-p', '--file', 'docs/plan.md'])
+      expect(failed.code).toBe(3)
+      expect(failed.err).toContain('outside the repository')
       expect(() => readPlan('run-p')).toThrow(/no plan/)
     } finally {
       rmSync(outside, { recursive: true, force: true })

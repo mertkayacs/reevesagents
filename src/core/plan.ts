@@ -18,7 +18,7 @@
 //     - [x] Text of the item.                      (id-less; id is derived, see `deriveId`)
 
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { flowsDir, flowPath, readFlow, saveFlow } from './flow-store.js'
 import { withRunsLock } from './runs.js'
@@ -628,6 +628,46 @@ export function renderPlanItemPrompt(plan: Plan, id: string): string {
   return renderDispatchPrompt(item.spec)
 }
 
+// What a payload may say about an item. The brief is stored as a snapshot for the *dispatch*, not for the
+// transcript: `body`, `goal`, `requirements`, `checks` and `report` are the work itself, and a payload that
+// carried them would duplicate the brief in every `flow plan --json` and in every MCP answer. A surface gets
+// the shape of the brief (`id`, `title`, `unstructured`) and a path to read the rest if it really needs it.
+export interface PlanItemView {
+  id: string
+  title: string
+  status: PlanStatus
+  spec: { id: string, title: string, unstructured: boolean } | null
+  spec_path: string | null
+  spec_hash: string | null
+  head: string | null
+  rounds: number
+  notes_ref: string | null
+  owner_action: boolean
+  missing_since: string | null
+  line: number | null
+  updated_at: string
+}
+
+export function planItemView(item: PlanItem): PlanItemView {
+  return {
+    id: item.id,
+    title: item.title,
+    status: item.status,
+    spec: item.spec
+      ? { id: item.spec.id, title: item.spec.title, unstructured: item.spec.unstructured === true }
+      : null,
+    spec_path: item.spec_path,
+    spec_hash: item.spec_hash,
+    head: item.head,
+    rounds: item.rounds,
+    notes_ref: item.notes_ref,
+    owner_action: item.owner_action,
+    missing_since: item.missing_since,
+    line: item.line,
+    updated_at: item.updated_at,
+  }
+}
+
 // ---------------------------------------------------------------------------------------------------
 // Store: `flows/<run-id>/plan.json`, beside the notes directory
 // ---------------------------------------------------------------------------------------------------
@@ -778,24 +818,71 @@ export function mutatePlan<T>(
   return withRunsLock(() => {
     const current = planExists(runId, options) ? readPlan(runId, options) : null
     const result = mutator(current)
-    if (result.plan === null) return result.value
+    if (result.plan === null) {
+      // Nothing to write — but a crash between the two writes of an earlier mutation can have left the
+      // summary behind, and the next no-op is the first moment anybody notices. Repair it here: the plan file
+      // is the record, the summary is a cache, and a cache that cannot be repaired is worse than none.
+      if (current) applyPlanSummary(current, options)
+      return result.value
+    }
     savePlan(result.plan, options)
     applyPlanSummary(result.plan, options)
     return result.value
   })
 }
 
+// The read path a surface uses before showing anything: repair the summary if it drifted, under the same lock
+// a mutation would take. A `flow stop`/`delete-history` race is not worth a stuck counter on the run card.
+export function ensurePlanSummary(runId: string, options: PlanStoreOptions = {}): void {
+  withRunsLock(() => {
+    if (!planExists(runId, options)) return
+    try {
+      applyPlanSummary(readPlan(runId, options), options)
+    } catch {
+      // A damaged plan is reported where it is read, not here.
+    }
+  })
+}
+
 // A path the plan stores must be inside the repository: `~/…` in `source_path` is a leak (it names the
 // operator's home in every later payload) and an absolute path outside the checkout is not something a plan
 // can mean. Refused rather than shortened, because a shortened path cannot be re-read by `plan import`.
-export function repositoryRelativePath(path: string, root = process.cwd()): string {
+//
+// The check is on **real** paths, both sides: a lexical comparison passes a file inside the checkout that is a
+// symlink to one outside it, and then the reader happily reads the outside file. The returned `absolute` is the
+// resolved path, so the caller reads exactly the file that was checked instead of re-resolving a name that
+// could change between the two steps.
+export interface RepositoryPath {
+  absolute: string
+  relative: string
+}
+
+export function resolveRepositoryPath(path: string, root = process.cwd()): RepositoryPath {
   const absolute = path.startsWith('/') ? path : `${root}/${path}`
-  const relativePath = relative(root, absolute)
-  if (relativePath === '' || relativePath.startsWith('..') || relativePath.startsWith('/')) {
+  let realRoot: string
+  let realFile: string
+  try {
+    realRoot = realpathSync(root)
+  } catch {
+    throw new PlanError(`the project directory ${displayPath(root)} does not exist`, 'refused')
+  }
+  try {
+    realFile = realpathSync(absolute)
+  } catch {
+    // A missing file is a read error, not a containment question; the caller turns it into its own message.
+    throw new PlanError(`cannot read ${displayPath(path)}: it does not exist`, 'invalid')
+  }
+  const inside = realFile === realRoot || realFile.startsWith(`${realRoot}/`)
+  if (!inside || realFile === realRoot) {
     throw new PlanError(
       `${displayPath(path)} is outside the repository (${displayPath(root)}); run the command from the project root or pass a path inside it`,
       'refused',
     )
   }
-  return relativePath
+  return { absolute: realFile, relative: relative(realRoot, realFile) }
+}
+
+// The relative form on its own, for a caller that only needs what to store.
+export function repositoryRelativePath(path: string, root = process.cwd()): string {
+  return resolveRepositoryPath(path, root).relative
 }

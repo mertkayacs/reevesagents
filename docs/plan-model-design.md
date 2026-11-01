@@ -325,8 +325,11 @@ same output without writing (for `next` that means "do not queue, do not send").
 without an ACCEPT (§2.2): that is why it needs `--yes` and a `--note`, and why the note lands in the journal
 next to the previous status. Nothing else in the engine may write `done`.
 
-`--json` never carries the spec `body` or the notes text — the payload is a transcript, the file is the
-record (the rule from `docs/notifications-design.md` §11.3).
+`--json` never carries the spec `body`, its `requirements`/`checks`/`report` or the notes text — the payload
+is a transcript, the file is the record (the rule from `docs/notifications-design.md` §11.3). An item is
+rendered through `planItemView`: id, title, status, the *shape* of the brief (`id`, `title`, `unstructured`),
+its path and hash, the closing commit, rounds, the notes reference and the timestamps. A surface that needs
+the text opens `spec_path`.
 
 ## 8. UI
 
@@ -358,6 +361,7 @@ meaningless without one. So:
 | multi-line items (plan B, lines 29 and 103) | a line starting with `- [` opens an item; following lines that are indented or start with `**` are appended to its title until the next item, heading or blank line; the folded text is what `title` holds |
 | ids that are not spec-safe (`P1.7.1` is fine; `1.2 a/b` is not) | an id-bearing document with an invalid id is refused, naming the line — the id must be usable as a `BlockSpec.id` |
 | a path outside the repository (`--file`/`--spec` from the home directory) | refused (`outside the repository`, exit 3), not shortened: `~/…` in `source_path` names the operator's home in every later payload, and a shortened path cannot be re-imported. The path is resolved against the **run's working directory**, so the command works from any cwd |
+| a file inside the checkout that is a **symlink** to one outside it | refused: containment is decided on `realpathSync` of both the file and the project root, and the caller reads the *resolved* path, so the name cannot be swapped between the check and the read. A lexical comparison would pass the link and then read the outside file |
 | a plan edited while a round is running | import is allowed, but an item that is `in_work`/`reviewing` keeps its status even if its line vanished (`missing_since` is set, status untouched) — §3.3 |
 | `delete-history` on a run | the cascade removes `flows/<run-id>/` including `plan.json` (the notes directory is already handled this way, `flow-store.ts:103`) |
 
