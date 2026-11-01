@@ -19,6 +19,7 @@ import type { NotesCounts } from '../../core/flow-notes.js'
 import { listNotesHeads, readNotesRound } from '../../core/flow-notes.js'
 import { redactSecrets } from '../../core/redact.js'
 import { shortHomePath } from '../../utils/paths.js'
+import { finalizePlanCommands, registerPlanCommands } from './plan.js'
 import { requireDestructiveConfirmation } from './helpers.js'
 
 // The payload and the id resolution are shared with the MCP tools, so a host CLI and
@@ -141,6 +142,8 @@ export function registerFlow(program: Command): void {
   const flow = program
     .command('flow')
     .description('dev -> review -> fix pipeline for a run (start, status, tick)')
+
+  registerPlanCommands(flow)
 
   flow
     .command('start')
@@ -437,4 +440,7 @@ export function registerFlow(program: Command): void {
         fail(err)
       }
     })
+
+  // After every subcommand exists (see `finalizePlanCommands`).
+  finalizePlanCommands(flow)
 }
