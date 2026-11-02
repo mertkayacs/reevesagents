@@ -887,7 +887,13 @@ function planAcceptDecision(
   observations: FlowObservations,
   plan: PlanTickView,
 ): FlowDecision {
-  const close = (decision: FlowDecision): FlowDecision => withPlanClose(state, observations, decision)
+  // Closing an item and recording it are one write, and so is what the flow has in flight afterwards: the closed item must
+  // not stay in `active_plan_item`, or the next tick believes a task is running and never starts the next one (block 31,
+  // D11). A decision that dispatches the next item names it; anything else leaves nothing in flight.
+  const close = (decision: FlowDecision): FlowDecision => ({
+    ...withPlanClose(state, observations, decision),
+    next_active_plan_item: decision.next_active_plan_item ?? null,
+  })
 
   // The fuse outranks everything: a flow that has spent its total budget escalates even while closing an item,
   // otherwise a pathological reviewer could keep it walking from item to item for ever.
@@ -1144,17 +1150,40 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
 //
 // `null` means "nothing to start", and the caller keeps its own reason (`head_unchanged`). A `hold` is returned only
 // when there *is* work and something concrete stands in the way, so the journal says why nothing went out.
+// Is the item `active_plan_item` points at actually in flight? The field is a cache of "one task per flow", and a closed item
+// left in it blocks the next one for ever — the sandbox showed `P1.1.1: done` with the flow still naming it, and the tick
+// answering `head_unchanged` while `P1.1.2` waited with a brief (block 31, D11). Only `in_work` and `reviewing` are work; any
+// other status is a stale value.
+function activeItemInFlight(state: FlowState, plan: PlanTickView | undefined): boolean {
+  const id = state.active_plan_item
+  if (!id) return false
+  const item = plan?.items.find(entry => entry.id === id)
+  return item !== undefined && (item.status === 'in_work' || item.status === 'reviewing')
+}
+
 function bootstrapDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
   const queued = nextSpec(state)
   const plan = observations.plan
   if (!queued && !plan) return null
-  // One task per flow, and never into a tree somebody is editing: pasting a brief over half-finished work loses it.
-  if (state.active_plan_item) return null
+  // One task per flow, and never into a tree somebody is editing: pasting a brief over half-finished work loses it. What
+  // counts as "in flight" is the plan's word, not the field's: a stale id is cleared in this same decision and the tick
+  // carries on, so the journal records `stale_active_item_cleared` once instead of the field blocking the plan for ever.
+  const staleId = state.active_plan_item !== null && !activeItemInFlight(state, plan) ? state.active_plan_item : null
+  if (state.active_plan_item !== null && staleId === null) return null
+  const dispatch = (decision: FlowDecision): FlowDecision => (staleId === null ? decision : {
+    ...decision,
+    next_active_plan_item: decision.next_active_plan_item ?? null,
+    log_event: 'stale_active_item_cleared',
+    extra_events: [
+      ...(decision.extra_events ?? []),
+      { event: 'stale_active_item_cleared', detail: `${staleId} is not in flight` },
+    ],
+  })
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   if (queued) {
     const gate = dispatchGate(state, observations)
     if (gate) return gate
-    return specDispatch(state, queued, observations)
+    return dispatch(specDispatch(state, queued, observations))
   }
   if (!plan) return null
   const next = planNext(plan, { skip: state.active_plan_item })
@@ -1164,7 +1193,7 @@ function bootstrapDecision(state: FlowState, observations: FlowObservations): Fl
   if (next.kind !== 'item') return null
   const gate = dispatchGate(state, observations)
   if (gate) return gate
-  return planItemDispatch(state, next.item, observations)
+  return dispatch(planItemDispatch(state, next.item, observations))
 }
 
 function tickReviewing(state: FlowState, observations: FlowObservations): FlowDecision {

@@ -311,6 +311,11 @@ Two fields carry the notification key and **ship in this build** (blocks 14 and 
   notification key: `flow start --replace` keeps the `run_id` of the run it replaces but writes a new flow file, so
   a run-scoped key would collide with the closed flow's keys and the durable dedupe index would suppress the new
   flow's first escalation;
+- `active_plan_item` — **invariant: it names an open item or nothing.** Only a plan item that is `in_work` or `reviewing`
+  counts as work in flight; a value pointing at a `done`, `pending` or `queued` item is stale, is cleared on the next tick
+  (journal: `stale_active_item_cleared`), and never blocks the plan. Closing an item writes `active_plan_item: null` in the
+  same transition that records it as `done` (block 31 — a closed item left in the field stopped every following item from
+  starting);
 - `claim.verdict_applied` — has this claim's verdict been carried out? Written in the same state transition as the
   dispatch or the close it caused, so "the answer is known" and "the answer was used" are two facts on disk rather than
   one inference. A file written before the field existed is **migrated on read**: when `verdict_handled_for` already names the current

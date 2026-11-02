@@ -325,6 +325,12 @@ was not confirmed (the tooltip names which). **`flow: paused (1/3)`** and **`flo
 breathe only while the state is new (`agent_pulse_ms`), and a page with reduced motion shows the colour and the words
 without animation.
 
+### The plan does not get stuck on a finished item
+
+When an item is closed, the flow forgets it in the same write. If an old state still names a finished item as "in flight",
+the next tick says so once in the log (`stale_active_item_cleared`) and starts the next item that has a brief, instead of
+waiting for a commit nobody owes.
+
 ### A recorded verdict is carried out once, from the state
 
 When the flow holds a verdict it has not acted on (`claim.verdict` set, `claim.verdict_applied: false`), the next tick
