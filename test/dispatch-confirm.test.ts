@@ -754,6 +754,118 @@ describe('recovery settles the claim on its own head (block 28/29)', () => {
   })
 })
 
+describe('a notes file answers its round whatever the state (block 41)', () => {
+  const OLD = 'a'.repeat(40)
+  const NEW = 'c'.repeat(40)
+
+  function planOne() {
+    const doc = '- [ ] **P1.1** — first'
+    const plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    const briefed = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 't', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(briefed)
+    return briefed
+  }
+
+  it('case A: the claim is on an older head, the answer is for the commit that was reviewed', () => {
+    // `landing-one`: the flow went back to `idle` with `claim.head = a933d44`, the reviewer wrote the verdict for `47884a4`,
+    // and every tick asked for the review again.
+    planOne()
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: OLD, verdict: null, verdict_count: 0, verdict_applied: false } })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', NEW, 2, root), 'VERDICT: ACCEPT\n')
+
+    const sent: string[] = []
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: NEW, tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    // Applied, not re-requested; the claim moved to the head the reviewer actually read.
+    expect(result.decision.kind).not.toBe('request_review')
+    expect(sent).toHaveLength(0)
+    expect(readFlow('run-1').claim.head).toBe(NEW)
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).toBe('done')
+    const log = readFlow('run-1').log
+    expect(log.some(entry => entry.event === 'settled_by_observation')).toBe(true)
+    expect(log.some(entry => entry.detail.includes('ACCEPT'))).toBe(true)
+  })
+
+  it('case B: the claim is on the right head, the flow is idle, and the item is not dispatched again', () => {
+    // `landing-ten`: `claim.head` was correct and the file was beside it, yet the tick dispatched the item again.
+    planOne()
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: NEW, verdict: null, verdict_count: 0, verdict_applied: false } })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', NEW, 2, root), 'VERDICT: ACCEPT\n')
+
+    const sent: string[] = []
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: NEW, tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    expect(result.decision.kind).not.toBe('dispatch_spec')
+    expect(sent).toHaveLength(0)
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).toBe('done')
+  })
+
+  it('closes the item even when the marker already says "applied" but the mirror still shows it open', () => {
+    // `landing-ten` after the first repair: `verdict_applied: true`, `verdict_handled_item: P2.1`, and `P2.1: in_work`. The marker
+    // described bookkeeping that had not happened; the open item is the close still owed.
+    const briefed = planOne()
+    savePlan({ ...briefed, items: briefed.items.map(item => ({ ...item, status: 'in_work' as const })) })
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle', rounds: 0, active_plan_item: 'P1.1',
+      claim: { head: NEW, verdict: 'ACCEPT', verdict_count: 1, verdict_applied: true },
+      verdict_handled_for: NEW, verdict_handled_item: 'P1.1',
+    })
+    // The answer is on disk as the published record of that round — which is what the live run had.
+    mkdirSync(join(root, 'flows', 'run-1', 'notes'), { recursive: true })
+    writeFileSync(join(root, 'flows', 'run-1', 'notes', `${NEW}-r1.md`), 'VERDICT: ACCEPT\n')
+
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: NEW, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).toBe('done')
+  })
+
+  it('with no file, the tick behaves exactly as before', () => {
+    // The item is in flight (as the runner writes it after a dispatch), so the unchanged behaviour is a hold.
+    const briefed = planOne()
+    savePlan({ ...briefed, items: briefed.items.map(item => ({ ...item, status: 'in_work' as const })) })
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: NEW, verdict: null, verdict_count: 0, verdict_applied: false } })
+
+    const sent: string[] = []
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: NEW, tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('head_unchanged')
+    expect(sent).toHaveLength(0)
+    expect(readFlow('run-1').log.some(entry => entry.event === 'settled_by_observation')).toBe(false)
+  })
+})
+
 describe('legacy state without verdict_applied (MAJOR 3)', () => {
   function legacy(extra: { handled?: string | null }): void {
     const state = createFlowState({

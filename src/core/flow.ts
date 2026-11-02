@@ -320,6 +320,9 @@ export interface FlowObservations {
   // True when every commit between `claim.head` and the observed head touched only the plan document or the briefs: the
   // documents about the work are not the work, and a dev did nothing for them (block 22, D6).
   docs_only_since_claim?: boolean
+  // The commit the round's notes file belongs to. It can differ from `claim.head`: a review was requested for it before the
+  // claim caught up (block 41).
+  notes_head?: string
 }
 
 // What a tick can measure about the review behind a verdict.
@@ -1035,6 +1038,57 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
 }
 
+// A notes file is the answer to its round, and it outranks every other decision: if the reviewer wrote it, the flow applies it
+// instead of asking again or dispatching the same item. The state does not matter and `claim.head` does not matter — the file
+// names its own head, and the claim is moved there (they are the commit the reviewer actually read). Two live runs each failed
+// a different half of this: one had gone back to `idle` with the file beside the old head, the other sat on the right head with
+// the file written and the tick dispatching the item again (block 41).
+function settleFromNotes(state: FlowState, observations: FlowObservations): FlowDecision | null {
+  if (observations.verdict_source !== 'file' || observations.verdict === null) return null
+  const head = observations.notes_head
+  if (!head) return null
+  // Already applied for this very round *and* nothing is left open for it: nothing to settle. The marker alone is not enough —
+  // the live run had it set with its item still `in_work`, so the answer was on disk, the item was open, and every tick
+  // answered `head_unchanged` (block 41, case B).
+  const openItem = observations.plan?.items.some(item =>
+    (item.status === 'in_work' || item.status === 'queued' || item.status === 'reviewing') && item.spec !== null)
+  if (state.claim.verdict === observations.verdict && state.claim.head === head && state.claim.verdict_applied && !openItem) return null
+  // The ordinary path: a flow in `reviewing`, on that very head, reads its own file in `tickReviewing` — with its own events
+  // and its own notes handling. This branch exists for the two cases that path cannot serve: the head moved on without the
+  // claim, or the flow left `reviewing` before the answer arrived.
+  if (state.state === 'reviewing' && state.claim.head === head && state.pending === null) return null
+  // Which plan item the answer closes. `active_plan_item` is the bookkeeping for it and can be missing — the live run had it
+  // cleared while its item was still open — so the item is found from the plan: the first open one that has a brief, which is
+  // the one that was dispatched and reviewed.
+  const planItem = state.active_plan_item
+    ?? observations.plan?.items.find(item => item.status !== 'done' && item.status !== 'skipped' && item.spec !== null)?.id
+    ?? null
+  const answered: FlowState = {
+    ...state,
+    active_plan_item: planItem,
+    // The round the reviewer answered: its head, its verdict, and a clock so the budgets behave as they would have.
+    claim: { head, verdict: observations.verdict, verdict_count: observations.verdict_count, verdict_applied: false },
+    state: state.state === 'paused' || state.state === 'orphaned' || state.state === 'done' ? state.state : 'reviewing',
+    review_started_at: state.review_started_at ?? observations.now,
+    // The claim that was in flight for this round is answered now.
+    pending: null,
+  }
+  // Settled as the collected verdict it is — not by re-entering `flowTick`, which would come straight back here.
+  const decision = settledVerdictDecision(answered, observations)
+  if (!decision) return null
+  if (decision.kind === 'request_review') return null
+  if (!decisionChangesState(answered, decision)) return null
+  return {
+    ...decision,
+    next_claim: { ...decision.next_claim, head },
+    log_event: 'settled_by_observation',
+    extra_events: [
+      ...(decision.extra_events ?? []),
+      { event: 'settled_by_observation', detail: `${head.slice(0, 7)} verdict ${observations.verdict}` },
+    ],
+  }
+}
+
 // Settle a claim the world has already answered. The decision is the one the engine would have taken without the claim
 // (a `tickReviewing` that reads the notes file), marked with `settled_by_observation` so the journal says the claim was
 // recovered rather than settled by its sender. Returns null when nothing observable answers the claim — then the claim is
@@ -1454,6 +1508,10 @@ export function flowTick(state: FlowState, observations: FlowObservations): Flow
     // paste landed. Re-sending blind is how one prompt becomes two, so a human decides.
     return escalate(state, observations, 'dispatch_unresolved')
   }
+  // A notes file for a round answers that round, whatever the state and wherever `claim.head` points: this is the first thing
+  // a tick settles, before the state machine gets a chance to ask again (block 41).
+  const fromNotes = settleFromNotes(state, observations)
+  if (fromNotes) return fromNotes
   // An explicit negative from the caller parks the flow; "not looked at" (undefined) does not.
   if (observations.run_present === false) return orphan(state, 'run_gone')
   if (observations.agents_present === false) return orphan(state, 'agents_gone')

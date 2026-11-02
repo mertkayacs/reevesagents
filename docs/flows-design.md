@@ -457,6 +457,14 @@ Two invariants make the table safe: a transition is written only inside a short 
 consumes a verdict and cleared when the HEAD moves. Without it an ACCEPT collected in `idle` would be
 re-applied on the following tick and would close the item the tick before had just dispatched.
 
+**The notes file is the source of truth for its round (block 41).** A valid `notes/inbox/<head>-r<N>.md` — or its published
+copy under `notes/` — answers the round it belongs to, whatever `state` the flow is in and wherever `claim.head` points: the file
+names its own head, and the claim moves there (that is the commit the reviewer actually read). Two live runs broke on the two
+halves of this: one had returned to `idle` with `claim.head` still on the commit *before* the one reviewed, the other sat on the
+right head with the answer on disk and dispatched its item again. The settle is the first thing a tick does, before the state
+machine can ask for another review, and the marker `claim.verdict_applied` does not outrank it — a marker with an item still
+open is exactly the close that is owed.
+
 **Claims settle by observation (block 23, D7).** A claim is not a lock on the world: when the round's notes file answers,
 or the pane's verdict counter grows, the claim is *stale*, not pending — and the answer is read for the claim's own
 `(head, round)` regardless of the state the file is in, because a review claim is written while the flow is still `idle`

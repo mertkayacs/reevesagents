@@ -161,6 +161,8 @@ export interface ObserveFlowOptions {
 // What the caller observed about this round's notes file, in the shape the engine wants.
 export interface NotesRead {
   source: 'file' | 'pane'
+  // Which commit the file belongs to: the head the review was requested for, which need not be `claim.head`.
+  head?: string
   // The verdict of the round, when the file answered. It is the answer the reviewer chose to persist.
   verdict?: FlowVerdict
   text?: string
@@ -276,13 +278,14 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
     ? observedHead.trim()
     : isCommitId(state.claim.head) ? state.claim.head : ''
   const staging = requestHead ? stagingPath(state.run_id, requestHead, round, options.root) : undefined
-  // Reading an answer is not limited to `reviewing`: a review claim is written while the flow is still `idle` or
-  // `fixing` (the state advances only when the send settles), so a claim left behind by a dead sender would never read
-  // the file the reviewer has already written. The question is "is a review outstanding?", and a `request_review` claim
-  // answers it whatever the state says (block 27, MAJOR 1).
+  // Reading an answer is not limited to `reviewing`, and not limited to the claim's head either. Two live runs showed both
+  // halves of that: one had already returned to `idle` with the file written for the commit it had reviewed, the other sat on
+  // the right head with the file beside it — in both, the answer existed and nothing looked. The file is the source of truth
+  // for its round; the state and `claim.head` are bookkeeping around it (block 41).
   const pendingReview = state.pending?.kind === 'request_review' ? state.pending : null
-  if (state.state !== 'reviewing' && !pendingReview) return { source: 'pane', staging_path: staging }
-  const head = pendingReview?.head && isCommitId(pendingReview.head) ? pendingReview.head : state.claim.head
+  const head = [pendingReview?.head, observedHead, state.claim.head]
+    .map(candidate => (typeof candidate === 'string' ? candidate.trim() : ''))
+    .find(candidate => isCommitId(candidate)) ?? ''
   if (!isCommitId(head)) return { source: 'pane', staging_path: staging }
   // Staging first — it is what the reviewer wrote — then the **durable** record of the same round: once a
   // valid staging file has been published its copy is gone, and every later tick of this round (the ones
@@ -300,6 +303,7 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
       ref: notesRef(head, round),
       counts: read.counts,
       staging_path: staging,
+      head,
       evidence_text: read.text,
       // Only a staging text is published later; a durable one is already the record.
       raw: stagingRead.ok ? read.text : undefined,
@@ -553,6 +557,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     notes_invalid: fromFile ? undefined : notes.invalid,
     notes_raw: fromFile ? notes.raw : undefined,
     notes_staging_path: notes.staging_path,
+    notes_head: notes.head,
     pane_text: reviewPane === 'unknown' ? undefined : paneText,
     evidence_policy: options.evidence_policy ?? evidencePolicy(),
     // The plan owns the queue only when it exists: a flow without one keeps `state.specs`, which is what

@@ -57,6 +57,11 @@ function tickPayload(result: FlowStepResult, dryRun: boolean) {
       review_pane: result.observations.review_pane,
       verdict: result.observations.verdict,
       verdict_count: result.observations.verdict_count,
+      // Where the verdict came from, and which round file it was read from: without these two a tick that re-requests a review
+      // nobody understands (blocks 41) looks exactly like a tick that had no answer at all.
+      verdict_source: result.observations.verdict_source,
+      notes_head: result.observations.notes_head ?? null,
+      notes_invalid: result.observations.notes_invalid ?? null,
     },
     state: result.path ? flowStatusPayload(result.state, result.path) : flowStatusPayload(result.state, flowPath(result.state.run_id)),
   }
