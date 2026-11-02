@@ -147,6 +147,14 @@ export function composerText(paneText: string, provider: Provider): string | nul
   return null
 }
 
+// Lines that show the agent did something: a tool call, a shell line, a file edit. Used as a second, independent signal of
+// a confirmed dispatch — a pane that never prints a busy marker still shows its ledger (block 23, D9).
+const WORK_LINE_PATTERN = /^(?:\s*[│|]?\s*[●◦•·]\s|\s*[│|]\s*(?:run|exec|shell|read|write|edit|grep|search)\b)|\bexec_command\b|\brun_shell\b|💻|\$ /iu
+
+export function countWorkLines(paneText: string): number {
+  return stripAnsi(paneText).split('\n').filter(line => WORK_LINE_PATTERN.test(line)).length
+}
+
 // tmux draws a position badge (`[12/345]`) in the top-right corner while a pane is in copy mode; in
 // that mode keystrokes scroll instead of typing, so an Enter would never submit. The badge is the only
 // marker a raw capture carries, hence the heuristic — and a pane that scrolls instead of typing is

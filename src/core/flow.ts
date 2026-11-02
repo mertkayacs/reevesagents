@@ -388,6 +388,10 @@ export interface FlowDecision {
   // The round key a dispatch was built from, recorded so the same file answer is not consumed twice.
   next_answered_round?: string | null
   next_verdict_handled_for?: string | null
+  // The journal event for this decision, when the default (`kind`, or `reason` for a hold) would hide what happened.
+  log_event?: string
+  // Extra journal lines written with this decision — never the prompt, never a path.
+  extra_events?: Array<{ event: string, detail: string }>
   // The plan item this decision dispatches for (null clears it: a dispatch that is not the plan's).
   next_active_plan_item?: string | null
   // The plan item an accepted verdict closes, with the facts the plan records.
@@ -986,6 +990,26 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
 }
 
+// Settle a claim the world has already answered. The decision is the one the engine would have taken without the claim
+// (a `tickReviewing` that reads the notes file), marked with `settled_by_observation` so the journal says the claim was
+// recovered rather than settled by its sender. Returns null when nothing observable answers the claim — then the claim is
+// genuinely in flight and the caller holds.
+function settleByObservation(state: FlowState, observations: FlowObservations): FlowDecision | null {
+  const pending = state.pending
+  if (!pending || pending.kind !== 'request_review') return null
+  const fromFile = observations.verdict_source === 'file' && observations.verdict !== null
+  const fromPane = observations.verdict !== null && observations.verdict_count > state.claim.verdict_count
+  if (!fromFile && !fromPane) return null
+  // Re-run the engine with the claim out of the way; anything it refuses to decide means the observation does not
+  // actually answer this claim, and the claim keeps its rights.
+  const withoutClaim: FlowState = { ...state, pending: null }
+  const decision = flowTick(withoutClaim, observations)
+  // "Did not decide" is "changes nothing on disk" — not `kind: 'none'`, which is also how a legitimate `flow_done` is
+  // expressed.
+  if (!decisionChangesState(withoutClaim, decision)) return null
+  return { ...decision, log_event: 'settled_by_observation' }
+}
+
 // Take a documentation-only commit as the new baseline: nothing is reviewed, nothing is dispatched, the round counter does
 // not move. The journal says so once, because "the flow moved its baseline" is a fact an operator wants to see; what does
 // not happen is a review request or a fix.
@@ -1192,6 +1216,10 @@ function isVerdictSubstantiated(observations: FlowObservations): boolean {
   const evidence = observations.verdict_evidence
   const elapsedOk = policy.min_seconds <= 0
     || (evidence !== undefined && evidence.elapsed_ms >= policy.min_seconds * 1000)
+  // A valid notes *file* carrying an explicit verdict is evidence in itself: a human-readable record the reviewer wrote
+  // by hand, not a one-second stamp picked out of a pane. Without the file the older rule stands — enough wall time and at
+  // least one finding (or an explicit "nothing to report") — because an ACCEPT typed into a busy pane proves nothing (D8).
+  if (observations.verdict_source === 'file') return true
   const notesOk = (evidence?.notes_findings ?? 0) >= 1 || observations.verdict_explicit_clean === true
   return elapsedOk && notesOk
 }
@@ -1283,6 +1311,11 @@ export function flowTick(state: FlowState, observations: FlowObservations): Flow
   // caller sees the claim on disk, decides nothing, and pastes nothing. It outranks the orphan
   // check on purpose: a send in flight has to settle (or expire) before the flow is parked.
   if (state.pending) {
+    // A claim in flight is not a lock on the world: if the work it asked for has visibly happened — the round's notes
+    // file answers, or the pane's verdict counter grew — then the claim is stale, not pending, and the flow settles it
+    // from what it can see instead of waiting for a TTL that will escalate work which is already done (D7).
+    const byObservation = settleByObservation(state, observations)
+    if (byObservation) return byObservation
     if (observations.now - state.pending.at < PENDING_TTL_SEC * 1000) return hold(state, 'dispatch_pending')
     // Past the TTL the claim belongs to a process that is gone, and nobody can tell whether the
     // paste landed. Re-sending blind is how one prompt becomes two, so a human decides.
@@ -1322,8 +1355,12 @@ function logDetail(decision: FlowDecision): string {
   return parts.join(' ')
 }
 
+export function appendLogEntries(log: FlowLogEntry[], entry: FlowLogEntry): FlowLogEntry[] {
+  return [...log, entry].slice(-FLOW_LOG_LIMIT)
+}
+
 export function appendLog(state: FlowState, entry: FlowLogEntry): FlowLogEntry[] {
-  return [...state.log, entry].slice(-FLOW_LOG_LIMIT)
+  return appendLogEntries(state.log, entry)
 }
 
 function withDelta(
@@ -1364,16 +1401,19 @@ function withDelta(
     notify_episode: options.advance && state.state !== 'escalated' && decision.next_state === 'escalated'
       ? state.notify_episode + 1
       : state.notify_episode,
-    log: appendLog(state, {
-      at,
-      event: options.event,
+    log: [...(decision.extra_events ?? []).reduce<FlowLogEntry[]>(
+      (acc, extra) => appendLogEntries(acc, { at, event: extra.event, detail: extra.detail }),
+      appendLog(state, {
+        at,
+        event: options.event,
       detail: options.detail
         ?? [logDetail(decision), decision.notes_invalid ? `notes_invalid ${decision.notes_invalid}` : '']
           .filter(Boolean).join(' '),
       // Only a decision that consumed a round's notes carries these; the text stays out of the journal.
-      ...(decision.notes_ref ? { notes_ref: decision.notes_ref } : {}),
-      ...(decision.notes_counts ? { notes_counts: decision.notes_counts } : {}),
-    }),
+        ...(decision.notes_ref ? { notes_ref: decision.notes_ref } : {}),
+        ...(decision.notes_counts ? { notes_counts: decision.notes_counts } : {}),
+      })),
+    ],
     updated_at: at,
   }
 }
@@ -1384,9 +1424,9 @@ export function applyDecisionToState(state: FlowState, decision: FlowDecision, a
   if (decision.next_state !== state.state) assertTransition(state.state, decision.next_state, decision.kind)
   return withDelta(state, decision, at, {
     advance: true,
-    event: decision.kind === 'none'
+    event: decision.log_event ?? (decision.kind === 'none'
       ? decision.reason
-      : decision.kind === 'orphan' ? 'flow_orphaned' : decision.kind,
+      : decision.kind === 'orphan' ? 'flow_orphaned' : decision.kind),
   })
 }
 

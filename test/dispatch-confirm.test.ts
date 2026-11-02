@@ -297,6 +297,80 @@ describe('a verdict already collected is work, even when the head has not moved 
   })
 })
 
+describe('a claim the world already answered settles by observation (D7)', () => {
+  it('applies the notes file that arrived while the claim was open', () => {
+    // The sandbox: the request was pasted, the send reported `pane_changed`, the claim stayed open, the reviewer wrote
+    // `notes/inbox/<head>-r1.md` — and nothing read it until PENDING_TTL_SEC expired into an escalation. The observation is
+    // the answer; the claim is stale, not pending.
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state,
+      state: 'reviewing',
+      review_started_at: NOW,
+      claim: { head: HEAD, verdict: null, verdict_count: 0 },
+      pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', HEAD, 1, root), 'VERDICT: ACCEPT\n')
+
+    const result = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    expect(result.status).toBe('applied')
+    expect(result.decision.reason).toBe('flow_done')
+    const after = readFlow('run-1')
+    expect(after.pending).toBeNull()
+    expect(after.state).toBe('done')
+    expect(after.log.some(entry => entry.event === 'settled_by_observation')).toBe(true)
+  })
+
+  it('leaves a claim alone when nothing observable answers it', () => {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state,
+      state: 'reviewing',
+      review_started_at: NOW,
+      claim: { head: HEAD, verdict: null, verdict_count: 0 },
+      pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
+    })
+
+    const result = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports(() => ({ sent: true }), ''),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('dispatch_pending')
+    expect(readFlow('run-1').pending?.op_id).toBe('op-1')
+  })
+})
+
+describe('a valid notes file is evidence by itself (D8)', () => {
+  it('accepts a 16-byte VERDICT: ACCEPT with no findings', () => {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'reviewing', review_started_at: NOW + 1_000, claim: { head: HEAD, verdict: null, verdict_count: 0 } })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', HEAD, 1, root), 'VERDICT: ACCEPT\n')
+
+    const result = stepFlow('run-1', {
+      // One second after the request: the time half of the old rule would have refused this.
+      now: NOW + 2_000, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports(() => ({ sent: true }), ''),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('flow_done')
+    expect(result.decision.reason).not.toBe('review_unsubstantiated')
+  })
+})
+
 describe('a commit that only touches the plan is not the dev\'s work (D6)', () => {
   it('moves the baseline instead of asking for a review', () => {
     // Seen on the sandbox: the plan and a brief were committed after `flow start`, the flow asked for a review of that

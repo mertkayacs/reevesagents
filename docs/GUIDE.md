@@ -316,6 +316,25 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+### One ticker at a time (manual runs and tests)
+
+The claim protocol makes two tickers safe, but they still race for the same flow: one takes the claim, the other answers
+`locked` or `dispatch_pending`, and a manual run sees a stuck round instead of progress. When you tick by hand — or drive a
+flow from a test harness — there must be exactly one driver:
+
+- set `flow_tick_ms: 0` so the dashboard stops advancing flows on its own, **or** close the dashboard while you tick by
+  hand; `flow tick --all` in a cron job counts as a ticker too;
+- one `flow tick --run <id>` at a time per flow: the second one is not an error, it simply decides nothing;
+- after such a run put `flow_tick_ms` back — a machine that never ticks looks like a broken flow.
+
+### When a claim is answered by something other than its sender
+
+A claim (`pending`) normally settles when the send reports back. If the work happens anyway — the reviewer writes
+`notes/inbox/<head>-r<N>.md`, or the pane's verdict counter grows — the next tick settles the claim from what it observes
+(`settled_by_observation` in `flow logs`) instead of waiting out `PENDING_TTL_SEC` and escalating a round that is already
+answered. A valid notes file carrying `VERDICT:` is evidence in itself (`notes_accept_verified`); a bare verdict in a pane
+still needs time and a finding.
+
 ### Order matters: the plan and its briefs are committed before `flow start`
 
 The engine treats **any** commit as progress: a moved HEAD is reviewed. Documents about the work are not the work, so

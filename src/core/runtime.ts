@@ -39,7 +39,7 @@ import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { paneInSession, realDriver, sessionInGroup, STALE_WINDOW_ERROR, VIEWER_SESSION_PATTERN, windowInSession, type RuntimeDriver } from './tmux.js'
 import { reapPaneProcess } from './process.js'
 import {
-  BUSY_SCAN_LINES, composerText, detectPaneBusy, detectPaneReady, paneInCopyMode, type PaneBusyState,
+  BUSY_SCAN_LINES, composerText, countWorkLines, detectPaneBusy, detectPaneReady, paneInCopyMode, type PaneBusyState,
 } from './activity.js'
 import { redactSecrets } from './redact.js'
 import { providerDisplayName } from '../utils/display.js'
@@ -801,10 +801,15 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // `unknown` — a modal, a login screen, a half-drawn frame — must not receive a keystroke at all), and the
   // composer still holds exactly our text (a submit that did not land, not a blind repeat).
   const after = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  const stillOurs = composerHoldsOurs(composerText(after, agent.provider) ?? '', text)
+  // A confirmed submit does not have to announce itself as "busy". Two independent witnesses are enough: our text is out
+  // of the composer, and the pane's ledger grew (a tool line, a shell line, a file edit). Providers that never print a
+  // busy marker — or print it later than the window — used to look like a failed dispatch while the agent was already
+  // working on it (block 23, D9).
+  if (!stillOurs && countWorkLines(after) > countWorkLines(beforeEnter)) return { sent: true }
   const afterBusy = detectPaneBusy(after, agent.provider)
   const afterReady = detectPaneReady(after, agent.provider)
   if (afterBusy !== 'idle' || afterReady !== 'ready') return { sent: false, reason: 'unconfirmed' }
-  const stillOurs = composerHoldsOurs(composerText(after, agent.provider) ?? '', text)
   if (!stillOurs) return { sent: false, reason: 'unconfirmed' }
   try {
     driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])

@@ -444,6 +444,19 @@ Two invariants make the table safe: a transition is written only inside a short 
 consumes a verdict and cleared when the HEAD moves. Without it an ACCEPT collected in `idle` would be
 re-applied on the following tick and would close the item the tick before had just dispatched.
 
+**Claims settle by observation (block 23, D7).** A claim is not a lock on the world: when the round's notes file answers,
+or the pane's verdict counter grows, the claim is *stale*, not pending — the tick settles it with the decision it would have
+taken anyway (`settled_by_observation`), and only a claim nothing observes waits for `PENDING_TTL_SEC`. The decision is
+"changes the state on disk", not `kind: 'none'`, because `flow_done` is also a `none`.
+
+**A valid notes file is evidence (D8).** The evidence rule exists to reject a one-second ACCEPT typed into a pane. A file
+carrying `VERDICT:` is a record the reviewer chose to write, so it counts on its own (`notes_accept_verified`); the pane
+path keeps the older, stricter rule (time plus a finding).
+
+**A send is confirmed by what the pane shows (D9).** "Became busy within N seconds" is one witness among others; the others
+are the composer no longer holding our text and the pane's ledger having grown. A provider that prints its busy marker late
+— or never — used to look like a failed dispatch while the agent was already running the prompt.
+
 **Documents are not work (block 22, D6).** A commit is what the flow reviews, and the engine cannot know what a commit
 *means* — so it asks git what it touched. A range that changed only the imported plan document or `docs/briefs/` is a
 document commit: the tick re-anchors `claim.head` on it, writes one journal line (`head_reanchored`), and asks for no

@@ -281,6 +281,32 @@ describe('sendWhenIdle', () => {
     expect(driver.count('send-keys')).toBe(0)
   })
 
+  it('confirms the send when the composer cleared and the ledger grew, without any busy marker', async () => {
+    // D9: the sandbox pane never printed a busy marker inside the window, so every send looked unconfirmed while the agent
+    // was already running the prompt. Composer cleared + a new tool line is the same fact, observed twice.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const worked = [
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/reevesagents-flow',
+      '  💻 $ git add -- index.html style.css  0.1s',
+    ].join('\n')
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, worked]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: true })
+    expect(driver.pasted()).toEqual(['hello'])
+    expect(driver.count('send-keys')).toBe(1)
+  })
+
+  it('does not confirm on a cleared composer alone', async () => {
+    // The other half: an empty composer with nothing else to show is a paste that vanished — still unconfirmed.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_IDLE]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed' })
+  })
+
   it('waits the dispatch window by default, polling for the busy marker', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()

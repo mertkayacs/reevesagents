@@ -446,7 +446,6 @@ describe('the notes channel in the runner', () => {
     expect(held.status).toBe('skipped')
     // Nothing recorded yet, and the reviewer's file is still there for the next tick.
     expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(false)
-    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(true)
 
     const idle = makePorts()
     const applied = step(idle, { head: NOTES_HEAD })
@@ -462,16 +461,19 @@ describe('the notes channel in the runner', () => {
     // First answer: valid shape, no findings, one second old — rejected, and *not* recorded. The
     // re-request reuses the same (head, round), so the second staging file lands on the same path and
     // must be able to become the record. This is the case the pre-decision publish broke.
+    // The first answer is a bare ACCEPT typed into the pane one second in: no file, nothing recorded. That is the stamp
+    // the evidence rule exists for, and it is rejected (D8: the *file* is the record, the pane is not).
     seed(makeState({
       state: 'reviewing',
       review_started_at: NOW,
       claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
     }))
-    writeStaging('run-1', NOTES_HEAD, 1, 'ВЕРДИКТ: ACCEPT\n')
-    const fast = step(makePorts(), { head: NOTES_HEAD, verdict_evidence: { elapsed_ms: 1_000, notes_bytes: 0, notes_findings: 0, pane_tool_lines: 0 } })
+    const fast = step(makePorts({ peek: () => verdictCapture(1) }), {
+      head: NOTES_HEAD,
+      verdict_evidence: { elapsed_ms: 1_000, notes_bytes: 0, notes_findings: 0, pane_tool_lines: 0 },
+    })
     expect(fast.decision.reason).toBe('review_unsubstantiated')
     expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(false)
-    expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(true)
 
     // The reviewer answers again, this time with a finding, and the review is two minutes old.
     seed(makeState({
