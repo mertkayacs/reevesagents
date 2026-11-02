@@ -649,7 +649,7 @@ reevesagents flow plan import --run <id> --file <path> [--dry-run]   # shipped
 reevesagents flow plan attach --run <id> --item <id> --spec <file> [--queue]  # shipped
 reevesagents flow plan status --item <id> [--run <id>] [--json]      # shipped
 reevesagents flow plan set   --run <id> --item <id> --status <s> [--yes] [--note <t>]  # shipped
-reevesagents flow plan next  --run <id> [--dry-run] [--json]         # shipped (block 13)
+reevesagents flow plan next  --run <id> [--json]                     # shipped (block 13); reads only (block 19)
 reevesagents notifications list [--run <id>] [--unread] [--limit N]  # shipped (block 14)
 reevesagents notifications read [--seq N]                            # shipped
 ```
@@ -815,7 +815,7 @@ so two concurrent resolves move the flow once), and only when the flow is still 
 | Verdict evidence (`review_unsubstantiated`) | **shipped** (block 10) — `unsubstantiated_attempts` in the state, one re-request with a stricter prompt, then escalation; numbers in the journal and in `flow status` |
 | Dispatch readiness (`target_not_ready`, `composer_dirty`, `dispatch_confirm_seconds`) | **shipped** (block 10) — `runtime.sendWhenIdle` probes the composer, cancels copy mode, and refuses instead of pasting twice |
 | The plan as an object (`plan.json`, import/attach/set) | **shipped** (block 12) — `src/core/plan.ts` parses the two real document shapes, mirrors them into `flows/<run-id>/plan.json`, and the flow state carries a one-line summary; `flow plan` / `plan import` / `plan attach` / `plan status` / `plan set` and the MCP `flow_plan` + `flow_plan_import` read and edit it. `done` is only ever set by a substantiated ACCEPT or an explicit human `set`, and a document that disagrees produces a conflict, never a silent rewrite |
-| Plan auto-advance and completion (`plan next`, `plan_incomplete`, per-item rounds) | **shipped** (block 13) — the tick takes the first item with a brief from the plan (`plan_item_dispatched`), an ACCEPT closes *that* item with its head, rounds and notes, a spent item budget blocks the item (`blocked_owner` / `rounds_exhausted`), `max_total_rounds` escalates the flow, and the flow refuses `done` while anything is open (`plan_incomplete`). A flow without a plan keeps the old `max_rounds` behaviour |
+| Plan auto-advance and completion (`plan next`, `plan_incomplete`, per-item rounds) | **shipped** (blocks 13, 19) — the first item is dispatched from `idle` (§3.6) — the tick takes the first item with a brief from the plan (`plan_item_dispatched`), an ACCEPT closes *that* item with its head, rounds and notes, a spent item budget blocks the item (`blocked_owner` / `rounds_exhausted`), `max_total_rounds` escalates the flow, and the flow refuses `done` while anything is open (`plan_incomplete`). A flow without a plan keeps the old `max_rounds` behaviour |
 | Notification journal (`notifications.jsonl`, `GET/POST /api/notifications`, `notifications list`) | **shipped** (block 14) — append-only ring with a read watermark, at-least-once with a durable `dedupe_key`; the two flow kinds are emitted from this engine's attention (`flow.escalated`, `flow.review_timeout`) plus `plan.item_done` / `plan.item_blocked` / `plan.item_needs_brief` |
 | Agent-card pulse + Plan/Logs dialog in the Web UI | **shipped** (block 16) — one dialog with a Plan tab (progress, waiting block, item detail) and a Logs tab (filters, mark-read, live refresh over SSE); the card pulse is `pulseRemaining` from the summary's `unread_by`, `agent_pulse_ms` (`0` disables) |
 
