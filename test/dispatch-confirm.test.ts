@@ -712,6 +712,33 @@ describe('recovery settles the claim on its own head (block 28/29)', () => {
     expect(decision.reason).toBe('flow_done')
   })
 
+  it('carries the decision baseline, so the verdict visible before the send is not its answer', () => {
+    // `state.claim.verdict_count` was N, but a verdict appeared while the tick was deciding and the decision recorded N+1;
+    // that is the number the request is answered against. Six verdicts on screen are not the answer to a request sent with
+    // six; the seventh is.
+    const B = 'b'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle',
+      claim: { head: B, verdict: null, verdict_count: 7, verdict_applied: false },
+      pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: B, spec_id: null, at: NOW, verdict_baseline: 6 },
+    })
+    const observations = (count: number) => ({
+      now: NOW + 63_000, head: B, tree_clean: true, dev_pane: 'idle' as const, review_pane: 'idle' as const,
+      verdict: 'ACCEPT' as const, verdict_notes: 'MINOR src/a.ts:1 — x', verdict_count: count, verdict_source: 'pane' as const,
+      run_present: true, agents_present: true,
+      verdict_evidence: { elapsed_ms: 60_000, notes_bytes: 40, notes_findings: 1, pane_tool_lines: 2 },
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    // Six: the verdict that was already there when the request left — not an answer.
+    expect(flowTick(readFlow('run-1'), observations(6)).reason).toBe('dispatch_pending')
+    // Seven: the one that arrived after it.
+    expect(flowTick(readFlow('run-1'), observations(7)).reason).toBe('flow_done')
+  })
+
   it('applies the verdict that arrived after the request, measured against its own baseline', () => {
     pendingOnB(5, 6)
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })

@@ -1577,7 +1577,11 @@ export function claimPendingDispatch(state: FlowState, decision: FlowDecision, i
       head: decision.head ?? null,
       spec_id: decision.spec_id ?? null,
       at: Math.floor(init.now),
-      verdict_baseline: state.claim.verdict_count,
+      // The baseline belongs to the decision, not to the state it was taken from: `next_claim.verdict_count` is the counter
+      // the request is answered against, and it can already be ahead of `state.claim.verdict_count` when a verdict appeared
+      // while the tick was deciding. Taking the state's number there would let that older verdict pass for the answer
+      // (block 30).
+      verdict_baseline: decision.next_claim.verdict_count,
     },
     log: appendLog(state, { at, event: 'dispatch_claimed', detail: logDetail(decision) }),
     updated_at: at,

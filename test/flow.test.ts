@@ -521,10 +521,16 @@ describe('the dispatch claim', () => {
       head: 'bbb222',
       spec_id: null,
       at: NOW,
-      // The claim records the verdict counter it was sent with, so a recovery can tell a new answer from an old one.
-      verdict_baseline: 0,
+      // The claim records the counter the *decision* was answered against — the observation's three verdicts, not the
+      // state's zero: the claim is sent with the number a fresh answer has to beat (block 30).
+      verdict_baseline: 3,
     })
     expect(claimed.log.at(-1)?.event).toBe('dispatch_claimed')
+    // ^ `verdict_baseline` above is the decision's counter (3), not the state's (0). They differ whenever a verdict showed up
+    // while the tick was deciding, and the claim has to carry the higher one: it is the number an answer must beat.
+    expect(idle.claim.verdict_count).toBe(0)
+    expect(decision.next_claim.verdict_count).toBe(3)
+    expect(claimed.pending?.verdict_baseline).toBe(decision.next_claim.verdict_count)
     // The claim itself changes nothing the engine acts on: the status moves when it settles.
     expect(claimed.state).toBe('idle')
     expect(claimed.review_started_at).toBeNull()
