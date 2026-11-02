@@ -236,6 +236,19 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
   }
 }
 
+// Is the item the claim is bound to still open? The question the settle asks, asked here so `resume` keeps the answer that is still due.
+function boundItemOpen(state: FlowState): boolean {
+  const id = state.claim.spec_id
+  if (!id) return false
+  try {
+    const plan = readPlan(state.run_id)
+    return plan.items.some(item => item.id === id && item.status !== 'done' && item.status !== 'skipped')
+  } catch {
+    // An unreadable plan is not a reason to throw the answer away: the settle will find nothing to close and say so.
+    return true
+  }
+}
+
 // `resume` starts a new working spell, so the commits that landed while the flow was parked are the new baseline: they are
 // "already accounted for" and do not earn a review (block 22, D6). Without this the first tick after a resume asked a
 // reviewer to read whatever had been committed in the meantime — including the plan document itself.
@@ -245,7 +258,10 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
 // `landing-ten` did (`claim.head = 5badf48`, `verdict ACCEPT`, then `verdict none` after the resume). An answer that has not been
 // used keeps its head, its verdict and its binding: the whole point of resuming is to let the flow carry it out (block 48, MAJOR 2).
 function anchorOnHead(state: FlowState): { claim: FlowState['claim'], verdict_handled_for: null } {
-  const owed = state.claim.verdict !== null && !state.claim.verdict_applied
+  // An answer is owed while the item it belongs to is still open — the marker `verdict_applied` is bookkeeping, and it can be set while
+  // the item it claims to have closed is still in flight (the settle treats exactly that as "the close is still due"). Resetting the
+  // claim on that state threw the answer away and left the run parked with nothing to apply (block 50, MAJOR).
+  const owed = state.claim.verdict !== null && (!state.claim.verdict_applied || boundItemOpen(state))
   const head = owed ? state.claim.head : (readGitHead(state.repo) || state.claim.head)
   return {
     claim: owed
