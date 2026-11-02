@@ -798,6 +798,28 @@ where the two disagree, the row above and the code win.
 
 ---
 
+### 4.7 The gate this branch closes with, and what is left to the owner
+
+Run on the tree this document ships with, every probe against an isolated state and tmux socket
+(`REEVES_REGISTRY`, `REEVES_CONFIG`, `TMUX_TMPDIR` in a temp dir, `unset TMUX`), with the live `reeves-*` sessions
+counted before and after each step:
+
+| Step | Result |
+| --- | --- |
+| `pnpm typecheck` | `exit=0` |
+| `pnpm lint` | `exit=0` |
+| `pnpm exec vitest run` | `exit=0` — 121 files passed, 1 skipped; 1340 tests passed, 5 skipped (the Windows-only `winmux-e2e`) |
+| `pnpm build` | `exit=0` |
+| `pnpm smoke:cli` | `exit=0` — 4 checks |
+| `pnpm check:package` | `exit=0` — `package contents ok (38 files)` |
+| `pnpm --dir packages/reevesagents-win run test` | `exit=0` — 52 tests |
+| `git diff --check` | `exit=0` |
+| `pnpm check:install-matrix` | **not run**: it starts a real Web UI against the shared tmux server and the sweep can archive live runs. The guard it needs came with 2.1.0, so the owner or CI can run it on an idle fleet |
+
+Left to the owner: push and open the PR (nothing here was pushed), run `check:install-matrix` on an idle host, install
+the build if wanted (`~/.local` still carries the previous one). No rebase is needed: the branch is merged up to 2.1.0
+and `git rev-list --left-right --count upstream/master...HEAD` is `0 103`.
+
 ## 5. Risks and contract changes
 
 | Risk | Where it bites | Mitigation |
