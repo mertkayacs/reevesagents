@@ -7,6 +7,20 @@
 ;(function (global) {
   'use strict'
 
+  // Is the flow badge a button, and what does it say? A badge with a plan opens that plan; a badge without one stays a chip
+  // and says so, because a button that does nothing is worse than a chip that does nothing.
+  function planBadgeAction(flow) {
+    if (!flow) return { interactive: false, reason: 'no-flow' }
+    if (!flow.plan) return { interactive: false, reason: 'no-plan' }
+    return {
+      interactive: true,
+      haspopup: 'dialog',
+      // The run is part of the label: two cards side by side both say "flow: plan 1/2", and a screen reader needs to know
+      // which one it is about to open.
+      label: `${flow.label} — ${flow.run_id || ''}`.trim(),
+    }
+  }
+
   // `12/23` plus the percentage the progress bar needs. A plan with no items is `0/0` and a 0 % bar, not a crash.
   function formatPlanProgress(done, total) {
     const safeTotal = Number.isFinite(total) && total > 0 ? total : 0
@@ -61,5 +75,5 @@
     return { needsBrief, blocked, total: needsBrief.length + blocked.length }
   }
 
-  global.insightsCore = { formatPlanProgress, pulseRemaining, filterPlanItems, planWaiting }
+  global.insightsCore = { formatPlanProgress, pulseRemaining, filterPlanItems, planWaiting, planBadgeAction }
 })(typeof window === 'undefined' ? globalThis : window)

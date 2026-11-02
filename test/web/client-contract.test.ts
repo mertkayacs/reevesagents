@@ -214,17 +214,23 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
   const js = readClientFile('app.js')
   const css = readClientFile('app.css')
 
-  it('puts one button after About, and one dialog with two tabs', () => {
+  it('puts one button after About, and keeps the logs dialog free of tabs', () => {
     expect(html).toContain('id="logs-btn"')
     // The button sits after About and before New agent, which is the header order the block asks for.
     expect(html.indexOf('id="logs-btn"')).toBeGreaterThan(html.indexOf('id="about-btn"'))
     expect(html.indexOf('id="logs-btn"')).toBeLessThan(html.indexOf('id="new-agent-btn"'))
 
     expect(html).toContain('id="insights-dialog"')
-    expect(html).toContain('id="insights-tab-plan"')
-    expect(html).toContain('id="insights-tab-logs"')
-    expect(html).toContain('role="tablist"')
-    expect(html).toContain('role="tabpanel"')
+    // Logs are logs: the plan tab left this dialog for its own, opened from the flow badge.
+    expect(html).not.toContain('id="insights-tab-plan"')
+    // (the create dialog keeps its own tablist; this is about the logs dialog)
+    expect(html).not.toContain('class="insights-tabs"')
+    // The plan has its own dialog, and its own close button.
+    expect(html).toContain('id="plan-dialog"')
+    expect(html).toContain('id="plan-dialog-title"')
+    expect(html).toContain('id="plan-close"')
+    // The panel lives inside the plan dialog, not inside the logs one.
+    expect(html.indexOf('id="plan-panel"')).toBeLessThan(html.indexOf('id="insights-dialog"'))
   })
 
   it('has the Plan tab: progress, filter chips, item list, waiting block, empty state', () => {
@@ -254,10 +260,18 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain('previous.latest_seq !== data.notifications.latest_seq')
   })
 
-  it('opens the dialog with the plan tab when the run has a plan', () => {
-    expect(js).toContain('function openInsightsDialog(')
+  it('opens the plan from the flow badge, with the run id it belongs to', () => {
+    expect(js).toContain('async function openPlanDialog(runId, opener)')
+    expect(js).toContain("el.planDialog.showModal()")
     expect(js).toContain("api('GET', `/api/plan?run=")
-    expect(js).toContain("const wanted = tab || (insights.plan ? 'plan' : 'logs')")
+    // The badge is the only opener, and only when the run has a plan.
+    // The decision comes from `planBadgeAction`, so the badge and the test read one rule.
+    expect(js).toContain("flow.setAttribute('aria-haspopup', action.haspopup)")
+    expect(js).toContain('if (action.interactive)')
+    expect(js).toContain('openPlanDialog(run.id, flow)')
+    // Esc closes the dialog and hands focus back to the badge that opened it.
+    expect(js).toContain("el.planDialog.addEventListener('close'")
+    expect(js).toContain('opener.focus()')
   })
 
   it('pulses only the card that has unread news, from the summary the server sends', () => {

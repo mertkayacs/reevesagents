@@ -318,6 +318,9 @@ cron usually wants that.
 
 ### Reading the plan indicator on a run card
 
+Click the flow chip on a run card to open that run's plan; Esc (or Close) brings you back to the chip. A chip without a
+plan is not clickable and says so in its tooltip. The **Logs** button opens the notification journal on its own.
+
 Under the run name: **`flow: plan 1/3`** in amber means the flow is walking its plan and needs nobody; **`flow: done 3/3`**
 in green means the plan finished and the work is ready to look at; **`flow: needs attention`** in red means something waits
 for you — an escalation, a review past its deadline, an item without a brief, an item its owner blocked, or a dispatch that

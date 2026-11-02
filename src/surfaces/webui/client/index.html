@@ -244,18 +244,12 @@
     </div>
   </dialog>
 
-  <dialog id="insights-dialog" class="dialog mcp-dialog">
+  <dialog id="plan-dialog" class="dialog mcp-dialog plan-dialog">
     <div class="mcp-panel">
       <div class="dialog-header">
-        <div id="insights-title" class="dialog-title">Plan and logs</div>
-        <div id="insights-subtitle" class="dialog-subtitle">What the flow is doing and what your agents reported.</div>
+        <div id="plan-dialog-title" class="dialog-title">Plan</div>
       </div>
-      <div class="insights-tabs" role="tablist" aria-label="insights">
-        <button id="insights-tab-plan" class="insights-tab" type="button" role="tab" aria-selected="false" aria-controls="plan-panel">Plan</button>
-        <button id="insights-tab-logs" class="insights-tab" type="button" role="tab" aria-selected="false" aria-controls="logs-panel">Logs</button>
-      </div>
-
-      <div id="plan-panel" class="insights-panel" role="tabpanel" aria-labelledby="insights-tab-plan">
+      <div id="plan-panel" class="insights-panel">
         <div class="plan-progress">
           <div class="plan-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <span id="plan-progress-fill" class="plan-progress-fill"></span>
@@ -275,8 +269,21 @@
           <div class="empty-body">Import the project document with `reevesagents flow plan import`.</div>
         </div>
       </div>
+      <div class="dialog-actions">
+        <button id="plan-close" class="btn" type="button">Close</button>
+      </div>
+    </div>
+  </dialog>
 
-      <div id="logs-panel" class="insights-panel" role="tabpanel" aria-labelledby="insights-tab-logs" hidden>
+  <dialog id="insights-dialog" class="dialog mcp-dialog">
+    <div class="mcp-panel">
+      <div class="dialog-header">
+        <div id="insights-title" class="dialog-title">Logs</div>
+        <div id="insights-subtitle" class="dialog-subtitle">What your agents reported.</div>
+      </div>
+
+
+      <div id="logs-panel" class="insights-panel">
         <div class="logs-filters">
           <label class="logs-filter">
             <span>Run</span>

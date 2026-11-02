@@ -305,8 +305,9 @@
     logsBtn: document.getElementById('logs-btn'),
     insightsDialog: document.getElementById('insights-dialog'),
     insightsClose: document.getElementById('insights-close'),
-    insightsTabPlan: document.getElementById('insights-tab-plan'),
-    insightsTabLogs: document.getElementById('insights-tab-logs'),
+    planDialog: document.getElementById('plan-dialog'),
+    planDialogTitle: document.getElementById('plan-dialog-title'),
+    planClose: document.getElementById('plan-close'),
     planPanel: document.getElementById('plan-panel'),
     logsPanel: document.getElementById('logs-panel'),
     planList: document.getElementById('plan-list'),
@@ -603,10 +604,9 @@
     el.doctorRefresh.textContent = t('web.refresh')
     el.doctorClose.textContent = t('web.mcpClose')
     el.logsBtn.textContent = t('web.logs')
-    document.querySelector('#insights-dialog .dialog-title').textContent = t('web.insightsTitle')
-    document.querySelector('#insights-dialog .dialog-subtitle').textContent = t('web.insightsSubtitle')
-    el.insightsTabPlan.textContent = t('web.tabPlan')
-    el.insightsTabLogs.textContent = t('web.tabLogs')
+    document.querySelector('#insights-dialog .dialog-title').textContent = t('web.logsTitle')
+    document.querySelector('#insights-dialog .dialog-subtitle').textContent = t('web.logsSubtitle')
+    el.planClose.textContent = t('web.mcpClose')
     el.planFilterAll.textContent = t('web.planFilterAll')
     el.planFilterOpen.textContent = t('web.planFilterOpen')
     el.planFilterWaiting.textContent = t('web.planFilterWaiting')
@@ -1059,7 +1059,8 @@
       // The flow chip is rendered by the server (core/flow-label.ts), so the client holds no copy of
       // its wording; attention is an attribute on the same chip, painted by app.css.
       if (run.flow) {
-        const flow = document.createElement('span')
+        const flow = document.createElement('button')
+        flow.type = 'button'
         // The tone is decided on the server (`flowBadgeView`), so the classes here are a mapping and nothing else: a second
         // copy of "green means the plan finished" in JavaScript is how two surfaces start disagreeing.
         const tone = run.flow.tone || 'neutral'
@@ -1069,6 +1070,20 @@
           flow.dataset.attention = run.flow.attention
         }
         flow.title = run.flow.detail || run.flow.attention_label || run.flow.label
+        // The badge opens the plan — but only when there is one. A run without a plan keeps a plain chip: a button that
+        // does nothing is worse than a chip that does nothing.
+        const action = core().planBadgeAction({ ...run.flow, run_id: run.id })
+        if (action.interactive) {
+          flow.setAttribute('aria-haspopup', action.haspopup)
+          flow.setAttribute('aria-expanded', String(el.planDialog.open && insights.runId === run.id))
+          flow.setAttribute('aria-label', `${action.label} · ${t('web.planOpen')}`)
+          flow.classList.add('is-interactive')
+          flow.addEventListener('click', () => { void openPlanDialog(run.id, flow) })
+        } else {
+          flow.tabIndex = -1
+          flow.title = `${flow.title} · ${t('web.planNone')}`
+          flow.classList.add('is-static')
+        }
         headBody.appendChild(flow)
       }
       head.appendChild(headBody)
@@ -1223,7 +1238,13 @@
 
 
   // ---- Insights dialog: the Plan and Logs tabs -------------------------------------------------
-  const core = () => window.insightsCore || { formatPlanProgress: (d, t) => ({ text: `${d}/${t}`, percent: 0 }), pulseRemaining: () => 0, filterPlanItems: items => items || [], planWaiting: () => ({ needsBrief: [], blocked: [], total: 0 }) }
+  const core = () => window.insightsCore || {
+    formatPlanProgress: (d, t) => ({ text: `${d}/${t}`, percent: 0 }),
+    pulseRemaining: () => 0,
+    filterPlanItems: items => items || [],
+    planWaiting: () => ({ needsBrief: [], blocked: [], total: 0 }),
+    planBadgeAction: flow => ({ interactive: Boolean(flow && flow.plan), haspopup: 'dialog', label: flow ? flow.label : '' }),
+  }
 
   // The dialog is run-scoped: the agent the operator has selected decides which run's plan opens.
   function selectedRun() {
@@ -1237,30 +1258,34 @@
     return runs[0] || null
   }
 
-  function setInsightsTab(tab) {
-    insights.tab = tab === 'logs' ? 'logs' : 'plan'
-    const plan = insights.tab === 'plan'
-    el.insightsTabPlan.setAttribute('aria-selected', String(plan))
-    el.insightsTabLogs.setAttribute('aria-selected', String(!plan))
-    el.insightsTabPlan.classList.toggle('is-active', plan)
-    el.insightsTabLogs.classList.toggle('is-active', !plan)
-    el.planPanel.hidden = !plan
-    el.logsPanel.hidden = plan
-    if (plan) renderPlan()
-    else renderLogs()
-  }
-
-  async function openInsightsDialog(tab) {
+  async function openInsightsDialog() {
     const run = selectedRun()
     insights.runId = run ? run.id : ''
     el.insightsDialog.showModal()
-    // The plan decides the tab: a run with a plan opens on it, a run without one opens on the journal.
-    await loadPlan(insights.runId)
-    const wanted = tab || (insights.plan ? 'plan' : 'logs')
-    setInsightsTab(wanted)
     await loadLogs()
     renderLogFilters()
-    ;(insights.tab === 'plan' ? el.insightsTabPlan : el.insightsTabLogs).focus()
+    el.insightsClose.focus()
+  }
+
+  // The plan has its own dialog, opened by the flow badge on the run card: that badge is the only place the plan is
+  // advertised, and putting it behind the log dialog made "look at the plan" a two-step detour.
+  let planOpener = null
+
+  async function openPlanDialog(runId, opener) {
+    if (!runId) return
+    planOpener = opener || null
+    insights.runId = runId
+    const run = runs.find(entry => entry.id === runId)
+    el.planDialogTitle.textContent = t('web.planTitle', { run: run ? run.name : runId })
+    el.planDialog.showModal()
+    await loadPlan(runId)
+    renderPlan()
+    el.planClose.focus()
+  }
+
+  function closePlanDialog() {
+    if (!el.planDialog.open) return
+    el.planDialog.close()
   }
 
   async function loadPlan(runId) {
@@ -2540,8 +2565,14 @@
   el.aboutBtn.addEventListener('click', openAboutDialog)
   el.logsBtn.addEventListener('click', () => { void openInsightsDialog() })
   el.insightsClose.addEventListener('click', () => el.insightsDialog.close())
-  el.insightsTabPlan.addEventListener('click', () => setInsightsTab('plan'))
-  el.insightsTabLogs.addEventListener('click', () => setInsightsTab('logs'))
+  el.planClose.addEventListener('click', closePlanDialog)
+  // Esc closes the dialog natively; the focus has to come back to the badge that opened it, or the keyboard user lands on
+  // the top of the page.
+  el.planDialog.addEventListener('close', () => {
+    const opener = planOpener
+    planOpener = null
+    if (opener) opener.focus()
+  })
   el.planFilterAll.addEventListener('click', () => setPlanFilter('all'))
   el.planFilterOpen.addEventListener('click', () => setPlanFilter('open'))
   el.planFilterWaiting.addEventListener('click', () => setPlanFilter('waiting'))

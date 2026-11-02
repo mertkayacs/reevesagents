@@ -599,6 +599,14 @@ button { letter-spacing: 0; }
   background: transparent;
 }
 
+.flow-badge.is-interactive {
+  cursor: pointer;
+}
+
+.flow-badge.is-static {
+  cursor: default;
+}
+
 .flow-badge.is-pulsing {
   animation: flow-badge-pulse 1.8s ease-in-out infinite;
 }
@@ -610,7 +618,15 @@ button { letter-spacing: 0; }
 
 /* A reader who asked for less motion gets the colour and the words, never the breathing. */
 @media (prefers-reduced-motion: reduce) {
-  .flow-badge.is-pulsing { animation: none; }
+  .flow-badge.is-interactive {
+  cursor: pointer;
+}
+
+.flow-badge.is-static {
+  cursor: default;
+}
+
+.flow-badge.is-pulsing { animation: none; }
 }
 
 .run-action,
