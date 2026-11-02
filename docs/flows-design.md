@@ -817,8 +817,10 @@ counted before and after each step:
 | `pnpm check:install-matrix` | **not run**: it starts a real Web UI against the shared tmux server and the sweep can archive live runs. The guard it needs came with 2.1.0, so the owner or CI can run it on an idle fleet |
 
 Left to the owner: push and open the PR (nothing here was pushed), run `check:install-matrix` on an idle host, install
-the build if wanted (`~/.local` still carries the previous one). No rebase is needed: the branch is merged up to 2.1.0
-and `git rev-list --left-right --count upstream/master...HEAD` is `0 104`.
+the build if wanted (`~/.local` still carries the previous one). No rebase is needed: the branch is merged up to 2.1.0,
+and `git rev-list --left-right --count upstream/master...HEAD` reports **zero commits behind** — the exact commit count
+is deliberately not written here, because a number written into a document is stale the moment the document is
+committed.
 
 ## 5. Risks and contract changes
 
