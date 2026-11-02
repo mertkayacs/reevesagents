@@ -17,10 +17,12 @@
 //   which is what lets `--dry-run` print exactly what a real tick would do.
 
 import { randomUUID } from 'node:crypto'
+import { relative } from 'node:path'
 import type { PaneBusyState } from './activity.js'
 import type { BlockSpec } from './spec.js'
 import { DISPATCH_POINTER_MAX, renderPointerPrompt } from './spec.js'
 import { isCommitId } from './flow-notes.js'
+import { displayPath } from '../utils/paths.js'
 import type { FlowVerdict } from './verdict.js'
 import type { PlanItemTick, PlanTickView } from './flow-plan.js'
 import {
@@ -820,17 +822,31 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
   }
 }
 
+// Which file the pointer names. A plan item carries its brief as a repository-relative path (`docs/briefs/<id>.md`); a spec handed to
+// `flow start --spec` or `flow add-spec` carries the file the operator passed, which is the one dev must read. It arrives absolute, so a
+// path inside the repository is shortened to its relative form and one outside is shown the way every other message shows it — never as a
+// raw `/home/...`, and never as a guess: pointing dev at `docs/briefs/<id>.md` when the brief lives somewhere else sends it to a file that
+// may not exist (block 54).
+function pointerPath(state: FlowState, spec: BlockSpec, planPath: string | null | undefined): string {
+  if (planPath) return planPath
+  const source = spec.source_path
+  if (source) {
+    const relativePath = relative(state.repo, source)
+    return relativePath !== '' && !relativePath.startsWith('..') ? relativePath : displayPath(source)
+  }
+  return `docs/briefs/${spec.id}.md`
+}
+
 // What the dev's panel receives: a pointer to the brief when the item has one, the full specification otherwise. `DISPATCH_POINTER_MAX`
 // is the ceiling — a longer paste is what broke the composer detection on three live runs (block 47).
-function messageForDispatch(spec: BlockSpec, observations: FlowObservations): string {
+function messageForDispatch(state: FlowState, spec: BlockSpec, observations: FlowObservations): string {
   // One path for both kinds of dispatch — a plan item and a spec queued by hand: the panel gets a pointer to the brief, never its body.
   // A brief body is fifteen to thirty lines, and pasting it pushed the input line out of the detector's window: the Enter was never
   // confirmed, the next tick read `dev_pane_unknown`, and the prompt sat in the composer until a human sent a pointer by hand (block 52,
   // the live `flow-a`). The fallback matters as much: an item without a recorded `spec_path` still gets the conventional path rather than
   // the body, because "no path" is not a reason to paste a document into a terminal.
   const item = observations.plan?.items.find(entry => entry.id === spec.id)
-  const path = item?.spec_path ?? `docs/briefs/${spec.id}.md`
-  const pointer = renderPointerPrompt({ id: spec.id, title: spec.title, path })
+  const pointer = renderPointerPrompt({ id: spec.id, title: spec.title, path: pointerPath(state, spec, item?.spec_path) })
   return pointer.length <= DISPATCH_POINTER_MAX ? pointer : `${pointer.slice(0, DISPATCH_POINTER_MAX - 1)}…`
 }
 
@@ -867,7 +883,7 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_claim_verdict_applied: true,
     next_unsubstantiated_attempts: 0,
     next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
-    message: messageForDispatch(spec, observations),
+    message: messageForDispatch(state, spec, observations),
   }
 }
 

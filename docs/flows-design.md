@@ -487,10 +487,17 @@ and the plan icon stays the only opener.
 line out of the detector's window, the Enter is never confirmed, and the round ends in `dispatch_unconfirmed` and an escalation —
 measured on three live runs, while a two-line "read `docs/briefs/<id>.md` and carry it out" went through on the first Enter and
 produced the work. What is dispatched is therefore a pointer (`renderPointerPrompt`, ≤ `DISPATCH_POINTER_MAX` = 400 characters) that names the brief
-file; the body stays in the repository, where the dev and the reviewer read it. There is **one** path for both kinds of dispatch — a
-plan item and a spec queued with `flow add-spec` — and no fallback to the body: an item whose `spec_path` is not recorded still gets
-the conventional `docs/briefs/<id>.md`, because "no path" is not a reason to paste a document into a terminal. A pointer that somehow
-exceeds the ceiling is truncated, not replaced by the body.
+file; the body stays in the repository, where the dev and the reviewer read it. There is **one** path for both kinds of dispatch, and no fallback to the body. Which file the pointer names depends on where the brief
+came from, and in this order:
+
+1. a **plan item**: its `spec_path`, which the plan mirror stores repository-relative (`docs/briefs/<id>.md`);
+2. a spec handed to **`flow start --spec`** or **`flow add-spec`**: the `source_path` recorded when the file was read — the operator's own
+   file. It arrives absolute, so a path inside the repository is shortened to its relative form and one outside is shown the way every
+   other message shows it, never as a raw `/home/...`;
+3. nothing recorded: the conventional `docs/briefs/<id>.md`.
+
+Point 2 is the one that matters in practice: naming the conventional path for a spec that lives elsewhere sends dev to a file that may not
+exist. A pointer that somehow exceeds the ceiling is truncated, not replaced by the body.
 
 **An answer that arrives after an unconfirmed send is still the answer (block 47).** `claim.verdict_applied` says the answer was used;
 an item still open for that answer proves it was not, and the settle closes it instead of the flow escalating. A dispatch starts its

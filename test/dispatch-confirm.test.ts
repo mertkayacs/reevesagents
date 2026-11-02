@@ -1242,6 +1242,64 @@ describe('a spec queued by hand gets the same pointer (block 52)', () => {
   })
 })
 
+describe('a spec handed to flow start --spec names the file it was given (block 54)', () => {
+  it('points at the operator file, not at a conventional path that may not exist', () => {
+    // `flow start --spec /tmp/…/my-brief.md`: the operator chose that file, and the pointer must name it. Falling back to
+    // `docs/briefs/S1.md` sends dev to a file that does not exist (block 54, MAJOR).
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    const source = join(root, 'my-brief.md')
+    const spec = {
+      id: 'S1', title: 'a brief the operator chose', goal: '', requirements: [], checks: [], report: [],
+      body: ['# S1', ...Array.from({ length: 20 }, (_, i) => `  line ${i + 1}`)].join('\n'),
+      unstructured: true, source_path: source,
+    }
+    saveFlow({
+      ...state, state: 'idle', specs: [spec], dispatched_specs: [],
+      claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+
+    const sent: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'a'.repeat(40), tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(sent).toHaveLength(1)
+    const message = sent[0]!
+    // The operator's file, named — and not the conventional path.
+    expect(message).toContain('my-brief.md')
+    expect(message).not.toContain('docs/briefs/S1.md')
+    expect(message.length).toBeLessThanOrEqual(400)
+  })
+
+  it('keeps the repository-relative path for a plan item', () => {
+    const doc = '- [ ] **P1.1** — first'
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 't', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.md', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', claim: { head: 'b'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
+
+    const sent: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'b'.repeat(40), tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(sent[0]).toContain('docs/briefs/P1.1.md')
+  })
+})
+
 describe('an answer that arrives after an unconfirmed send is still applied (block 47)', () => {
   it('closes the item whose verdict is recorded, even though the marker says applied', () => {
     // `landing-ten`: `claim.head = 5badf48`, `verdict: ACCEPT`, `verdict_applied: true`, `P2.3b` still in flight, flow escalated —
