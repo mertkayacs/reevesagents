@@ -1211,6 +1211,37 @@ describe('a pointer, not the brief, goes to the dev (block 47)', () => {
   })
 })
 
+describe('a spec queued by hand gets the same pointer (block 52)', () => {
+  it('sends a short pointer with the conventional brief path, never the body', () => {
+    const body = ['# S1 — a block with no plan', ...Array.from({ length: 30 }, (_, i) => `  line ${i + 1} of the block body`)].join('\n')
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    const spec = {
+      id: 'S1', title: 'a block with no plan', goal: '', requirements: [], checks: [], report: [],
+      body, unstructured: true,
+    }
+    saveFlow({
+      ...state, state: 'idle', specs: [spec], dispatched_specs: [],
+      claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+
+    const sent: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'a'.repeat(40), tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(sent).toHaveLength(1)
+    const message = sent[0]!
+    expect(message.length).toBeLessThanOrEqual(400)
+    expect(message).toContain('docs/briefs/S1.md')
+    expect(message).not.toContain('line 30 of the block body')
+    expect(message).not.toContain('Full specification:')
+  })
+})
+
 describe('an answer that arrives after an unconfirmed send is still applied (block 47)', () => {
   it('closes the item whose verdict is recorded, even though the marker says applied', () => {
     // `landing-ten`: `claim.head = 5badf48`, `verdict: ACCEPT`, `verdict_applied: true`, `P2.3b` still in flight, flow escalated —

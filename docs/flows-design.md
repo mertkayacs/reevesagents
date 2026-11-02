@@ -483,12 +483,14 @@ every state snapshot — an SSE frame that parks the flow from another tab flips
 On the card a small glyph beside the plan icon reports the same state (`flow-plan-state`, `data-paused`); the chip stays a label,
 and the plan icon stays the only opener.
 
-**The panel receives a pointer, not the brief (block 47).** A brief of fifteen to thirty lines pasted into a terminal pushes the input
+**The panel receives a pointer, not the brief — for a plan item and for a spec alike (blocks 47, 52).** A brief of fifteen to thirty lines pasted into a terminal pushes the input
 line out of the detector's window, the Enter is never confirmed, and the round ends in `dispatch_unconfirmed` and an escalation —
 measured on three live runs, while a two-line "read `docs/briefs/<id>.md` and carry it out" went through on the first Enter and
-produced the work. What is dispatched is therefore a pointer (`renderPointerPrompt`, ≤ `DISPATCH_POINTER_MAX` = 400 characters) that
-names the brief file; the body stays in the repository, where the dev and the reviewer read it. A spec with no file falls back to the
-rendered block, which is short by construction.
+produced the work. What is dispatched is therefore a pointer (`renderPointerPrompt`, ≤ `DISPATCH_POINTER_MAX` = 400 characters) that names the brief
+file; the body stays in the repository, where the dev and the reviewer read it. There is **one** path for both kinds of dispatch — a
+plan item and a spec queued with `flow add-spec` — and no fallback to the body: an item whose `spec_path` is not recorded still gets
+the conventional `docs/briefs/<id>.md`, because "no path" is not a reason to paste a document into a terminal. A pointer that somehow
+exceeds the ceiling is truncated, not replaced by the body.
 
 **An answer that arrives after an unconfirmed send is still the answer (block 47).** `claim.verdict_applied` says the answer was used;
 an item still open for that answer proves it was not, and the settle closes it instead of the flow escalating. A dispatch starts its

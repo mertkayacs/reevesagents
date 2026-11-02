@@ -19,7 +19,7 @@
 import { randomUUID } from 'node:crypto'
 import type { PaneBusyState } from './activity.js'
 import type { BlockSpec } from './spec.js'
-import { DISPATCH_POINTER_MAX, renderDispatchPrompt, renderPointerPrompt } from './spec.js'
+import { DISPATCH_POINTER_MAX, renderPointerPrompt } from './spec.js'
 import { isCommitId } from './flow-notes.js'
 import type { FlowVerdict } from './verdict.js'
 import type { PlanItemTick, PlanTickView } from './flow-plan.js'
@@ -823,10 +823,15 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
 // What the dev's panel receives: a pointer to the brief when the item has one, the full specification otherwise. `DISPATCH_POINTER_MAX`
 // is the ceiling — a longer paste is what broke the composer detection on three live runs (block 47).
 function messageForDispatch(spec: BlockSpec, observations: FlowObservations): string {
+  // One path for both kinds of dispatch — a plan item and a spec queued by hand: the panel gets a pointer to the brief, never its body.
+  // A brief body is fifteen to thirty lines, and pasting it pushed the input line out of the detector's window: the Enter was never
+  // confirmed, the next tick read `dev_pane_unknown`, and the prompt sat in the composer until a human sent a pointer by hand (block 52,
+  // the live `flow-a`). The fallback matters as much: an item without a recorded `spec_path` still gets the conventional path rather than
+  // the body, because "no path" is not a reason to paste a document into a terminal.
   const item = observations.plan?.items.find(entry => entry.id === spec.id)
-  if (!item || !item.spec_path) return renderDispatchPrompt(spec)
-  const pointer = renderPointerPrompt({ id: spec.id, title: spec.title, path: item.spec_path })
-  return pointer.length <= DISPATCH_POINTER_MAX ? pointer : renderDispatchPrompt(spec)
+  const path = item?.spec_path ?? `docs/briefs/${spec.id}.md`
+  const pointer = renderPointerPrompt({ id: spec.id, title: spec.title, path })
+  return pointer.length <= DISPATCH_POINTER_MAX ? pointer : `${pointer.slice(0, DISPATCH_POINTER_MAX - 1)}…`
 }
 
 function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObservations): FlowDecision {
