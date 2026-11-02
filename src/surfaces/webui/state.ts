@@ -136,7 +136,10 @@ function webFlow(badge: FlowBadge, t: FlowTranslate, options: { now?: number, pu
   // "Still news" is an expiry, not a state: a badge that pulses for ever is ignored within a day. The flow file's own
   // `updated_at` is the clock — no extra timer, and a restart does not restart the pulse.
   const pulseMs = options.pulseMs ?? 15 * 60 * 1000
-  const fresh = badge.updated_at > 0 && (options.now ?? Date.now()) - badge.updated_at < pulseMs
+  // `pulseMs > 0` first, before any comparison: with `0` the difference is `age < 0`, which a clock skew (an `updated_at`
+  // in the future) would turn into "fresh" and start a pulse the operator switched off (block 28, MINOR).
+  const fresh = pulseMs > 0 && badge.updated_at > 0
+    && (options.now ?? Date.now()) - badge.updated_at < pulseMs
   const view = flowBadgeView(t, badge, { fresh })
   const doneKind = badge.status !== 'done'
     ? null

@@ -83,4 +83,20 @@ describe('the configured pulse reaches the badge', () => {
     const on = buildWebState({ now, agent_pulse_ms: 60_000, liveTmuxTarget: live }).runs.find(run => run.id === 'run-1')!.flow!
     expect(on.pulse).toBe(true)
   })
+
+  it('keeps the pulse off for 0 even when the clock runs backwards', () => {
+    // A file stamped in the future (clock skew between machines) makes `age < 0`: with `0` that inequality would read as
+    // "fresh" and start the pulse the operator switched off.
+    const source = readFileSync(join(process.cwd(), 'src/surfaces/webui/state.ts'), 'utf-8')
+    expect(source).toMatch(/pulseMs > 0/)
+  })
+
+  it('expires the pulse when the event is older than the window', async () => {
+    const { buildWebState } = await import('../../src/surfaces/webui/state.js')
+    const live = () => true
+    const stale = buildWebState({
+      now: Date.now() + 24 * 60 * 60 * 1000, agent_pulse_ms: 15_000, liveTmuxTarget: live,
+    }).runs.find(run => run.id === 'run-1')!.flow!
+    expect(stale.pulse).toBe(false)
+  })
 })

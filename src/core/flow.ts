@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto'
 import type { PaneBusyState } from './activity.js'
 import type { BlockSpec } from './spec.js'
 import { renderDispatchPrompt } from './spec.js'
+import { isCommitId } from './flow-notes.js'
 import type { FlowVerdict } from './verdict.js'
 import type { PlanItemTick, PlanTickView } from './flow-plan.js'
 import {
@@ -1034,11 +1035,24 @@ function settleByObservation(state: FlowState, observations: FlowObservations): 
   // Settle it as the round it was, not as a new tick: the claim says which state the flow was in when the request went
   // out, and re-deciding from "no claim, still idle" is how a second `request_review` was created and sent instead of the
   // answer being used (block 27, MAJOR 2).
+  // The claim is on the head the request was *made for*, which is usually not the head the flow still carries (the dev
+  // committed while the request was being pasted). Keeping the old head makes `tickReviewing` see "head !== claim.head"
+  // and ask for the review again, so the claim never settles (block 28, MAJOR). A synthetic claim on `pending.head` with
+  // the baseline the request was sent with is what the send itself would have written.
+  const pendingHead = pending.head ?? ''
+  const reviewHead = isCommitId(pendingHead) ? pendingHead : state.claim.head
   const withoutClaim: FlowState = {
     ...state,
     pending: null,
     state: 'reviewing',
     review_started_at: state.review_started_at ?? pending.at,
+    claim: {
+      ...state.claim,
+      head: reviewHead,
+      // The counter at dispatch time is what "a new verdict" is measured against; the pane's counter today may have moved
+      // for reasons of its own.
+      verdict_count: state.claim.verdict_count,
+    },
   }
   const decision = flowTick(withoutClaim, observations)
   // A review request can never be the settlement of a review request: if the engine wants to ask again, this claim is
