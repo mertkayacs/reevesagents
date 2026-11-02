@@ -638,10 +638,23 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       const result = pausing ? pauseFlow(runId) : resumeFlow(runId)
       sendJson(res, 200, { run_id: runId, flow: flowStatusPayload(result.state, flowPath(runId)) })
     } catch (err) {
+      // The pre-check above reads the state and the call re-reads it under the lock, so the state can change in between — another tab
+      // presses Pause, a ticker escalates, the operator stops the flow. The transition table then refuses with a sentence like
+      // `cannot pause a flow in state done`, and a client had to parse that prose out of a 400. Every refusal is mapped back to the same
+      // stable codes the pre-check uses, so the answer means the same thing whichever check caught it (block 53).
       const message = errMessage(err)
-      // A run without a flow is the caller's mistake, not a server fault; everything else is reported as it comes.
-      if (/no flow|not found|unknown/i.test(message)) sendJson(res, 404, { error: message })
-      else sendJson(res, 400, { error: message })
+      const transition = /cannot (pause|resume) a flow in state (\w+)/.exec(message)
+      if (/no flow for run|not found/i.test(message) && !transition) {
+        sendJson(res, 404, { error: 'not_found' })
+        return
+      }
+      if (transition) {
+        const [, action, state] = transition
+        const code = action === 'pause' ? 'not_pausable' : 'not_paused'
+        sendJson(res, 409, { error: code, state })
+        return
+      }
+      sendJson(res, 400, { error: message })
     }
     return
   }

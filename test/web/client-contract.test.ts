@@ -260,6 +260,25 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain('previous.latest_seq !== data.notifications.latest_seq')
   })
 
+  it('carries the pause control and the state glyph the UI promises', () => {
+    // The dialog owns the control; the card only reports the state. Both are asserted here because the server tests cannot see a DOM.
+    expect(html).toContain('id="plan-play-pause"')
+    expect(html).toContain('aria-pressed="false"')
+    expect(js).toContain("el.planPlayPause.textContent = paused ? t('web.planResume') : t('web.planPause')")
+    expect(js).toContain("el.planPlayPause.setAttribute('aria-label', paused ? t('web.planResumeLabel') : t('web.planPauseLabel'))")
+    // Without this handler the button is decoration: a test that only checked the markup would still pass, so the wiring is asserted.
+    expect(js).toContain("el.planPlayPause.addEventListener('click', () => { void togglePlanPlayPause() })")
+    expect(js).toContain("`/api/flow/${paused ? 'resume' : 'pause'}`")
+    // The card's glyph: present, driven by the flow's own status, and not a control.
+    expect(js).toContain("run.flow.status === 'paused'")
+    expect(js).toContain("planState.dataset.paused = String(paused)")
+    expect(js).toContain('flow-plan-state')
+    const glyph = js.slice(js.indexOf('const planState = document.createElement'), js.indexOf('headBody.appendChild(planState)'))
+    expect(glyph).not.toContain('addEventListener')
+    // And the state is kept in step by every snapshot, not only at open time.
+    expect(js).toContain('syncPlanPlayPause()')
+  })
+
   it('lays the head out as a 2×2 grid, with icon actions in the corner', () => {
     // Row 1: name and counters. Row 2: the flow chip and its plan icon. The chip and the icon share that row — that is the
     // whole point of the change, and a flat column put them on separate lines.

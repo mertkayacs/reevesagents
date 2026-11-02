@@ -914,6 +914,24 @@ changes a written contract, so the change is deliberate and recorded:
   `locales/en.ts` because `test/i18n.test.ts:48`–`:59` reads every `'web.*'` key out of
   `src/surfaces/webui/client/app.js` and fails the build otherwise.
 
+#### Pausing and resuming from the UI
+
+The dialog's header carries `#plan-play-pause` (`client/index.html`): the label follows the flow (`Pause` / `Resume`), `aria-pressed`
+says which state it is in, and a refusal is shown as the code (`not_pausable`, `already_paused`, `not_paused`) under the dialog's
+actions. The button is kept in step by every state snapshot — `syncPlanPlayPause()` runs from `applyState`, so an SSE frame that parks
+the flow from another tab flips it and a second click cannot answer `already_paused`.
+
+The routes behind it are the CLI's own functions, and their answers are codes rather than prose:
+
+| route | body | success | refusals |
+| --- | --- | --- | --- |
+| `POST /api/flow/pause` | `{ run_id }` | `200 { run_id, flow }` | `404 not_found`, `409 not_pausable` (`done`), `409 already_paused` |
+| `POST /api/flow/resume` | `{ run_id }` | `200 { run_id, flow }` | `404 not_found`, `409 not_paused` (it was not parked) |
+
+Both check the state before calling and map the transition's own refusal (the state can change in between) to the same codes, so the
+answer means the same thing whichever check caught it. While a flow is `paused` the tick observes nothing and sends nothing; `resume`
+returns it to the state it was paused from and keeps an answer the flow still owes.
+
 #### The plan indicator on a run card
 
 The chip under a run's name answers one question: **does this flow still need me?** It carries the numbers in the label,
@@ -925,7 +943,7 @@ stopped".
 | `idle` / `reviewing` / `fixing` | `1/3` | `flow: plan 1/3` | `progress` (amber) | no |
 | `done` | `3/3` | `flow: done 3/3` | `done` (green) | while fresh |
 | any | attention: `escalated`, `review_timeout`, `needs_brief`, `blocked_owner`, `composer_dirty`/`dispatch_unconfirmed` | `flow: needs attention` (+ the item in the tooltip) | `attention` (red) | while fresh |
-| `paused` / `orphaned` | any | `flow: paused (1/3)` | `paused` | no |
+| `paused` / `orphaned` | any | `flow: paused (1/3)` — the chip stays a label; a small glyph beside the plan icon (`flow-plan-state`, `data-paused`) shows the same state and is not a control | `paused` | no |
 | `done` | none | `flow: closed` | `neutral` | no |
 | any | none | `flow: review (2/3)` — the round budget | `neutral` | no |
 

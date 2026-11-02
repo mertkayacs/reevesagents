@@ -752,6 +752,25 @@ describe('POST /api/flow/pause and /api/flow/resume', () => {
     expect(idle.status).toBe(200)
   })
 
+  it('maps a transition that lost the race to the same stable code', async () => {
+    // The pre-check reads the state; `pauseFlow` re-reads it under the lock. Between the two the flow can be closed — the request below
+    // is the same one, only the state behind it changed. The answer must be the code, not `cannot pause a flow in state done` (block 53).
+    const { pauseFlow } = await import('../../src/core/flow-control.js')
+    seedFlow()
+    const handle = await start()
+
+    // Close the flow *through the engine* after the route would have passed its pre-check: this is what the race looks like from inside
+    // the server, and calling `pauseFlow` directly is how the handler's own call behaves when it loses.
+    const flow = readFlow('run-1')
+    saveFlow({ ...flow, state: 'done', close_reason: 'stopped by the operator' })
+    expect(() => pauseFlow('run-1')).toThrow(/cannot pause a flow in state done/)
+
+    const raced = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
+    expect(raced.status).toBe(409)
+    expect(JSON.parse(raced.body).error).toBe('not_pausable')
+    expect(JSON.parse(raced.body).state).toBe('done')
+  })
+
   it('rejects a POST without an Origin header', async () => {
     seedFlow()
     const handle = await start()
