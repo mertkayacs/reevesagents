@@ -216,6 +216,40 @@ describe('sendWhenIdle', () => {
     expect(driver.pasted()).toEqual(['hello'])
   })
 
+  it('submits when a redraw reads as busy but the composer still holds exactly our text', async () => {
+    // D2: the Codex pane redraws while the paste settles, the busy probe sees `Working`, and refusing there left the
+    // prompt sitting in the box until a human pressed Enter. The composer is the fact that matters.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    // The busy hint is the last line, as a redraw prints it — that is what the old pre-Enter probe reacted to.
+    const redrawn = [
+      '› hello',
+      '  GPT-6-Luna high · ~/projects/reevesagents-flow',
+      '  ◦ Working (1s • esc to interrupt)',
+    ].join('\n')
+    driver.captures = [CODEX_IDLE, redrawn, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: true })
+    // One paste and one Enter — the Enter that the busy probe used to refuse.
+    expect(driver.pasted()).toEqual(['hello'])
+    expect(driver.count('send-keys')).toBe(1)
+  })
+
+  it('still refuses when the redraw holds somebody else\'s text', async () => {
+    // The other half of D2: a pane that moved on is a refusal, and `composer_dirty` is what the flow escalates on.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const other = [
+      '› somebody else\'s prompt',
+      '  GPT-6-Luna high · ~/projects/reevesagents-flow',
+      '  ◦ Working (1s • esc to interrupt)',
+    ].join('\n')
+    driver.captures = [CODEX_IDLE, other]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'pane_changed' })
+    expect(driver.count('send-keys')).toBe(0)
+  })
+
   it('waits the dispatch window by default, polling for the busy marker', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()

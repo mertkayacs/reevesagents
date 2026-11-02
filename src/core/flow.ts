@@ -1310,15 +1310,24 @@ export function applyDecisionToState(state: FlowState, decision: FlowDecision, a
   })
 }
 
-// The paste landed but the Enter was never confirmed: the work may not have started, so the
-// status does not advance — but the decision is consumed, because pasting the same text twice is
-// how a queued Enter ends up answering someone else's prompt. A human reads the log entry.
+// The paste landed but the Enter was never confirmed: the work may not have started, so a *fix* round does not
+// advance — but the decision is consumed, because pasting the same text twice is how a queued Enter ends up
+// answering someone else's prompt. A human reads the log entry.
+//
+// A review request is the exception, and it is the whole of D1: an unconfirmed request is still a round. The
+// reviewer may well be working on the commit we pasted and answers by writing `notes/inbox/<head>-r<N>.md`; a flow
+// left in `idle` with `review_started_at === null` never reads that file (the next tick says `head_unchanged`, and
+// notes are only read in `reviewing`), so the answer is lost and the work is repeated. Here the transition and the
+// clock are applied exactly as a confirmed request would apply them. What is not applied is a second paste: the
+// claim is consumed in this write, and the claim is what a paste needs.
 export function applyUnconfirmedDispatch(state: FlowState, decision: FlowDecision, reason: string, at = isoNow()): FlowState {
-  return withDelta(state, decision, at, {
-    advance: false,
+  const unconfirmed = (advance: boolean): FlowState => withDelta(state, decision, at, {
+    advance,
     event: 'dispatch_unconfirmed',
     detail: `${reason} ${logDetail(decision)}`,
   })
+  if (decision.kind === 'request_review') return unconfirmed(true)
+  return unconfirmed(false)
 }
 
 export interface PendingClaimInit {

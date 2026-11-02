@@ -316,6 +316,28 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+### When the flow says `dispatch_unconfirmed`
+
+`dispatch_unconfirmed` means the prompt reached the pane but nothing proved that the agent started on it: the busy
+hint never appeared inside `dispatch_confirm_seconds` (default 90 s), even after the one extra Enter the engine is
+allowed to press when the composer still holds exactly its text. What to do, in order:
+
+1. **Look at the pane.** `reevesagents attach <agent>` and read the composer. If the prompt is still sitting there, the
+   agent never submitted it: press Enter once by hand and let it run — the engine never types the same text again, so
+   there is no risk of a double prompt. If the composer is empty and the agent is working, the dispatch simply
+   confirmed late; nothing to do.
+2. **Check the round, not the tick.** For a review request the round has already started (the clock is running and the
+   notes file is read as soon as the reviewer writes it), so the answer will arrive on a later tick even though the
+   send was reported as unconfirmed. `flow status` shows `review: waiting` and the deadline.
+3. **Only then decide.** If the agent is idle with an empty composer and no notes file appeared by the deadline, the
+   round times out and the flow escalates with `review_timeout`; `flow resume` gives it a fresh budget once you know
+   why (a provider that was not ready, a wrong pane, a login screen).
+4. **Never paste twice.** A second paste of the same prompt is how a queued Enter ends up answering something nobody
+   asked for, so the engine refuses it by design and so should you.
+
+`pane_changed` is a different message: the paste landed but the pane stopped looking idle before the Enter, and the
+composer no longer held the engine's text. Nothing was submitted; the next tick retries when the pane is free.
+
 ### The plan as an object
 
 **How a project runs on its plan:** `flow plan import` once (and again after the document changes) →

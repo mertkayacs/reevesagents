@@ -599,6 +599,42 @@ Both thresholds are global config keys (`review_min_seconds`, `review_evidence_r
 `dispatch_confirm_seconds`), so they are visible in `reevesagents config`, the MCP `get_config`, the TUI
 settings and the Web config panel without a per-flow flag.
 
+### 3.5b Dispatch confirmation: what `pane_changed` means (block 20)
+
+A send is not "typed and done". `sendWhenIdle` types the prompt, waits for the paste to settle, presses Enter, and then
+waits inside `dispatch_confirm_seconds` (90 s, polled) for the pane to show the provider's busy hint. Everything that
+happens before that hint is a guess, and the guesses are named:
+
+| outcome | what was seen | what the flow does |
+| --- | --- | --- |
+| `sent: true` | the busy hint appeared within the window | the round (or the fix) begins |
+| `composer_dirty` | the composer held text that is not ours | nothing is pasted; the flow escalates, a human reads the pane |
+| `pane_changed` | the pane stopped reading `idle` right before the Enter, and the composer did **not** hold our text | the claim is released and the next tick retries when the pane is free |
+| `unconfirmed` | the Enter went in, the busy hint never came, and a second Enter (only when the composer still holds exactly our text) did not wake the pane | `dispatch_unconfirmed` in the journal; for a review request the round still starts (§3.6b) |
+
+**Why Codex needs the composer test and not a longer timeout.** On this machine a Codex pane redraws while our paste
+settles: the frame reflows, the busy probe sees a half-drawn `Working` line, and the old code called that
+`pane_changed` — leaving a perfectly good prompt sitting in the composer until a human pressed Enter (D2 of the live
+run). Waiting longer does not fix that, because the pane is not late, it is *different*. So the decision before the
+Enter is made on the composer, never on the busy probe: exact text (normalised) in the box means our paste landed and
+one Enter is all that is missing; anything else means the pane moved on and the send is refused. This is not a blind
+retry — a blind retry types the prompt again, and nine copies of one prompt in a box is how a queued Enter answers
+something nobody asked for. One paste, at most two Enters, both of them justified by what the box holds.
+
+### 3.6b An unconfirmed review request is still a round (block 20)
+
+"Not confirmed" is not "did not happen". The reviewer may be working on the commit we pasted and answers by writing
+`notes/inbox/<head>-r<N>.md`; a flow left in `idle` with `review_started_at === null` never reads that file — notes are
+read only in `reviewing`, and the next tick answers `head_unchanged` — so the answer is lost and the work is repeated
+(D1 of the live run). An unconfirmed `request_review` therefore applies its transition and its clock exactly as a
+confirmed one would; what it does not do is paste again, because the claim is consumed in that write and the claim is
+what a paste needs. A fix round keeps the older rule: it does not advance, and a human reads the journal line.
+
+**Evidence counts the file, not its finding lines (D3).** The evidence rule measured `notes_text`, which is the filtered
+finding lines — so a 16-byte `VERDICT: ACCEPT` with `no findings` measured `notes=0/0b` and the first honest answer of a
+fast reviewer was rejected as unsubstantiated. The observation now carries the whole text of the round's file
+(staging first, durable second) for evidence, while the prompt and the journal keep the findings.
+
 ### 3.6 Starting the plan from `idle` (block 19)
 
 `planNext` used to be reached **only** from `planAcceptDecision`, and `tickIdle` returned `head_unchanged` on its first

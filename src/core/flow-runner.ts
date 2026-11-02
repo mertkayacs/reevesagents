@@ -129,6 +129,10 @@ export interface NotesRead {
   staging_path?: string
   invalid?: string
   raw?: string
+  // The whole text of the round's file (staging or durable), before the finding lines are filtered out. Evidence is
+  // measured on this: a 16-byte `VERDICT: ACCEPT` with «no findings» is a substantiated answer, and counting only
+  // its finding lines reported `notes=0/0b` for a file that was right there (D3).
+  evidence_text?: string
 }
 
 // Is the flow's run still there, and are both of its role agents still part of it? An archived run
@@ -253,6 +257,7 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
       ref: notesRef(head, round),
       counts: read.counts,
       staging_path: staging,
+      evidence_text: read.text,
       // Only a staging text is published later; a durable one is already the record.
       raw: stagingRead.ok ? read.text : undefined,
     }
@@ -498,7 +503,8 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     // ACCEPT in a pane is exactly the one-second stamp the evidence rule rejects.
     // The phrase lives in the file body, not in the finding lines: `notes.raw` is the whole staging text.
     verdict_explicit_clean: fromFile && observations_explicit_clean(notes.raw ?? notes.text ?? ''),
-    notes_text: fromFile ? notes.text : undefined,
+    // Evidence wants the file, not the filtered findings; the prompt and the journal keep the findings.
+    notes_text: fromFile ? (notes.evidence_text ?? notes.text) : undefined,
     notes_ref: fromFile ? notes.ref : undefined,
     notes_counts: fromFile ? notes.counts : undefined,
     notes_invalid: fromFile ? undefined : notes.invalid,

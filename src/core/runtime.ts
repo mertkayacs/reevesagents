@@ -771,8 +771,20 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   waitBlocking(driver, timings.pasteSettleMs)
   // Re-check right before the Enter: during the settle window the agent can start working, or
   // the screen can change to a modal, and submitting then would answer whatever prompt just
-  // appeared. The paste is already done, so this is reported as an ambiguous dispatch.
-  if (paneBusy(agent.id, options) !== 'idle') return { sent: false, reason: 'pane_changed' }
+  // appeared.
+  //
+  // But "the pane changed" is two different facts wearing one face, and only one of them may be submitted. A Codex
+  // pane that redraws while our paste settles reads as busy — the redraw *is* our paste — and the composer still holds
+  // exactly our text; one Enter is all that is missing, and refusing here is what left prompts sitting in the box
+  // (D2). A pane that really moved on (the agent started working, a modal appeared) no longer holds our text, or is
+  // no longer ready, and that is a refusal. So the decision is made on the composer, not on the busy probe.
+  const beforeEnter = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  if (detectPaneBusy(beforeEnter, agent.provider) !== 'idle') {
+    // Only the composer decides: the busy probe is what the redraw trips, and it says nothing about whose text is in
+    // the box. Our exact text in it means the paste landed and the Enter is the only step missing.
+    const holdsOurs = normalizeComposer(composerText(beforeEnter, agent.provider) ?? '') === normalizeComposer(text)
+    if (!holdsOurs) return { sent: false, reason: 'pane_changed' }
+  }
   try {
     driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])
   } catch {
