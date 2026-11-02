@@ -1080,12 +1080,15 @@
           planBtn.className = 'flow-plan-btn'
           planBtn.setAttribute('aria-label', t('web.planOpenLabel'))
           planBtn.setAttribute('aria-haspopup', 'dialog')
-          planBtn.setAttribute('aria-expanded', String(el.planDialog.open && insights.runId === run.id))
+          // Recomputed on every render, so a card redrawn while the dialog is open still says "expanded".
+          planBtn.setAttribute('aria-expanded', core().planExpanded(el.planDialog.open ? insights.runId : null, run.id))
           planBtn.title = t('web.planOpenLabel')
+          // The card is rebuilt on every SSE frame, so the element is not something to hold on to: the id is.
+          planBtn.dataset.planRun = run.id
           planBtn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">'
             + '<path d="M2 3.5h2M6 3.5h8M2 8h2M6 8h8M2 12.5h2M6 12.5h8" stroke="currentColor" stroke-width="1.4" '
             + 'stroke-linecap="round" fill="none"/></svg>'
-          planBtn.addEventListener('click', () => { void openPlanDialog(run.id, planBtn) })
+          planBtn.addEventListener('click', () => { void openPlanDialog(run.id) })
           headBody.appendChild(planBtn)
         }
       }
@@ -1270,14 +1273,28 @@
     el.insightsClose.focus()
   }
 
-  // The plan has its own dialog, opened by the flow badge on the run card: that badge is the only place the plan is
-  // advertised, and putting it behind the log dialog made "look at the plan" a two-step detour.
-  let planOpener = null
+  // The plan dialog is opened by its own icon on the run card. The element is not remembered: `renderSidebar()` rebuilds
+  // every card on each SSE frame, so a held reference would be detached from the document by the time Esc is pressed and
+  // the focus would land on `body`. The run id survives a re-render; the button is looked up by it.
+  let planOpenerRun = null
 
-  async function openPlanDialog(runId, opener) {
+  function planButtonFor(runId) {
+    const target = core().planFocusTarget(document, runId)
+    // Only the icon counts as "the button"; the card and the Logs button are fallbacks for focus, not for aria.
+    return target && target.hasAttribute && target.hasAttribute('data-plan-run') ? target : null
+  }
+
+  function setPlanExpanded(runId, expanded) {
+    const button = planButtonFor(runId)
+    if (button) button.setAttribute('aria-expanded', String(expanded))
+  }
+
+  async function openPlanDialog(runId) {
     if (!runId) return
-    planOpener = opener || null
+    // The id is the memory; the element is never kept.
+    planOpenerRun = runId
     insights.runId = runId
+    setPlanExpanded(runId, true)
     const run = runs.find(entry => entry.id === runId)
     el.planDialogTitle.textContent = t('web.planTitle', { run: run ? run.name : runId })
     el.planDialog.showModal()
@@ -1564,6 +1581,10 @@
   function renderCard(run, agent) {
     const card = document.createElement('div')
     card.className = 'card' + (agent.status === 'ended' ? ' is-ended' : '')
+    // The plan dialog returns focus here when the run's card is gone: a keyboard user who pressed Esc must not land on
+    // `body`, and the card is the next best place to be ("this is the thing I was looking at").
+    card.dataset.runCard = run.id
+    card.tabIndex = -1
     card.setAttribute('aria-selected', String(agent.id === selectedId))
     card.dataset.status = agent.status
     card.dataset.provider = agent.provider
@@ -2569,12 +2590,15 @@
   el.logsBtn.addEventListener('click', () => { void openInsightsDialog() })
   el.insightsClose.addEventListener('click', () => el.insightsDialog.close())
   el.planClose.addEventListener('click', closePlanDialog)
-  // Esc closes the dialog natively; the focus has to come back to the badge that opened it, or the keyboard user lands on
-  // the top of the page.
+  // Esc closes the dialog natively; the focus has to come back to the icon that opened it, or the keyboard user lands on
+  // `body`. The button is looked up by run id at this moment, because the card may have been rebuilt by an SSE frame while
+  // the dialog was open — and if the card is gone entirely, the focus still has to land somewhere sensible.
   el.planDialog.addEventListener('close', () => {
-    const opener = planOpener
-    planOpener = null
-    if (opener) opener.focus()
+    const runId = planOpenerRun
+    planOpenerRun = null
+    setPlanExpanded(runId, false)
+    const target = core().planFocusTarget(document, runId)
+    if (target) target.focus()
   })
   el.planFilterAll.addEventListener('click', () => setPlanFilter('all'))
   el.planFilterOpen.addEventListener('click', () => setPlanFilter('open'))

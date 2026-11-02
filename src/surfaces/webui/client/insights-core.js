@@ -7,6 +7,27 @@
 ;(function (global) {
   'use strict'
 
+  // Where focus goes when the plan dialog closes. The button is looked up, never remembered: `renderSidebar()` rebuilds the
+  // cards on every SSE frame, so a held element is detached by the time Esc is pressed. Order: the icon of that run, then the
+  // run's card, then the Logs button — a keyboard user must never land on `body`.
+  function planFocusTarget(doc, runId) {
+    const query = selector => {
+      if (!doc || typeof doc.querySelector !== 'function') return null
+      const found = doc.querySelector(selector)
+      return found && typeof found.focus === 'function' ? found : null
+    }
+    if (!runId) return query('#logs-btn')
+    return query(`[data-plan-run="${runId}"]`)
+      || query(`[data-run-card="${runId}"]`)
+      || query('#logs-btn')
+  }
+
+  // `aria-expanded` for the plan icon: true only for the run whose dialog is open. Passed the id of the open dialog rather
+  // than a flag, so a redrawn card cannot claim `true` for a different run.
+  function planExpanded(openRunId, runId) {
+    return openRunId !== null && openRunId !== undefined && openRunId === runId ? 'true' : 'false'
+  }
+
   // Is there a plan to open for this card? The badge itself is a label and never a control; the plan icon beside it is drawn
   // only when the answer is yes, because a button that cannot do anything is worse than no button (T1.6.6).
   function planIconVisible(flow) {
@@ -67,5 +88,5 @@
     return { needsBrief, blocked, total: needsBrief.length + blocked.length }
   }
 
-  global.insightsCore = { formatPlanProgress, pulseRemaining, filterPlanItems, planWaiting, planIconVisible }
+  global.insightsCore = { formatPlanProgress, pulseRemaining, filterPlanItems, planWaiting, planIconVisible, planFocusTarget, planExpanded }
 })(typeof window === 'undefined' ? globalThis : window)

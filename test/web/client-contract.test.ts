@@ -261,16 +261,16 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
   })
 
   it('opens the plan from its own icon, with the run id it belongs to', () => {
-    expect(js).toContain('async function openPlanDialog(runId, opener)')
+    expect(js).toContain('async function openPlanDialog(runId)')
     expect(js).toContain("el.planDialog.showModal()")
     expect(js).toContain("api('GET', `/api/plan?run=")
     // The icon is the opener, drawn only when there is a plan; the badge stays a label.
     expect(js).toContain('core().planIconVisible')
     expect(js).toContain("planBtn.setAttribute('aria-haspopup', 'dialog')")
-    expect(js).toContain('openPlanDialog(run.id, planBtn)')
-    // Esc closes the dialog and hands focus back to the icon that opened it.
+    expect(js).toContain('openPlanDialog(run.id)')
+    // Esc closes the dialog and hands focus back to the icon, found again by run id (the card may have been redrawn).
     expect(js).toContain("el.planDialog.addEventListener('close'")
-    expect(js).toContain('opener.focus()')
+    expect(js).toContain('planButtonFor(runId)')
   })
 
   it('pulses only the card that has unread news, from the summary the server sends', () => {
