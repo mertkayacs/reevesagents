@@ -114,7 +114,10 @@ function documentationPaths(state: FlowState): string[] {
 export function docsOnlySince(state: FlowState, head: string): boolean | null {
   if (state.state === 'done') return null
   const changed = changedPathsBetween(state.repo, state.claim.head, head)
-  if (changed === null || changed.length === 0) return false
+  // `null` is "cannot tell" and must stay `null`: collapsing it into `false` made an unreadable range look like an answer, and a caller
+  // that anchors on anything but `true` (`resume`) treated it as documentation and ate the commit (block 57, MAJOR).
+  if (changed === null) return null
+  if (changed.length === 0) return false
   const docs = documentationPaths(state)
   return changed.every(path => docs.some(prefix => path === prefix || path.startsWith(prefix)))
 }

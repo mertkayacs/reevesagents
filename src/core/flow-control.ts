@@ -236,13 +236,14 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
   }
 }
 
-// The head a fresh spell starts from: the current one when the movement since the claim was documentation only (or unreadable), the old
-// one when real work happened in between — the tick needs to see that difference to request a review.
+// The head a fresh spell starts from: the current one only when the movement since the claim is *known* to be documentation. `false`
+// (real work) and `null` (the range could not be read) both keep the old head — the contract of `docsOnlySince` is that unknown changes
+// count as work, and anchoring on the current head in that case swallowed a work commit and its review, which is exactly how `flow-a`
+// ended up in `in_work` with no request (block 57, MAJOR).
 function anchorHead(state: FlowState): string {
   const current = readGitHead(state.repo) || state.claim.head
   if (!state.claim.head) return current
-  const docsOnly = docsOnlySince(state, current)
-  return docsOnly === false ? state.claim.head : current
+  return docsOnlySince(state, current) === true ? current : state.claim.head
 }
 
 // Is the item the claim is bound to still open? The question the settle asks, asked here so `resume` keeps the answer that is still due.

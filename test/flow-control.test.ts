@@ -608,6 +608,31 @@ describe('a resume does not swallow the commit that arrived while parked (block 
     expect(work).not.toBe(base)
   })
 
+  it('keeps the old head when the range cannot be read at all', () => {
+    // `docsOnlySince` answers `null` for an unreadable range, and its contract says unknown changes count as work. Anchoring anyway put
+    // the claim on the new head and ate the review — the same defect that left `flow-a` at `0/2` (block 57, MAJOR).
+    const repo = join(root, 'resume-unreadable')
+    execFileSync('git', ['init', '-q', repo], { encoding: 'utf-8' })
+    writeFileSync(join(repo, 'a.txt'), 'one')
+    const base = gitCommit(repo, 'base')
+
+    const state = createFlowState({
+      run_id: 'run-1', repo, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    // A claim head git cannot resolve: the range `claim.head..HEAD` is unreadable, so the answer must be `null`, not `false`.
+    saveFlow({
+      ...state, state: 'paused', paused_from: 'idle',
+      claim: { head: 'f'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+    writeFileSync(join(repo, 'b.txt'), 'two')
+    const work = gitCommit(repo, 'work')
+
+    resumeFlow('run-1')
+    // Not the new head: the movement stays visible, so the next tick requests the review of `work`.
+    expect(readFlow('run-1').claim.head).toBe('f'.repeat(40))
+    expect(work).not.toBe(base)
+  })
+
   it('still anchors on a commit that only touched the plan and the briefs', () => {
     const repo = join(root, 'resume-docs')
     execFileSync('git', ['init', '-q', repo], { encoding: 'utf-8' })
