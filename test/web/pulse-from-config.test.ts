@@ -35,7 +35,7 @@ beforeEach(() => {
     schema_version: 1, run_id: 'run-1', flow_id: 'f1', notify_episode: 0, repo: root,
     roles: { dev: 'dev-1', review: 'dev-1' }, state: 'done', rounds: 1, max_rounds: 3, max_total_rounds: 12,
     review_started_at: null, review_timeout_sec: 1800,
-    claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false },
+    claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     pending: null, specs: [], dispatched_specs: [], active_plan_item: null, answered_round: null,
     verdict_handled_for: null, verdict_handled_item: null, unsubstantiated_attempts: 0,
     paused_from: null, paused_at: null, orphan_reason: null, close_reason: null,

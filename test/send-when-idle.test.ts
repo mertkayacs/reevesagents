@@ -125,6 +125,12 @@ const CODEX_BUSY = [
   '  GPT-6-Luna high · ~/projects/reevesagents-flow',
 ].join('\n')
 
+const HERMES_BUSY = [
+  '❯ ',
+  '────────────────────────────────────────────',
+  ' ☤ deepseek-v4.1-flash · 282K/1M · enter прервать',
+].join('\n')
+
 const HERMES_IDLE = [
   '❯ fix the failing test',
   '────────────────────────────────────────────',
@@ -324,6 +330,38 @@ describe('sendWhenIdle', () => {
     driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_IDLE]
 
     expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed' })
+  })
+
+  it('finds a composer pushed above the tail window by a long brief, and sends it', async () => {
+    // `ten-dev`: a 30-line brief was pasted and not sent. The `❯` line sat above the last forty rows, so the pane read `unknown` and
+    // every tick refused with `dev_pane_unknown` — the brief stayed in the box for minutes (block 44).
+    const { sendWhenIdle } = await seed({ provider: 'hermes' as Provider })
+    const driver = new PaneDriver()
+    const long = Array.from({ length: 30 }, (_, i) => `  line ${i + 1} of the brief`).join('\n')
+    const idleWithPaste = [
+      `❯ ${long}`,
+      '  ────────────────────────────────────────────',
+      '  ☤ deepseek-v4.1-flash · 210K/1M · ✓ 2m · ~/projects/landing-ten',
+    ].join('\n')
+    driver.captures = [idleWithPaste, idleWithPaste, HERMES_BUSY]
+
+    const prompt = long
+    expect(sendWhenIdle('agent-1', prompt, { driver, ...FAST })).toEqual({ sent: true })
+    // Already in the box: the Enter is all that was missing, never a second paste.
+    expect(driver.pasted()).toEqual([])
+  })
+
+  it('keeps refusing a pane whose composer holds somebody else\'s text', async () => {
+    const { sendWhenIdle } = await seed({ provider: 'hermes' as Provider })
+    const driver = new PaneDriver()
+    const theirs = [
+      '❯ починить сборку на стенде',
+      '  ────────────────────────────────────────────',
+      '  ☤ deepseek-v4.1-flash · 210K/1M · ✓ 2m · ~/projects/landing-ten',
+    ].join('\n')
+    driver.captures = [theirs]
+
+    expect(sendWhenIdle('agent-1', 'наш бриф', { driver, ...FAST })).toEqual({ sent: false, reason: 'composer_dirty' })
   })
 
   it('waits the dispatch window by default, polling for the busy marker', async () => {

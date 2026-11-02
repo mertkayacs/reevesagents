@@ -65,7 +65,7 @@ describe('flowTick — idle', () => {
     expect(decision.kind).toBe('request_review')
     expect(decision.target).toBe('review')
     expect(decision.next_state).toBe('reviewing')
-    expect(decision.next_claim).toEqual({ head: 'bbb222', verdict: null, verdict_count: 4, verdict_applied: false })
+    expect(decision.next_claim).toEqual({ head: 'bbb222', verdict: null, verdict_count: 4, verdict_applied: false, spec_id: null })
     expect(decision.message).toContain('bbb222')
     expect(decisionChangesState(state, decision)).toBe(true)
   })
@@ -97,7 +97,7 @@ describe('flowTick — a verdict belongs to the head it was requested for', () =
     // answer to this request, so the tick must keep waiting.
     const idle = makeState()
     const request = flowTick(idle, makeObservations({ head: 'bbb222', verdict: 'ACCEPT', verdict_count: 1 }))
-    expect(request.next_claim).toEqual({ head: 'bbb222', verdict: null, verdict_count: 1, verdict_applied: false })
+    expect(request.next_claim).toEqual({ head: 'bbb222', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null })
 
     const reviewing = applyDecisionToState(idle, request, AT)
     const sameVerdict = flowTick(
@@ -120,7 +120,7 @@ describe('flowTick — a verdict belongs to the head it was requested for', () =
     // is not a green light for `ccc333` — the new head goes to review instead.
     const reviewing = makeState({
       state: 'reviewing',
-      claim: { head: 'bbb222', verdict: null, verdict_count: 2, verdict_applied: false },
+      claim: { head: 'bbb222', verdict: null, verdict_count: 2, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(
       reviewing,
@@ -128,13 +128,13 @@ describe('flowTick — a verdict belongs to the head it was requested for', () =
     )
     expect(decision.kind).toBe('request_review')
     expect(decision.reason).toBe('head_moved')
-    expect(decision.next_claim).toEqual({ head: 'ccc333', verdict: null, verdict_count: 3, verdict_applied: false })
+    expect(decision.next_claim).toEqual({ head: 'ccc333', verdict: null, verdict_count: 3, verdict_applied: false, spec_id: null })
   })
 
   it('re-baselines when the capture scrolled instead of reading the drop as a verdict', () => {
     const reviewing = makeState({
       state: 'reviewing',
-      claim: { head: 'aaa111', verdict: null, verdict_count: 5, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 5, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(reviewing, makeObservations({ verdict_count: 2 }))
     expect(decision.kind).toBe('none')
@@ -172,7 +172,7 @@ describe('flowTick — never write into a pane that is not confirmed idle', () =
   it('does not send a fix into a busy dev pane even though the verdict is fresh', () => {
     const reviewing = makeState({
       state: 'reviewing',
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(
       reviewing,
@@ -190,7 +190,7 @@ describe('flowTick — the round budget is cumulative and terminal', () => {
   it('dispatches a fix with the reviewer remarks and counts the round', () => {
     const reviewing = makeState({
       state: 'reviewing',
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(
       reviewing,
@@ -205,14 +205,14 @@ describe('flowTick — the round budget is cumulative and terminal', () => {
     expect(decision.next_state).toBe('fixing')
     expect(decision.next_rounds).toBe(1)
     expect(decision.message).toContain('MAJOR: null is treated as absent')
-    expect(decision.next_claim).toEqual({ head: 'aaa111', verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_applied: false })
+    expect(decision.next_claim).toEqual({ head: 'aaa111', verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_applied: false, spec_id: null })
   })
 
   it('escalates instead of looping once MAX_ROUNDS is spent, and stays put afterwards', () => {
     const spent = makeState({
       state: 'reviewing',
       rounds: MAX_ROUNDS,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(
       spent,
@@ -240,7 +240,7 @@ describe('flowTick — the round budget is cumulative and terminal', () => {
     let state = makeState({
       state: 'reviewing',
       rounds: 5,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const fix = flowTick(state, makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_count: 2 }))
     expect(fix.kind).toBe('dispatch_fix')
@@ -268,7 +268,7 @@ describe('flowTick — accepting a block', () => {
       state: 'reviewing',
       specs: [block('block_01'), block('block_02')],
       dispatched_specs: ['block_01'],
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(
       reviewing,
@@ -292,7 +292,7 @@ describe('flowTick — accepting a block', () => {
       state: 'reviewing',
       specs: [block('block_01')],
       dispatched_specs: ['block_01'],
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(reviewing, makeObservations({ verdict: 'ACCEPT', verdict_count: 2 }))
     expect(decision.kind).toBe('none')
@@ -304,13 +304,13 @@ describe('flowTick — accepting a block', () => {
 
 describe('flowTick — fixing', () => {
   it('waits for a new head', () => {
-    const fixing = makeState({ state: 'fixing', claim: { head: 'aaa111', verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_applied: false } })
+    const fixing = makeState({ state: 'fixing', claim: { head: 'aaa111', verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_applied: false, spec_id: null } })
     const decision = flowTick(fixing, makeObservations({ head: 'aaa111' }))
     expect(decision.reason).toBe('no_new_head')
   })
 
   it('requests a review for the new head once the dev is idle again', () => {
-    const fixing = makeState({ state: 'fixing', rounds: 1, claim: { head: 'aaa111', verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_applied: false } })
+    const fixing = makeState({ state: 'fixing', rounds: 1, claim: { head: 'aaa111', verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_applied: false, spec_id: null } })
     const decision = flowTick(fixing, makeObservations({ head: 'bbb222', verdict_count: 2 }))
     expect(decision.kind).toBe('request_review')
     expect(decision.next_state).toBe('reviewing')
@@ -333,7 +333,7 @@ describe('flowTick — a review without an answer is bounded by review_timeout_s
     const reviewing = makeState({
       state: 'reviewing',
       review_started_at: NOW - (REVIEW_TIMEOUT_SEC - 1) * 1000,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(reviewing, makeObservations({ verdict_count: 1 }))
     expect(decision.kind).toBe('none')
@@ -345,7 +345,7 @@ describe('flowTick — a review without an answer is bounded by review_timeout_s
     const reviewing = makeState({
       state: 'reviewing',
       review_started_at: NOW - REVIEW_TIMEOUT_SEC * 1000,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(reviewing, makeObservations({ verdict_count: 1 }))
 
@@ -366,7 +366,7 @@ describe('flowTick — a review without an answer is bounded by review_timeout_s
     const reviewing = makeState({
       state: 'reviewing',
       review_started_at: NOW - REVIEW_TIMEOUT_SEC * 1000 - 1,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     expect(flowTick(reviewing, makeObservations({ review_pane: 'unknown' })).reason).toBe('review_timeout')
 
@@ -382,7 +382,7 @@ describe('flowTick — a review without an answer is bounded by review_timeout_s
     const reviewing = makeState({
       state: 'reviewing',
       review_started_at: NOW - REVIEW_TIMEOUT_SEC * 1000,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(reviewing, makeObservations({ head: '', verdict_count: 1 }))
     expect(decision.kind).toBe('escalate')
@@ -400,7 +400,7 @@ describe('flowTick — a review without an answer is bounded by review_timeout_s
       state: 'reviewing',
       review_timeout_sec: 60,
       review_started_at: NOW - 61_000,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     expect(flowTick(brisk, makeObservations({ verdict_count: 1 })).reason).toBe('review_timeout')
   })
@@ -411,7 +411,7 @@ describe('flowTick — a review without an answer is bounded by review_timeout_s
     const unstamped = makeState({
       state: 'reviewing',
       review_started_at: null,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
     const decision = flowTick(unstamped, makeObservations({ verdict_count: 1 }))
     expect(decision.kind).toBe('none')
@@ -546,7 +546,7 @@ describe('the dispatch claim', () => {
     expect(claimPendingDispatch(idle, hold, { op_id: 'op-1', now: NOW, at: AT })).toBe(idle)
 
     const escalation = flowTick(
-      makeState({ state: 'reviewing', rounds: 6, claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false } }),
+      makeState({ state: 'reviewing', rounds: 6, claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null } }),
       makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_count: 2 }),
     )
     expect(escalation.kind).toBe('escalate')

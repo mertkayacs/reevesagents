@@ -72,7 +72,7 @@ function seedIdleFlow(): FlowState {
     run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
   })
   // The baseline commit is behind: the dev has committed, the flow has not reviewed it yet.
-  saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } })
+  saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
   return state
 }
 
@@ -176,7 +176,7 @@ describe('a verdict already collected is work, even when the head has not moved 
     })
     saveFlow({
       ...state, state: 'idle', rounds: 0,
-      claim: { head: HEAD, verdict, verdict_count: 2, verdict_applied: false },
+      claim: { head: HEAD, verdict, verdict_count: 2, verdict_applied: false, spec_id: null },
       ...extra,
     })
   }
@@ -267,7 +267,7 @@ describe('a verdict already collected is work, even when the head has not moved 
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
     const sent: string[] = []
 
     const result = stepFlow('run-1', {
@@ -309,7 +309,7 @@ describe('a claim the world already answered settles by observation (D7)', () =>
       ...state,
       state: 'reviewing',
       review_started_at: NOW,
-      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
     })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
@@ -337,7 +337,7 @@ describe('a claim the world already answered settles by observation (D7)', () =>
       ...state,
       state: 'reviewing',
       review_started_at: NOW,
-      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
     })
 
@@ -356,7 +356,7 @@ describe('a valid notes file is evidence by itself (D8)', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'reviewing', review_started_at: NOW + 1_000, claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'reviewing', review_started_at: NOW + 1_000, claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
     writeFileSync(stagingPath('run-1', HEAD, 1, root), 'VERDICT: ACCEPT\n')
 
@@ -392,7 +392,7 @@ describe('an ACCEPT collected in idle closes the item (D10)', () => {
     })
     saveFlow({
       ...state, state: 'idle', active_plan_item: active, verdict_handled_for: handledFor,
-      claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5, verdict_applied: false },
+      claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5, verdict_applied: false, spec_id: null },
     })
   }
 
@@ -458,7 +458,7 @@ describe('an ACCEPT collected in idle closes the item (D10)', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5, verdict_applied: false, spec_id: null } })
 
     const result = stepFlow('run-1', {
       now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null, ports: ports(() => ({ sent: true })),
@@ -477,7 +477,7 @@ describe('a verdict recorded but not applied is answered from the state (D11)', 
     })
     saveFlow({
       ...state, state: 'idle',
-      claim: { head: HEAD, verdict, verdict_count: 5, verdict_applied: applied },
+      claim: { head: HEAD, verdict, verdict_count: 5, verdict_applied: applied, spec_id: null },
       ...extra,
     })
   }
@@ -576,7 +576,7 @@ describe('a verdict recorded but not applied is answered from the state (D11)', 
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
     const raw = JSON.parse(readFileSync(join(root, 'flows', 'run-1.json'), 'utf-8')) as { claim: Record<string, unknown> }
     delete raw.claim.verdict_applied
     writeFileSync(join(root, 'flows', 'run-1.json'), JSON.stringify(raw))
@@ -599,7 +599,7 @@ describe('a claim written before the state advanced is still settled (MAJOR 1/2)
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
     saveFlow({
-      ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
     })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
@@ -627,7 +627,7 @@ describe('a claim written before the state advanced is still settled (MAJOR 1/2)
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
     saveFlow({
-      ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
     })
     const sent: string[] = []
@@ -655,7 +655,7 @@ describe('recovery settles the claim on its own head (block 28/29)', () => {
     })
     saveFlow({
       ...state, state: 'idle',
-      claim: { head: A, verdict: null, verdict_count: claimCount, verdict_applied: false },
+      claim: { head: A, verdict: null, verdict_count: claimCount, verdict_applied: false, spec_id: null },
       pending: {
         op_id: 'op-1', kind: 'request_review', target: 'review', head: B, spec_id: null, at: NOW,
         ...(baseline === undefined ? {} : { verdict_baseline: baseline }),
@@ -694,7 +694,7 @@ describe('recovery settles the claim on its own head (block 28/29)', () => {
     })
     saveFlow({
       ...state, state: 'idle',
-      claim: { head: B, verdict: null, verdict_count: 7, verdict_applied: false },
+      claim: { head: B, verdict: null, verdict_count: 7, verdict_applied: false, spec_id: null },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: B, spec_id: null, at: NOW, verdict_baseline: 6 },
     })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
@@ -722,7 +722,7 @@ describe('recovery settles the claim on its own head (block 28/29)', () => {
     })
     saveFlow({
       ...state, state: 'idle',
-      claim: { head: B, verdict: null, verdict_count: 7, verdict_applied: false },
+      claim: { head: B, verdict: null, verdict_count: 7, verdict_applied: false, spec_id: null },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: B, spec_id: null, at: NOW, verdict_baseline: 6 },
     })
     const observations = (count: number) => ({
@@ -777,7 +777,7 @@ describe('a notes file answers its round whatever the state (block 41)', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: OLD, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: OLD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
     writeFileSync(stagingPath('run-1', NEW, 2, root), 'VERDICT: ACCEPT\n')
 
@@ -804,7 +804,7 @@ describe('a notes file answers its round whatever the state (block 41)', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: NEW, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: NEW, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
     writeFileSync(stagingPath('run-1', NEW, 2, root), 'VERDICT: ACCEPT\n')
 
@@ -830,7 +830,7 @@ describe('a notes file answers its round whatever the state (block 41)', () => {
     })
     saveFlow({
       ...state, state: 'idle', rounds: 0, active_plan_item: 'P1.1',
-      claim: { head: NEW, verdict: 'ACCEPT', verdict_count: 1, verdict_applied: true },
+      claim: { head: NEW, verdict: 'ACCEPT', verdict_count: 1, verdict_applied: true, spec_id: null },
       verdict_handled_for: NEW, verdict_handled_item: 'P1.1',
     })
     // The answer is on disk as the published record of that round — which is what the live run had.
@@ -852,7 +852,7 @@ describe('a notes file answers its round whatever the state (block 41)', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: NEW, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.1', claim: { head: NEW, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
 
     const sent: string[] = []
     const result = stepFlow('run-1', {
@@ -866,12 +866,110 @@ describe('a notes file answers its round whatever the state (block 41)', () => {
   })
 })
 
+describe('an item is closed by its own commit, not by whichever commit arrives (block 44)', () => {
+  function planOf(ids: string[]) {
+    const doc = ids.map(id => `- [ ] **${id}** — ${id}`).join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ids) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    return plan
+  }
+
+  const commit = (index: number) => String(index).repeat(40).slice(0, 40)
+
+  function dispatchAndClose(itemId: string, head: string): void {
+    // What the runner does across two ticks: the item's brief goes out (the claim records it), then its own commit is accepted.
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 20, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 1, active_plan_item: itemId, review_started_at: NOW - 60_000,
+      claim: { head, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: itemId },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', head, 2, root), 'VERDICT: ACCEPT\n')
+    stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+  }
+
+  it('closes each item with its own commit, and never two items with one commit', () => {
+    planOf(['P1.1', 'P1.2', 'P1.3'])
+    dispatchAndClose('P1.1', commit(1))
+    dispatchAndClose('P1.2', commit(2))
+    dispatchAndClose('P1.3', commit(3))
+
+    const plan = readPlan('run-1')
+    const byId = new Map(plan.items.map(item => [item.id, item]))
+    expect(byId.get('P1.1')!.head).toBe(commit(1))
+    expect(byId.get('P1.2')!.head).toBe(commit(2))
+    expect(byId.get('P1.3')!.head).toBe(commit(3))
+    expect(plan.items.filter(item => item.status === 'done')).toHaveLength(3)
+  })
+
+  it('closes the item whose brief was sent, even when another item is the active one', () => {
+    // The live binding error in one tick: `active_plan_item` had already moved on, so the close landed on the wrong row.
+    planOf(['P1.1', 'P1.2'])
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 20, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 1, active_plan_item: 'P1.2', review_started_at: NOW - 60_000,
+      claim: { head: commit(1), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', commit(1), 2, root), 'VERDICT: ACCEPT\n')
+
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: commit(1), tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    const plan = readPlan('run-1')
+    expect(plan.items.find(item => item.id === 'P1.1')!.status).toBe('done')
+    expect(plan.items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
+  })
+
+  it('refuses a second item on a commit that already closed one, and escalates', () => {
+    // The live run: ACCEPT on `b14896c` closed P2.1, then the same commit closed P2.2 as well — the header went into the next
+    // commit, which closed P2.3 ("About"), a section nobody wrote.
+    planOf(['P1.1', 'P1.2'])
+    dispatchAndClose('P1.1', commit(1))
+
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 20, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 1, active_plan_item: 'P1.2', review_started_at: NOW - 60_000,
+      claim: { head: commit(1), verdict: null, verdict_count: 1, verdict_applied: false, spec_id: 'P1.2' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', commit(1), 2, root), 'VERDICT: ACCEPT\n')
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: commit(1), tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    expect(result.decision.reason).toBe('plan_item_double_close')
+    expect(readFlow('run-1').state).toBe('escalated')
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
+  })
+})
+
 describe('legacy state without verdict_applied (MAJOR 3)', () => {
   function legacy(extra: { handled?: string | null }): void {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', active_plan_item: 'P1.1', claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 2, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', active_plan_item: 'P1.1', claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 2, verdict_applied: false, spec_id: null } })
     const file = join(root, 'flows', 'run-1.json')
     const raw = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown> & { claim: Record<string, unknown> }
     delete raw.claim.verdict_applied
@@ -909,7 +1007,7 @@ describe('a closed item must not stay in flight (D11)', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', active_plan_item: id, claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', active_plan_item: id, claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
   }
 
   it('starts the next briefed item when the recorded active one is already done', () => {
@@ -1003,7 +1101,7 @@ describe('a closed item must not stay in flight (D11)', () => {
     })
     saveFlow({
       ...state, state: 'reviewing', rounds: 1, review_started_at: NOW - 1_000, active_plan_item: 'P1.1',
-      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
     writeFileSync(stagingPath('run-1', HEAD, 2, root), 'VERDICT: ACCEPT\n')
@@ -1057,7 +1155,7 @@ describe('a commit that only touches the plan is not the dev\'s work (D6)', () =
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
     const sent: string[] = []
 
     const result = stepFlow('run-1', {
@@ -1088,7 +1186,7 @@ describe('a commit that only touches the plan is not the dev\'s work (D6)', () =
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
     const sent: string[] = []
 
     const result = stepFlow('run-1', {
@@ -1110,7 +1208,7 @@ describe('evidence sees the round file, not just its finding lines (D3)', () => 
       }),
       state: 'reviewing',
       review_started_at: NOW,
-      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     }
     saveFlow(state)
     if (body !== null) {

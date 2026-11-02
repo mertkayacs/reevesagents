@@ -818,8 +818,20 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   } catch {
     return { sent: false, reason: 'stale_pane' }
   }
-  const retryWindow = Math.min(confirmMs, 5000)
-  return waitForBusy(agent, options, driver, retryWindow, pollMs) ? { sent: true } : { sent: false, reason: 'unconfirmed' }
+  if (waitForBusy(agent, options, driver, Math.min(confirmMs, 5000), pollMs)) return { sent: true }
+  // The text is still in the composer and the pane is idle: the provider swallowed the Enter (Hermes redraws its composer while the
+  // paste settles and drops a keystroke that lands mid-draw). What an operator does by hand: Escape, then Enter. One attempt, and
+  // only when the text is still exactly ours — never a blind repeat (block 44).
+  const afterRetry = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  if (!composerHoldsOurs(composerText(afterRetry, agent.provider) ?? '', text)) return { sent: false, reason: 'unconfirmed' }
+  try {
+    driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Escape'])
+    waitBlocking(driver, timings.pasteSettleMs)
+    driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])
+  } catch {
+    return { sent: false, reason: 'stale_pane' }
+  }
+  return waitForBusy(agent, options, driver, Math.min(confirmMs, 5000), pollMs) ? { sent: true } : { sent: false, reason: 'unconfirmed' }
 }
 
 // The window is measured in *simulated* time — the sum of the waits this function asked for — not on the

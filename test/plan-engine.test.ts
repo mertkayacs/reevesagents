@@ -69,7 +69,7 @@ function reviewingState(overrides: Partial<FlowState> = {}): FlowState {
     state: 'reviewing',
     rounds: 1,
     review_started_at: NOW - 60_000,
-    claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
+    claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     ...overrides,
   }
 }
@@ -144,7 +144,7 @@ describe('starting the plan from idle', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: '/tmp/repo', roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 2, max_total_rounds: 5, at: AT,
     })
-    return { ...state, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false }, ...overrides }
+    return { ...state, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null }, ...overrides }
   }
 
   it('dispatches the first item with a brief on the very first tick, with the head unmoved', () => {
@@ -234,7 +234,7 @@ describe('starting the plan from idle', () => {
 describe('the engine with a plan', () => {
   it('dispatches the picked item and records it as the active one', () => {
     const plan = planWithBriefs(['P1.2'])
-    const state = reviewingState({ state: 'idle', claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false } })
+    const state = reviewingState({ state: 'idle', claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
     const decision = flowTick(state, observationsFor(state, plan, { head: 'aaa111', verdict: null, verdict_count: 0 }))
 
     // idle -> the decision is a review request for the new head, not a dispatch: that is the pre-plan flow.
@@ -298,7 +298,7 @@ describe('the engine with a plan', () => {
   it('allows the last round the fuse permits, and escalates on the next one', () => {
     const plan = planWithBriefs(['P1.1', 'P1.2'])
     // `max_total_rounds` is 5: four spent rounds still allow the fifth.
-    const fourSpent = reviewingState({ active_plan_item: 'P1.1', rounds: 4, claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false } })
+    const fourSpent = reviewingState({ active_plan_item: 'P1.1', rounds: 4, claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null } })
     const allowed = flowTick(fourSpent, observationsFor(fourSpent, plan, { verdict: 'CHANGES_REQUESTED' }))
     expect(allowed.kind).toBe('dispatch_fix')
 
@@ -408,7 +408,7 @@ describe('the runner with a plan on disk', () => {
       state: 'reviewing',
       rounds: 1,
       review_started_at: NOW - 60_000,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
       active_plan_item: 'P1.1',
     })
   }
@@ -425,7 +425,7 @@ describe('the runner with a plan on disk', () => {
         max_rounds: 2, max_total_rounds: 5, at: AT,
       }),
       state: 'idle',
-      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     })
 
     const sent: string[] = []

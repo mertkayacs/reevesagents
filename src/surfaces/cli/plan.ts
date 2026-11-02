@@ -457,7 +457,7 @@ function anchorAfterDocumentChange(runId: string): void {
   if (head === state.claim.head) return
   saveFlow({
     ...state,
-    claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false },
+    claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: null },
     verdict_handled_for: null,
     log: appendLog(state, {
       at: new Date().toISOString(),

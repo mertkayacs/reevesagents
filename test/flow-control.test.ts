@@ -158,7 +158,7 @@ describe('pause and resume', () => {
   })
 
   it('resumes into the state it was paused from, not to the beginning', () => {
-    seed(makeState({ state: 'fixing', claim: { head: 'aaa111', verdict: 'CHANGES_REQUESTED', verdict_count: 1, verdict_applied: false } }))
+    seed(makeState({ state: 'fixing', claim: { head: 'aaa111', verdict: 'CHANGES_REQUESTED', verdict_count: 1, verdict_applied: false, spec_id: null } }))
     pauseFlow('run-1', { at: AT, now: NOW })
 
     const resumed = resumeFlow('run-1', { at: AT })

@@ -560,7 +560,7 @@ describe('flow notes', () => {
       head,
       at: '2026-01-01T00:00:00.000Z',
     })
-    saveFlow({ ...state, claim: { head, verdict: null, verdict_count: 0, verdict_applied: false } })
+    saveFlow({ ...state, claim: { head, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
   }
 
   it('prints a round with its counts and file', async () => {
@@ -616,7 +616,7 @@ describe('flow notes', () => {
     const key = ['sk', 'ant', 'abcdefghijklmnopqrstuvwxyz'].join('-')
     saveFlow({
       ...readFlow('run-c1'),
-      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     })
     publishNotes('run-c1', HEAD, 1, text)
     // Overwrite the durable file the way an older build (or a human) could have.

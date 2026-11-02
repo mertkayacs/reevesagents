@@ -133,18 +133,48 @@ export function isComposerPlaceholder(text: string, provider: Provider): boolean
 // line can be identified at all — the caller must then refuse rather than guess.
 export function composerText(paneText: string, provider: Provider): string | null {
   if (!providerHasBusyDetector(provider)) return null
-  const lines = paneTail(paneText, BUSY_SCAN_LINES)
+  const lines = stripAnsi(paneText)
+    .split('\n')
+    .map(line => line.replace(/\r/g, '').trim())
+    .filter(line => line !== '')
   const marker = provider === 'hermes' ? /^\s*❯\s?/ : provider === 'codex' ? /^\s*›\s?/ : null
   if (!marker) return null
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index]!
-    if (!marker.test(line)) continue
-    // A placeholder is not typed text: what an *empty* composer draws is not somebody's unsent prompt.
-    const rest = line.replace(marker, '').trim()
-    if (isComposerPlaceholder(rest, provider)) return ''
-    return rest
+  // The composer is the block whose first line carries the marker and whose last line sits just above the status line — not "the
+  // last marked line in the tail". A long paste occupies many rows between the two; searching a forty-row window found nothing
+  // and reported `unknown` while the text was on screen (block 44).
+  const status = ((): number => {
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const line = lines[index]!
+      if (/^\s*☤/.test(line) || /←\s*for agents/i.test(line)) return index
+    }
+    return lines.length
+  })()
+  let start = -1
+  for (let index = status - 1; index >= 0; index -= 1) {
+    if (marker.test(lines[index]!)) {
+      start = index
+      break
+    }
   }
-  return null
+  if (start < 0) return null
+  // The block ends at the first line that is chrome, not text: the provider's model line, its footer or a rule. Without this the
+  // model line under a one-line composer (`› Ask Codex to do anything` over `GPT-… high · …`) reads as typed text.
+  const chrome = /^\s*(?:☤|─{5,}|[◦●•·]\s)|←\s*for agents|^\s*(?:GPT-|Claude|DeepSeek|Hermes|Kimi|GLM)\b.*·/i
+  let end = status
+  for (let index = start + 1; index < status; index += 1) {
+    if (chrome.test(lines[index]!)) {
+      end = index
+      break
+    }
+  }
+  const block = lines.slice(start, end)
+  const rest = [block[0]!.replace(marker, '').trim(), ...block.slice(1).map(line => line.trim())]
+    .filter(line => line !== '')
+    .join(' ')
+    .trim()
+  // A placeholder is not typed text: what an *empty* composer draws is not somebody's unsent prompt.
+  if (isComposerPlaceholder(rest, provider)) return ''
+  return rest
 }
 
 // Lines that show the agent did something: a tool call, a shell line, a file edit. Used as a second, independent signal of
@@ -175,6 +205,11 @@ export function detectPaneBusy(paneText: string, provider: Provider): PaneBusySt
   // Busy first: while a turn runs both providers still draw an input box, so the idle signal is
   // present in both states and only the busy hint separates them.
   if (signals.busy.some(marker => marker.test(text))) return 'busy'
-  if (!signals.idle.some(marker => marker.test(text))) return 'unknown'
-  return 'idle'
+  if (signals.idle.some(marker => marker.test(text))) return 'idle'
+  // The composer can sit above the tail window: a brief pasted but not sent pushes the `❯` line out of the last forty rows, and
+  // the pane then reads as `unknown` while it is perfectly idle and holding our text (block 44, live `ten-dev`). The busy hint is
+  // still looked for only in the tail — an old `esc to interrupt` from an earlier turn must not make an idle pane look busy — so
+  // the whole screen is consulted for the idle marker alone.
+  const whole = stripAnsi(paneText)
+  return signals.idle.some(marker => marker.test(whole)) ? 'idle' : 'unknown'
 }

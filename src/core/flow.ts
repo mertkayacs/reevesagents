@@ -112,6 +112,9 @@ export interface FlowClaim {
   // observation that no longer contains it (block 25). Absent on older files, which read as `false` — and a state whose
   // verdict is `null` is unaffected either way.
   verdict_applied: boolean
+  // The plan item whose brief was dispatched for this round. The close uses it, not "whatever item is active now": the live run
+  // closed P2.2 with the commit that belonged to P2.1 (block 44).
+  spec_id: string | null
 }
 
 export interface FlowRoles {
@@ -373,6 +376,7 @@ export type FlowReason =
   | 'dispatch_unresolved'
   | 'review_unsubstantiated'
   | 'plan_incomplete'
+  | 'plan_item_double_close'
   | 'plan_in_flight'
   | 'rounds_exhausted'
   | 'total_rounds_exhausted'
@@ -480,7 +484,7 @@ export function createFlowState(init: FlowInit): FlowState {
       ? Math.floor(init.review_timeout_sec)
       : REVIEW_TIMEOUT_SEC,
     review_started_at: null,
-    claim: { head: init.head ?? '', verdict: null, verdict_count: 0, verdict_applied: false },
+    claim: { head: init.head ?? '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     specs: init.specs ?? [],
     dispatched_specs: [],
     pending: null,
@@ -548,6 +552,8 @@ export function parseFlowState(raw: unknown): FlowState {
       verdict_applied: typeof claim.verdict_applied === 'boolean'
         ? claim.verdict_applied
         : typeof record.verdict_handled_for === 'string' && record.verdict_handled_for === text(claim.head),
+      // Absent on older files: the close falls back to `active_plan_item`, which is what those files were written with.
+      spec_id: typeof claim.spec_id === 'string' ? claim.spec_id : null,
     },
     specs: Array.isArray(record.specs) ? record.specs.map(normalizeSpec).filter((spec): spec is BlockSpec => spec !== null) : [],
     dispatched_specs: Array.isArray(record.dispatched_specs)
@@ -757,7 +763,7 @@ function reviewRequest(
     next_review_started_at: now,
     // The baseline is the reviewer's counter *now*, so the verdict that a previous commit left on
     // screen cannot be mistaken for this head's answer.
-    next_claim: { head, verdict: null, verdict_count: verdictCount, verdict_applied: false },
+    next_claim: { head, verdict: null, verdict_count: verdictCount, verdict_applied: false, spec_id: null },
     target: 'review',
     head,
     message: renderReviewPrompt({
@@ -790,7 +796,11 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
     next_rounds: rounds,
     next_review_started_at: null,
     // Consume the verdict: one CHANGES_REQUESTED is dispatched once, however often the tick runs.
-    next_claim: { ...state.claim, verdict: observations.verdict, verdict_count: observations.verdict_count },
+    next_claim: {
+      ...state.claim,
+      verdict: observations.verdict,
+      verdict_count: observations.verdict_count,
+    },
     target: 'dev',
     head: state.claim.head,
     notes,
@@ -816,7 +826,13 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_state: 'idle',
     next_rounds: state.rounds,
     next_review_started_at: null,
-    next_claim: { ...state.claim, verdict: observations.verdict, verdict_count: observations.verdict_count },
+    next_claim: {
+      ...state.claim,
+      verdict: observations.verdict,
+      verdict_count: observations.verdict_count,
+      // The round belongs to this item: the close reads it back, so a later tick cannot close "whatever is active now".
+      spec_id: fromPlan ? spec.id : null,
+    },
     target: 'dev',
     spec_id: spec.id,
     // A spec that is an item of the flow's plan *is* that item's work: the ACCEPT will close it, and the fix
@@ -844,7 +860,11 @@ function escalate(
     next_state: 'escalated',
     next_rounds: state.rounds,
     next_review_started_at: null,
-    next_claim: { ...state.claim, verdict: observations.verdict, verdict_count: observations.verdict_count },
+    next_claim: {
+      ...state.claim,
+      verdict: observations.verdict,
+      verdict_count: observations.verdict_count,
+    },
     head: state.claim.head,
     notes: observations.verdict_notes ?? '',
   }
@@ -870,8 +890,26 @@ function reviewGate(state: FlowState, observations: FlowObservations): FlowDecis
 
 // The item an accepted verdict closes, with what the plan records about it. `notes_ref` comes from the round
 // that produced the verdict, so `flow plan status` can point at the findings of the closing review.
+// One commit closes one item. A second item closing on a head that already closed one is not progress — it is a binding error, and
+// the live run showed what it costs: P2.2 was closed with P2.1's commit, the header went into the next commit, and P2.3 ("About")
+// was closed with work it never did, silently skipping a section (block 44).
+function planItemDoubleClose(state: FlowState, observations: FlowObservations): FlowDecision | null {
+  const id = state.claim.spec_id ?? state.active_plan_item
+  const head = state.claim.head
+  if (!id || !head || !observations.plan) return null
+  const already = observations.plan.items.find(item =>
+    item.id !== id && item.head === head && (item.status === 'done' || item.status === 'skipped'))
+  if (!already) return null
+  return {
+    ...escalate(state, observations, 'plan_item_double_close'),
+    log_detail: `${head.slice(0, 7)} already closed ${already.id}; it cannot close ${id} as well`,
+  }
+}
+
 function planCloseOf(state: FlowState, observations: FlowObservations): FlowDecision['next_plan_close'] {
-  const id = state.active_plan_item
+  // The item that owns this round: the one whose brief was dispatched. `active_plan_item` is only the fallback for files written
+  // before the claim carried `spec_id`, and for a close that is not about a plan item at all.
+  const id = state.claim.spec_id ?? state.active_plan_item
   if (!id) return undefined
   // The item's own rounds, not the flow's: after a few items the flow counter is several times the item's, and
   // `flow plan status` would report a number that never happened for this row.
@@ -893,10 +931,14 @@ function planAcceptDecision(
   // Closing an item and recording it are one write, and so is what the flow has in flight afterwards: the closed item must
   // not stay in `active_plan_item`, or the next tick believes a task is running and never starts the next one (block 31,
   // D11). A decision that dispatches the next item names it; anything else leaves nothing in flight.
-  const close = (decision: FlowDecision): FlowDecision => ({
-    ...withPlanClose(state, observations, decision),
-    next_active_plan_item: decision.next_active_plan_item ?? null,
-  })
+  const close = (decision: FlowDecision): FlowDecision => {
+    const doubleClose = planItemDoubleClose(state, observations)
+    if (doubleClose) return doubleClose
+    return {
+      ...withPlanClose(state, observations, decision),
+      next_active_plan_item: decision.next_active_plan_item ?? null,
+    }
+  }
 
   // The fuse outranks everything: a flow that has spent its total budget escalates even while closing an item,
   // otherwise a pathological reviewer could keep it walking from item to item for ever.
@@ -917,7 +959,10 @@ function planAcceptDecision(
     return close(specDispatch(state, queued, observations))
   }
 
-  const next = planNext(plan, { skip: state.active_plan_item })
+  // The item being closed is the one whose brief was sent; `active_plan_item` may already be a different row. Skipping the wrong
+  // id here re-dispatched the item that had just been closed (block 44).
+  const closingId = state.claim.spec_id ?? state.active_plan_item
+  const next = planNext(plan, { skip: closingId })
   if (next.kind === 'none') {
     if (!planIsComplete(plan)) {
       const open = planOpenItems(plan)
@@ -1067,7 +1112,14 @@ function settleFromNotes(state: FlowState, observations: FlowObservations): Flow
     ...state,
     active_plan_item: planItem,
     // The round the reviewer answered: its head, its verdict, and a clock so the budgets behave as they would have.
-    claim: { head, verdict: observations.verdict, verdict_count: observations.verdict_count, verdict_applied: false },
+    claim: {
+      head,
+      verdict: observations.verdict,
+      verdict_count: observations.verdict_count,
+      verdict_applied: false,
+      // The answer closes the item whose brief was sent, which is the one the plan item above names.
+      spec_id: planItem,
+    },
     state: state.state === 'paused' || state.state === 'orphaned' || state.state === 'done' ? state.state : 'reviewing',
     review_started_at: state.review_started_at ?? observations.now,
     // The claim that was in flight for this round is answered now.
@@ -1147,7 +1199,7 @@ function reanchor(state: FlowState, head: string): FlowDecision {
     next_state: state.state,
     next_rounds: state.rounds,
     next_review_started_at: state.review_started_at,
-    next_claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false },
+    next_claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: state.claim.spec_id },
     next_verdict_handled_for: null,
     log_detail: `documentation commit ${head.slice(0, 7)}: baseline moved, nothing to review`,
   }

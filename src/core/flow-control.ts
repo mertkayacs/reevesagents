@@ -241,7 +241,7 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
 // reviewer to read whatever had been committed in the meantime — including the plan document itself.
 function anchorOnHead(state: FlowState): { claim: FlowState['claim'], verdict_handled_for: null } {
   const head = readGitHead(state.repo) || state.claim.head
-  return { claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false }, verdict_handled_for: null }
+  return { claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: null }, verdict_handled_for: null }
 }
 
 // A block queued on a closed flow is work nobody will ever dispatch: refuse it with the reason

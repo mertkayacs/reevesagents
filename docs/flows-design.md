@@ -457,6 +457,16 @@ Two invariants make the table safe: a transition is written only inside a short 
 consumes a verdict and cleared when the HEAD moves. Without it an ACCEPT collected in `idle` would be
 re-applied on the following tick and would close the item the tick before had just dispatched.
 
+**An item is closed by its own round (block 44).** The claim records the item whose brief was dispatched (`spec_id`), and the
+close reads it back — never "whichever item is active now": the live run closed P2.2 with P2.1's commit, the header went into the
+next commit, and P2.3 ("About") was closed with work nobody did. One commit closes one item: a second close on a head that already
+closed something is `plan_item_double_close`, journalled and escalated, not a silent skip of the next row.
+
+**A long paste must not hide the composer (block 44).** The input line is found structurally — the marked block above the status
+line, whatever its length — and the idle probe falls back to the whole screen when the tail shows neither a busy hint nor a
+composer. A composer holding exactly our text gets one more Enter, and if that fails once, `Escape` then `Enter`, the way an
+operator unsticks it; only then `dispatch_unconfirmed`.
+
 **The notes file is the source of truth for its round (block 41).** A valid `notes/inbox/<head>-r<N>.md` — or its published
 copy under `notes/` — answers the round it belongs to, whatever `state` the flow is in and wherever `claim.head` points: the file
 names its own head, and the claim moves there (that is the commit the reviewer actually read). Two live runs broke on the two
