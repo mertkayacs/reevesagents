@@ -740,14 +740,16 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // The input box exists — but is it *initialised*? A provider draws its composer hints only once it is
   // ready; a fresh pane with none of them is `target_not_ready`, and pasting into it loses the prompt
   // (incident of 2026-11-01). A provider with no verified hints keeps the older behaviour.
-  if (detectPaneReady(paneText, agent.provider) === 'not_ready') return { sent: false, reason: 'target_not_ready' }
-
-  // What is already sitting in the composer? Empty means "paste". Our own text means a previous paste
-  // landed and only the submit is missing — one Enter, never a second paste. Anything else is somebody
-  // else's text: pasting again stacks onto it (nine copies of one prompt in one pane), so refuse.
+  // What is already sitting in the composer? Empty means "paste". Our own text means a previous paste landed and only the
+  // submit is missing — one Enter, never a second paste. Anything else is somebody else's text: pasting again stacks onto
+  // it (nine copies of one prompt in one pane), so refuse. This is read *before* the readiness hint, because a composer
+  // holding our own text has no placeholder to hint with — the pane is ready, it is just waiting for the Enter.
   const composer = composerText(paneText, agent.provider)
   if (composer === null) return { sent: false, reason: 'unknown' }
   const alreadyOurs = composer !== '' && composerHoldsOurs(composer, text)
+  if (!alreadyOurs && detectPaneReady(paneText, agent.provider) === 'not_ready') {
+    return { sent: false, reason: 'target_not_ready' }
+  }
   if (composer !== '' && !alreadyOurs) return { sent: false, reason: 'composer_dirty' }
 
   if (!alreadyOurs) {

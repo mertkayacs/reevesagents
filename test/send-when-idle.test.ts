@@ -266,6 +266,25 @@ describe('sendWhenIdle', () => {
     expect(driver.count('send-keys')).toBe(1)
   })
 
+  it('submits our own text even when the composer shows no readiness hint', async () => {
+    // The sandbox pane: our paste in the box, no placeholder left to hint with, so the readiness probe said
+    // `target_not_ready` and the Enter was never pressed — while the prompt sat there in full view.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const ours = [
+      '› [Pasted Content 1020 chars]R followed by file:line, then what is wrong',
+      '  GPT-6-Luna high · ~/projects/flow-demo',
+    ].join('\n')
+    // The pane already holds our paste from the previous attempt: nothing to type, only the Enter to press.
+    driver.captures = [ours, ours, CODEX_BUSY]
+
+    const prompt = 'x'.repeat(1020) + 'R followed by file:line, then what is wrong'
+    expect(sendWhenIdle('agent-1', prompt, { driver, ...FAST })).toEqual({ sent: true })
+    // No second paste: the text was already there.
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(1)
+  })
+
   it('still refuses when the redraw holds somebody else\'s text', async () => {
     // The other half of D2: a pane that moved on is a refusal, and `composer_dirty` is what the flow escalates on.
     const { sendWhenIdle } = await seed()
