@@ -21,7 +21,7 @@ import type { BlockSpec } from './spec.js'
 import { readSpecFile } from './flow-queue.js'
 import type { FlowStoreOptions } from './flow-store.js'
 import { readFlow, saveFlow } from './flow-store.js'
-import { readGitHead } from './flow-runner.js'
+import { docsOnlySince, readGitHead } from './flow-runner.js'
 import { isRunsLockTimeout, withRunsLock } from './runs.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { planExists, readPlan } from './plan.js'
@@ -236,6 +236,15 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
   }
 }
 
+// The head a fresh spell starts from: the current one when the movement since the claim was documentation only (or unreadable), the old
+// one when real work happened in between — the tick needs to see that difference to request a review.
+function anchorHead(state: FlowState): string {
+  const current = readGitHead(state.repo) || state.claim.head
+  if (!state.claim.head) return current
+  const docsOnly = docsOnlySince(state, current)
+  return docsOnly === false ? state.claim.head : current
+}
+
 // Is the item the claim is bound to still open? The question the settle asks, asked here so `resume` keeps the answer that is still due.
 function boundItemOpen(state: FlowState): boolean {
   const id = state.claim.spec_id
@@ -262,7 +271,11 @@ function anchorOnHead(state: FlowState): { claim: FlowState['claim'], verdict_ha
   // the item it claims to have closed is still in flight (the settle treats exactly that as "the close is still due"). Resetting the
   // claim on that state threw the answer away and left the run parked with nothing to apply (block 50, MAJOR).
   const owed = state.claim.verdict !== null && (!state.claim.verdict_applied || boundItemOpen(state))
-  const head = owed ? state.claim.head : (readGitHead(state.repo) || state.claim.head)
+  // Re-anchoring is for the commits that are not work: a plan import or an attached brief made while the flow was parked must not come back
+  // as "the head moved". A commit that touches code is work, and the flow owes it a review — so the claim keeps its old head and the next
+  // tick sees the movement and asks for the review. Anchoring on the new head regardless swallowed that step: `flow-a` came back from a
+  // resume with `claim.head` already at the dev's commit, `0/2`, and a tick that could only say `head_unchanged` (block 55).
+  const head = owed ? state.claim.head : anchorHead(state)
   return {
     claim: owed
       ? { ...state.claim, head }

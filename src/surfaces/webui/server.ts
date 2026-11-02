@@ -117,6 +117,23 @@ function withPulse<T extends object>(summary: T): T & { agent_pulse_ms: number }
   return { ...summary, agent_pulse_ms: loadConfig().global.agent_pulse_ms }
 }
 
+// Map a refused pause/resume to the code a client branches on. Two different layers can refuse: the route's own pre-check, and the
+// engine under the lock — which may find a state the pre-check did not see (`already paused`, `cannot resume into state …`, or the
+// transition table's `cannot pause a flow in state done`). All of them must answer the same vocabulary; a sentence in a 400 is not an
+// answer a button can act on (block 55, MAJOR).
+export function flowControlRefusal(message: string): { code: 'not_found' | 'already_paused' | 'not_paused' | 'not_pausable' | null, state?: string } {
+  if (/no flow for run|not found/i.test(message) && !/cannot /.test(message)) return { code: 'not_found' }
+  if (/is already paused/i.test(message)) return { code: 'already_paused', state: 'paused' }
+  const resumeInto = /cannot resume into state (\w+)/.exec(message)
+  if (resumeInto) return { code: 'not_paused', state: 'paused' }
+  const transition = /cannot (pause|resume) a flow in state (\w+)/.exec(message)
+  if (transition) {
+    const [, action, state] = transition
+    return { code: action === 'pause' ? 'not_pausable' : 'not_paused', state: state! }
+  }
+  return { code: null }
+}
+
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
@@ -642,19 +659,16 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       // presses Pause, a ticker escalates, the operator stops the flow. The transition table then refuses with a sentence like
       // `cannot pause a flow in state done`, and a client had to parse that prose out of a 400. Every refusal is mapped back to the same
       // stable codes the pre-check uses, so the answer means the same thing whichever check caught it (block 53).
-      const message = errMessage(err)
-      const transition = /cannot (pause|resume) a flow in state (\w+)/.exec(message)
-      if (/no flow for run|not found/i.test(message) && !transition) {
+      const refusal = flowControlRefusal(errMessage(err))
+      if (refusal.code === 'not_found') {
         sendJson(res, 404, { error: 'not_found' })
         return
       }
-      if (transition) {
-        const [, action, state] = transition
-        const code = action === 'pause' ? 'not_pausable' : 'not_paused'
-        sendJson(res, 409, { error: code, state })
+      if (refusal.code) {
+        sendJson(res, 409, { error: refusal.code, ...(refusal.state ? { state: refusal.state } : {}) })
         return
       }
-      sendJson(res, 400, { error: message })
+      sendJson(res, 400, { error: errMessage(err) })
     }
     return
   }

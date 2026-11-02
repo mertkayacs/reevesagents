@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FlowState } from '../src/core/flow.js'
@@ -568,6 +569,67 @@ describe('the cascade into deleteRunHistory', () => {
 
   it('tolerates a run that never had a flow', () => {
     expect(() => deleteRunHistory('run-without-flow')).not.toThrow()
+  })
+})
+
+const gitc = (repo: string, ...args: string[]) =>
+  execFileSync('git', ['-C', repo, ...args], { encoding: 'utf-8' }).trim()
+const gitCommit = (repo: string, message: string) => {
+  execFileSync('git', ['-C', repo, 'add', '-A'], { encoding: 'utf-8' })
+  execFileSync('git', ['-C', repo, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', message], { encoding: 'utf-8' })
+  return gitc(repo, 'rev-parse', 'HEAD')
+}
+
+describe('a resume does not swallow the commit that arrived while parked (block 55)', () => {
+  it('keeps the old head when the movement was work, so the tick asks for a review', () => {
+    const repo = join(root, 'resume-work')
+    execFileSync('git', ['init', '-q', repo], { encoding: 'utf-8' })
+    mkdirSync(repo, { recursive: true })
+    writeFileSync(join(repo, 'a.txt'), 'one')
+    const base = gitCommit(repo, 'base')
+
+    const state = createFlowState({
+      run_id: 'run-1', repo, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'paused', paused_from: 'idle',
+      claim: { head: base, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+
+    // The dev commits while the flow is parked.
+    writeFileSync(join(repo, 'b.txt'), 'two')
+    const work = gitCommit(repo, 'work')
+
+    resumeFlow('run-1')
+    const resumed = readFlow('run-1')
+
+    // Not the new head: the tick must be able to see that the head moved, and ask for the review of `work`.
+    expect(resumed.claim.head).toBe(base)
+    expect(work).not.toBe(base)
+  })
+
+  it('still anchors on a commit that only touched the plan and the briefs', () => {
+    const repo = join(root, 'resume-docs')
+    execFileSync('git', ['init', '-q', repo], { encoding: 'utf-8' })
+    mkdirSync(repo, { recursive: true })
+    writeFileSync(join(repo, 'a.txt'), 'one')
+    const base = gitCommit(repo, 'base')
+
+    const state = createFlowState({
+      run_id: 'run-1', repo, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'paused', paused_from: 'idle',
+      claim: { head: base, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+
+    // A brief attached while parked: `docs/briefs/` is what the engine calls documentation, so this movement is not work.
+    mkdirSync(join(repo, 'docs/briefs'), { recursive: true })
+    writeFileSync(join(repo, 'docs/briefs/P1.1.md'), '# P1.1')
+    const docs = gitCommit(repo, 'docs: brief')
+
+    resumeFlow('run-1')
+    expect(readFlow('run-1').claim.head).toBe(docs)
   })
 })
 

@@ -472,7 +472,9 @@ resumed run escalate again for ever.
 | `POST /api/flow/pause` | `{ run_id }` | `200 { run_id, flow }` (the `flow status --json` payload) | `404 not_found`, `409 not_pausable` (`done`), `409 already_paused` |
 | `POST /api/flow/resume` | `{ run_id }` | `200 { run_id, flow }` | `404 not_found`, `409 not_paused` (it was not parked) |
 
-`error` is a stable code, not a sentence: a client branches on it. Both call `pauseFlow`/`resumeFlow` — the same functions the CLI
+`error` is a stable code, not a sentence: a client branches on it. The route checks the state and the engine checks it again under the
+lock, so the refusal can come from either; both are mapped to this same vocabulary (`not_found`, `already_paused`, `not_paused`,
+`not_pausable`) — a sentence in a `400` is not something a button can act on. Both call `pauseFlow`/`resumeFlow` — the same functions the CLI
 uses — so the transition table, the parked state and the re-anchoring on resume cannot drift between the two surfaces. While a flow
 is `paused` the tick observes nothing and sends nothing; `resume` returns it to the state it was paused from, keeping an answer the
 flow still owes (`anchorOnHead` asks the plan whether the bound item is still open, the same question the settle asks).

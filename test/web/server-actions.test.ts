@@ -1,9 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// A test seam at the module boundary, not in the product: the route keeps calling `pauseFlow`/`resumeFlow`, and a test can make that call
+// lose the race the way a second tab would — the pre-check has already passed, and the engine finds a different state under its lock.
+const race = vi.hoisted(() => ({ pause: null as null | (() => never), resume: null as null | (() => never) }))
+vi.mock('../../src/core/flow-control.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../src/core/flow-control.js')>()
+  return {
+    ...actual,
+    pauseFlow: (runId: string, options?: never) => (race.pause ? race.pause() : actual.pauseFlow(runId, options)),
+    resumeFlow: (runId: string, options?: never) => (race.resume ? race.resume() : actual.resumeFlow(runId, options)),
+  }
+})
 import { request } from 'node:http'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { startWebServer, type WebServerHandle } from '../../src/surfaces/webui/server.js'
+import { startWebServer, flowControlRefusal, type WebServerHandle } from '../../src/surfaces/webui/server.js'
+
 import {
   listAgents,
   listRunHistory,
@@ -13,7 +26,7 @@ import {
   writeRun,
 } from '../../src/core/runs.js'
 import { loadConfig } from '../../src/core/config.js'
-import { createFlowState } from '../../src/core/flow.js'
+import { createFlowState, FlowStateError } from '../../src/core/flow.js'
 import { readFlow, saveFlow } from '../../src/core/flow-store.js'
 import type { AgentRecord, Provider, RunRecord } from '../../src/core/types.js'
 
@@ -752,23 +765,48 @@ describe('POST /api/flow/pause and /api/flow/resume', () => {
     expect(idle.status).toBe(200)
   })
 
-  it('maps a transition that lost the race to the same stable code', async () => {
-    // The pre-check reads the state; `pauseFlow` re-reads it under the lock. Between the two the flow can be closed — the request below
-    // is the same one, only the state behind it changed. The answer must be the code, not `cannot pause a flow in state done` (block 53).
-    const { pauseFlow } = await import('../../src/core/flow-control.js')
+  it('answers a race that finds the flow already parked with the code, not the prose', async () => {
+    // The route reads the state, then calls `pauseFlow`, which re-reads it under the lock. A second tab (or a double click) that wins the
+    // race makes the engine refuse with `flow for run … is already paused; …` — a sentence the pre-check never produces. It used to fall
+    // through to a 400 with that sentence as the body; it must answer `409 already_paused` (block 55, MAJOR).
     seedFlow()
     const handle = await start()
 
-    // Close the flow *through the engine* after the route would have passed its pre-check: this is what the race looks like from inside
-    // the server, and calling `pauseFlow` directly is how the handler's own call behaves when it loses.
-    const flow = readFlow('run-1')
-    saveFlow({ ...flow, state: 'done', close_reason: 'stopped by the operator' })
-    expect(() => pauseFlow('run-1')).toThrow(/cannot pause a flow in state done/)
+    race.pause = () => { throw new FlowStateError('flow for run run-1 is already paused; `flow resume` puts it back to work') }
+    try {
+      const raced = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
+      expect(raced.status).toBe(409)
+      expect(JSON.parse(raced.body).error).toBe('already_paused')
+      expect(JSON.parse(raced.body).state).toBe('paused')
+    } finally {
+      race.pause = null
+    }
+  })
 
-    const raced = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
-    expect(raced.status).toBe(409)
-    expect(JSON.parse(raced.body).error).toBe('not_pausable')
-    expect(JSON.parse(raced.body).state).toBe('done')
+  it('maps a transition that lost the race to the same stable code', async () => {
+    // Same class, different refusal: the state was closed between the pre-check and the call.
+    seedFlow()
+    const handle = await start()
+
+    race.pause = () => { throw new FlowStateError('cannot pause a flow in state done') }
+    try {
+      const raced = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
+      expect(raced.status).toBe(409)
+      expect(JSON.parse(raced.body).error).toBe('not_pausable')
+      expect(JSON.parse(raced.body).state).toBe('done')
+    } finally {
+      race.pause = null
+    }
+  })
+
+  it('names every refusal in one vocabulary', async () => {
+    // The mapping itself, so a new message shape cannot quietly become a 400 again.
+    expect(flowControlRefusal('no flow for run x')).toEqual({ code: 'not_found' })
+    expect(flowControlRefusal('flow for run x is already paused; `flow resume` puts it back to work')).toEqual({ code: 'already_paused', state: 'paused' })
+    expect(flowControlRefusal('cannot pause a flow in state done')).toEqual({ code: 'not_pausable', state: 'done' })
+    expect(flowControlRefusal('cannot resume into state done')).toEqual({ code: 'not_paused', state: 'paused' })
+    expect(flowControlRefusal('cannot resume a flow in state idle (only a paused or escalated flow can be resumed)')).toEqual({ code: 'not_paused', state: 'idle' })
+    expect(flowControlRefusal('something else entirely')).toEqual({ code: null })
   })
 
   it('rejects a POST without an Origin header', async () => {
