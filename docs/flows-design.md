@@ -818,7 +818,7 @@ counted before and after each step:
 
 Left to the owner: push and open the PR (nothing here was pushed), run `check:install-matrix` on an idle host, install
 the build if wanted (`~/.local` still carries the previous one). No rebase is needed: the branch is merged up to 2.1.0
-and `git rev-list --left-right --count upstream/master...HEAD` is `0 103`.
+and `git rev-list --left-right --count upstream/master...HEAD` is `0 104`.
 
 ## 5. Risks and contract changes
 
