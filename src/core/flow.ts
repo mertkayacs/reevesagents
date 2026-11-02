@@ -42,7 +42,9 @@ export const FLOW_TRANSITIONS: Record<FlowStatus, readonly FlowStatus[]> = {
   // `done` is reachable from every live state because `flow stop` is the operator's escape hatch.
   // `escalated` is reachable from `idle` too: a claimed block dispatch that never settles escalates
   // from there after `PENDING_TTL_SEC`, and refusing that transition would strand the claim.
-  idle: ['reviewing', 'paused', 'orphaned', 'escalated', 'done'],
+  // `fixing` is reachable from `idle` because a verdict can be collected while the flow is idle (block 21): the answer
+  // is older work than any commit, and refusing the edge would leave it unspent for ever.
+  idle: ['reviewing', 'fixing', 'paused', 'orphaned', 'escalated', 'done'],
   reviewing: ['idle', 'fixing', 'paused', 'orphaned', 'escalated', 'done'],
   fixing: ['reviewing', 'paused', 'orphaned', 'escalated', 'done'],
   // A paused flow returns to the state it was paused from, which is one of the three above.
@@ -208,6 +210,9 @@ export interface FlowState {
   // `dispatch_unconfirmed` (claim released, staging file kept) the next tick rebuilt and re-pasted the same
   // fix prompt. A *refused* dispatch does not set it: nothing was pasted, so the answer stays usable.
   answered_round: string | null
+  // The commit whose verdict this flow has already acted on from `idle`. Without it an ACCEPT that arrived while the
+  // flow was idle would be re-applied on every tick — closing the item it just dispatched. Reset when the head moves.
+  verdict_handled_for: string | null
   // Where `resume` returns the flow to, and when the pause happened. Null unless `state` is
   // `paused`: a resume that guessed would silently restart a pipeline in the wrong state.
   paused_from: FlowStatus | null
@@ -378,6 +383,7 @@ export interface FlowDecision {
   next_unsubstantiated_attempts?: number
   // The round key a dispatch was built from, recorded so the same file answer is not consumed twice.
   next_answered_round?: string | null
+  next_verdict_handled_for?: string | null
   // The plan item this decision dispatches for (null clears it: a dispatch that is not the plan's).
   next_active_plan_item?: string | null
   // The plan item an accepted verdict closes, with the facts the plan records.
@@ -453,6 +459,7 @@ export function createFlowState(init: FlowInit): FlowState {
     pending: null,
     unsubstantiated_attempts: 0,
     answered_round: null,
+    verdict_handled_for: null,
     active_plan_item: null,
     paused_from: null,
     paused_at: null,
@@ -509,6 +516,7 @@ export function parseFlowState(raw: unknown): FlowState {
     pending: parsePendingDispatch(record.pending),
     unsubstantiated_attempts: count(record.unsubstantiated_attempts),
     answered_round: typeof record.answered_round === 'string' ? record.answered_round : null,
+    verdict_handled_for: typeof record.verdict_handled_for === 'string' ? record.verdict_handled_for : null,
     active_plan_item: typeof record.active_plan_item === 'string' ? record.active_plan_item : null,
     // A paused file always names where it came from; a missing field defaults to `idle`, which is
     // the only target a flow without a recorded origin could safely resume into.
@@ -741,6 +749,7 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
     head: state.claim.head,
     notes,
     next_unsubstantiated_attempts: 0,
+    next_verdict_handled_for: state.claim.head,
     next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
     message: renderFixPrompt({
       head: state.claim.head,
@@ -952,12 +961,46 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   // the loop that made an imported plan look unstartable. The head still wins when it has moved — a review of the new
   // commit is an older promise than any queued item — so this is consulted only after that check.
   if (observations.head === state.claim.head) {
+    // A verdict that arrived while the flow was idle is work waiting to happen. `fixDispatch` and `planAcceptDecision`
+    // used to be reachable only from `tickReviewing`, so a CHANGES_REQUESTED collected at the wrong moment left the flow
+    // answering `head_unchanged` for ever: no fix → no commit → no review (D4, the same shape as the block-19 bootstrap).
+    // Settling it first is the rule "finish what was already answered before waiting for a new answer".
+    const settled = settledVerdictDecision(state, observations)
+    if (settled) return settled
     return bootstrapDecision(state, observations) ?? hold(state, 'head_unchanged')
   }
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
+}
+
+// The verdict the flow already has, acted on from `idle`. Ordered before the head check because it is *older* work than
+// any commit: an answer that was collected must be carried out, or the pipeline stops on a state nobody advances.
+// `verdict_handled_for` makes it once per commit — without it an ACCEPT would close the item it just dispatched on every
+// following tick.
+function settledVerdictDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
+  const verdict = state.claim.verdict
+  if (verdict === null || state.verdict_handled_for === state.claim.head) return null
+  if (!observations.tree_clean) return hold(state, 'tree_dirty')
+
+  if (verdict === 'ACCEPT') {
+    // Without a plan an ACCEPT is the legacy close, and `tickReviewing` has already done it: a flow that is idle with an
+    // ACCEPT and no plan is simply done with its work. With a plan the item is still open and must be closed.
+    if (!observations.plan) return null
+    const accepted = planAcceptDecision(state, observations, observations.plan)
+    return { ...accepted, next_verdict_handled_for: state.claim.head }
+  }
+
+  if (observations.plan) {
+    const budget = planBudgetDecision(state, observations, observations.plan)
+    if (budget) return { ...budget, next_verdict_handled_for: state.claim.head }
+  } else if (state.rounds >= state.max_rounds) {
+    return { ...escalate(state, observations), next_verdict_handled_for: state.claim.head }
+  }
+  const gate = dispatchGate(state, observations)
+  if (gate) return gate
+  return fixDispatch(state, observations)
 }
 
 // The first dispatch of a flow. Same rules as `planAcceptDecision` — a queued spec outranks the picker, the picker
@@ -1056,23 +1099,27 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // with nothing recorded is either stamping or broken, and both must stop here rather than close the plan.
   if (!isVerdictSubstantiated(observations)) return unsubstantiated(state, observations)
 
+  // Whatever path consumes this verdict, it is consumed for this commit: the marker is what keeps `idle` from applying the
+  // same ACCEPT a second time after the flow comes back there (block 21, D4).
+  const handled = (decision: FlowDecision): FlowDecision => ({ ...decision, next_verdict_handled_for: state.claim.head })
+
   if (observations.verdict === 'ACCEPT') {
     // With a plan the queue comes from the document, not from `state.specs` (§5): the accepted item closes and
     // the engine takes the next item in document order — or refuses to move on, which is the whole point.
-    if (observations.plan) return planAcceptDecision(state, observations, observations.plan)
+    if (observations.plan) return handled(planAcceptDecision(state, observations, observations.plan))
 
     const spec = nextSpec(state)
     if (!spec) {
-      return withNotes(withNext(state, 'flow_done', {
+      return handled(withNotes(withNext(state, 'flow_done', {
         next_state: 'done',
         next_review_started_at: null,
         next_claim: { ...state.claim, verdict: 'ACCEPT', verdict_count: observations.verdict_count },
         next_unsubstantiated_attempts: 0,
-      }), observations)
+      }), observations))
     }
     const gate = dispatchGate(state, observations)
     if (gate) return gate
-    return withNotes(specDispatch(state, spec, observations), observations)
+    return handled(withNotes(specDispatch(state, spec, observations), observations))
   }
 
   // CHANGES_REQUESTED: the budget is checked before the dispatch, so the flow stops on the round it cannot
@@ -1082,16 +1129,16 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // (`max_rounds` per item) block the item, and the flow's fuse (`max_total_rounds`) escalates the flow.
   if (observations.plan) {
     const budget = planBudgetDecision(state, observations, observations.plan)
-    if (budget) return withNotes(budget, observations)
+    if (budget) return handled(withNotes(budget, observations))
     const planGate = dispatchGate(state, observations)
     if (planGate) return planGate
-    return withNotes(fixDispatch(state, observations), observations)
+    return handled(withNotes(fixDispatch(state, observations), observations))
   }
   // No plan: the rule a schema-v1 flow has always had, untouched.
-  if (state.rounds >= state.max_rounds) return withNotes(escalate(state, observations), observations)
+  if (state.rounds >= state.max_rounds) return handled(withNotes(escalate(state, observations), observations))
   const gate = dispatchGate(state, observations)
   if (gate) return gate
-  return withNotes(fixDispatch(state, observations), observations)
+  return handled(withNotes(fixDispatch(state, observations), observations))
 }
 
 function tickFixing(state: FlowState, observations: FlowObservations): FlowDecision {
@@ -1279,6 +1326,11 @@ function withDelta(
     orphan_reason: decision.kind === 'orphan' ? (decision.notes ?? null) : state.orphan_reason,
     unsubstantiated_attempts: decision.next_unsubstantiated_attempts ?? state.unsubstantiated_attempts,
     answered_round: decision.next_answered_round === undefined ? state.answered_round : decision.next_answered_round,
+    // A verdict is acted on once per commit: set by the branch that used it, dropped as soon as the head moves (the
+    // next commit has its own verdict to earn).
+    verdict_handled_for: decision.next_verdict_handled_for !== undefined
+      ? decision.next_verdict_handled_for
+      : (decision.next_claim.head !== state.claim.head ? null : state.verdict_handled_for),
     active_plan_item: decision.next_active_plan_item === undefined ? state.active_plan_item : decision.next_active_plan_item,
     // A new episode starts when the flow *becomes* escalated, which is exactly when a human has to be told.
     notify_episode: options.advance && state.state !== 'escalated' && decision.next_state === 'escalated'

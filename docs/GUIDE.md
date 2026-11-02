@@ -316,6 +316,23 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+### The flow's own placeholders (why an empty Hermes pane is safe)
+
+The engine pastes into a pane only when the composer is empty. "Empty" means **the provider's hint**, not "no
+characters": Hermes draws a rotating invitation (`Спросите о чём угодно или введите / для команд…`, `Ask anything, or
+type / for commands…`), Codex draws `Ask Codex to do anything`. A hint is recognised in every locale the TUI ships, and
+structurally too — an invitation to use commands ends in an ellipsis and names `/` — so a reworded hint does not need a
+release. Anything else in the box is somebody's unsent text: the flow refuses (`composer_dirty`) instead of pasting
+over it. If you ever see `composer_dirty` on a pane that looks empty, the hint was not recognised: send the pane
+capture with `docs/GUIDE.md`'s troubleshooting note and it becomes a test case.
+
+### A verdict that arrived at the wrong moment is not lost
+
+If a review answer is collected while the flow is momentarily `idle` (a resumed flow, a round that ended in the same
+tick), the next tick does not answer `head_unchanged`: it takes the verdict it already has. `CHANGES_REQUESTED` sends
+the fix to the dev, an `ACCEPT` closes the plan item and takes the next one. It happens once per commit — the marker is
+`verdict_handled_for` — so you will not see the same fix twice, and a new commit earns a new verdict.
+
 ### When the flow says `dispatch_unconfirmed`
 
 `dispatch_unconfirmed` means the prompt reached the pane but nothing proved that the agent started on it: the busy

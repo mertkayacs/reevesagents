@@ -427,7 +427,7 @@ module cycle.
 
 | Status | Meaning | A tick may | Leaves via |
 | --- | --- | --- | --- |
-| `idle` | nothing pending, waiting for the dev's next HEAD | request review when HEAD moved | `reviewing` |
+| `idle` | nothing pending; either waiting for the dev's next HEAD, or holding a verdict that was collected at the wrong moment | a verdict already collected for `claim.head` is settled first — `CHANGES_REQUESTED` → `fixing` (budgets checked), `ACCEPT` with a plan → the item closes and the next one is dispatched; then queued work is started; then a moved HEAD is reviewed. `head_unchanged` is the *last* answer, not the first (block 21) | `reviewing` / `fixing` |
 | `reviewing` | review requested for `req_head` | record a verdict, log a timeout once | `fixing` / `accepted` / `escalated` |
 | `dispatching` | a claim is out (`pending` set, send in flight) | nothing — another ticker owns it | `pending` cleared by settle, or by a control command (`pause`/`stop`), in which case the runner re-checks the claim before pasting and answers `cancelled` |
 | `fixing` | fix request delivered | request review for a new HEAD | `reviewing` |
@@ -439,7 +439,10 @@ module cycle.
 
 Two invariants make the table safe: a transition is written only inside a short lock
 (§2.4), and no state re-sends the same text for the same `(head, verdict, spec_id)` — the
-`dispatched_*` keys are the memory that survives a crash.
+`dispatched_*` keys are the memory that survives a crash. The verdict half of that memory is
+`verdict_handled_for`: the commit whose answer this flow has already acted on, set by every path that
+consumes a verdict and cleared when the HEAD moves. Without it an ACCEPT collected in `idle` would be
+re-applied on the following tick and would close the item the tick before had just dispatched.
 
 **The table is code, not prose (block 07).** `FLOW_TRANSITIONS` in `src/core/flow.ts` lists the
 allowed target of every state, `assertTransition` refuses anything else with the state named

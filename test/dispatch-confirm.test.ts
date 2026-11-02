@@ -7,13 +7,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState, flowTick } from '../src/core/flow.js'
 import type { FlowObservations, FlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { notesRef, stagingPath } from '../src/core/flow-notes.js'
 import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
+import { attachSpec, createPlan, planPath, savePlan } from '../src/core/plan.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
 const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []) => {
@@ -165,6 +166,109 @@ describe('an unconfirmed review request is still a round (D1)', () => {
     const after = readFlow('run-1')
     expect(after.state).toBe('done')
     expect(after.log.at(-1)?.event).toBe('flow_done')
+  })
+})
+
+describe('a verdict already collected is work, even when the head has not moved (D4)', () => {
+  function idleWithVerdict(verdict: 'ACCEPT' | 'CHANGES_REQUESTED', extra: Partial<FlowState> = {}): void {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle', rounds: 0,
+      claim: { head: HEAD, verdict, verdict_count: 2 },
+      ...extra,
+    })
+  }
+
+  it('dispatches the fix for a CHANGES_REQUESTED collected in idle, and only once', () => {
+    idleWithVerdict('CHANGES_REQUESTED')
+    const sent: string[] = []
+    const portsFix = ports((_pane, text) => { sent.push(text); return { sent: true } })
+
+    const first = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null, ports: portsFix,
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(first.decision.kind).toBe('dispatch_fix')
+    expect(first.status).toBe('applied')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toContain(HEAD)
+    expect(readFlow('run-1').state).toBe('fixing')
+
+    // The verdict is spent: the next tick waits for the commit instead of sending the same fix again.
+    const second = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: null, ports: portsFix,
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(second.decision.kind).not.toBe('dispatch_fix')
+    expect(sent).toHaveLength(1)
+  })
+
+  it('closes the accepted plan item and takes the next one', () => {
+    // The plan is what makes an idle ACCEPT ambiguous: the item it accepted is still open, and `tickReviewing` never saw
+    // the verdict because the flow was parked when it arrived.
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    const brief = (id: string) => JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] })
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2']) {
+      plan = attachSpec(plan, { id, text: brief(id), format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    idleWithVerdict('ACCEPT', { active_plan_item: 'P1.1' })
+
+    const sent: string[] = []
+    const first = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(first.decision.reason).toBe('plan_item_dispatched')
+    expect(first.decision.next_plan_close?.id).toBe('P1.1')
+    expect(readFlow('run-1').active_plan_item).toBe('P1.2')
+
+    // Once per commit: the ACCEPT is not re-applied, so P1.2 is not closed by the tick that just dispatched it.
+    const second = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(second.decision.kind).not.toBe('dispatch_spec')
+    expect(sent).toHaveLength(1)
+  })
+
+  it('still holds on an unchanged head when there is no verdict to act on', () => {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0 } })
+    const sent: string[] = []
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('head_unchanged')
+    expect(sent).toHaveLength(0)
+  })
+
+  it('does not send the same fix from two ticks that race for the claim', () => {
+    idleWithVerdict('CHANGES_REQUESTED')
+    const sent: string[] = []
+    const portsFix = ports((_pane, text) => { sent.push(text); return { sent: true } })
+
+    const a = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null, ports: portsFix,
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    const b = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null, ports: portsFix,
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect([a.decision.kind, b.decision.kind].filter(kind => kind === 'dispatch_fix')).toHaveLength(1)
+    expect(sent).toHaveLength(1)
   })
 })
 
