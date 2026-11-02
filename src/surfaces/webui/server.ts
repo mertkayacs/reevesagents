@@ -612,7 +612,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
         sendJson(res, 400, { error: 'run_id is required' })
         return
       }
-      const runId = resolveFlowRunId(requested)
+      let runId: string
+      try {
+        runId = resolveFlowRunId(requested)
+      } catch {
+        // A stable code, not a sentence: a client must not have to parse prose to know what happened.
+        sendJson(res, 404, { error: 'not_found' })
+        return
+      }
       const before = readFlow(runId)
       // `done` is terminal: a finished plan has nothing to pause, and saying so is better than pretending it worked.
       if (pausing && before.state === 'done') {
@@ -621,6 +628,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       }
       if (pausing && before.state === 'paused') {
         sendJson(res, 409, { error: 'already_paused', state: before.state })
+        return
+      }
+      if (!pausing && before.state !== 'paused') {
+        // Resuming a flow that is not parked is not an error the caller can fix by retrying: it is a stale button, and the code says so.
+        sendJson(res, 409, { error: 'not_paused', state: before.state })
         return
       }
       const result = pausing ? pauseFlow(runId) : resumeFlow(runId)

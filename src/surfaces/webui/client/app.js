@@ -428,6 +428,10 @@
     if (Array.isArray(data.runs)) runs = data.runs
     if (Array.isArray(data.history)) history = data.history
     if (Array.isArray(data.approvals)) approvals = data.approvals
+    // A snapshot can change the flow's state under an open dialog (another tab pressed Pause, a ticker escalated it). Without this the
+    // button kept its old label and a second click answered `already_paused` — a stale button is a bug the operator has to interpret
+    // (block 51).
+    syncPlanPlayPause()
     if (typeof data.version === 'string' && data.version) appVersion = data.version
     if (data.language) applyLanguage(data.language)
     if (data.web_theme) applyTheme(data.web_theme)
@@ -1313,6 +1317,15 @@
 
   // The dialog's play/pause: the same operation as `flow pause` / `flow resume`, through one route. The button's label and
   // `aria-pressed` follow the flow's state, so "Pause" never lies about a flow that is already parked.
+  // Ask the freshest snapshot which state the plan is in, and draw the button from it.
+  function syncPlanPlayPause() {
+    if (!insights.runId) return
+    const run = runs.find(entry => entry.id === insights.runId)
+    if (!run || !run.flow) return
+    insights.flowState = run.flow.status
+    if (el.planDialog.open) renderPlanPlayPause(insights.flowState === 'paused')
+  }
+
   function renderPlanPlayPause(paused) {
     el.planPlayPause.textContent = paused ? t('web.planResume') : t('web.planPause')
     el.planPlayPause.setAttribute('aria-pressed', String(paused))

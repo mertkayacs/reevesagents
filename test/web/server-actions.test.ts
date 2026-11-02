@@ -744,6 +744,12 @@ describe('POST /api/flow/pause and /api/flow/resume', () => {
 
     const missing = await post(handle.port, '/api/flow/pause', { run_id: 'no-such-run' })
     expect(missing.status).toBe(404)
+    // A stable code, not a sentence: the client branches on `error`, never on the prose.
+    expect(JSON.parse(missing.body).error).toBe('not_found')
+
+    // Resuming something that is not parked is the same class: a stale button, reported as a code.
+    const idle = await post(handle.port, '/api/flow/resume', { run_id: 'run-1' })
+    expect(idle.status).toBe(200)
   })
 
   it('rejects a POST without an Origin header', async () => {

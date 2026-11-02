@@ -465,11 +465,23 @@ recorded in the plan's conflicts), the refused item goes back to the queue inste
 with the next item. It does not escalate: a historical inconsistency can never be repaired, so an escalation would make every
 resumed run escalate again for ever.
 
-**Play/pause is the operator's, and it is the engine's own operation (block 49).** `POST /api/flow/pause` and `/api/flow/resume`
-call `pauseFlow`/`resumeFlow` — the same functions the CLI uses — so the transition table, the parked state and the re-anchoring on
-resume cannot drift between the two surfaces. While a flow is `paused` the tick observes nothing and sends nothing; `resume` returns
-it to the state it was paused from, keeping an answer the flow still owes. The dialog's button and the card's glyph only reflect
-that state: the chip stays a label, and the plan icon stays the only opener.
+**Play/pause is the operator's, and it is the engine's own operation (blocks 49, 51).** Two routes carry it:
+
+| route | body | success | refusals |
+| --- | --- | --- | --- |
+| `POST /api/flow/pause` | `{ run_id }` | `200 { run_id, flow }` (the `flow status --json` payload) | `404 not_found`, `409 not_pausable` (`done`), `409 already_paused` |
+| `POST /api/flow/resume` | `{ run_id }` | `200 { run_id, flow }` | `404 not_found`, `409 not_paused` (it was not parked) |
+
+`error` is a stable code, not a sentence: a client branches on it. Both call `pauseFlow`/`resumeFlow` — the same functions the CLI
+uses — so the transition table, the parked state and the re-anchoring on resume cannot drift between the two surfaces. While a flow
+is `paused` the tick observes nothing and sends nothing; `resume` returns it to the state it was paused from, keeping an answer the
+flow still owes (`anchorOnHead` asks the plan whether the bound item is still open, the same question the settle asks).
+
+In the UI the plan dialog's header carries `#plan-play-pause`: the label follows the flow (`Pause` / `Resume`), `aria-pressed` says
+which state it is in, and a refusal is shown as the code (`not_pausable`) under the dialog's actions. The button is kept in step by
+every state snapshot — an SSE frame that parks the flow from another tab flips it, so a second click cannot answer `already_paused`.
+On the card a small glyph beside the plan icon reports the same state (`flow-plan-state`, `data-paused`); the chip stays a label,
+and the plan icon stays the only opener.
 
 **The panel receives a pointer, not the brief (block 47).** A brief of fifteen to thirty lines pasted into a terminal pushes the input
 line out of the detector's window, the Enter is never confirmed, and the round ends in `dispatch_unconfirmed` and an escalation —
