@@ -599,12 +599,25 @@ button { letter-spacing: 0; }
   background: transparent;
 }
 
-.flow-badge.is-interactive {
+.flow-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-left: var(--s-1);
+  padding: 0 4px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
+  line-height: 1;
 }
 
-.flow-badge.is-static {
-  cursor: default;
+.flow-plan-btn:hover,
+.flow-plan-btn:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--muted) 50%, var(--border));
 }
 
 .flow-badge.is-pulsing {
@@ -618,12 +631,25 @@ button { letter-spacing: 0; }
 
 /* A reader who asked for less motion gets the colour and the words, never the breathing. */
 @media (prefers-reduced-motion: reduce) {
-  .flow-badge.is-interactive {
+  .flow-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-left: var(--s-1);
+  padding: 0 4px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
+  line-height: 1;
 }
 
-.flow-badge.is-static {
-  cursor: default;
+.flow-plan-btn:hover,
+.flow-plan-btn:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--muted) 50%, var(--border));
 }
 
 .flow-badge.is-pulsing { animation: none; }

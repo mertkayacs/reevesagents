@@ -877,9 +877,11 @@ stopped".
 | `done` | none | `flow: closed` | `neutral` | no |
 | any | none | `flow: review (2/3)` — the round budget | `neutral` | no |
 
-The plan is opened by the badge itself (`plan-dialog`, filled from `GET /api/plan?run=…`): the chip is a `<button>`
-with `aria-haspopup="dialog"`, its `aria-label` names the run, and a run **without** a plan keeps a static chip that says so.
-Closing the dialog — Esc or its button — returns focus to the badge. The log dialog no longer has a Plan tab: logs are logs.
+The chip is a **label**, never a control: it reports the tone, the numbers and the pulse, and clicking it does nothing.
+Beside it, and only when the run has a plan, sits the plan button — a small icon (`#plan-btn`, `.flow-plan-btn`) with
+`aria-label` "Plan", `aria-haspopup="dialog"` and `aria-expanded`. It opens `#plan-dialog`, filled from
+`GET /api/plan?run=…`; Esc or Close returns focus to the icon. A run without a plan draws no icon at all (no disabled
+placeholder). The log dialog has no Plan tab: logs are logs.
 
 The mapping is `flowBadgeView` (`src/core/flow-label.ts`) and it decides the tone, the words and the pulse in one place;
 the browser maps a tone to a class and holds no second copy of the rule. `pulse` is an expiry, not a state: the server

@@ -1059,10 +1059,9 @@
       // The flow chip is rendered by the server (core/flow-label.ts), so the client holds no copy of
       // its wording; attention is an attribute on the same chip, painted by app.css.
       if (run.flow) {
-        const flow = document.createElement('button')
-        flow.type = 'button'
-        // The tone is decided on the server (`flowBadgeView`), so the classes here are a mapping and nothing else: a second
-        // copy of "green means the plan finished" in JavaScript is how two surfaces start disagreeing.
+        // The badge is a label, not a control: it says what the flow is doing and nothing else. The plan has its own icon
+        // beside it, so clicking the status cannot silently navigate somewhere.
+        const flow = document.createElement('span')
         const tone = run.flow.tone || 'neutral'
         flow.className = `run-flow flow-badge flow-badge--${tone}${run.flow.pulse ? ' is-pulsing' : ''}`
         flow.textContent = run.flow.label
@@ -1070,21 +1069,25 @@
           flow.dataset.attention = run.flow.attention
         }
         flow.title = run.flow.detail || run.flow.attention_label || run.flow.label
-        // The badge opens the plan — but only when there is one. A run without a plan keeps a plain chip: a button that
-        // does nothing is worse than a chip that does nothing.
-        const action = core().planBadgeAction({ ...run.flow, run_id: run.id })
-        if (action.interactive) {
-          flow.setAttribute('aria-haspopup', action.haspopup)
-          flow.setAttribute('aria-expanded', String(el.planDialog.open && insights.runId === run.id))
-          flow.setAttribute('aria-label', `${action.label} · ${t('web.planOpen')}`)
-          flow.classList.add('is-interactive')
-          flow.addEventListener('click', () => { void openPlanDialog(run.id, flow) })
-        } else {
-          flow.tabIndex = -1
-          flow.title = `${flow.title} · ${t('web.planNone')}`
-          flow.classList.add('is-static')
-        }
         headBody.appendChild(flow)
+
+        // The plan icon: drawn only when the run has a plan (T1.6.6 — no disabled placeholders), and the only control that
+        // opens the plan dialog.
+        if (core().planIconVisible({ ...run.flow, run_id: run.id })) {
+          const planBtn = document.createElement('button')
+          planBtn.type = 'button'
+          planBtn.id = 'plan-btn'
+          planBtn.className = 'flow-plan-btn'
+          planBtn.setAttribute('aria-label', t('web.planOpenLabel'))
+          planBtn.setAttribute('aria-haspopup', 'dialog')
+          planBtn.setAttribute('aria-expanded', String(el.planDialog.open && insights.runId === run.id))
+          planBtn.title = t('web.planOpenLabel')
+          planBtn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">'
+            + '<path d="M2 3.5h2M6 3.5h8M2 8h2M6 8h8M2 12.5h2M6 12.5h8" stroke="currentColor" stroke-width="1.4" '
+            + 'stroke-linecap="round" fill="none"/></svg>'
+          planBtn.addEventListener('click', () => { void openPlanDialog(run.id, planBtn) })
+          headBody.appendChild(planBtn)
+        }
       }
       head.appendChild(headBody)
 
@@ -1243,7 +1246,7 @@
     pulseRemaining: () => 0,
     filterPlanItems: items => items || [],
     planWaiting: () => ({ needsBrief: [], blocked: [], total: 0 }),
-    planBadgeAction: flow => ({ interactive: Boolean(flow && flow.plan), haspopup: 'dialog', label: flow ? flow.label : '' }),
+    planIconVisible: flow => Boolean(flow && flow.plan),
   }
 
   // The dialog is run-scoped: the agent the operator has selected decides which run's plan opens.

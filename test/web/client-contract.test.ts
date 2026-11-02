@@ -260,16 +260,15 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain('previous.latest_seq !== data.notifications.latest_seq')
   })
 
-  it('opens the plan from the flow badge, with the run id it belongs to', () => {
+  it('opens the plan from its own icon, with the run id it belongs to', () => {
     expect(js).toContain('async function openPlanDialog(runId, opener)')
     expect(js).toContain("el.planDialog.showModal()")
     expect(js).toContain("api('GET', `/api/plan?run=")
-    // The badge is the only opener, and only when the run has a plan.
-    // The decision comes from `planBadgeAction`, so the badge and the test read one rule.
-    expect(js).toContain("flow.setAttribute('aria-haspopup', action.haspopup)")
-    expect(js).toContain('if (action.interactive)')
-    expect(js).toContain('openPlanDialog(run.id, flow)')
-    // Esc closes the dialog and hands focus back to the badge that opened it.
+    // The icon is the opener, drawn only when there is a plan; the badge stays a label.
+    expect(js).toContain('core().planIconVisible')
+    expect(js).toContain("planBtn.setAttribute('aria-haspopup', 'dialog')")
+    expect(js).toContain('openPlanDialog(run.id, planBtn)')
+    // Esc closes the dialog and hands focus back to the icon that opened it.
     expect(js).toContain("el.planDialog.addEventListener('close'")
     expect(js).toContain('opener.focus()')
   })

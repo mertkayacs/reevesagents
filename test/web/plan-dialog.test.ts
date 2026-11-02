@@ -12,7 +12,7 @@ const appSource = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/ap
 const html = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/index.html'), 'utf8')
 
 interface Core {
-  planBadgeAction: (_flow: unknown) => { interactive: boolean, haspopup?: string, label?: string, reason?: string }
+  planIconVisible: (_flow: unknown) => boolean
 }
 
 function loadCore(): Core {
@@ -24,24 +24,27 @@ function loadCore(): Core {
 }
 
 describe('the flow badge opens the plan', () => {
-  it('is a dialog opener only when the run has a plan', () => {
-    const { planBadgeAction } = loadCore()
+  it('draws the Plan icon only when the run has a plan', () => {
+    const { planIconVisible } = loadCore()
 
-    const withPlan = planBadgeAction({ label: 'flow: plan 1/2', plan: { done: 1, total: 2 }, run_id: 'run-1' })
-    expect(withPlan.interactive).toBe(true)
-    expect(withPlan.haspopup).toBe('dialog')
-    expect(withPlan.label).toContain('run-1')
-
-    expect(planBadgeAction({ label: 'flow: closed', plan: null, run_id: 'run-1' })).toEqual({ interactive: false, reason: 'no-plan' })
-    expect(planBadgeAction(null)).toEqual({ interactive: false, reason: 'no-flow' })
+    expect(planIconVisible({ label: 'flow: plan 1/2', plan: { done: 1, total: 2 }, run_id: 'run-1' })).toBe(true)
+    expect(planIconVisible({ label: 'flow: closed', plan: null, run_id: 'run-1' })).toBe(false)
+    expect(planIconVisible(null)).toBe(false)
   })
 
-  it('wires that decision into the card, with the run id of the badge', () => {
-    expect(appSource).toContain('core().planBadgeAction')
-    expect(appSource).toContain("flow.setAttribute('aria-haspopup', action.haspopup)")
-    expect(appSource).toContain('openPlanDialog(run.id, flow)')
-    // A run without a plan keeps a chip: no pointer cursor, no tab stop.
-    expect(appSource).toContain("flow.classList.add('is-static')")
+  it('leaves the badge alone and puts the control beside it', () => {
+    // The badge is a label: no button element, no click handler, no aria-haspopup on it.
+    const badge = appSource.slice(appSource.indexOf("const flow = document.createElement('span')"), appSource.indexOf('headBody.appendChild(flow)'))
+    expect(badge).not.toContain('addEventListener')
+    expect(badge).not.toContain('aria-haspopup')
+    expect(badge).not.toContain("createElement('button')")
+
+    // The icon is the control, and it carries the run it belongs to.
+    expect(appSource).toContain('core().planIconVisible')
+    expect(appSource).toContain("planBtn.id = 'plan-btn'")
+    expect(appSource).toContain("planBtn.setAttribute('aria-haspopup', 'dialog')")
+    expect(appSource).toContain("planBtn.setAttribute('aria-label', t('web.planOpenLabel'))")
+    expect(appSource).toContain('openPlanDialog(run.id, planBtn)')
   })
 
   it('closes back to the badge that opened it', () => {
