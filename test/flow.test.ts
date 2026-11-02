@@ -521,6 +521,8 @@ describe('the dispatch claim', () => {
       head: 'bbb222',
       spec_id: null,
       at: NOW,
+      // The claim records the verdict counter it was sent with, so a recovery can tell a new answer from an old one.
+      verdict_baseline: 0,
     })
     expect(claimed.log.at(-1)?.event).toBe('dispatch_claimed')
     // The claim itself changes nothing the engine acts on: the status moves when it settles.

@@ -132,6 +132,10 @@ export interface FlowPendingDispatch {
   spec_id: string | null
   // When the claim was taken (epoch ms) — the only clock `PENDING_TTL_SEC` is measured against.
   at: number
+  // The pane's verdict counter when the request was sent. Kept in the claim so a recovery can tell "a verdict answered this
+  // request" from "the pane still shows the verdict that was there before it" — the number is the only memory of that
+  // moment, and `state.claim.verdict_count` may have been refreshed since (block 29, MAJOR). Absent on older files.
+  verdict_baseline?: number
 }
 
 export interface FlowLogEntry {
@@ -615,6 +619,11 @@ function parsePendingDispatch(raw: unknown): FlowPendingDispatch | null {
     head: text(record.head) || null,
     spec_id: text(record.spec_id) || null,
     at: Math.floor(record.at),
+    // Optional on read: a claim written before the field existed simply has no baseline, and a recovery falls back to the
+    // flow's own counter (the pre-block-29 behaviour) rather than inventing one.
+    ...(typeof record.verdict_baseline === 'number' && Number.isFinite(record.verdict_baseline)
+      ? { verdict_baseline: Math.floor(record.verdict_baseline) }
+      : {}),
   }
 }
 
@@ -1028,7 +1037,10 @@ function settleByObservation(state: FlowState, observations: FlowObservations): 
   const pending = state.pending
   if (!pending || pending.kind !== 'request_review') return null
   const fromFile = observations.verdict_source === 'file' && observations.verdict !== null
-  const fromPane = observations.verdict !== null && observations.verdict_count > state.claim.verdict_count
+  // "A new verdict" is measured against the counter the request was sent with, not the flow's counter today: a later tick may
+  // have moved that one, and comparing against it either loses the answer (7 > 7) or accepts an older one for it.
+  const baseline = pending.verdict_baseline ?? state.claim.verdict_count
+  const fromPane = observations.verdict !== null && observations.verdict_count > baseline
   if (!fromFile && !fromPane) return null
   // Re-run the engine with the claim out of the way; anything it refuses to decide means the observation does not
   // actually answer this claim, and the claim keeps its rights.
@@ -1049,9 +1061,10 @@ function settleByObservation(state: FlowState, observations: FlowObservations): 
     claim: {
       ...state.claim,
       head: reviewHead,
-      // The counter at dispatch time is what "a new verdict" is measured against; the pane's counter today may have moved
-      // for reasons of its own.
-      verdict_count: state.claim.verdict_count,
+      // The counter at dispatch time is what "a new verdict" is measured against — the claim recorded it, because
+      // `state.claim.verdict_count` may have been refreshed by later ticks and would let the verdict that was already on
+      // screen before the request pass for its answer (block 29, MAJOR).
+      verdict_count: pending.verdict_baseline ?? state.claim.verdict_count,
     },
   }
   const decision = flowTick(withoutClaim, observations)
@@ -1564,6 +1577,7 @@ export function claimPendingDispatch(state: FlowState, decision: FlowDecision, i
       head: decision.head ?? null,
       spec_id: decision.spec_id ?? null,
       at: Math.floor(init.now),
+      verdict_baseline: state.claim.verdict_count,
     },
     log: appendLog(state, { at, event: 'dispatch_claimed', detail: logDetail(decision) }),
     updated_at: at,

@@ -645,19 +645,27 @@ describe('a claim written before the state advanced is still settled (MAJOR 1/2)
   })
 })
 
-describe('recovery settles the claim on its own head (block 28)', () => {
-  it('applies the answer to pending.head when the flow still carries an older head', () => {
-    // The request was made for B; the flow still says A (the dev committed while the request was being pasted). Keeping A
-    // made `tickReviewing` see "head !== claim.head" and ask for the review again — the claim then hung until its TTL.
-    const A = 'a'.repeat(40)
-    const B = 'b'.repeat(40)
+describe('recovery settles the claim on its own head (block 28/29)', () => {
+  const A = 'a'.repeat(40)
+  const B = 'b'.repeat(40)
+
+  function pendingOnB(claimCount: number, baseline: number | undefined): FlowState {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
     saveFlow({
-      ...state, state: 'idle', claim: { head: A, verdict: null, verdict_count: 0, verdict_applied: false },
-      pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: B, spec_id: null, at: NOW },
+      ...state, state: 'idle',
+      claim: { head: A, verdict: null, verdict_count: claimCount, verdict_applied: false },
+      pending: {
+        op_id: 'op-1', kind: 'request_review', target: 'review', head: B, spec_id: null, at: NOW,
+        ...(baseline === undefined ? {} : { verdict_baseline: baseline }),
+      },
     })
+    return readFlow('run-1')
+  }
+
+  it('applies the answer to pending.head when the flow still carries an older head', () => {
+    pendingOnB(0, 0)
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
     writeFileSync(stagingPath('run-1', B, 1, root), 'VERDICT: ACCEPT\n')
 
@@ -675,6 +683,47 @@ describe('recovery settles the claim on its own head (block 28)', () => {
     expect(after.pending).toBeNull()
     expect(after.claim.head).toBe(B)
     expect(after.log.some(entry => entry.event === 'settled_by_observation')).toBe(true)
+  })
+
+  it('measures the answer against the baseline the request was sent with, not the counter a later tick moved', () => {
+    // The request went out when the pane held six verdicts; a later tick moved the flow's counter to seven, and the reviewer
+    // then answered (the pane now holds seven — the new one, and a notes file for `pending.head`). Reading the flow's own
+    // counter would compare 7 > 7 and lose the answer; the claim's recorded baseline compares 7 > 6 and applies it.
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle',
+      claim: { head: B, verdict: null, verdict_count: 7, verdict_applied: false },
+      pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: B, spec_id: null, at: NOW, verdict_baseline: 6 },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', B, 1, root), 'VERDICT: ACCEPT\n')
+
+    const decision = flowTick(readFlow('run-1'), {
+      now: NOW + 63_000, head: B, tree_clean: true, dev_pane: 'idle', review_pane: 'idle',
+      verdict: 'ACCEPT', verdict_notes: 'MINOR src/a.ts:1 — x', verdict_count: 7, verdict_source: 'pane',
+      run_present: true, agents_present: true,
+      // A pane answer needs evidence: enough wall time and a finding line.
+      verdict_evidence: { elapsed_ms: 60_000, notes_bytes: 40, notes_findings: 1, pane_tool_lines: 2 },
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    expect(decision.reason).toBe('flow_done')
+  })
+
+  it('applies the verdict that arrived after the request, measured against its own baseline', () => {
+    pendingOnB(5, 6)
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', B, 1, root), 'VERDICT: ACCEPT\n')
+
+    const result = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: B, tree_clean: true, plan: null,
+      ports: ports(() => ({ sent: true }), ''),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('flow_done')
+    expect(readFlow('run-1').pending).toBeNull()
   })
 })
 

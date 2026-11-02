@@ -84,11 +84,26 @@ describe('the configured pulse reaches the badge', () => {
     expect(on.pulse).toBe(true)
   })
 
-  it('keeps the pulse off for 0 even when the clock runs backwards', () => {
-    // A file stamped in the future (clock skew between machines) makes `age < 0`: with `0` that inequality would read as
-    // "fresh" and start the pulse the operator switched off.
-    const source = readFileSync(join(process.cwd(), 'src/surfaces/webui/state.ts'), 'utf-8')
-    expect(source).toMatch(/pulseMs > 0/)
+  it('keeps the pulse off for 0 even when the flow file is stamped in the future', () => {
+    // Clock skew: a file stamped a minute ahead makes `now - updated_at` negative, and `age < pulseMs` with `0` would read
+    // that as "fresh". Zero must mean "never pulse" without any arithmetic — behaviour, not a line in the source.
+    const future = new Date(Date.now() + 60_000).toISOString()
+    const file = join(root, 'flows', 'run-1.json')
+    const flow = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown>
+    writeFileSync(file, JSON.stringify({ ...flow, updated_at: future }))
+
+    return import('../../src/surfaces/webui/state.js').then(({ buildWebState }) => {
+      const live = () => true
+      const off = buildWebState({ now: Date.now(), agent_pulse_ms: 0, liveTmuxTarget: live })
+        .runs.find(run => run.id === 'run-1')!.flow!
+      expect(off.tone).toBe('done')
+      expect(off.pulse).toBe(false)
+
+      // The same future stamp with a real window is fresh: the file is one second "old" in the wrong direction.
+      const on = buildWebState({ now: Date.now(), agent_pulse_ms: 15_000, liveTmuxTarget: live })
+        .runs.find(run => run.id === 'run-1')!.flow!
+      expect(on.pulse).toBe(true)
+    })
   })
 
   it('expires the pulse when the event is older than the window', async () => {
