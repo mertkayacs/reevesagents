@@ -43,7 +43,7 @@ function seedFlow(head: string) {
     run_id: 'run-1', repo, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8,
     at: '2026-11-02T09:00:00.000Z',
   })
-  const seeded = { ...state, state: 'idle' as const, claim: { head, verdict: null, verdict_count: 0 } }
+  const seeded = { ...state, state: 'idle' as const, claim: { head, verdict: null, verdict_count: 0, verdict_applied: false } }
   saveFlow(seeded)
   return seeded
 }
@@ -83,7 +83,7 @@ describe('telling a document commit from work (D6)', () => {
 
     const atDocs = seedFlow(start)
     expect(docsOnlySince(atDocs, docsCommit)).toBe(true)
-    const atCode = { ...readFlow('run-1'), claim: { head: start, verdict: null, verdict_count: 0 } }
+    const atCode = { ...readFlow('run-1'), claim: { head: start, verdict: null, verdict_count: 0, verdict_applied: false } }
     expect(docsOnlySince(atCode, codeCommit)).toBe(false)
   })
 

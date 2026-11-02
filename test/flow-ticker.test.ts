@@ -127,7 +127,7 @@ function seed(plan: Plan, options: { inWork?: string } = {}): void {
     ...base,
     state: 'reviewing',
     review_started_at: NOW - 60_000,
-    claim: { head: HEAD.value, verdict: null, verdict_count: 0 },
+    claim: { head: HEAD.value, verdict: null, verdict_count: 0, verdict_applied: false },
     specs: [item.spec],
     // Already sent: otherwise the off-plan queue would dispatch it again, which is a different scenario.
     dispatched_specs: [item.id],

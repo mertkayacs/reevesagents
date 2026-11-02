@@ -120,7 +120,7 @@ describe('flowStatusPayload', () => {
       state: 'reviewing',
       rounds: 2,
       review_started_at: 1730000000000,
-      claim: { head: 'abc1234', verdict: 'CHANGES_REQUESTED', verdict_count: 3 },
+      claim: { head: 'abc1234', verdict: 'CHANGES_REQUESTED', verdict_count: 3, verdict_applied: false },
     }))
 
     expect(payload).toMatchObject({
@@ -130,7 +130,9 @@ describe('flowStatusPayload', () => {
       review_timeout_sec: 120,
       review_started_at: 1730000000000,
       head: 'abc1234',
-      claim: { head: 'abc1234', verdict: 'CHANGES_REQUESTED', verdict_count: 3 },
+      // `claim` is compared as a whole, so it names every field the payload carries — including the one that says whether
+      // the verdict was applied.
+      claim: { head: 'abc1234', verdict: 'CHANGES_REQUESTED', verdict_count: 3, verdict_applied: false },
       last_decision: null,
     })
   })

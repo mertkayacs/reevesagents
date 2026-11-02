@@ -106,6 +106,11 @@ export interface FlowClaim {
   // How many verdicts the reviewer pane held when the claim was taken. A verdict is "new" only
   // when this counter goes up, which is the memory that survives a restart.
   verdict_count: number
+  // Has this claim's verdict been carried out? Recorded in the same write as the dispatch or the close it caused, so a
+  // crash between "the answer is known" and "the answer was used" is visible instead of being re-derived from an
+  // observation that no longer contains it (block 25). Absent on older files, which read as `false` — and a state whose
+  // verdict is `null` is unaffected either way.
+  verdict_applied: boolean
 }
 
 export interface FlowRoles {
@@ -392,6 +397,8 @@ export interface FlowDecision {
   next_answered_round?: string | null
   next_verdict_handled_for?: string | null
   next_verdict_handled_item?: string | null
+  // Marks the claim's verdict as carried out. Set by the decision that dispatches or closes on it, in the same write.
+  next_claim_verdict_applied?: boolean
   // The journal event for this decision, when the default (`kind`, or `reason` for a hold) would hide what happened.
   log_event?: string
   // Extra journal lines written with this decision — never the prompt, never a path.
@@ -465,7 +472,7 @@ export function createFlowState(init: FlowInit): FlowState {
       ? Math.floor(init.review_timeout_sec)
       : REVIEW_TIMEOUT_SEC,
     review_started_at: null,
-    claim: { head: init.head ?? '', verdict: null, verdict_count: 0 },
+    claim: { head: init.head ?? '', verdict: null, verdict_count: 0, verdict_applied: false },
     specs: init.specs ?? [],
     dispatched_specs: [],
     pending: null,
@@ -521,7 +528,14 @@ export function parseFlowState(raw: unknown): FlowState {
     review_started_at: typeof record.review_started_at === 'number' && Number.isFinite(record.review_started_at)
       ? Math.floor(record.review_started_at)
       : null,
-    claim: { head: text(claim.head), verdict, verdict_count: count(claim.verdict_count) },
+    claim: {
+      head: text(claim.head),
+      verdict,
+      verdict_count: count(claim.verdict_count),
+      // Backward compatible: a file written before this field existed has a verdict that was applied by the old code
+      // path (or none at all), so it reads as applied and never re-fires.
+      verdict_applied: typeof claim.verdict_applied === 'boolean' ? claim.verdict_applied : verdict !== null,
+    },
     specs: Array.isArray(record.specs) ? record.specs.map(normalizeSpec).filter((spec): spec is BlockSpec => spec !== null) : [],
     dispatched_specs: Array.isArray(record.dispatched_specs)
       ? record.dispatched_specs.map(text).filter(entry => entry !== '')
@@ -725,7 +739,7 @@ function reviewRequest(
     next_review_started_at: now,
     // The baseline is the reviewer's counter *now*, so the verdict that a previous commit left on
     // screen cannot be mistaken for this head's answer.
-    next_claim: { head, verdict: null, verdict_count: verdictCount },
+    next_claim: { head, verdict: null, verdict_count: verdictCount, verdict_applied: false },
     target: 'review',
     head,
     message: renderReviewPrompt({
@@ -794,6 +808,7 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     // Dispatching an item spends the verdict of this commit for that item: the answer that closed the previous one cannot
     // be read as a close still owed for this one.
     next_verdict_handled_item: observations.plan?.items.some(item => item.id === spec.id) ? spec.id : null,
+    next_claim_verdict_applied: true,
     next_unsubstantiated_attempts: 0,
     next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
     message: renderDispatchPrompt(spec),
@@ -1029,7 +1044,7 @@ function reanchor(state: FlowState, head: string): FlowDecision {
     next_state: state.state,
     next_rounds: state.rounds,
     next_review_started_at: state.review_started_at,
-    next_claim: { head, verdict: null, verdict_count: state.claim.verdict_count },
+    next_claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false },
     next_verdict_handled_for: null,
     log_detail: `documentation commit ${head.slice(0, 7)}: baseline moved, nothing to review`,
   }
@@ -1041,17 +1056,15 @@ function reanchor(state: FlowState, head: string): FlowDecision {
 // following tick.
 function settledVerdictDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
   const verdict = state.claim.verdict
-  if (verdict === null) return null
+  // The question is "does this flow owe its verdict a consequence?", and the answer lives in the state: a verdict that was
+  // recorded and never applied. Deriving it from this tick's observation cannot work — once the answer is collected, the
+  // next observation no longer contains it (the review is not waiting any more), so the close was looked for in a place
+  // that had already forgotten it (block 25).
+  if (verdict === null || state.claim.verdict_applied) return null
   // An ACCEPT that is still owed a close outranks the marker: the marker says "this verdict was applied", and a plan item
   // that is still open is proof it was not. The live run showed how that happens — a review timed out, the same item was
   // dispatched again, the reviewer answered afterwards, and the marker left the item `in_work` for ever while the flow
   // answered `head_unchanged` (block 24, D10).
-  const owesClose = verdict === 'ACCEPT'
-    && observations.plan !== undefined
-    && state.active_plan_item !== null
-    && state.verdict_handled_item !== state.active_plan_item
-    && observations.plan.items.some(item => item.id === state.active_plan_item && item.status !== 'done')
-  if (state.verdict_handled_for === state.claim.head && !owesClose) return null
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
 
   if (verdict === 'ACCEPT') {
@@ -1063,6 +1076,7 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
       ...accepted,
       next_verdict_handled_for: state.claim.head,
       next_verdict_handled_item: state.active_plan_item,
+      next_claim_verdict_applied: true,
       // The item is closed here, so the flow has nothing in flight unless the decision dispatched the next one.
       next_active_plan_item: accepted.next_active_plan_item === undefined ? null : accepted.next_active_plan_item,
     }
@@ -1070,13 +1084,13 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
 
   if (observations.plan) {
     const budget = planBudgetDecision(state, observations, observations.plan)
-    if (budget) return { ...budget, next_verdict_handled_for: state.claim.head }
+    if (budget) return { ...budget, next_verdict_handled_for: state.claim.head, next_claim_verdict_applied: true }
   } else if (state.rounds >= state.max_rounds) {
-    return { ...escalate(state, observations), next_verdict_handled_for: state.claim.head }
+    return { ...escalate(state, observations), next_verdict_handled_for: state.claim.head, next_claim_verdict_applied: true }
   }
   const gate = dispatchGate(state, observations)
   if (gate) return gate
-  return fixDispatch(state, observations)
+  return { ...fixDispatch(state, observations), next_claim_verdict_applied: true }
 }
 
 // The first dispatch of a flow. Same rules as `planAcceptDecision` — a queued spec outranks the picker, the picker
@@ -1182,6 +1196,7 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   const handled = (decision: FlowDecision): FlowDecision => ({
     ...decision,
     next_verdict_handled_for: state.claim.head,
+    next_claim_verdict_applied: true,
     // A decision that already names the item it spent the verdict on (a dispatch of the next one) keeps it.
     next_verdict_handled_item: decision.next_verdict_handled_item !== undefined
       ? decision.next_verdict_handled_item
@@ -1410,7 +1425,14 @@ function withDelta(
     ...state,
     // The claim (and the dispatched-spec list) are consumed in both cases: a paste that landed
     // must never be repeated, even when the submit could not be confirmed.
-    claim: decision.next_claim,
+    claim: {
+      ...decision.next_claim,
+      // A verdict that just arrived is not applied yet; the branch that uses it says so in the same decision. Older
+      // decisions that predate the field keep whatever the state had.
+      verdict_applied: decision.next_claim_verdict_applied !== undefined
+        ? decision.next_claim_verdict_applied
+        : (decision.next_claim.verdict !== state.claim.verdict ? false : state.claim.verdict_applied),
+    },
     dispatched_specs: dispatched,
     state: options.advance ? decision.next_state : state.state,
     rounds: options.advance ? decision.next_rounds : state.rounds,

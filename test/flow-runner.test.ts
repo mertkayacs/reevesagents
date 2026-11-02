@@ -147,7 +147,7 @@ describe('stepFlow', () => {
     const after = readFlow('run-1')
     expect(after.pending).toBeNull()
     expect(after.state).toBe('reviewing')
-    expect(after.claim).toEqual({ head: 'bbb222', verdict: null, verdict_count: 0 })
+    expect(after.claim).toEqual({ head: 'bbb222', verdict: null, verdict_count: 0, verdict_applied: false })
   })
 
   it('lets a second ticker find the claim and send nothing', () => {
@@ -239,7 +239,7 @@ describe('stepFlow', () => {
   })
 
   it('never pastes the same fix twice when the submit could not be confirmed', () => {
-    seed(makeState({ state: 'reviewing', claim: { head: 'aaa111', verdict: null, verdict_count: 1 } }))
+    seed(makeState({ state: 'reviewing', claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false } }))
     const ports = makePorts({
       peek: () => verdictCapture(2),
       // `unconfirmed`: the Enter went in and nothing confirmed it. `pane_changed` is the pre-Enter refusal, where
@@ -270,7 +270,7 @@ describe('stepFlow', () => {
     seed(makeState({
       state: 'reviewing',
       review_started_at: NOW - 901_000,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
     }))
     const ports = makePorts({ peek: () => verdictCapture(1) })
 
@@ -287,7 +287,7 @@ describe('stepFlow', () => {
     seed(makeState({
       state: 'reviewing',
       rounds: 6,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 1 },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false },
     }))
     const ports = makePorts({ peek: () => verdictCapture(2) })
 
@@ -360,7 +360,7 @@ function reviewingState(overrides: Partial<FlowState> = {}): FlowState {
   return makeState({
     state: 'reviewing',
     review_started_at: NOW,
-    claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
+    claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
     ...overrides,
   })
 }
@@ -408,7 +408,7 @@ describe('the notes channel in the runner', () => {
   it('names the staging file in the review prompt, on the tick that requests the review', () => {
     // The request is created from `idle`, not from `reviewing`, so the path has to be resolved for
     // every tick — a prompt that names nothing is a prompt no reviewer can follow.
-    seed(makeState({ state: 'idle', claim: { head: 'aaa1111', verdict: null, verdict_count: 0 } }))
+    seed(makeState({ state: 'idle', claim: { head: 'aaa1111', verdict: null, verdict_count: 0, verdict_applied: false } }))
 
     const result = step(makePorts(), { head: NOTES_HEAD })
 
@@ -466,7 +466,7 @@ describe('the notes channel in the runner', () => {
     seed(makeState({
       state: 'reviewing',
       review_started_at: NOW,
-      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
+      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
     }))
     const fast = step(makePorts({ peek: () => verdictCapture(1) }), {
       head: NOTES_HEAD,
@@ -480,7 +480,7 @@ describe('the notes channel in the runner', () => {
       state: 'reviewing',
       review_started_at: NOW - 120_000,
       unsubstantiated_attempts: 1,
-      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
+      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
     }))
     writeStaging('run-1', NOTES_HEAD, 1, fileText)
     const second = step(makePorts(), { head: NOTES_HEAD })
@@ -516,7 +516,7 @@ describe('the notes channel in the runner', () => {
 
     const round2 = `MAJOR other.ts:9 — still wrong\nВЕРДИКТ: CHANGES_REQUESTED\n`
     writeStaging('run-1', NOTES_HEAD, 2, round2)
-    seed(reviewingState({ rounds: 1, claim: { head: NOTES_HEAD, verdict: 'CHANGES_REQUESTED', verdict_count: 1 } }))
+    seed(reviewingState({ rounds: 1, claim: { head: NOTES_HEAD, verdict: 'CHANGES_REQUESTED', verdict_count: 1, verdict_applied: false } }))
     const second = step(makePorts(), { head: NOTES_HEAD })
 
     expect(second.decision.kind).toBe('dispatch_fix')
@@ -548,7 +548,7 @@ describe('verdict evidence', () => {
     seed(makeState({
       state: 'reviewing',
       review_started_at: NOW,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 0 },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false },
     }))
     void evidence
   }
@@ -575,7 +575,7 @@ describe('verdict evidence', () => {
   it('counts the findings a pane answer named, not only the ones in a file', () => {
     // The reviewer answered in the pane with three real MAJOR lines: that is evidence of a review, and
     // counting only the notes file used to reject it and send the round to the retry/escalation path.
-    seed(makeState({ state: 'reviewing', review_started_at: NOW - 90_000, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    seed(makeState({ state: 'reviewing', review_started_at: NOW - 90_000, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } }))
     const pane = [
       'VERDICT: CHANGES_REQUESTED',
       'MAJOR src/core/flow.ts:120 — the claim is not re-read',
@@ -594,7 +594,7 @@ describe('verdict evidence', () => {
       state: 'reviewing',
       review_started_at: NOW,
       unsubstantiated_attempts: 1,
-      claim: { head: 'aaa111', verdict: null, verdict_count: 0 },
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false },
     }))
     const ports = makePorts({ peek: () => verdictCapture(1) })
 
@@ -631,7 +631,7 @@ describe('verdict evidence', () => {
     expect(fast.decision.kind).toBe('dispatch_fix')
 
     // Instant and empty: still rejected, because the notes half is not optional.
-    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } }))
     const empty = step(ports, { head: 'aaa111', verdict_evidence: FAST_REVIEW, evidence_policy: policy })
     expect(empty.decision.reason).toBe('review_unsubstantiated')
   })
@@ -642,7 +642,7 @@ describe('verdict evidence', () => {
     seed(makeState({
       state: 'reviewing',
       review_started_at: NOW - 60_000,
-      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0 },
+      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
     }))
     writeStaging('run-1', NOTES_HEAD, 1, 'No findings: the diff is a docstring change.\n\nВЕРДИКТ: ACCEPT\n')
     // The evidence is *not* injected here: the runner derives it from the file, which is the point of the
@@ -652,7 +652,7 @@ describe('verdict evidence', () => {
     expect(fromFile.state.state).toBe('done')
 
     // Pane answered: the same words in a pane are not evidence.
-    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } }))
     const fromPane = step(makePorts({ peek: () => 'No findings: docstring only\nVERDICT: ACCEPT\n' }), {
       head: 'aaa111',
       verdict_evidence: { ...MINUTE, notes_findings: 0, notes_bytes: 0 },
@@ -661,7 +661,7 @@ describe('verdict evidence', () => {
   })
 
   it('escalates instead of pasting when the composer holds somebody else\'s text', () => {
-    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } }))
     const ports = makePorts({
       peek: () => verdictCapture(1),
       send: vi.fn(() => ({ sent: false as const, reason: 'composer_dirty' as const })),
@@ -676,7 +676,7 @@ describe('verdict evidence', () => {
   })
 
   it('holds without consuming the round when the target is not ready', () => {
-    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0 } }))
+    seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } }))
     const ports = makePorts({
       peek: () => verdictCapture(1),
       send: vi.fn(() => ({ sent: false as const, reason: 'target_not_ready' as const })),

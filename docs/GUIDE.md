@@ -316,6 +316,13 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+### A recorded verdict is carried out once, from the state
+
+When the flow holds a verdict it has not acted on (`claim.verdict` set, `claim.verdict_applied: false`), the next tick
+carries it out — the fix goes to the dev, or the accepted item is closed and the next one taken — even if nothing on the
+pane or in the notes still shows that answer. `flow status` prints the pair, so "the reviewer answered and the flow has
+not used it yet" is visible instead of being guessed.
+
 ### One ticker at a time (manual runs and tests)
 
 The claim protocol makes two tickers safe, but they still race for the same flow: one takes the claim, the other answers

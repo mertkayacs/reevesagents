@@ -311,6 +311,12 @@ Two fields carry the notification key and **ship in this build** (blocks 14 and 
   notification key: `flow start --replace` keeps the `run_id` of the run it replaces but writes a new flow file, so
   a run-scoped key would collide with the closed flow's keys and the durable dedupe index would suppress the new
   flow's first escalation;
+- `claim.verdict_applied` — has this claim's verdict been carried out? Written in the same state transition as the
+  dispatch or the close it caused, so "the answer is known" and "the answer was used" are two facts on disk rather than
+  one inference. A file written before the field existed reads as `true` when it carries a verdict (the old code applied
+  eagerly), and a verdict of `null` is unaffected either way. The tick decides from this field, never from the current
+  observation: once an answer is collected, the next observation no longer contains it — that inference is what left a
+  completed item open while every tick answered `plan_incomplete` (block 25);
 - `notify_episode` — a per-flow counter incremented on every transition into `escalated`, so a second escalation
   after a `resume` is a new key rather than a suppressed duplicate. The notification key is
   `<flow_id>:<kind>:<notify_episode>`, and the same number is what the escalation approval checks before it lets a
@@ -427,7 +433,7 @@ module cycle.
 
 | Status | Meaning | A tick may | Leaves via |
 | --- | --- | --- | --- |
-| `idle` | nothing pending; either waiting for the dev's next HEAD, or holding a verdict that was collected at the wrong moment. A collected `CHANGES_REQUESTED` sends the fix; a collected `ACCEPT` with an open plan item closes it and takes the next item with a brief (or holds on `plan_incomplete`) — an ACCEPT is never "not yet"; the marker is `(verdict_handled_for, verdict_handled_item)`, so a verdict already applied to another item does not close this one. A commit that touched only the plan or its briefs re-anchors the baseline instead of asking for a review | a verdict already collected for `claim.head` is settled first — `CHANGES_REQUESTED` → `fixing` (budgets checked), `ACCEPT` with a plan → the item closes and the next one is dispatched; then queued work is started; then a moved HEAD is reviewed. `head_unchanged` is the *last* answer, not the first (block 21) | `reviewing` / `fixing` |
+| `idle` | nothing pending; either waiting for the dev's next HEAD, or holding a verdict recorded with `verdict_applied: false` — **decided from the state, not from an observation**: A collected `CHANGES_REQUESTED` sends the fix; a collected `ACCEPT` with an open plan item closes it and takes the next item with a brief (or holds on `plan_incomplete`) — an ACCEPT is never "not yet"; the marker is `(verdict_handled_for, verdict_handled_item)`, so a verdict already applied to another item does not close this one. A commit that touched only the plan or its briefs re-anchors the baseline instead of asking for a review | a verdict already collected for `claim.head` is settled first — `CHANGES_REQUESTED` → `fixing` (budgets checked), `ACCEPT` with a plan → the item closes and the next one is dispatched; then queued work is started; then a moved HEAD is reviewed. `head_unchanged` is the *last* answer, not the first (block 21) | `reviewing` / `fixing` |
 | `reviewing` | review requested for `req_head` | record a verdict, log a timeout once | `fixing` / `accepted` / `escalated` |
 | `dispatching` | a claim is out (`pending` set, send in flight) | nothing — another ticker owns it | `pending` cleared by settle, or by a control command (`pause`/`stop`), in which case the runner re-checks the claim before pasting and answers `cancelled` |
 | `fixing` | fix request delivered | request review for a new HEAD | `reviewing` |

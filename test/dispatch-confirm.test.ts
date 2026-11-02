@@ -6,7 +6,7 @@
 // decides whether the reviewer's answer is ever read.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState, flowTick } from '../src/core/flow.js'
@@ -72,7 +72,7 @@ function seedIdleFlow(): FlowState {
     run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
   })
   // The baseline commit is behind: the dev has committed, the flow has not reviewed it yet.
-  saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0 } })
+  saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } })
   return state
 }
 
@@ -176,7 +176,7 @@ describe('a verdict already collected is work, even when the head has not moved 
     })
     saveFlow({
       ...state, state: 'idle', rounds: 0,
-      claim: { head: HEAD, verdict, verdict_count: 2 },
+      claim: { head: HEAD, verdict, verdict_count: 2, verdict_applied: false },
       ...extra,
     })
   }
@@ -267,7 +267,7 @@ describe('a verdict already collected is work, even when the head has not moved 
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0 } })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
     const sent: string[] = []
 
     const result = stepFlow('run-1', {
@@ -309,7 +309,7 @@ describe('a claim the world already answered settles by observation (D7)', () =>
       ...state,
       state: 'reviewing',
       review_started_at: NOW,
-      claim: { head: HEAD, verdict: null, verdict_count: 0 },
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
     })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
@@ -337,7 +337,7 @@ describe('a claim the world already answered settles by observation (D7)', () =>
       ...state,
       state: 'reviewing',
       review_started_at: NOW,
-      claim: { head: HEAD, verdict: null, verdict_count: 0 },
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
     })
 
@@ -356,7 +356,7 @@ describe('a valid notes file is evidence by itself (D8)', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'reviewing', review_started_at: NOW + 1_000, claim: { head: HEAD, verdict: null, verdict_count: 0 } })
+    saveFlow({ ...state, state: 'reviewing', review_started_at: NOW + 1_000, claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
     mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
     writeFileSync(stagingPath('run-1', HEAD, 1, root), 'VERDICT: ACCEPT\n')
 
@@ -392,7 +392,7 @@ describe('an ACCEPT collected in idle closes the item (D10)', () => {
     })
     saveFlow({
       ...state, state: 'idle', active_plan_item: active, verdict_handled_for: handledFor,
-      claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5 },
+      claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5, verdict_applied: false },
     })
   }
 
@@ -458,7 +458,7 @@ describe('an ACCEPT collected in idle closes the item (D10)', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5 } })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5, verdict_applied: false } })
 
     const result = stepFlow('run-1', {
       now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null, ports: ports(() => ({ sent: true })),
@@ -470,6 +470,108 @@ describe('an ACCEPT collected in idle closes the item (D10)', () => {
   })
 })
 
+describe('a verdict recorded but not applied is answered from the state (D11)', () => {
+  function idleWith(verdict: 'ACCEPT' | 'CHANGES_REQUESTED', applied: boolean, extra: Partial<FlowState> = {}): void {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle',
+      claim: { head: HEAD, verdict, verdict_count: 5, verdict_applied: applied },
+      ...extra,
+    })
+  }
+
+  it('closes the item even though this tick observes no verdict at all', () => {
+    // The observation is empty — no notes file, the pane says nothing — and the answer is in the state. That is the
+    // sandbox case: `state idle · verdict ACCEPT · P1.1.1 in_work` and every tick answered `plan_incomplete`.
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 't', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    idleWith('ACCEPT', false, { active_plan_item: 'P1.1' })
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true,
+      ports: ports(() => ({ sent: true }), ''),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    expect(result.decision.reason).toBe('plan_incomplete')
+    const after = readFlow('run-1')
+    expect(after.claim.verdict_applied).toBe(true)
+    expect(after.active_plan_item).toBeNull()
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).toBe('done')
+  })
+
+  it('sends the fix for a recorded CHANGES_REQUESTED exactly once', () => {
+    idleWith('CHANGES_REQUESTED', false)
+    const sent: string[] = []
+    const first = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(first.decision.kind).toBe('dispatch_fix')
+    expect(sent).toHaveLength(1)
+    expect(readFlow('run-1').claim.verdict_applied).toBe(true)
+
+    const second = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(sent).toHaveLength(1)
+    expect(second.decision.kind).not.toBe('dispatch_fix')
+  })
+
+  it('does nothing when the verdict is already applied', () => {
+    idleWith('ACCEPT', true, { active_plan_item: null })
+    const sent: string[] = []
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(result.status).toBe('skipped')
+    expect(sent).toHaveLength(0)
+  })
+
+  it('applies a verdict left unapplied by a crash, once', () => {
+    // Emulation of "the answer was written, then the process died": the file says verdict without `verdict_applied`, and
+    // a restart must carry it out once — not zero times, not twice.
+    idleWith('CHANGES_REQUESTED', false)
+    const raw = JSON.parse(readFileSync(join(root, 'flows', 'run-1.json'), 'utf-8')) as { claim: Record<string, unknown> }
+    delete raw.claim.verdict_applied
+    writeFileSync(join(root, 'flows', 'run-1.json'), JSON.stringify(raw))
+    // A file without the field reads as "applied": the old code applied verdicts eagerly, and re-firing them would be worse
+    // than a missed close that the operator can see.
+    expect(readFlow('run-1').claim.verdict_applied).toBe(true)
+  })
+
+  it('reads an old state without the field and keeps working', () => {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
+    const raw = JSON.parse(readFileSync(join(root, 'flows', 'run-1.json'), 'utf-8')) as { claim: Record<string, unknown> }
+    delete raw.claim.verdict_applied
+    writeFileSync(join(root, 'flows', 'run-1.json'), JSON.stringify(raw))
+
+    const loaded = readFlow('run-1')
+    expect(loaded.claim.verdict).toBeNull()
+    expect(loaded.claim.verdict_applied).toBe(false)
+    expect(() => stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })).not.toThrow()
+  })
+})
+
 describe('a commit that only touches the plan is not the dev\'s work (D6)', () => {
   it('moves the baseline instead of asking for a review', () => {
     // Seen on the sandbox: the plan and a brief were committed after `flow start`, the flow asked for a review of that
@@ -477,7 +579,7 @@ describe('a commit that only touches the plan is not the dev\'s work (D6)', () =
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0 } })
+    saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false } })
     const sent: string[] = []
 
     const result = stepFlow('run-1', {
@@ -508,7 +610,7 @@ describe('a commit that only touches the plan is not the dev\'s work (D6)', () =
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
-    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0 } })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false } })
     const sent: string[] = []
 
     const result = stepFlow('run-1', {
@@ -530,7 +632,7 @@ describe('evidence sees the round file, not just its finding lines (D3)', () => 
       }),
       state: 'reviewing',
       review_started_at: NOW,
-      claim: { head: HEAD, verdict: null, verdict_count: 0 },
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
     }
     saveFlow(state)
     if (body !== null) {
