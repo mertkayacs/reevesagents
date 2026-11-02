@@ -841,9 +841,10 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_review_started_at: null,
     next_claim: {
       ...state.claim,
-      // A new round has no answer yet: the verdict that dispatched this item was spent closing the previous one. Carrying it forward made
-      // "the marker says applied" indistinguishable from "this item still owes its close" (block 47).
-      verdict: null,
+      // A new round has no answer yet — but only when the previous one was actually spent. A verdict that is still owed (an unconfirmed
+      // send whose answer arrived, and whose close has not happened yet) must survive the dispatch, or the answer is lost exactly when
+      // the flow was trying to act on it (block 47).
+      verdict: state.claim.verdict_applied ? null : state.claim.verdict,
       verdict_count: observations.verdict_count,
       verdict_applied: false,
       // The round belongs to this item: the close reads it back, so a later tick cannot close "whatever is active now".
@@ -1282,8 +1283,10 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
     // Without a plan an ACCEPT is the legacy close, and `tickReviewing` has already done it: a flow that is idle with an
     // ACCEPT and no plan is simply done with its work. With a plan the item is still open and must be closed.
     if (!observations.plan) return null
-    // Nothing to close means the answer was already used: an item that was closed leaves no active one behind.
-    if (state.active_plan_item === null) return null
+    // Nothing to close means the answer was already used. The item is the one the claim bound, or the active one when the claim has
+    // no binding (states written before it): a flow whose field was cleared — a refused close does that — still owes the close for
+    // the item its verdict names (block 47).
+    if (boundItem === null && state.active_plan_item === null) return null
     const accepted = planAcceptDecision(state, observations, observations.plan)
     return {
       ...accepted,
