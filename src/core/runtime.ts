@@ -813,17 +813,9 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   const afterReady = detectPaneReady(after, agent.provider)
   if (afterBusy !== 'idle' || afterReady !== 'ready') return { sent: false, reason: 'unconfirmed' }
   if (!stillOurs) return { sent: false, reason: 'unconfirmed' }
-  try {
-    driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])
-  } catch {
-    return { sent: false, reason: 'stale_pane' }
-  }
-  if (waitForBusy(agent, options, driver, Math.min(confirmMs, 5000), pollMs)) return { sent: true }
-  // The text is still in the composer and the pane is idle: the provider swallowed the Enter (Hermes redraws its composer while the
-  // paste settles and drops a keystroke that lands mid-draw). What an operator does by hand: Escape, then Enter. One attempt, and
-  // only when the text is still exactly ours — never a blind repeat (block 44).
-  const afterRetry = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
-  if (!composerHoldsOurs(composerText(afterRetry, agent.provider) ?? '', text)) return { sent: false, reason: 'unconfirmed' }
+  // Exactly one retry, and it is the operator's: `Escape`, then `Enter`. Never a bare second Enter — an extra keystroke queued behind
+  // the first one is how a delayed Enter answers the *next* prompt (block 45, MAJOR 2). One attempt, only while the text is still
+  // exactly ours, and after it the answer is final: `unconfirmed` rather than a third press.
   try {
     driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Escape'])
     waitBlocking(driver, timings.pasteSettleMs)

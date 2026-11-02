@@ -39,7 +39,7 @@ import {
 } from './flow-notes.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { loadConfig } from './config.js'
-import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound } from './plan.js'
+import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound, PLAN_LIMITS } from './plan.js'
 import { emitNotification } from './notifications.js'
 import { raiseEscalationApproval } from './flow-escalation.js'
 import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js'
@@ -356,6 +356,15 @@ function evidencePolicy(): EvidencePolicy {
 // but unreadable is a different thing entirely: swallowing the error would make the ACCEPT path take the legacy
 // branch and close the flow with items still open, which is the one outcome the plan exists to prevent. So the
 // error is raised, the tick writes nothing, and the operator fixes the file.
+// The plan's conflict list, for the guards that must report a historical inconsistency only once.
+function readPlanConflicts(state: FlowState): Array<{ kind?: string, detail?: string, item_id?: string }> {
+  try {
+    return planExists(state.run_id) ? readPlan(state.run_id).conflicts : []
+  } catch {
+    return []
+  }
+}
+
 export function readPlanView(state: FlowState): PlanTickView | null {
   if (!planExists(state.run_id)) return null
   const plan = readPlan(state.run_id)   // throws PlanError for a damaged file, which `stepFlow` surfaces
@@ -373,7 +382,8 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
   const fixRound = decision.kind === 'dispatch_fix' && activeId !== null
   const started = decision.reason === 'plan_item_dispatched' || decision.kind === 'dispatch_spec'
   const reviewStarted = decision.kind === 'request_review' && activeId !== null
-  if (!close && !status && !fixRound && !started && !reviewStarted) return
+  const refusedClose = decision.reason === 'plan_item_double_close'
+  if (!close && !status && !fixRound && !started && !reviewStarted && !refusedClose) return
 
   try {
     mutatePlan(before.run_id, current => {
@@ -415,6 +425,18 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
           block_reason: status.block_reason ?? null,
           now: Date.now(),
         })
+      }
+      // A refused double close is recorded in the plan, so the next tick recognises it as history and stops reporting it.
+      if (decision.reason === 'plan_item_double_close' && decision.log_detail) {
+        next = {
+          ...next,
+          conflicts: [...next.conflicts, {
+            kind: 'plan_item_double_close' as const,
+            item_id: before.active_plan_item ?? '',
+            detail: decision.log_detail,
+            at: new Date().toISOString(),
+          }].slice(-PLAN_LIMITS.conflicts),
+        }
       }
       if (fixRound) next = addItemRound(next, activeId, Date.now())
       if (started && decision.next_active_plan_item) {
@@ -563,6 +585,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     // The plan owns the queue only when it exists: a flow without one keeps `state.specs`, which is what
     // schema-v1 flows have always used.
     plan: options.plan === null ? undefined : (options.plan ?? readPlanView(state) ?? undefined),
+    plan_conflicts: readPlanConflicts(state),
     docs_only_since_claim: options.docs_only_since_claim ?? docsOnlySince(state, head) ?? false,
   }
   // The evidence is measured on the finished observation: it needs the notes text and the capture, so it

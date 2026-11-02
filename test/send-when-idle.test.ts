@@ -552,13 +552,28 @@ describe('the repeated Enter', () => {
     expect(driver.count('send-keys')).toBe(1)   // the first Enter only
   })
 
-  it('presses it once more while the pane is idle, ready and still holding our text', async () => {
+  it('retries once with Escape and Enter, never with a bare second Enter', async () => {
+    // The operator's unstick: Escape, then Enter. An extra Enter queued behind the first is how a delayed keystroke answers the next
+    // prompt (block 45, MAJOR 2).
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
     driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
 
     expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: true })
-    expect(driver.count('send-keys')).toBe(2)
+    expect(driver.pasted()).toEqual(['hello'])
+    const keys = driver.calls.filter(call => call.args[0] === 'send-keys').map(call => call.args[3])
+    expect(keys).toEqual(['Enter', 'Escape', 'Enter'])
+  })
+
+  it('gives up after that one retry instead of pressing a third time', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    // Still our text after Escape and Enter: the pane is not co-operating, and the answer is `unconfirmed`.
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed' })
+    const keys = driver.calls.filter(call => call.args[0] === 'send-keys').map(call => call.args[3])
+    expect(keys).toEqual(['Enter', 'Escape', 'Enter'])
     expect(driver.pasted()).toEqual(['hello'])
   })
 })

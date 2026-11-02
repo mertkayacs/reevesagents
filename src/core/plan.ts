@@ -143,7 +143,7 @@ function transitionRefusal(item: PlanItem, to: PlanStatus): PlanError {
 // Statuses where a round is in flight: the brief the round rendered must not be swapped underneath it.
 const BUSY_STATUSES: readonly PlanStatus[] = ['in_work', 'reviewing']
 
-export type PlanConflictKind = 'unticked' | 'ticked_by_hand' | 'duplicate_id' | 'spec_changed'
+export type PlanConflictKind = 'unticked' | 'ticked_by_hand' | 'duplicate_id' | 'spec_changed' | 'plan_item_double_close'
 
 export interface PlanConflict {
   at: string

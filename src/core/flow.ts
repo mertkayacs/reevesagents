@@ -326,6 +326,8 @@ export interface FlowObservations {
   // The commit the round's notes file belongs to. It can differ from `claim.head`: a review was requested for it before the
   // claim caught up (block 41).
   notes_head?: string
+  // The plan's recorded conflicts, so a guard can tell "this already happened and was reported" from "this is happening now".
+  plan_conflicts?: Array<{ kind?: string, detail?: string, item_id?: string }>
 }
 
 // What a tick can measure about the review behind a verdict.
@@ -763,7 +765,9 @@ function reviewRequest(
     next_review_started_at: now,
     // The baseline is the reviewer's counter *now*, so the verdict that a previous commit left on
     // screen cannot be mistaken for this head's answer.
-    next_claim: { head, verdict: null, verdict_count: verdictCount, verdict_applied: false, spec_id: null },
+    // The item whose brief this round is about survives the review request: the close reads `claim.spec_id`, and resetting it here
+    // sent the ACCEPT back to "whichever item is active", which is the binding error of block 44 all over again (block 45, MAJOR 1).
+    next_claim: { head, verdict: null, verdict_count: verdictCount, verdict_applied: false, spec_id: state.claim.spec_id },
     target: 'review',
     head,
     message: renderReviewPrompt({
@@ -900,10 +904,29 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
   const already = observations.plan.items.find(item =>
     item.id !== id && item.head === head && (item.status === 'done' || item.status === 'skipped'))
   if (!already) return null
-  return {
-    ...escalate(state, observations, 'plan_item_double_close'),
-    log_detail: `${head.slice(0, 7)} already closed ${already.id}; it cannot close ${id} as well`,
+  const detail = `${head.slice(0, 7)} already closed ${already.id}; it cannot close ${id} as well`
+  // A conflict that is already recorded is history, not news: closing more items on that head is refused, the line is written once,
+  // and the flow carries on with the first open item. Escalating every tick made a resumed run unresumable — `done` is terminal,
+  // so the guard could never stop firing (block 45, defect 3).
+  // Two memories, because either can be the only one left: the plan's conflict list and the flow's own journal. Whichever saw it
+  // first, the second tick reads it as history (block 45, defect 3).
+  const recorded = state.log.some(entry => entry.event === 'plan_item_double_close' && entry.detail.includes(id))
+    || (observations.plan_conflicts ?? []).some(conflict =>
+      (conflict.kind === 'plan_item_double_close' && conflict.item_id === id) || conflict.detail === detail)
+  // Refused either way — a second close on that head must not happen. The only difference is the journal: the first time the
+  // conflict is news, afterwards it is history, and repeating it every tick is what made a resumed run unresumable (block 45).
+  const refusal: FlowDecision = {
+    kind: 'none',
+    reason: 'plan_item_double_close',
+    next_state: state.state,
+    next_rounds: state.rounds,
+    next_review_started_at: state.review_started_at,
+    next_claim: { ...state.claim, verdict_applied: true },
+    next_active_plan_item: null,
+    log_detail: detail,
   }
+  if (recorded) return { ...refusal, log_detail: undefined }
+  return refusal
 }
 
 function planCloseOf(state: FlowState, observations: FlowObservations): FlowDecision['next_plan_close'] {
@@ -1108,6 +1131,12 @@ function settleFromNotes(state: FlowState, observations: FlowObservations): Flow
   const planItem = state.active_plan_item
     ?? observations.plan?.items.find(item => item.status !== 'done' && item.status !== 'skipped' && item.spec !== null)?.id
     ?? null
+  // This round was already refused once for a double close; the record in the plan is the memory of that, and re-deciding it every
+  // tick is what made a resumed run unresumable. Leave it to the ordinary tick, which moves on to the next item (block 45).
+  const refusedBefore = state.log.some(entry => entry.event === 'plan_item_double_close' && entry.detail.includes(planItem ?? '\u0000'))
+    || (observations.plan_conflicts ?? []).some(conflict =>
+      conflict.kind === 'plan_item_double_close' && conflict.item_id === planItem)
+  if (refusedBefore) return null
   const answered: FlowState = {
     ...state,
     active_plan_item: planItem,

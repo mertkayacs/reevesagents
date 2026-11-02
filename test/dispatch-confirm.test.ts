@@ -9,12 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createFlowState, flowTick } from '../src/core/flow.js'
+import { applyDecisionToState, createFlowState, flowTick } from '../src/core/flow.js'
 import type { FlowObservations, FlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { notesRef, stagingPath } from '../src/core/flow-notes.js'
 import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
 import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
+import { planTickView } from '../src/core/flow-plan.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
 const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []) => {
@@ -937,9 +938,10 @@ describe('an item is closed by its own commit, not by whichever commit arrives (
     expect(plan.items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
   })
 
-  it('refuses a second item on a commit that already closed one, and escalates', () => {
+  it('refuses a second item on a commit that already closed one, reports it once, and keeps the flow alive', () => {
     // The live run: ACCEPT on `b14896c` closed P2.1, then the same commit closed P2.2 as well — the header went into the next
-    // commit, which closed P2.3 ("About"), a section nobody wrote.
+    // commit, which closed P2.3 ("About"), a section nobody wrote. The guard refuses the second close; escalating would make a
+    // resumed run unresumable, because `done` is terminal and the historical state never changes (block 45).
     planOf(['P1.1', 'P1.2'])
     dispatchAndClose('P1.1', commit(1))
 
@@ -959,8 +961,127 @@ describe('an item is closed by its own commit, not by whichever commit arrives (
     })
 
     expect(result.decision.reason).toBe('plan_item_double_close')
-    expect(readFlow('run-1').state).toBe('escalated')
+    // Not escalated: the round is refused, the flow stays where it was, and the item is not closed by somebody else's commit.
+    expect(readFlow('run-1').state).not.toBe('escalated')
     expect(readPlan('run-1').items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
+    // Reported once, and recorded in the plan so the next tick treats it as history.
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
+    expect(readPlan('run-1').conflicts.some(conflict => conflict.kind === 'plan_item_double_close')).toBe(true)
+
+    // The next tick does not repeat it, and the flow can start the next item.
+    stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: commit(1), tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+    // The refuse is not repeated in the journal: the guard keeps refusing, but it stops reporting.
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
+  })
+})
+
+describe('the item binding survives the review request (block 45)', () => {
+  it('keeps spec_id through dispatch → review → ACCEPT, and closes that item', () => {
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2']) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+
+    const head = 'd'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    // The dispatch: P1.1's brief goes out and the claim records it. The head has not moved, so the plan bootstraps.
+    const start = { ...state, state: 'idle' as const, claim: { head: 'c'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } }
+    const dispatched = flowTick(start, {
+      now: NOW, head: 'c'.repeat(40), tree_clean: true, dev_pane: 'idle', review_pane: 'idle',
+      verdict: null, verdict_notes: '', verdict_count: 0, verdict_source: 'pane',
+      run_present: true, agents_present: true, evidence_policy: { min_seconds: 0, retries: 1 },
+      plan: planTickView(readPlan('run-1'), { perItem: 3, total: 8 }),
+    } as never)
+    expect(dispatched.reason).toBe('plan_item_dispatched')
+    expect(dispatched.next_claim.spec_id).toBe('P1.1')
+
+    // The review request that follows must not forget it.
+    saveFlow(applyDecisionToState(start, dispatched, AT))
+    const claimed = readFlow('run-1')
+    const review = flowTick(claimed, {
+      now: NOW + 1_000, head, tree_clean: true, dev_pane: 'idle', review_pane: 'idle',
+      verdict: null, verdict_notes: '', verdict_count: 0, verdict_source: 'pane',
+      run_present: true, agents_present: true, evidence_policy: { min_seconds: 0, retries: 1 },
+      plan: planTickView(readPlan('run-1'), { perItem: 3, total: 8 }),
+    } as never)
+    expect(review.kind).toBe('request_review')
+    expect(review.next_claim.spec_id).toBe('P1.1')
+
+    // And the ACCEPT closes exactly that item.
+    saveFlow({ ...applyDecisionToState(claimed, review, AT), review_started_at: NOW - 60_000 })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', head, 1, root), 'VERDICT: ACCEPT\n')
+    stepFlow('run-1', {
+      now: NOW + 61_000, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    const closed = readPlan('run-1').items.find(item => item.id === 'P1.1')!
+    expect(closed.status).toBe('done')
+    expect(closed.head).toBe(head)
+  })
+})
+
+describe('a historical double close does not block the run (block 45, defect 3)', () => {
+  it('reports it once, refuses that close, and lets the plan continue after a resume', () => {
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2']) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    const head = 'e'.repeat(40)
+    // History: P1.1 is already closed on that commit, and the conflict was recorded when it happened.
+    const conflicted = {
+      ...plan,
+      items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'done' as const, head } : item)),
+      conflicts: [{ at: AT, item_id: 'P1.2', kind: 'plan_item_double_close' as const, detail: `${head.slice(0, 7)} already closed P1.1` }],
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(conflicted)
+
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle', rounds: 1, active_plan_item: 'P1.2',
+      claim: { head, verdict: 'ACCEPT', verdict_count: 1, verdict_applied: false, spec_id: 'P1.2' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes'), { recursive: true })
+    writeFileSync(join(root, 'flows', 'run-1', 'notes', `${head}-r1.md`), 'VERDICT: ACCEPT\n')
+
+    const sent: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // Not escalated, no second report, and the flow is free to work on the next item.
+    expect(readFlow('run-1').state).not.toBe('escalated')
+    // Reported once (this tick), refused, and the item is not closed by somebody else's commit.
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
+
+    // A second tick refuses again but says nothing more, and the flow is free to move.
+    stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
   })
 })
 
