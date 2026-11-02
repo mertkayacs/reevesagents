@@ -841,10 +841,10 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_review_started_at: null,
     next_claim: {
       ...state.claim,
-      // A new round has no answer yet — but only when the previous one was actually spent. A verdict that is still owed (an unconfirmed
-      // send whose answer arrived, and whose close has not happened yet) must survive the dispatch, or the answer is lost exactly when
-      // the flow was trying to act on it (block 47).
-      verdict: state.claim.verdict_applied ? null : state.claim.verdict,
+      // A new round starts with no answer: the verdict that led here was spent closing its item. Carrying it forward let the next tick
+      // close the *new* item on the old ACCEPT, without a review of its commit (block 48, MAJOR 1). A verdict that is still owed never
+      // reaches a dispatch — the settle hands it to `settledVerdictDecision` first.
+      verdict: null,
       verdict_count: observations.verdict_count,
       verdict_applied: false,
       // The round belongs to this item: the close reads it back, so a later tick cannot close "whatever is active now".

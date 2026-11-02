@@ -239,9 +239,20 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
 // `resume` starts a new working spell, so the commits that landed while the flow was parked are the new baseline: they are
 // "already accounted for" and do not earn a review (block 22, D6). Without this the first tick after a resume asked a
 // reviewer to read whatever had been committed in the meantime — including the plan document itself.
+//
+// What it must not do is throw away an answer the flow already has. `resume` used to reset `verdict` and `spec_id`, so a run that
+// escalated *after* its reviewer answered came back with nothing to apply and sat on the item for ever — that is exactly what
+// `landing-ten` did (`claim.head = 5badf48`, `verdict ACCEPT`, then `verdict none` after the resume). An answer that has not been
+// used keeps its head, its verdict and its binding: the whole point of resuming is to let the flow carry it out (block 48, MAJOR 2).
 function anchorOnHead(state: FlowState): { claim: FlowState['claim'], verdict_handled_for: null } {
-  const head = readGitHead(state.repo) || state.claim.head
-  return { claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: null }, verdict_handled_for: null }
+  const owed = state.claim.verdict !== null && !state.claim.verdict_applied
+  const head = owed ? state.claim.head : (readGitHead(state.repo) || state.claim.head)
+  return {
+    claim: owed
+      ? { ...state.claim, head }
+      : { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: null },
+    verdict_handled_for: null,
+  }
 }
 
 // A block queued on a closed flow is work nobody will ever dispatch: refuse it with the reason

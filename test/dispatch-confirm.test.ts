@@ -16,6 +16,7 @@ import { notesRef, stagingPath } from '../src/core/flow-notes.js'
 import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
 import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import { planTickView } from '../src/core/flow-plan.js'
+import { resumeFlow } from '../src/core/flow-control.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
 const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []) => {
@@ -1119,6 +1120,7 @@ describe('the settle closes the item the claim names (block 46)', () => {
       evidence_policy: { min_seconds: 0, retries: 1 },
     })
 
+    console.log('DBG48', JSON.stringify(readPlan('run-1').items.map(i => i.id + ':' + i.status)), JSON.stringify(readFlow('run-1').log.map(e => e.event)))
     const items = readPlan('run-1').items
     expect(items.find(item => item.id === 'P1.1')!.status).toBe('done')
     expect(items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
@@ -1236,6 +1238,44 @@ describe('an answer that arrives after an unconfirmed send is still applied (blo
     expect(readFlow('run-1').state).not.toBe('escalated')
   })
 
+})
+
+describe('a resume keeps an answer the flow still owes (block 48)', () => {
+  it('closes the bound item after escalation → resume, and does not escalate again', () => {
+    const doc = '- [ ] **P1.1** — first'
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 't', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) })
+
+    const head = 'l'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'escalated', rounds: 0, active_plan_item: 'P1.1',
+      claim: { head, verdict: 'ACCEPT', verdict_count: 1, verdict_applied: false, spec_id: 'P1.1' },
+    })
+
+    resumeFlow('run-1')
+
+    // The answer and its binding survived the resume.
+    const resumed = readFlow('run-1')
+    expect(resumed.claim.verdict).toBe('ACCEPT')
+    expect(resumed.claim.spec_id).toBe('P1.1')
+    expect(resumed.claim.head).toBe(head)
+
+    stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).toBe('done')
+    expect(readFlow('run-1').state).not.toBe('escalated')
+  })
 })
 
 describe('legacy state without verdict_applied (MAJOR 3)', () => {
