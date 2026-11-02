@@ -242,7 +242,9 @@ describe('stepFlow', () => {
     seed(makeState({ state: 'reviewing', claim: { head: 'aaa111', verdict: null, verdict_count: 1 } }))
     const ports = makePorts({
       peek: () => verdictCapture(2),
-      send: vi.fn(() => ({ sent: false as const, reason: 'pane_changed' as const })),
+      // `unconfirmed`: the Enter went in and nothing confirmed it. `pane_changed` is the pre-Enter refusal, where
+      // nothing was submitted and the round does not exist — a different test covers that one.
+      send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed' as const })),
     })
 
     const first = step(ports, { head: 'aaa111' })
