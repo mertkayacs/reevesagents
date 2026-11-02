@@ -820,6 +820,48 @@ describe('a closed item must not stay in flight (D11)', () => {
     expect(readFlow('run-1').log.some(entry => entry.event === 'stale_active_item_cleared')).toBe(true)
   })
 
+  it('does not hand a queued stale id to the picker, so the next ready item is not skipped', () => {
+    // The mirror can lag: the item was closed and the flow still names it, and that item is `queued` again (a re-imported
+    // document). Passing it as `skip` made the picker jump over the one item that was ready (block 37, MAJOR).
+    const plan = planWithTwo(['P1.1', 'P1.2'])
+    // P1.1 is `queued` (not in flight), P1.2 is ready with a brief — and it is P1.1 that the flow names.
+    savePlan({ ...plan, items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'queued' as const } : item)) })
+    idleNaming('P1.1')
+    const sent: string[] = []
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // P1.2 was chosen — not skipped along with the stale id.
+    expect(result.decision.reason).toBe('plan_item_dispatched')
+    expect(readFlow('run-1').active_plan_item).toBe('P1.2')
+    expect(sent).toHaveLength(1)
+    // One recovery record, and the decision keeps its own event.
+    const log = readFlow('run-1').log
+    expect(log.filter(entry => entry.event === 'stale_active_item_cleared')).toHaveLength(1)
+    expect(log.some(entry => entry.event === 'dispatch_spec' || entry.event === 'plan_item_dispatched')).toBe(true)
+  })
+
+  it('writes the stale value away even when there is nothing left to start', () => {
+    // Nothing has a brief: no dispatch, but the field must not survive to block a later tick.
+    const plan = planWithTwo([])
+    savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'queued' as const })) })
+    idleNaming('P1.1')
+
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    const after = readFlow('run-1')
+    expect(after.active_plan_item).toBeNull()
+    expect(after.log.filter(entry => entry.event === 'stale_active_item_cleared')).toHaveLength(1)
+    expect(after.log.at(-1)?.event).not.toBe('dispatch_spec')
+  })
+
   it('clears the active item in the same write as the close', () => {
     // The close and the field are one write: leaving the closed id behind is exactly what blocked the next item.
     const plan = planWithTwo(['P1.1', 'P1.2'])

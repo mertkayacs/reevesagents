@@ -1055,6 +1055,8 @@
       const meta = document.createElement('span')
       meta.className = 'run-meta'
       meta.textContent = `${statusLabel(run.status)} · ${agentCountLabel(run.terminals.length)}`
+      // The counters are the first thing a narrow card drops; the tooltip is what keeps them reachable there.
+      meta.title = meta.textContent
       headBody.appendChild(meta)
       // The flow chip is rendered by the server (core/flow-label.ts), so the client holds no copy of
       // its wording; attention is an attribute on the same chip, painted by app.css.

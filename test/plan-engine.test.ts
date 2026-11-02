@@ -160,7 +160,10 @@ describe('starting the plan from idle', () => {
   })
 
   it('sends once: the tick after the dispatch holds instead of pasting the same item again', () => {
-    const plan = planWithBriefs(['P1.1'])
+    // After the first tick the runner writes the item as `in_work` in the mirror; the second tick sees exactly that, which is
+    // what makes "one task per flow" true. A `queued` item in `active_plan_item` is not work — it is a stale value (block 37).
+    const briefed = planWithBriefs(['P1.1'])
+    const plan = { ...briefed, items: briefed.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'in_work' as const } : item)) }
     const state = freshState({ active_plan_item: 'P1.1' })
     const decision = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0 }))
 

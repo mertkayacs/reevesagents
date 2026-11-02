@@ -1169,30 +1169,40 @@ function bootstrapDecision(state: FlowState, observations: FlowObservations): Fl
   // counts as "in flight" is the plan's word, not the field's: a stale id is cleared in this same decision and the tick
   // carries on, so the journal records `stale_active_item_cleared` once instead of the field blocking the plan for ever.
   const staleId = state.active_plan_item !== null && !activeItemInFlight(state, plan) ? state.active_plan_item : null
-  if (state.active_plan_item !== null && staleId === null) return null
+  // Only a real in-flight item is work; a stale id is not, and must never be handed to the picker as `skip` — a `queued` entry
+  // in `active_plan_item` would make the picker jump over the very item that is ready (block 37, MAJOR).
+  const inFlightId = state.active_plan_item !== null && staleId === null ? state.active_plan_item : null
+  if (inFlightId) return null
+  // The clear is its own journal line, and the decision keeps its own: one record each, no overwriting.
   const dispatch = (decision: FlowDecision): FlowDecision => (staleId === null ? decision : {
     ...decision,
     next_active_plan_item: decision.next_active_plan_item ?? null,
-    log_event: 'stale_active_item_cleared',
     extra_events: [
       ...(decision.extra_events ?? []),
       { event: 'stale_active_item_cleared', detail: `${staleId} is not in flight` },
     ],
   })
-  if (!observations.tree_clean) return hold(state, 'tree_dirty')
+  if (!observations.tree_clean) return dispatch(hold(state, 'tree_dirty'))
   if (queued) {
     const gate = dispatchGate(state, observations)
-    if (gate) return gate
+    if (gate) return dispatch(gate)
     return dispatch(specDispatch(state, queued, observations))
   }
-  if (!plan) return null
-  const next = planNext(plan, { skip: state.active_plan_item })
+  if (!plan) {
+    // Nothing to start and no plan to start it from: the only thing left to do is write the stale value away.
+    return staleId === null ? null : dispatch(hold(state, 'head_unchanged'))
+  }
+  // The picker must not take the same item twice: a stale id that still has a brief is skipped (the work was already sent for
+  // it), a stale id without one is simply dropped — skipping it would make the picker jump over a ready item that follows.
+  const staleItem = staleId === null ? undefined : plan.items.find(item => item.id === staleId)
+  const skip = inFlightId ?? (staleItem && staleItem.spec ? staleId : null)
+  const next = planNext(plan, { skip })
   // `needs_brief` / `blocked_owner` / `in_flight` are states of the document, reported by `flow plan status` on every
   // read. Escalating or holding on them from `idle` would repeat one line every tick and would let a ready item later
   // in the document be picked over a blocked one, which block 13's rule forbids.
-  if (next.kind !== 'item') return null
+  if (next.kind !== 'item') return staleId === null ? null : dispatch(hold(state, 'plan_incomplete', `${staleId} is not in flight`))
   const gate = dispatchGate(state, observations)
-  if (gate) return gate
+  if (gate) return dispatch(gate)
   return dispatch(planItemDispatch(state, next.item, observations))
 }
 
@@ -1464,6 +1474,9 @@ export function decisionChangesState(state: FlowState, decision: FlowDecision): 
   if (state.claim.verdict !== decision.next_claim.verdict) return true
   if (state.claim.verdict_count !== decision.next_claim.verdict_count) return true
   if (state.review_started_at !== decision.next_review_started_at) return true
+  // A hold that clears a stale `active_plan_item` must reach the disk; otherwise the field survives and blocks the plan for
+  // ever, which is the defect the clear exists for.
+  if ((decision.next_active_plan_item ?? state.active_plan_item) !== state.active_plan_item) return true
   if (decision.kind === 'dispatch_spec' && decision.spec_id) {
     return !state.dispatched_specs.includes(decision.spec_id)
   }
