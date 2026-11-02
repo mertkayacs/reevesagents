@@ -945,11 +945,48 @@ function nextSpec(state: FlowState): BlockSpec | null {
 function tickIdle(state: FlowState, observations: FlowObservations): FlowDecision {
   // `claim.head` is the commit the flow has already accounted for; a review is requested for the
   // next one, so an unmoved head is not a reason to ask again.
-  if (observations.head === state.claim.head) return hold(state, 'head_unchanged')
+  //
+  // Except for work that has never been sent. A plan imported into a fresh flow, and a block queued with
+  // `flow add-spec`, both wait for a dispatch and neither produces a new head by itself: without this branch the flow
+  // holds on `head_unchanged` for ever (no dispatch → no commit → no review → no ACCEPT → no picker), which is exactly
+  // the loop that made an imported plan look unstartable. The head still wins when it has moved — a review of the new
+  // commit is an older promise than any queued item — so this is consulted only after that check.
+  if (observations.head === state.claim.head) {
+    return bootstrapDecision(state, observations) ?? hold(state, 'head_unchanged')
+  }
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
+}
+
+// The first dispatch of a flow. Same rules as `planAcceptDecision` — a queued spec outranks the picker, the picker
+// takes the first item with a brief, the gate refuses a pane that is not positively idle — reached from the other end
+// of the pipeline: nothing has been sent yet, so there is no verdict to react to.
+//
+// `null` means "nothing to start", and the caller keeps its own reason (`head_unchanged`). A `hold` is returned only
+// when there *is* work and something concrete stands in the way, so the journal says why nothing went out.
+function bootstrapDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
+  const queued = nextSpec(state)
+  const plan = observations.plan
+  if (!queued && !plan) return null
+  // One task per flow, and never into a tree somebody is editing: pasting a brief over half-finished work loses it.
+  if (state.active_plan_item) return null
+  if (!observations.tree_clean) return hold(state, 'tree_dirty')
+  if (queued) {
+    const gate = dispatchGate(state, observations)
+    if (gate) return gate
+    return specDispatch(state, queued, observations)
+  }
+  if (!plan) return null
+  const next = planNext(plan, { skip: state.active_plan_item })
+  // `needs_brief` / `blocked_owner` / `in_flight` are states of the document, reported by `flow plan status` on every
+  // read. Escalating or holding on them from `idle` would repeat one line every tick and would let a ready item later
+  // in the document be picked over a blocked one, which block 13's rule forbids.
+  if (next.kind !== 'item') return null
+  const gate = dispatchGate(state, observations)
+  if (gate) return gate
+  return planItemDispatch(state, next.item, observations)
 }
 
 function tickReviewing(state: FlowState, observations: FlowObservations): FlowDecision {

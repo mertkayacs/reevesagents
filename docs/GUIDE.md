@@ -273,6 +273,12 @@ Once a plan is imported and a brief is attached to an item, nobody has to type `
 function, and the claim protocol makes two of them harmless: if a cron tick and a dashboard tick meet, one of them
 sees the other's claim and does nothing instead of pasting the prompt twice.
 
+A fresh flow starts by itself: an imported plan with a ready item is dispatched on the **first** tick, not after
+somebody else's ACCEPT. The head check still wins when the head has moved — a new commit is reviewed before the plan
+takes the next item — and a queued block (`flow add-spec`) is sent the same way. `flow plan next` only reads: **it
+never pastes and never queues**. The tick dispatches, and the command says so (`ready for dispatch`, then `nothing was
+sent by this command`).
+
 What happens without you is one of three things, and only the first is "progress":
 
 - **the plan moves** — the ticker takes the next item that has a brief, dispatches it, and closes it on an
@@ -295,10 +301,25 @@ The plan is **done** when every item is `done` or `skipped` — that is the only
 To turn the autonomous tick off, set `flow_tick_ms` to `0`: `flow tick` keeps working, and a machine with its own
 cron usually wants that.
 
+### Three things a flow assumes about your repository
+
+- **The project must be a git repository with at least one commit.** `flow start` refuses a directory without a HEAD
+  (`cannot read HEAD in <dir> (is it a git repository with a commit?)`), and a tick that cannot read one stops on
+  `head_unknown`. This is a contract, not a limitation: a verdict, a notes file and an item closed as `done` are all
+  bound to a **commit**, so without commits there is nothing to review and nothing to prove.
+- **Any commit in that repository is treated as work.** The tick compares the repository HEAD with the commit it has
+  already accounted for; a moved head means "the dev made progress" and the flow asks for a review of that commit — no
+  matter who made it. So put the plan, the briefs and any other documentation into a commit **before** `flow start`
+  (or while the flow is paused / stopped), otherwise the flow politely reviews your plan instead of your code. This is
+  not a guess: it happened on the sandbox, where a plan committed mid-flow sent the reviewer after the document.
+- **Briefs live inside the repository.** `flow plan attach` refuses a path outside the project (`… is outside the
+  repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
+  path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
+
 ### The plan as an object
 
 **How a project runs on its plan:** `flow plan import` once (and again after the document changes) →
-`flow plan attach` a brief for each item you want done → `flow plan next` (or simply let the ticks run: after an
+`flow plan attach` a brief for each item you want done → let the timers run (or `flow plan next` to see what comes next:
 ACCEPT the engine takes the next item by itself) → review, ACCEPT, and the item closes with the commit that
 closed it. `flow plan` shows `done/total`, what waits for you, and which item is next; `flow status` shows the
 same one-line summary, and each item's row carries its commit, its rounds and a reference to the review notes of
@@ -323,9 +344,9 @@ what is left. The design is `docs/plan-model-design.md`; two rules matter when y
 
 - `reevesagents flow plan import --run <run> --file docs/implementation-plan.md [--dry-run]` — import or
   re-import the document. The path is resolved against the run's project directory (so it works from any
-  cwd) and must stay inside it: a file from your home directory is refused rather than stored as `~/…`. New items are added as `pending`, items the document dropped are kept and marked
-  `missing` (never deleted), and a document that disagrees with the record adds a conflict. An unchanged
-  file changes nothing. Exit code 3 means there are conflicts to read.
+  cwd) and must stay inside it: a file from your home directory is refused rather than stored as `~/…`. New items
+  are added as `pending`, items the document dropped are kept and marked `missing` (never deleted), and a document
+  that disagrees with the record adds a conflict. An unchanged file changes nothing. Exit code 3 means conflicts.
 - `reevesagents flow plan --run <run> [--json]` — progress (`12/23 done`), the buckets that wait for you
   (`needs_brief`, `blocked_owner`, `missing`, conflicts) and the next item in document order.
 - `reevesagents flow plan attach --run <run> --item P1.7.1 --spec docs/briefs/P1.7.1.json [--queue]` —
@@ -333,13 +354,13 @@ what is left. The design is `docs/plan-model-design.md`; two rules matter when y
   item id (a markdown brief takes the item id instead, because a heading slug cannot equal `P1.7.1`), and it
   is stored as a *snapshot*: the dispatch stays reproducible, and an edited brief is refused
   rather than silently picked up. Without `--queue` the item becomes `queued` in the plan only — run
-  `flow plan next` (block 13) to put it on the flow.
+  the next tick (block 13/19) to put it on the flow: nothing else has to be run.
 - `reevesagents flow plan status --item P1.7.1 [--run <run>] [--json]` — one item: status, the commit that
   closed it, its rounds, its notes reference and its brief.
-- `reevesagents flow plan next --run <run> [--dry-run]` — the item the plan wants next, and why: it takes the
-  first item in document order that has a brief, queues its block on the flow, and the next `flow tick` sends
-  it. An item without a brief is reported ("waiting for a brief"), never dispatched and never invented; one
-  task per flow, so an item already in flight stops the picker. `--dry-run` only prints.
+- `reevesagents flow plan next --run <run> [--json]` — the item the plan wants next, and why. It reads only
+  (block 19): the tick dispatches. It takes the first item in document order that has a brief and sends its block;
+  an item without a brief is reported ("waiting for a brief"), never dispatched and never invented; one
+  task per flow, so an item already in flight stops the picker.
 - `reevesagents flow plan set --run <run> --item P1.7.1 --status <status> [--yes] [--note <text>]` — move an
   item by hand. `done` and `skipped` need `--yes`, and a `done` without an accepted commit also needs a
   `--note`; the manual close is recorded in the plan's conflicts so `flow plan` shows how it was closed.

@@ -203,7 +203,7 @@ export function registerPlanCommands(flow: Command): void {
     .command('next')
     .description('the item the plan wants next, and why (or why not): the only automatic path to work')
     .option('--run <id>', 'run id (a unique prefix is accepted)')
-    .option('--dry-run', 'print the decision; queue nothing')
+    .option('--dry-run', 'accepted for compatibility; this command never writes')
     .option('--json', 'output JSON')
     .action((opts: { run?: string, dryRun?: boolean, json?: boolean }, cmd: Command) => {
       const json = jsonOption(cmd, opts)
@@ -224,24 +224,19 @@ export function registerPlanCommands(flow: Command): void {
           progress: { done: imported.items.filter(item => item.status === 'done').length, total: imported.items.length },
           waiting_for_brief: planWaitingForBrief(view).map(item => item.id),
         }
-        let queued = false
-        if (next.kind === 'item' && opts.dryRun !== true && next.item.spec) {
-          // Queue the brief on the flow so the next tick sends it: `plan next` is the only automatic path from a
-          // plan item to a dispatch, and it never invents one.
-          if (!flow.specs.some(entry => entry.id === next.item.id) && next.item.spec_path) {
-            // The brief is stored in the plan with a repository-relative path; `addFlowSpecs` reads the file, so
-            // the path is resolved against the same project root.
-            addFlowSpecs({ run_id: runId, files: [projectPath(next.item.spec_path, projectRoot(runId)).absolute] })
-            queued = true
-          }
-        }
+        // This command reads. It used to queue the brief on the flow as a second way to reach a dispatch, but the
+        // engine now takes a ready item straight from the plan (§3.6), so the queue was a duplicate path with its own
+        // failure modes — a brief whose id did not match the item's left an off-plan spec that outranked the plan.
+        // The claim protocol in `stepFlow` is the only sender; printing the decision is all this does.
+        const queued = false
         if (json) {
           console.log(JSON.stringify({ ...body, queued }, null, 2))
           return
         }
         if (next.kind === 'item') {
           const brief = next.item.spec_path ? ` (brief ${next.item.spec_path})` : ''
-          console.log(`next      ${next.item.id} — "${next.item.title}"${brief}${queued ? '  queued for dispatch' : ''}`)
+          console.log(`next      ${next.item.id} — "${next.item.title}"${brief}  ready for dispatch`)
+          console.log('          nothing was sent by this command; the tick dispatches it')
           return
         }
         if (next.kind === 'needs_brief') {
@@ -351,8 +346,8 @@ export function registerPlanCommands(flow: Command): void {
         const suffix = opts.dryRun === true
           ? '(dry run: nothing written)'
           : queued
-            ? '(queued for dispatch)'
-            : '(brief ready; flow plan next queues it)'
+            ? '(queued on the flow — the tick sends it)'
+            : '(brief ready; the next `flow tick` dispatches it)'
         console.log(`attached  ${result.item.id} → ${result.item.spec_path} ${suffix}`)
       } catch (err) {
         failPlan(err)

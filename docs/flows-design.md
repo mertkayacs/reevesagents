@@ -599,6 +599,33 @@ Both thresholds are global config keys (`review_min_seconds`, `review_evidence_r
 `dispatch_confirm_seconds`), so they are visible in `reevesagents config`, the MCP `get_config`, the TUI
 settings and the Web config panel without a per-flow flag.
 
+### 3.6 Starting the plan from `idle` (block 19)
+
+`planNext` used to be reached **only** from `planAcceptDecision`, and `tickIdle` returned `head_unchanged` on its first
+line. Together those two facts made the first item of a freshly imported plan impossible to start: no dispatch → no
+commit → no review → no ACCEPT → no picker. The sandbox showed exactly that — `decision: none head_unchanged` on a flow
+whose plan reported `next P1.1.1 ready`.
+
+`tickIdle` now consults a bootstrap branch when, and only when, the head has not moved:
+
+| order | condition | decision |
+| --- | --- | --- |
+| 1 | a new head | `request_review` for it — the older promise wins, the plan never jumps over a commit |
+| 2 | a block queued with `flow add-spec` | `spec_dispatch` (same precedence as after an ACCEPT) |
+| 3 | a plan item with a brief, nothing `in_work`/`reviewing`, no active item | `plan_item_dispatched` through `planItemDispatch`, i.e. the same claim → act → settle path |
+| 4 | nothing to start | `head_unchanged` — a hold per tick would drown the journal |
+| — | dirty tree, pane not positively idle, or an item already active | `hold` (`tree_dirty` / `dev_busy` / `dev_pane_unknown`), and nothing is pasted |
+
+`needs_brief`, `blocked_owner` and `in_flight` deliberately do **not** turn into holds or escalations here: they are
+states of the document, reported by `flow plan status` on every read, and holding on them from `idle` would repeat one
+line every tick while letting a ready item later in the document be picked over a blocked one. Idempotence comes from
+the claim, not from a second flag: the tick after a dispatch sees `active_plan_item` and holds.
+
+`flow plan next` is now strictly a **read**: with the picker reachable from `idle`, queueing the brief through the CLI was
+a duplicate path with its own failure modes (a brief whose id differs from the item left an off-plan spec that then
+outranked the plan). The claim protocol is the only sender, and the command says so — `ready for dispatch`, plus a line
+stating that nothing was sent. `--dry-run` is accepted and changes nothing.
+
 ## 4. How it meets the surfaces
 
 ### 4.1 CLI (`src/surfaces/cli/flow.ts`, registered in `index.ts:41`–`:71` so `--help` order stays intentional)
@@ -823,6 +850,21 @@ is deliberately not written here, because a number written into a document is st
 committed.
 
 ## 5. Risks and contract changes
+
+**A flow assumes three things about the project's repository**, and all three are contracts rather than incidental
+behaviour:
+
+1. **It is a git repository with at least one commit.** `flow start` refuses otherwise (`cannot read HEAD in <dir> (is it
+   a git repository with a commit?)`, `src/core/flow-start.ts:113`) and a tick that cannot read a HEAD stops on
+   `head_unknown`. A verdict, a notes file and an item closed as `done` are all bound to a *commit*: without commits
+   there is nothing to review and nothing to prove.
+2. **Any commit is treated as work.** The tick compares HEAD with the commit it has already accounted for; a moved head
+   is "the dev made progress" whoever made it. The plan, the briefs and other documentation therefore belong in a
+   commit **before** `flow start` (or during a pause) — otherwise the flow asks for a review of the document. Observed
+   on the sandbox, where a plan committed mid-flow sent the reviewer after the plan.
+3. **Briefs live inside the repository.** `flow plan attach` refuses a path outside the project (`… is outside the
+   repository`) because the brief travels with the code it describes and the mirror stores a repository-relative path;
+   `docs/briefs/<item-id>.md` is the recommended place.
 
 | Risk | Where it bites | Mitigation |
 | --- | --- | --- |

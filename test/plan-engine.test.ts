@@ -136,6 +136,98 @@ describe('picking the next item', () => {
   })
 })
 
+describe('starting the plan from idle', () => {
+  // A fresh flow has nothing in flight and its head is the commit it started on, so `idle` used to hold on
+  // `head_unchanged` for ever: no dispatch → no commit → no review → no ACCEPT → no picker. These cases are that loop,
+  // closed.
+  function freshState(overrides: Partial<FlowState> = {}): FlowState {
+    const state = createFlowState({
+      run_id: 'run-1', repo: '/tmp/repo', roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 2, max_total_rounds: 5, at: AT,
+    })
+    return { ...state, claim: { head: 'aaa111', verdict: null, verdict_count: 0 }, ...overrides }
+  }
+
+  it('dispatches the first item with a brief on the very first tick, with the head unmoved', () => {
+    const plan = planWithBriefs(['P1.1'])
+    const state = freshState()
+    const decision = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0 }))
+
+    expect(decision.kind).toBe('dispatch_spec')
+    expect(decision.reason).toBe('plan_item_dispatched')
+    expect(decision.target).toBe('dev')
+    expect(decision.next_active_plan_item).toBe('P1.1')
+    expect(decision.message).toContain('P1.1')
+  })
+
+  it('sends once: the tick after the dispatch holds instead of pasting the same item again', () => {
+    const plan = planWithBriefs(['P1.1'])
+    const state = freshState({ active_plan_item: 'P1.1' })
+    const decision = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0 }))
+
+    expect(decision.kind).not.toBe('dispatch_spec')
+    expect(decision.reason).toBe('head_unchanged')
+    expect(decision.message).toBeUndefined()
+  })
+
+  it('reviews a moved head instead of jumping into the plan', () => {
+    const plan = planWithBriefs(['P1.1'])
+    const state = freshState()
+    const decision = flowTick(state, observationsFor(state, plan, {
+      head: 'bbb222', verdict: null, verdict_count: 0, plan: planTickView(plan, { perItem: 2, total: 5 }),
+    }))
+
+    expect(decision.kind).toBe('request_review')
+    expect(decision.reason).toBe('review_requested')
+    expect(decision.message).toContain('bbb222')
+  })
+
+  it('takes the second item when the first has no brief, and names the first as waiting', () => {
+    const plan = planWithBriefs(['P1.2'])
+    const state = freshState()
+    const decision = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0 }))
+
+    expect(decision.kind).toBe('dispatch_spec')
+    expect(decision.next_active_plan_item).toBe('P1.2')
+    expect(planWaitingForBrief(planTickView(plan, { perItem: 2, total: 5 })).map(item => item.id)).toEqual(['P1.1', 'P1.3'])
+  })
+
+  it('holds on a dirty tree and on a dev pane that is not positively idle, and pastes nothing', () => {
+    const plan = planWithBriefs(['P1.1'])
+    const state = freshState()
+
+    const dirty = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0, tree_clean: false }))
+    expect(dirty.reason).toBe('tree_dirty')
+    expect(dirty.message).toBeUndefined()
+
+    const busy = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0, dev_pane: 'busy' }))
+    expect(busy.reason).toBe('dev_busy')
+    expect(busy.message).toBeUndefined()
+
+    const unknown = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0, dev_pane: 'unknown' }))
+    expect(unknown.reason).toBe('dev_pane_unknown')
+    expect(unknown.message).toBeUndefined()
+  })
+
+  it('says nothing about a plan that has nothing to start', () => {
+    // Every item without a brief: the document is not an instruction yet, and a hold per tick would drown the journal.
+    const plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: DOC, now: NOW, at: AT }).plan
+    const state = freshState()
+    const decision = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0 }))
+
+    expect(decision.reason).toBe('head_unchanged')
+  })
+
+  it('does not start an item from paused, escalated or done', () => {
+    const plan = planWithBriefs(['P1.1'])
+    for (const parked of ['paused', 'escalated', 'done'] as const) {
+      const state = freshState({ state: parked })
+      const decision = flowTick(state, observationsFor(state, plan, { verdict: null, verdict_count: 0 }))
+      expect(decision.kind).not.toBe('dispatch_spec')
+      expect(decision.message).toBeUndefined()
+    }
+  })
+})
+
 describe('the engine with a plan', () => {
   it('dispatches the picked item and records it as the active one', () => {
     const plan = planWithBriefs(['P1.2'])
@@ -317,6 +409,36 @@ describe('the runner with a plan on disk', () => {
       active_plan_item: 'P1.1',
     })
   }
+
+  it('starts the first item of a fresh flow, and sends it once across two ticks', () => {
+    // The defect this block fixes, at the level that actually pastes: a flow that has never sent anything, a plan with
+    // one ready item and an unmoved head. The first tick must dispatch; the second must find the claim and hold.
+    const plan = planWithBriefs(['P1.1'])
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    saveFlow({
+      ...createFlowState({
+        run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' },
+        max_rounds: 2, max_total_rounds: 5, at: AT,
+      }),
+      state: 'idle',
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0 },
+    })
+
+    const sent: string[] = []
+    const ports = { paneBusy: () => 'idle' as const, peek: () => '', send: (_pane: string, text: string) => { sent.push(text); return { sent: true as const } } }
+
+    const first = stepFlow('run-1', { now: NOW, at: AT, head: 'aaa111', tree_clean: true, plan: undefined, ports })
+    expect(first.decision.reason).toBe('plan_item_dispatched')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toContain('P1.1')
+    expect(readFlow('run-1').active_plan_item).toBe('P1.1')
+
+    // The same tick again: the item is in flight now, so nothing is pasted a second time.
+    const second = stepFlow('run-1', { now: NOW + 5_000, at: AT, head: 'aaa111', tree_clean: true, plan: undefined, ports })
+    expect(second.decision.kind).not.toBe('dispatch_spec')
+    expect(sent).toHaveLength(1)
+  })
 
   it('closes the item whose brief was sent, not the next one in the document', () => {
     // P1.1 is skipped in the document order on purpose: if the runner closed "the next item" instead of the

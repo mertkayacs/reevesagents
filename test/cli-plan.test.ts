@@ -192,7 +192,7 @@ describe('flow plan attach', () => {
   it('does not claim to queue by default, and says so', async () => {
     await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
     const { out } = await runCli(['flow', 'plan', 'attach', '--run', 'run-p', '--item', 'P1.2.1', '--spec', join(tmpDir, 'P1.2.1.json')])
-    expect(out).toContain('brief ready; flow plan next queues it')
+    expect(out).toContain('brief ready; the next `flow tick` dispatches it')
     expect(out).not.toContain('queued for dispatch')
     // The plan item is `queued` (has a brief), the flow queue is untouched.
     const plan = readPlan('run-p')
@@ -204,7 +204,7 @@ describe('flow plan attach', () => {
   it('queues the block when --queue is passed', async () => {
     await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
     const { out } = await runCli(['flow', 'plan', 'attach', '--run', 'run-p', '--item', 'P1.2.1', '--spec', join(tmpDir, 'P1.2.1.json'), '--queue'])
-    expect(out).toContain('queued for dispatch')
+    expect(out).toContain('queued on the flow — the tick sends it')
     const state = JSON.parse(readFileSync(join(tmpDir, 'flows', 'run-p.json'), 'utf-8')) as { specs?: { id: string }[] }
     expect(state.specs?.map(spec => spec.id)).toEqual(['P1.2.1'])
   })
