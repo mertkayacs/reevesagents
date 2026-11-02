@@ -33,6 +33,13 @@
     }
 
     return {
+      // Wires the dialog's own `close` event — the one Esc and the Close button both produce — to the focus rule below. Kept here
+      // rather than in `app.js` so the "Esc comes back to the icon" path can be driven end to end in a test instead of being
+      // described in a comment.
+      attach(dialog) {
+        if (!dialog || typeof dialog.addEventListener !== 'function') return
+        dialog.addEventListener('close', () => { this.close() })
+      },
       open(runId) {
         openRunId = runId || null
         refreshExpanded()
@@ -50,6 +57,27 @@
               || (doc && typeof doc.querySelector === 'function' ? doc.querySelector('#logs-btn') : null))
         if (target && typeof target.focus === 'function') target.focus()
         return target || null
+      },
+      // The icon itself: created only when the run has a plan, labelled for a screen reader and stamped with the run id the
+      // close path looks it up by. Kept here so "no plan → no button" is a behaviour a test can call, not a line of source it can
+      // search for.
+      createIcon(flow, labels) {
+        const core = global.insightsCore
+        if (!core || typeof core.planIconVisible !== 'function' || !core.planIconVisible(flow)) return null
+        const runId = flow && flow.run_id ? flow.run_id : ''
+        const button = doc.createElement('button')
+        button.type = 'button'
+        button.id = 'plan-btn'
+        button.className = 'flow-plan-btn'
+        button.setAttribute('aria-label', labels.ariaLabel)
+        button.setAttribute('aria-haspopup', 'dialog')
+        button.setAttribute('aria-expanded', openRunId !== null && runId === openRunId ? 'true' : 'false')
+        button.title = labels.ariaLabel
+        button.setAttribute('data-plan-run', runId)
+        button.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">'
+          + '<path d="M2 3.5h2M6 3.5h8M2 8h2M6 8h8M2 12.5h2M6 12.5h8" stroke="currentColor" stroke-width="1.4" '
+          + 'stroke-linecap="round" fill="none"/></svg>'
+        return button
       },
       // A card rendered while the dialog is open asks what to put on its button.
       expandedOf(runId) {

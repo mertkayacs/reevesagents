@@ -294,28 +294,35 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(head).not.toContain('.textContent = t(')
   })
 
-  it('keeps the plan icon in the head body, with its id and run marker', () => {
+  it('keeps the plan icon in the head body, under the chip', () => {
+    // Placement is structure; the icon's own attributes and the "no plan, no button" rule are behaviour and live in
+    // `plan-dialog.test.ts`, where the controller builds a real element.
     const head = js.slice(js.indexOf("headBody.className = 'run-head-body'"), js.indexOf('head.appendChild(headBody)'))
-    expect(head).toContain("headBody.appendChild(flow)")
-    expect(head).toContain("headBody.appendChild(planBtn)")
-    expect(head).toContain("planBtn.id = 'plan-btn'")
-    expect(head).toContain('planBtn.dataset.planRun = run.id')
+    expect(head).toContain('headBody.appendChild(flow)')
+    expect(head).toContain('headBody.appendChild(planBtn)')
     // The chip is still a span: the icon is the only control in that row.
     expect(head).toContain("const flow = document.createElement('span')")
   })
 
-  it('opens the plan from its own icon, with the run id it belongs to', () => {
-    expect(js).toContain('async function openPlanDialog(runId)')
+  it('draws the plan icon from the plan itself, not from the run', () => {
+    // Runtime, not a search through the source: load the client's own helper and ask it. A run with a plan has the icon; a run
+    // without one has no button at all (not a disabled one — T1.6.6).
+    const source = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/insights-core.js'), 'utf8')
+    const sandbox: { insightsCore?: { planIconVisible: (_flow: unknown) => boolean } } = {}
+    new Function('window', `${source}; return window.insightsCore`)(sandbox)
+    const { planIconVisible } = sandbox.insightsCore!
+
+    expect(planIconVisible({ label: 'flow: done 2/2', plan: { done: 2, total: 2 }, run_id: 'run-1' })).toBe(true)
+    expect(planIconVisible({ label: 'flow: closed', plan: null, run_id: 'run-1' })).toBe(false)
+    expect(planIconVisible(null)).toBe(false)
+  })
+
+  it('opens the plan dialog from the icon of that run', () => {
+    // The dialog is fetched and shown once; the Esc/close path is driven end to end in `plan-dialog.test.ts`.
     expect(js).toContain("el.planDialog.showModal()")
     expect(js).toContain("api('GET', `/api/plan?run=")
-    // The icon is the opener, drawn only when there is a plan; the badge stays a label.
-    expect(js).toContain('core().planIconVisible')
-    expect(js).toContain("planBtn.setAttribute('aria-haspopup', 'dialog')")
+    expect(js).toContain('planController.attach(el.planDialog)')
     expect(js).toContain('openPlanDialog(run.id)')
-    // Esc closes the dialog and the controller finds the icon again by run id (the card may have been redrawn); the
-    // behaviour itself is driven in `plan-dialog.test.ts`.
-    expect(js).toContain("el.planDialog.addEventListener('close'")
-    expect(js).toContain('planController.close()')
   })
 
   it('pulses only the card that has unread news, from the summary the server sends', () => {

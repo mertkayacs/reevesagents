@@ -1072,22 +1072,9 @@
         headBody.appendChild(flow)
 
         // The plan icon: drawn only when the run has a plan (T1.6.6 — no disabled placeholders), and the only control that
-        // opens the plan dialog.
-        if (core().planIconVisible({ ...run.flow, run_id: run.id })) {
-          const planBtn = document.createElement('button')
-          planBtn.type = 'button'
-          planBtn.id = 'plan-btn'
-          planBtn.className = 'flow-plan-btn'
-          planBtn.setAttribute('aria-label', t('web.planOpenLabel'))
-          planBtn.setAttribute('aria-haspopup', 'dialog')
-          // Recomputed on every render, so a card redrawn while the dialog is open still says "expanded".
-          planBtn.setAttribute('aria-expanded', planController.expandedOf(run.id))
-          planBtn.title = t('web.planOpenLabel')
-          // The card is rebuilt on every SSE frame, so the element is not something to hold on to: the id is.
-          planBtn.dataset.planRun = run.id
-          planBtn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">'
-            + '<path d="M2 3.5h2M6 3.5h8M2 8h2M6 8h8M2 12.5h2M6 12.5h8" stroke="currentColor" stroke-width="1.4" '
-            + 'stroke-linecap="round" fill="none"/></svg>'
+        // opens the plan dialog. The controller builds it, so the rules live where a test can drive them.
+        const planBtn = planController.createIcon({ ...run.flow, run_id: run.id }, { ariaLabel: t('web.planOpenLabel') })
+        if (planBtn) {
           planBtn.addEventListener('click', () => { void openPlanDialog(run.id) })
           headBody.appendChild(planBtn)
         }
@@ -2600,9 +2587,7 @@
   // Esc closes the dialog natively; the focus has to come back to the icon that opened it, or the keyboard user lands on
   // `body`. The button is looked up by run id at this moment, because the card may have been rebuilt by an SSE frame while
   // the dialog was open — and if the card is gone entirely, the focus still has to land somewhere sensible.
-  el.planDialog.addEventListener('close', () => {
-    planController.close()
-  })
+  planController.attach(el.planDialog)
   el.planFilterAll.addEventListener('click', () => setPlanFilter('all'))
   el.planFilterOpen.addEventListener('click', () => setPlanFilter('open'))
   el.planFilterWaiting.addEventListener('click', () => setPlanFilter('waiting'))

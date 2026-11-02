@@ -10,10 +10,29 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 interface Controller {
+  attach: (_dialog: FakeDialog) => void
+  createIcon: (_flow: unknown, _labels: { ariaLabel: string }) => FakeEl | null
   open: (_runId: string) => void
   close: () => FakeEl | null
   expandedOf: (_runId: string) => string
   openRunId: string | null
+}
+
+// A `<dialog>` the way a browser behaves for the one thing we care about: Esc closes it and fires `close`. The test presses Esc
+// on it, so the path under test is the user's — keydown → native close → `close` event → controller → focus — not a direct
+// call to `close()`.
+class FakeDialog {
+  open = false
+  listeners: Record<string, Array<() => void>> = {}
+  showModal(): void { this.open = true }
+  close(): void {
+    if (!this.open) return
+    this.open = false
+    for (const listener of this.listeners.close ?? []) listener()
+  }
+  addEventListener(name: string, listener: () => void): void { (this.listeners[name] ||= []).push(listener) }
+  // What a browser does with Escape on a modal dialog: it closes it, which dispatches `close`.
+  pressEscape(): void { this.close() }
 }
 
 class FakeEl {
@@ -33,6 +52,7 @@ class FakeEl {
 // Only the four lookups the controller makes: `[data-plan-run="…"]`, `[data-run-card="…"]`, `#logs-btn` and all plan buttons.
 class FakeDoc {
   nodes: FakeEl[] = []
+  createElement = (tag: string): FakeEl => new FakeEl(tag === 'button' ? 'plan' : 'other')
   mount(node: FakeEl): FakeEl { this.nodes.push(node); return node }
   unmount(node: FakeEl): void { this.nodes = this.nodes.filter(entry => entry !== node) }
   querySelector(selector: string): FakeEl | null {
@@ -48,12 +68,18 @@ class FakeDoc {
   }
 }
 
-function loadController(): (_doc: unknown) => Controller {
+function loadController(): (_doc: unknown, _core?: unknown) => Controller {
   const source = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/plan-controller.js'), 'utf8')
   const sandbox: { planDialogController?: { createPlanDialogController: (_doc: unknown) => Controller } } = {}
   new Function('window', `${source}; return window.planDialogController`)(sandbox)
   if (!sandbox.planDialogController) throw new Error('plan-controller did not publish itself')
-  return sandbox.planDialogController.createPlanDialogController
+  const create = sandbox.planDialogController.createPlanDialogController
+  // `createIcon` asks `window.insightsCore` (the page loads it before `app.js`); a test passes the real one, or nothing and it
+  // simply never draws.
+  return (doc: unknown, core?: unknown) => {
+    if (core) (sandbox as { insightsCore?: unknown }).insightsCore = core
+    return create(doc)
+  }
 }
 
 const planButton = (doc: FakeDoc, runId: string): FakeEl => {
@@ -70,6 +96,10 @@ describe('closing the plan dialog puts focus back where the user was', () => {
     const first = planButton(doc, 'run-1')
     const controller = create(doc)
 
+    const dialog = new FakeDialog()
+    controller.attach(dialog)
+
+    dialog.showModal()
     controller.open('run-1')
     expect(first.getAttribute('aria-expanded')).toBe('true')
 
@@ -79,15 +109,37 @@ describe('closing the plan dialog puts focus back where the user was', () => {
     second.setAttribute('aria-expanded', controller.expandedOf('run-1'))
     expect(second.getAttribute('aria-expanded')).toBe('true')
 
-    const focused = controller.close()
+    // The user presses Esc.
+    dialog.pressEscape()
 
-    expect(focused).toBe(second)
+    expect(dialog.open).toBe(false)
+    expect(controller.openRunId).toBeNull()
     expect(second.focused).toBe(1)
     // The detached button is not the one that got the focus call — the negative control for "remembered the element".
     expect(first.focused).toBe(0)
     expect(logs.focused).toBe(0)
     // Closed: every card says so.
     expect(second.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('draws the icon only for a run with a plan, and stamps it with that run', () => {
+    const create = loadController()
+    const doc = new FakeDoc()
+    // `createIcon` asks `planIconVisible`, which the page loads from `insights-core.js`.
+    const coreSource = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/insights-core.js'), 'utf8')
+    const sandbox: { insightsCore?: { planIconVisible: (_flow: unknown) => boolean } } = {}
+    new Function('window', `${coreSource}; return window.insightsCore`)(sandbox)
+    const controller = create(doc, sandbox.insightsCore!)
+
+    const made = controller.createIcon({ label: 'flow: done 2/2', plan: { done: 2, total: 2 }, run_id: 'run-1' }, { ariaLabel: 'Plan' })
+    expect(made).not.toBeNull()
+    expect(made!.attributes['data-plan-run']).toBe('run-1')
+    expect(made!.attributes['aria-label']).toBe('Plan')
+    expect(made!.attributes['aria-haspopup']).toBe('dialog')
+    expect(made!.attributes['aria-expanded']).toBe('false')
+
+    // No plan: no button at all — not a disabled one.
+    expect(controller.createIcon({ label: 'flow: closed', plan: null, run_id: 'run-1' }, { ariaLabel: 'Plan' })).toBeNull()
   })
 
   it('falls back to the run card when the card\'s button is gone, and to Logs when the card is gone too', () => {
@@ -97,13 +149,18 @@ describe('closing the plan dialog puts focus back where the user was', () => {
     const card = doc.mount(new FakeEl('card', 'run-1'))
     const controller = create(doc)
 
+    const dialog = new FakeDialog()
+    controller.attach(dialog)
+
+    dialog.showModal()
     controller.open('run-1')
-    expect(controller.close()).toBe(card)
+    dialog.pressEscape()
     expect(card.focused).toBe(1)
 
     doc.unmount(card)
+    dialog.showModal()
     controller.open('run-1')
-    expect(controller.close()).toBe(logs)
+    dialog.pressEscape()
     expect(logs.focused).toBe(1)
   })
 
@@ -124,7 +181,12 @@ describe('closing the plan dialog puts focus back where the user was', () => {
     expect(second.getAttribute('aria-expanded')).toBe('true')
     expect(other.getAttribute('aria-expanded')).toBe('false')
 
-    controller.close()
+    const dialog = new FakeDialog()
+    controller.attach(dialog)
+    dialog.showModal()
+    controller.open('run-1')
+    dialog.pressEscape()
+
     expect(second.getAttribute('aria-expanded')).toBe('false')
     expect(controller.openRunId).toBeNull()
   })
