@@ -427,7 +427,7 @@ module cycle.
 
 | Status | Meaning | A tick may | Leaves via |
 | --- | --- | --- | --- |
-| `idle` | nothing pending; either waiting for the dev's next HEAD, or holding a verdict that was collected at the wrong moment | a verdict already collected for `claim.head` is settled first — `CHANGES_REQUESTED` → `fixing` (budgets checked), `ACCEPT` with a plan → the item closes and the next one is dispatched; then queued work is started; then a moved HEAD is reviewed. `head_unchanged` is the *last* answer, not the first (block 21) | `reviewing` / `fixing` |
+| `idle` | nothing pending; either waiting for the dev's next HEAD, or holding a verdict that was collected at the wrong moment. A commit that touched only the plan or its briefs re-anchors the baseline instead of asking for a review | a verdict already collected for `claim.head` is settled first — `CHANGES_REQUESTED` → `fixing` (budgets checked), `ACCEPT` with a plan → the item closes and the next one is dispatched; then queued work is started; then a moved HEAD is reviewed. `head_unchanged` is the *last* answer, not the first (block 21) | `reviewing` / `fixing` |
 | `reviewing` | review requested for `req_head` | record a verdict, log a timeout once | `fixing` / `accepted` / `escalated` |
 | `dispatching` | a claim is out (`pending` set, send in flight) | nothing — another ticker owns it | `pending` cleared by settle, or by a control command (`pause`/`stop`), in which case the runner re-checks the claim before pasting and answers `cancelled` |
 | `fixing` | fix request delivered | request review for a new HEAD | `reviewing` |
@@ -443,6 +443,15 @@ Two invariants make the table safe: a transition is written only inside a short 
 `verdict_handled_for`: the commit whose answer this flow has already acted on, set by every path that
 consumes a verdict and cleared when the HEAD moves. Without it an ACCEPT collected in `idle` would be
 re-applied on the following tick and would close the item the tick before had just dispatched.
+
+**Documents are not work (block 22, D6).** A commit is what the flow reviews, and the engine cannot know what a commit
+*means* — so it asks git what it touched. A range that changed only the imported plan document or `docs/briefs/` is a
+document commit: the tick re-anchors `claim.head` on it, writes one journal line (`head_reanchored`), and asks for no
+review. That is what happened on the sandbox, where the plan and a brief were committed after `flow start` and the flow
+spent a review round — and a fix round — on documentation while the item it was supposed to build never started. The
+same rule backs two operators' paths: `flow plan import`/`attach` re-anchor after they write, and `flow resume` re-anchors
+on the current HEAD, because a new working spell starts from what is already on disk. An unreadable range is treated as
+work — the safe side is a review nobody needed, not a commit nobody saw.
 
 **The table is code, not prose (block 07).** `FLOW_TRANSITIONS` in `src/core/flow.ts` lists the
 allowed target of every state, `assertTransition` refuses anything else with the state named

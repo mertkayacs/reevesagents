@@ -13,6 +13,10 @@
 import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
 import { listFlowFiles, readFlow } from '../../core/flow-store.js'
+import type { FlowState } from '../../core/flow.js'
+import { appendLog } from '../../core/flow.js'
+import { readGitHead } from '../../core/flow-runner.js'
+import { saveFlow } from '../../core/flow-store.js'
 import { readRun } from '../../core/runs.js'
 import { addFlowSpecs } from '../../core/flow-control.js'
 import type { Plan, PlanItem, PlanStatus, SetStatusInput } from '../../core/plan.js'
@@ -170,6 +174,7 @@ export function registerPlanCommands(flow: Command): void {
             // mtime for nothing.
             return { plan: imported.unchanged ? null : imported.plan, value: imported }
           })
+        if (opts.dryRun !== true) anchorAfterDocumentChange(runId)
         if (json) {
           console.log(JSON.stringify({
             dry_run: opts.dryRun === true,
@@ -335,6 +340,7 @@ export function registerPlanCommands(flow: Command): void {
           addFlowSpecs({ run_id: runId, files: format === 'json' ? [target.absolute] : undefined, markdown: format === 'markdown' ? [target.absolute] : undefined })
           queued = true
         }
+        if (opts.dryRun !== true) anchorAfterDocumentChange(runId)
         if (json) {
           console.log(JSON.stringify({
             dry_run: opts.dryRun === true,
@@ -437,6 +443,30 @@ function findItem(itemId: string, run?: string): { plan: Plan, item: PlanItem } 
 
 // A plan path is a path in the *project*, so it is resolved against the run's working directory first: the
 // operator may run the CLI from anywhere, and `docs/implementation-plan.md` means the project's document.
+// The plan and its briefs are documents *about* the work, and the engine treats any commit as progress: importing them
+// into a running flow asked a reviewer to read the document instead of the code (block 22, D6 — seen on the sandbox, where
+// the flow sent the reviewer after the plan and never started the item). Two ways to prevent that: park the flow, or move
+// its baseline. Park is worse — `flow start` → `plan import` → `plan attach` is the documented order, and it would break.
+// So the baseline moves: everything committed up to now is "already accounted for", and the item goes to the dev on the
+// next tick.
+function anchorAfterDocumentChange(runId: string): void {
+  let state: FlowState
+  try { state = readFlow(runId) } catch { return }
+  if (state.state === 'done') return
+  const head = readGitHead(state.repo) || state.claim.head
+  if (head === state.claim.head) return
+  saveFlow({
+    ...state,
+    claim: { head, verdict: null, verdict_count: state.claim.verdict_count },
+    verdict_handled_for: null,
+    log: appendLog(state, {
+      at: new Date().toISOString(),
+      event: 'plan_documents_anchored',
+      detail: `${head.slice(0, 7)}: the plan is a document, not the dev's work`,
+    }),
+  })
+}
+
 function projectRoot(runId: string): string {
   try {
     return readRun(runId).working_dir

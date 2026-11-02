@@ -238,6 +238,31 @@ describe('a verdict already collected is work, even when the head has not moved 
     expect(sent).toHaveLength(1)
   })
 
+  it('settles the verdict before it looks at a head that has already moved (A1)', () => {
+    // The verdict is older than the commit: skipping it because HEAD moved would drop an answer the reviewer already
+    // gave, and the fix would never be sent.
+    idleWithVerdict('CHANGES_REQUESTED')
+    const sent: string[] = []
+    const first = stepFlow('run-1', {
+      now: NOW, at: AT, head: 'bbb222', tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(first.decision.kind).toBe('dispatch_fix')
+    expect(sent).toHaveLength(1)
+
+    // Then the flow is in `fixing`; once the dev commits, that commit is what gets reviewed — the second step of the
+    // sequence is not lost either.
+    const after = stepFlow('run-1', {
+      now: NOW + 10_000, at: AT, head: 'ccc333', tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(after.decision.kind).toBe('request_review')
+    expect(after.decision.head).toBe('ccc333')
+    expect(sent).toHaveLength(2)
+  })
+
   it('still holds on an unchanged head when there is no verdict to act on', () => {
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
@@ -269,6 +294,58 @@ describe('a verdict already collected is work, even when the head has not moved 
     })
     expect([a.decision.kind, b.decision.kind].filter(kind => kind === 'dispatch_fix')).toHaveLength(1)
     expect(sent).toHaveLength(1)
+  })
+})
+
+describe('a commit that only touches the plan is not the dev\'s work (D6)', () => {
+  it('moves the baseline instead of asking for a review', () => {
+    // Seen on the sandbox: the plan and a brief were committed after `flow start`, the flow asked for a review of that
+    // commit and sent a fix round about a document, while the real item never started.
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', claim: { head: 'aaa111', verdict: null, verdict_count: 0 } })
+    const sent: string[] = []
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null,
+      docs_only_since_claim: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(result.decision.reason).toBe('head_reanchored')
+    expect(result.status).toBe('applied')
+    expect(sent).toHaveLength(0)
+    const after = readFlow('run-1')
+    expect(after.claim.head).toBe(HEAD)
+    expect(after.state).toBe('idle')
+  })
+
+  it('starts the item of the plan on the very next tick', () => {
+    // The point of re-anchoring: the tick after the document commit does the work, not the paperwork.
+    const doc = '- [ ] **P1.1** — first'
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 't', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0 } })
+    const sent: string[] = []
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('plan_item_dispatched')
+    expect(sent).toHaveLength(1)
+    expect(readFlow('run-1').active_plan_item).toBe('P1.1')
   })
 })
 

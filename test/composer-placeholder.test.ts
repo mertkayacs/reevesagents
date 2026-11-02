@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { composerText, isComposerPlaceholder } from '../src/core/activity.js'
+import { COMPOSER_HINTS } from '../src/core/composer-hints.js'
 
 // The hint Hermes draws in an empty composer, one per shipped locale, plus the two shapes that are not in the catalogue.
 const PLACEHOLDERS = [
@@ -14,7 +15,7 @@ const PLACEHOLDERS = [
   ['es', 'Pregunta lo que quieras, o escribe / para ver los comandos…'],
   ['fr', 'Posez une question, ou tapez / pour les commandes…'],
   ['it', 'Chiedi qualsiasi cosa, o digita / per i comandi…'],
-  ['pt', 'Pergunte qualquer coisa ou digite / para mande comandos…'],
+  ['pt', 'Pergunte qualquer coisa ou digite / para ver comandos…'],
   ['tr', 'Bir şey sorun veya komutlar için / yazın…'],
   ['ja', '何でも質問するか、/ を入力してコマンドを表示…'],
   ['zh-Hans', '随便问点什么，或输入 / 查看命令…'],
@@ -54,8 +55,27 @@ describe('an empty composer is not somebody else\'s text (D5)', () => {
     expect(composerText('› fix the failing test', 'codex')).toBe('fix the failing test')
   })
 
-  it('recognises a reworded hint through its shape, without a new release', () => {
-    expect(isComposerPlaceholder('Спросите что угодно · / — команды…', 'hermes')).toBe(true)
-    expect(isComposerPlaceholder('Just press / to see every command…', 'hermes')).toBe(true)
+  it('never treats meaningful text as an empty composer, however it is punctuated', () => {
+    // A2: the shape rule ("ellipsis plus a slash") matched a real draft and would have pasted a prompt on top of it.
+    for (const draft of [
+      'Please inspect ./src/a.ts…',
+      'Посмотри ./src/a.ts и почини…',
+      'Fix a/b, then rerun…',
+      'Zobacz ./src/a.ts…',
+      'check the log at /var/log/x',
+      'Спросите что угодно · / — команды…',
+      'Just press / to see every command…',
+    ]) {
+      expect(composerText(hermesPane(draft), 'hermes'), draft).toBe(draft)
+      expect(isComposerPlaceholder(draft, 'hermes'), draft).toBe(false)
+    }
+  })
+
+  it('keeps every shipped hint from the TUI catalogue', () => {
+    // The list is data copied from `~/.hermes/hermes-agent/locales/*.yaml`: all seventeen locales, all eleven rotations.
+    expect(COMPOSER_HINTS.length).toBeGreaterThan(150)
+    for (const hint of COMPOSER_HINTS) {
+      expect(isComposerPlaceholder(hint, 'hermes'), hint).toBe(true)
+    }
   })
 })

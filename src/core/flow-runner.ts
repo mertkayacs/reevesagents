@@ -81,6 +81,44 @@ export function readGitHead(repo: string): string {
   }
 }
 
+// Which files the commits between two heads touched. Used to tell the dev's work from the plan and its briefs, which are
+// documents about the work: a commit that only changes those is not progress a reviewer should be asked to read
+// (block 22, D6 — on the sandbox the flow sent the reviewer after the plan document instead of the item).
+export function changedPathsBetween(repo: string, from: string, to: string): string[] | null {
+  if (!repo || !isCommitId(from) || !isCommitId(to) || from === to) return []
+  try {
+    return execFileSync('git', ['-C', repo, 'diff', '--name-only', `${from}..${to}`], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).split('\n').map(line => line.trim()).filter(Boolean)
+  } catch {
+    // Unreadable history is not "documents": the caller falls back to reviewing, which is the safe side.
+    return null
+  }
+}
+
+// The paths that hold the plan and the briefs of a flow: the imported document, the brief directory, and the mirror.
+function documentationPaths(state: FlowState): string[] {
+  const paths = ['docs/briefs/']
+  try {
+    const plan = readPlan(state.run_id)
+    if (plan) paths.push(plan.source_path)
+  } catch {
+    // A damaged plan does not make a commit a document commit.
+  }
+  return paths
+}
+
+// Is every path this commit range touched documentation? `null`/`[]` answers mean "cannot tell", which the caller treats
+// as work.
+export function docsOnlySince(state: FlowState, head: string): boolean | null {
+  if (state.state === 'done') return null
+  const changed = changedPathsBetween(state.repo, state.claim.head, head)
+  if (changed === null || changed.length === 0) return false
+  const docs = documentationPaths(state)
+  return changed.every(path => docs.some(prefix => path === prefix || path.startsWith(prefix)))
+}
+
 export function isGitTreeClean(repo: string): boolean {
   if (!repo) return false
   try {
@@ -96,6 +134,8 @@ export function isGitTreeClean(repo: string): boolean {
 }
 
 export interface ObserveFlowOptions {
+  // Caller-known: a test or a probe can state whether the commits since the claim touched only documents.
+  docs_only_since_claim?: boolean
   ports?: FlowPorts
   // Caller-known facts win: a probe or a re-check can pass them instead of shelling out to git.
   head?: string
@@ -515,6 +555,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     // The plan owns the queue only when it exists: a flow without one keeps `state.specs`, which is what
     // schema-v1 flows have always used.
     plan: options.plan === null ? undefined : (options.plan ?? readPlanView(state) ?? undefined),
+    docs_only_since_claim: options.docs_only_since_claim ?? docsOnlySince(state, head) ?? false,
   }
   // The evidence is measured on the finished observation: it needs the notes text and the capture, so it
   // cannot be built before them. A caller that has already measured it (the flow's own tests) passes it.

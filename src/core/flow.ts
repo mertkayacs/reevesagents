@@ -304,6 +304,9 @@ export interface FlowObservations {
   // The raw staging text (untruncated), so the runner can publish the durable record without reading
   // the file a second time.
   notes_raw?: string
+  // True when every commit between `claim.head` and the observed head touched only the plan document or the briefs: the
+  // documents about the work are not the work, and a dev did nothing for them (block 22, D6).
+  docs_only_since_claim?: boolean
 }
 
 // What a tick can measure about the review behind a verdict.
@@ -338,6 +341,7 @@ export type FlowReason =
   | 'agents_gone'
   | 'head_unknown'
   | 'head_unchanged'
+  | 'head_reanchored'
   | 'no_new_head'
   | 'tree_dirty'
   | 'dev_busy'
@@ -960,19 +964,42 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   // holds on `head_unchanged` for ever (no dispatch → no commit → no review → no ACCEPT → no picker), which is exactly
   // the loop that made an imported plan look unstartable. The head still wins when it has moved — a review of the new
   // commit is an older promise than any queued item — so this is consulted only after that check.
+  // A verdict that arrived while the flow was idle is work waiting to happen, and it comes **before** the head check:
+  // `fixDispatch` and `planAcceptDecision` used to be reachable only from `tickReviewing`, so a CHANGES_REQUESTED
+  // collected at the wrong moment left the flow answering `head_unchanged` for ever (D4). The settled verdict is older
+  // than any commit — and if the head moved in the meantime, skipping it would drop the answer the reviewer already
+  // gave, which is the same loss one step later (block 22, A1). Order: verdict → moved head → queued work →
+  // `head_unchanged`.
+  const settled = settledVerdictDecision(state, observations)
+  if (settled) return settled
+
   if (observations.head === state.claim.head) {
-    // A verdict that arrived while the flow was idle is work waiting to happen. `fixDispatch` and `planAcceptDecision`
-    // used to be reachable only from `tickReviewing`, so a CHANGES_REQUESTED collected at the wrong moment left the flow
-    // answering `head_unchanged` for ever: no fix → no commit → no review (D4, the same shape as the block-19 bootstrap).
-    // Settling it first is the rule "finish what was already answered before waiting for a new answer".
-    const settled = settledVerdictDecision(state, observations)
-    if (settled) return settled
     return bootstrapDecision(state, observations) ?? hold(state, 'head_unchanged')
   }
+
+  // A commit that only touches the plan or its briefs is not the dev's work: re-anchor and keep going instead of asking a
+  // reviewer to read a document (block 22, D6).
+  if (observations.docs_only_since_claim === true) return reanchor(state, observations.head)
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
+}
+
+// Take a documentation-only commit as the new baseline: nothing is reviewed, nothing is dispatched, the round counter does
+// not move. The journal says so once, because "the flow moved its baseline" is a fact an operator wants to see; what does
+// not happen is a review request or a fix.
+function reanchor(state: FlowState, head: string): FlowDecision {
+  return {
+    kind: 'none',
+    reason: 'head_reanchored',
+    next_state: state.state,
+    next_rounds: state.rounds,
+    next_review_started_at: state.review_started_at,
+    next_claim: { head, verdict: null, verdict_count: state.claim.verdict_count },
+    next_verdict_handled_for: null,
+    log_detail: `documentation commit ${head.slice(0, 7)}: baseline moved, nothing to review`,
+  }
 }
 
 // The verdict the flow already has, acted on from `idle`. Ordered before the head check because it is *older* work than
@@ -1143,6 +1170,7 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
 
 function tickFixing(state: FlowState, observations: FlowObservations): FlowDecision {
   if (observations.head === state.claim.head) return hold(state, 'no_new_head')
+  if (observations.docs_only_since_claim === true) return reanchor(state, observations.head)
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
@@ -1294,7 +1322,7 @@ function logDetail(decision: FlowDecision): string {
   return parts.join(' ')
 }
 
-function appendLog(state: FlowState, entry: FlowLogEntry): FlowLogEntry[] {
+export function appendLog(state: FlowState, entry: FlowLogEntry): FlowLogEntry[] {
   return [...state.log, entry].slice(-FLOW_LOG_LIMIT)
 }
 

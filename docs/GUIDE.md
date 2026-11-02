@@ -316,6 +316,27 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+### Order matters: the plan and its briefs are committed before `flow start`
+
+The engine treats **any** commit as progress: a moved HEAD is reviewed. Documents about the work are not the work, so
+the plan and its briefs belong in a commit **before** `flow start` — or, if they change mid-flight, while the flow is
+parked:
+
+```bash
+flow pause       --run <id>          # stop handing out work
+$EDITOR docs/implementation-plan.md  # and docs/briefs/<item>.md
+git commit -am 'docs: plan'
+flow plan import --run <id> --file docs/implementation-plan.md
+flow plan attach --run <id> --item P1.7.1 --spec docs/briefs/P1.7.1.md
+flow resume      --run <id>          # the new HEAD becomes the baseline
+```
+
+Two rules make that safe. `flow plan import` and `flow plan attach` move the flow's baseline to the current HEAD
+(`plan_documents_anchored`), because they change documents, not code. `flow resume` re-anchors on the current HEAD as
+well: everything committed while the flow was parked is "already accounted for" and earns no review. And if a commit
+that touches **only** the plan or `docs/briefs/` slips in while the flow runs, the tick re-anchors on it
+(`documentation commit …: baseline moved, nothing to review`) instead of sending a reviewer after a document.
+
 ### The flow's own placeholders (why an empty Hermes pane is safe)
 
 The engine pastes into a pane only when the composer is empty. "Empty" means **the provider's hint**, not "no

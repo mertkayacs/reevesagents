@@ -58,6 +58,8 @@ export function providerHasBusyDetector(provider: Provider): boolean {
   return SIGNALS[provider] !== undefined
 }
 
+import { COMPOSER_HINTS } from './composer-hints.js'
+
 // The providers whose panes can be classified at all; the CLI prints this list when it refuses
 // a provider instead of running unguarded.
 export function gatedProviders(): Provider[] {
@@ -105,44 +107,26 @@ export function detectPaneReady(paneText: string, provider: Provider): PaneReadi
   return hints.some(marker => marker.test(text)) ? 'ready' : 'not_ready'
 }
 
-// What an *empty* composer draws. Codex prints one fixed line; Hermes prints a rotating hint, one per locale, and every
-// one of them ends in an ellipsis and mentions `/` as the command prefix — that shape is the rule, and the known strings
-// are the backstop for a locale whose wording changes. Reading only Codex's line made every empty Hermes pane in a
-// Russian (or Polish, or Japanese…) interface look like "somebody else's text", which is a `composer_dirty` refusal and
-// no dispatch at all (D5 of the live run).
-const HERMES_PLACEHOLDERS: readonly string[] = [
-  'Ask anything, or type / for commands…',
-  'Спросите о чём угодно или введите / для команд…',
-  'Запитайте будь-що або введіть / для команд…',
-  'Fragen Sie etwas oder geben Sie / für Befehle ein…',
-  'Pregunta lo que quieras, o escribe / para ver los comandos…',
-  'Posez une question, ou tapez / pour les commandes…',
-  'Chiedi qualsiasi cosa, o digita / per i comandi…',
-  'Pergunte qualquer coisa ou digite / para ver comandos…',
-  'Bir şey sorun veya komutlar için / yazın…',
-  'اسأل أي شيء، أو اكتب / للأوامر…',
-  '随便问点什么，或输入 / 查看命令…',
-  '隨便問點什麼，或輸入 / 查看指令…',
-  '何でも質問するか、/ を入力してコマンドを表示…',
-  '무엇이든 물어보세요. 명령은 / 를 입력하세요…',
-]
+// What an *empty* composer draws. Codex prints one fixed line; Hermes prints a rotating hint in the interface language,
+// so "empty" can only be decided against the catalogue of hints the TUI itself ships (`composer-hints.ts`). The
+// structural shortcut that used to live here — "an ellipsis and a `/`" — also matched `Please inspect ./src/a.ts…` and
+// would have pasted a prompt over a human's draft (block 22, A2), so it is gone: a known hint is a placeholder,
+// everything else is text.
+const KNOWN_HINTS: ReadonlySet<string> = new Set(COMPOSER_HINTS.map(normalizeHint))
 
 function normalizeHint(value: string): string {
   return value.replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 // Is this text a hint the provider draws, rather than something somebody typed? A placeholder is never a message: it
-// must not be pasted over (that is fine — pasting replaces it) and it must never be mistaken for work in progress.
+// may be pasted over, and it must never be mistaken for work in progress. Unknown text — including a reworded hint in a
+// locale this build has never seen — is text, because a wrong "empty" destroys what a human wrote.
 export function isComposerPlaceholder(text: string, provider: Provider): boolean {
   const seen = normalizeHint(text)
   if (seen === '') return true
   if (provider === 'codex') return /^ask codex to do anything$/.test(seen)
   if (provider !== 'hermes') return false
-  if (HERMES_PLACEHOLDERS.some(known => normalizeHint(known) === seen)) return true
-  // The structural half, so a new locale or a reworded hint does not need a release: an invitation to use commands ends
-  // in an ellipsis and names the slash prefix.
-  // The ellipsis must end the line: a hint with somebody's text appended is somebody's text, not a hint.
-  return /(?:…|\.\.\.)$/.test(seen) && seen.includes('/')
+  return KNOWN_HINTS.has(seen)
 }
 
 // The text currently sitting in the input box, with the prompt marker removed. `null` when no input

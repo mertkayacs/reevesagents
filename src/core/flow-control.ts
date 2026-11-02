@@ -21,6 +21,7 @@ import type { BlockSpec } from './spec.js'
 import { readSpecFile } from './flow-queue.js'
 import type { FlowStoreOptions } from './flow-store.js'
 import { readFlow, saveFlow } from './flow-store.js'
+import { readGitHead } from './flow-runner.js'
 import { isRunsLockTimeout, withRunsLock } from './runs.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { planExists, readPlan } from './plan.js'
@@ -117,7 +118,7 @@ export function resumeFlow(runId: string, options: FlowControlOptions = {}): Flo
         event: 'flow_resumed',
         detail: `from paused to ${target}`,
         at,
-        patch: { paused_from: null, paused_at: null },
+        patch: { paused_from: null, paused_at: null, ...anchorOnHead(state) },
       })
     }
     if (state.state === 'escalated') {
@@ -128,7 +129,7 @@ export function resumeFlow(runId: string, options: FlowControlOptions = {}): Flo
         event: 'flow_resumed',
         detail: `from escalated to idle, rounds reset from ${state.rounds}`,
         at,
-        patch: { rounds: 0 },
+        patch: { rounds: 0, ...anchorOnHead(state) },
       })
     }
     throw new FlowStateError(
@@ -233,6 +234,14 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
     }),
     queued,
   }
+}
+
+// `resume` starts a new working spell, so the commits that landed while the flow was parked are the new baseline: they are
+// "already accounted for" and do not earn a review (block 22, D6). Without this the first tick after a resume asked a
+// reviewer to read whatever had been committed in the meantime — including the plan document itself.
+function anchorOnHead(state: FlowState): { claim: FlowState['claim'], verdict_handled_for: null } {
+  const head = readGitHead(state.repo) || state.claim.head
+  return { claim: { head, verdict: null, verdict_count: state.claim.verdict_count }, verdict_handled_for: null }
 }
 
 // A block queued on a closed flow is work nobody will ever dispatch: refuse it with the reason
