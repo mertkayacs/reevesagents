@@ -1096,11 +1096,14 @@
 
       const actions = document.createElement('div')
       actions.className = 'run-actions'
+      // Actions are icons in the corner, like window controls: the label moves into `aria-label`/`title` instead of
+      // disappearing, so the meaning survives for a screen reader and for a hover.
       if (run.status === 'running') {
         const add = document.createElement('button')
         add.className = 'run-action'
         add.type = 'button'
-        add.textContent = t('web.addAgent')
+        add.innerHTML = runActionIcon('add')
+        add.setAttribute('aria-label', t('web.addAgent'))
         add.title = t('web.addAgentTitle', { name: run.name })
         add.addEventListener('click', () => openAgentDialog(run.id))
         actions.appendChild(add)
@@ -1109,7 +1112,8 @@
         const stop = document.createElement('button')
         stop.className = 'run-stop'
         stop.type = 'button'
-        stop.textContent = t('web.stop')
+        stop.innerHTML = runActionIcon('stop')
+        stop.setAttribute('aria-label', t('web.stop'))
         stop.title = t('web.stopRunTitle', { name: run.name })
         stop.addEventListener('click', () => stopRun(run))
         actions.appendChild(stop)
@@ -1118,7 +1122,8 @@
         const del = document.createElement('button')
         del.className = 'run-delete'
         del.type = 'button'
-        del.textContent = t('common.delete')
+        del.innerHTML = runActionIcon('delete')
+        del.setAttribute('aria-label', t('common.delete'))
         del.title = t('web.deleteRunTitle', { name: run.name })
         del.addEventListener('click', () => deleteRun(run))
         actions.appendChild(del)
@@ -1566,6 +1571,18 @@
     pulseSeenAt.clear()
     if (pulseTimer) { globalThis.clearTimeout(pulseTimer); pulseTimer = null }
     renderSidebar()
+  }
+
+  // 16-unit glyphs for the run actions, drawn like the plan icon: `currentColor`, no library, `aria-hidden` because the
+  // button carries the label.
+  function runActionIcon(kind) {
+    const glyph = kind === 'add'
+      ? '<path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>'
+      : kind === 'stop'
+        ? '<rect x="4" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/>'
+        : '<path d="M3.5 5h9M6.5 5V3.5h3V5M5 5l.6 8h4.8L11 5" stroke="currentColor" stroke-width="1.4" '
+          + 'stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+    return `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">${glyph}</svg>`
   }
 
   function renderCard(run, agent) {

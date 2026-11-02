@@ -260,6 +260,50 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain('previous.latest_seq !== data.notifications.latest_seq')
   })
 
+  it('lays the head out as a 2×2 grid, with icon actions in the corner', () => {
+    // Row 1: name and counters. Row 2: the flow chip and its plan icon. The chip and the icon share that row — that is the
+    // whole point of the change, and a flat column put them on separate lines.
+    expect(css).toMatch(/\.run-head-body \{[^}]*display: grid/)
+    expect(css).toMatch(/\.run-head-body \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/)
+    expect(css).toMatch(/\.run-name \{[^}]*grid-row: 1/)
+    expect(css).toMatch(/\.run-meta \{[^}]*grid-row: 1/)
+    expect(css).toMatch(/\.run-flow \{[^}]*grid-row: 2/)
+    expect(css).toMatch(/\.flow-plan-btn \{[^}]*grid-row: 2/)
+
+    // Actions are 24×24 icons whose meaning lives in aria-label/title, not in a text node.
+    expect(css).toMatch(/\.run-action,\s*\.run-stop,\s*\.run-delete \{[^}]*width: 24px/)
+    expect(css).toMatch(/\.run-action,\s*\.run-stop,\s*\.run-delete \{[^}]*height: 24px/)
+    // Destructive action stays apart, focus stays visible.
+    expect(css).toMatch(/\.run-delete \{[^}]*margin-left: 4px/)
+    expect(css).toContain('.run-delete:focus-visible')
+    // Narrow cards drop the counters, never the chip.
+    expect(css).toMatch(/@media \(max-width: 520px\)[\s\S]*\.run-meta \{\s*display: none;/)
+  })
+
+  it('gives every action button an accessible name instead of a text node', () => {
+    expect(js).toContain("add.setAttribute('aria-label', t('web.addAgent'))")
+    expect(js).toContain("stop.setAttribute('aria-label', t('web.stop'))")
+    expect(js).toContain("del.setAttribute('aria-label', t('common.delete'))")
+    // The glyphs are drawn, not typed.
+    expect(js).toContain("add.innerHTML = runActionIcon('add')")
+    expect(js).toContain("stop.innerHTML = runActionIcon('stop')")
+    expect(js).toContain("del.innerHTML = runActionIcon('delete')")
+    // No `textContent` inside the run head any more: that is what used to make those buttons wide. (Other `del` buttons in
+    // the file — history rows, presets — keep their text; this is about the card's header.)
+    const head = js.slice(js.indexOf('head.className = \'run-head\''), js.indexOf("head.appendChild(headBody)"))
+    expect(head).not.toContain('.textContent = t(')
+  })
+
+  it('keeps the plan icon in the head body, with its id and run marker', () => {
+    const head = js.slice(js.indexOf("headBody.className = 'run-head-body'"), js.indexOf('head.appendChild(headBody)'))
+    expect(head).toContain("headBody.appendChild(flow)")
+    expect(head).toContain("headBody.appendChild(planBtn)")
+    expect(head).toContain("planBtn.id = 'plan-btn'")
+    expect(head).toContain('planBtn.dataset.planRun = run.id')
+    // The chip is still a span: the icon is the only control in that row.
+    expect(head).toContain("const flow = document.createElement('span')")
+  })
+
   it('opens the plan from its own icon, with the run id it belongs to', () => {
     expect(js).toContain('async function openPlanDialog(runId)')
     expect(js).toContain("el.planDialog.showModal()")

@@ -877,6 +877,10 @@ stopped".
 | `done` | none | `flow: closed` | `neutral` | no |
 | any | none | `flow: review (2/3)` — the round budget | `neutral` | no |
 
+The card's head is a 2×2 grid: name and counters on the first row, the chip and its plan icon on the second, and the run
+actions as 24×24 icon buttons in the top-right corner (their labels live in `aria-label`/`title`). Below 520 px the counters
+are dropped — they remain in the tooltip — so the chip and its icon stay on one line.
+
 The chip is a **label**, never a control: it reports the tone, the numbers and the pulse, and clicking it does nothing.
 Beside it, and only when the run has a plan, sits the plan button — a small icon (`#plan-btn`, `.flow-plan-btn`) with
 `aria-label` "Plan", `aria-haspopup="dialog"` and `aria-expanded`. It opens `#plan-dialog`, filled from
