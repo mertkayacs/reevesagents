@@ -268,9 +268,10 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain('core().planIconVisible')
     expect(js).toContain("planBtn.setAttribute('aria-haspopup', 'dialog')")
     expect(js).toContain('openPlanDialog(run.id)')
-    // Esc closes the dialog and hands focus back to the icon, found again by run id (the card may have been redrawn).
+    // Esc closes the dialog and the controller finds the icon again by run id (the card may have been redrawn); the
+    // behaviour itself is driven in `plan-dialog.test.ts`.
     expect(js).toContain("el.planDialog.addEventListener('close'")
-    expect(js).toContain('planButtonFor(runId)')
+    expect(js).toContain('planController.close()')
   })
 
   it('pulses only the card that has unread news, from the summary the server sends', () => {

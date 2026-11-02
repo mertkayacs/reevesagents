@@ -1,125 +1,131 @@
-// The plan left the log dialog for its own, opened by the flow badge. Three things have to hold, and none of them is a
-// browser question: the badge only opens when the run has a plan, the plan dialog exists on its own, and closing it hands
-// focus back. The first is arithmetic in `insights-core.js` (DOM-free); the other two are structure, checked against the
-// real client files.
+// The plan dialog's focus and ARIA rules, driven through the real controller against a small DOM.
+//
+// The case that matters (review of b6e6782): a run card is rebuilt on every SSE frame, so the button that opened the dialog is
+// detached by the time Esc arrives. These tests open the dialog, replace the card's button the way a re-render does, close it,
+// and check **which** element received focus — the new one, never the detached one. The negative control is the point: if the
+// controller remembered the element instead of looking it up, the detached button would get the focus call and the test fails.
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const coreSource = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/insights-core.js'), 'utf8')
-const appSource = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/app.js'), 'utf8')
-const html = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/index.html'), 'utf8')
-
-interface Core {
-  planIconVisible: (_flow: unknown) => boolean
-  planFocusTarget: (_doc: unknown, _runId: string | null) => { id: string, focus: () => void } | null
-  planExpanded: (_openRunId: string | null, _runId: string) => string
+interface Controller {
+  open: (_runId: string) => void
+  close: () => FakeEl | null
+  expandedOf: (_runId: string) => string
+  openRunId: string | null
 }
 
-function fakeDoc(buttons: Record<string, { id: string, focus: () => void } | undefined>) {
-  return {
-    querySelector: (selector: string) => {
-      // The three selectors the client asks for, mapped to whatever the fake DOM holds right now.
-      if (selector.startsWith('[data-plan-run=')) return buttons[`plan:${selector.slice(16, -2)}`]
-      if (selector.startsWith('[data-run-card=')) return buttons[`card:${selector.slice(16, -2)}`]
-      if (selector === '#logs-btn') return buttons['logs']
-      return null
-    },
+class FakeEl {
+  attributes: Record<string, string> = {}
+  focused = 0
+  kind: 'plan' | 'card' | 'logs' | 'other'
+  runId: string
+  constructor(kind: 'plan' | 'card' | 'logs' | 'other', runId = '') {
+    this.kind = kind
+    this.runId = runId
+  }
+  getAttribute(name: string): string | null { return this.attributes[name] ?? null }
+  setAttribute(name: string, value: string): void { this.attributes[name] = String(value) }
+  focus(): void { this.focused += 1 }
+}
+
+// Only the four lookups the controller makes: `[data-plan-run="…"]`, `[data-run-card="…"]`, `#logs-btn` and all plan buttons.
+class FakeDoc {
+  nodes: FakeEl[] = []
+  mount(node: FakeEl): FakeEl { this.nodes.push(node); return node }
+  unmount(node: FakeEl): void { this.nodes = this.nodes.filter(entry => entry !== node) }
+  querySelector(selector: string): FakeEl | null {
+    const plan = /^\[data-plan-run="(.*)"\]$/.exec(selector)
+    if (plan) return this.nodes.find(node => node.kind === 'plan' && node.runId === plan[1]) ?? null
+    const card = /^\[data-run-card="(.*)"\]$/.exec(selector)
+    if (card) return this.nodes.find(node => node.kind === 'card' && node.runId === card[1]) ?? null
+    if (selector === '#logs-btn') return this.nodes.find(node => node.kind === 'logs') ?? null
+    return null
+  }
+  querySelectorAll(selector: string): FakeEl[] {
+    return selector === '[data-plan-run]' ? this.nodes.filter(node => node.kind === 'plan') : []
   }
 }
 
-const element = (id: string) => ({ id, focus: () => {} })
-
-function loadCore(): Core {
-  const sandbox: { insightsCore?: Core } = {}
-  // The file is an IIFE that publishes itself on `window` (or `globalThis`); give it one and read it back.
-  new Function('window', `${coreSource}; return window.insightsCore`)(sandbox)
-  if (!sandbox.insightsCore) throw new Error('insights-core did not publish itself')
-  return sandbox.insightsCore
+function loadController(): (_doc: unknown) => Controller {
+  const source = readFileSync(join(process.cwd(), 'src/surfaces/webui/client/plan-controller.js'), 'utf8')
+  const sandbox: { planDialogController?: { createPlanDialogController: (_doc: unknown) => Controller } } = {}
+  new Function('window', `${source}; return window.planDialogController`)(sandbox)
+  if (!sandbox.planDialogController) throw new Error('plan-controller did not publish itself')
+  return sandbox.planDialogController.createPlanDialogController
 }
 
-describe('the flow badge opens the plan', () => {
-  it('draws the Plan icon only when the run has a plan', () => {
-    const { planIconVisible } = loadCore()
+const planButton = (doc: FakeDoc, runId: string): FakeEl => {
+  const button = doc.mount(new FakeEl('plan', runId))
+  button.setAttribute('data-plan-run', runId)
+  return button
+}
 
-    expect(planIconVisible({ label: 'flow: plan 1/2', plan: { done: 1, total: 2 }, run_id: 'run-1' })).toBe(true)
-    expect(planIconVisible({ label: 'flow: closed', plan: null, run_id: 'run-1' })).toBe(false)
-    expect(planIconVisible(null)).toBe(false)
+describe('closing the plan dialog puts focus back where the user was', () => {
+  it('focuses the button that exists now, not the one that was detached by a re-render', () => {
+    const create = loadController()
+    const doc = new FakeDoc()
+    const logs = doc.mount(new FakeEl('logs'))
+    const first = planButton(doc, 'run-1')
+    const controller = create(doc)
+
+    controller.open('run-1')
+    expect(first.getAttribute('aria-expanded')).toBe('true')
+
+    // An SSE frame rebuilds the card: the old button leaves the document, a new one arrives for the same run.
+    doc.unmount(first)
+    const second = planButton(doc, 'run-1')
+    second.setAttribute('aria-expanded', controller.expandedOf('run-1'))
+    expect(second.getAttribute('aria-expanded')).toBe('true')
+
+    const focused = controller.close()
+
+    expect(focused).toBe(second)
+    expect(second.focused).toBe(1)
+    // The detached button is not the one that got the focus call — the negative control for "remembered the element".
+    expect(first.focused).toBe(0)
+    expect(logs.focused).toBe(0)
+    // Closed: every card says so.
+    expect(second.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('leaves the badge alone and puts the control beside it', () => {
-    // The badge is a label: no button element, no click handler, no aria-haspopup on it.
-    const badge = appSource.slice(appSource.indexOf("const flow = document.createElement('span')"), appSource.indexOf('headBody.appendChild(flow)'))
-    expect(badge).not.toContain('addEventListener')
-    expect(badge).not.toContain('aria-haspopup')
-    expect(badge).not.toContain("createElement('button')")
+  it('falls back to the run card when the card\'s button is gone, and to Logs when the card is gone too', () => {
+    const create = loadController()
+    const doc = new FakeDoc()
+    const logs = doc.mount(new FakeEl('logs'))
+    const card = doc.mount(new FakeEl('card', 'run-1'))
+    const controller = create(doc)
 
-    // The icon is the control, and it carries the run it belongs to.
-    expect(appSource).toContain('core().planIconVisible')
-    expect(appSource).toContain("planBtn.id = 'plan-btn'")
-    expect(appSource).toContain("planBtn.setAttribute('aria-haspopup', 'dialog')")
-    expect(appSource).toContain("planBtn.setAttribute('aria-label', t('web.planOpenLabel'))")
-    expect(appSource).toContain('openPlanDialog(run.id)')
+    controller.open('run-1')
+    expect(controller.close()).toBe(card)
+    expect(card.focused).toBe(1)
+
+    doc.unmount(card)
+    controller.open('run-1')
+    expect(controller.close()).toBe(logs)
+    expect(logs.focused).toBe(1)
   })
 
-  it('finds the icon again after an SSE re-render, and never falls back to body', () => {
-    const { planFocusTarget } = loadCore()
-    const runId = 'run-1'
+  it('keeps aria-expanded true across a re-render while the dialog is open, and false for other runs', () => {
+    const create = loadController()
+    const doc = new FakeDoc()
+    const controller = create(doc)
+    const other = planButton(doc, 'run-2')
+    const first = planButton(doc, 'run-1')
 
-    // The card is rebuilt: the old element is detached, and the query finds the new one — that is the whole point of not
-    // holding a reference.
-    const rerendered = element('plan-btn-new')
-    expect(planFocusTarget(fakeDoc({ [`plan:${runId}`]: rerendered }), runId)).toBe(rerendered)
+    controller.open('run-1')
+    expect(first.getAttribute('aria-expanded')).toBe('true')
+    expect(other.getAttribute('aria-expanded')).toBe('false')
 
-    // The run's card disappeared with its icon: focus goes to the card, not to `body`.
-    const card = element('card-run-1')
-    expect(planFocusTarget(fakeDoc({ [`card:${runId}`]: card }), runId)).toBe(card)
+    doc.unmount(first)
+    const second = planButton(doc, 'run-1')
+    second.setAttribute('aria-expanded', controller.expandedOf('run-1'))
+    expect(second.getAttribute('aria-expanded')).toBe('true')
+    expect(other.getAttribute('aria-expanded')).toBe('false')
 
-    // Nothing of that run is on screen: the Logs button is the last resort.
-    const logs = element('logs-btn')
-    expect(planFocusTarget(fakeDoc({ logs }), runId)).toBe(logs)
-    // And with no run at all (defensive), also the Logs button.
-    expect(planFocusTarget(fakeDoc({ logs }), null)).toBe(logs)
-  })
-
-  it('reports aria-expanded for the run whose dialog is open, including after a re-render', () => {
-    const { planExpanded } = loadCore()
-
-    expect(planExpanded('run-1', 'run-1')).toBe('true')
-    expect(planExpanded('run-1', 'run-2')).toBe('false')
-    // The dialog is closed: every card says false, even the one that was open a moment ago.
-    expect(planExpanded(null, 'run-1')).toBe('false')
-  })
-
-  it('closes back to the icon, found again by run id', () => {
-    expect(appSource).toMatch(/el\.planDialog\.addEventListener\('close'/)
-    // The element is never remembered: an SSE re-render would detach it and the focus would land on `body`.
-    expect(appSource).not.toContain('let planOpener = null')
-    expect(appSource).toContain('let planOpenerRun = null')
-    expect(appSource).toContain('data-plan-run')
-    expect(appSource).toContain('planButtonFor(runId)')
-    // If the card is gone, the focus still has somewhere to go — the rule lives in `planFocusTarget`, and the card carries
-    // the id it needs.
-    expect(appSource).toContain("core().planFocusTarget(document, runId)")
-    expect(appSource).toContain('card.dataset.runCard = run.id')
-  })
-
-  it('keeps aria-expanded true while the dialog is open', () => {
-    expect(appSource).toContain('setPlanExpanded(runId, true)')
-    expect(appSource).toContain('setPlanExpanded(runId, false)')
-  })
-
-  it('keeps the plan out of the logs dialog', () => {
-    const insights = html.slice(html.indexOf('id="insights-dialog"'))
-    expect(insights).not.toContain('plan-panel')
-    expect(insights).not.toContain('plan-list')
-
-    const planDialog = html.slice(html.indexOf('id="plan-dialog"'), html.indexOf('id="insights-dialog"'))
-    expect(planDialog).toContain('id="plan-panel"')
-    expect(planDialog).toContain('id="plan-list"')
-    expect(planDialog).toContain('id="plan-waiting"')
-    expect(planDialog).toContain('id="plan-filter-waiting"')
-    expect(planDialog).toContain('id="plan-progress-text"')
+    controller.close()
+    expect(second.getAttribute('aria-expanded')).toBe('false')
+    expect(controller.openRunId).toBeNull()
   })
 })

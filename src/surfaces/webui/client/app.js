@@ -1081,7 +1081,7 @@
           planBtn.setAttribute('aria-label', t('web.planOpenLabel'))
           planBtn.setAttribute('aria-haspopup', 'dialog')
           // Recomputed on every render, so a card redrawn while the dialog is open still says "expanded".
-          planBtn.setAttribute('aria-expanded', core().planExpanded(el.planDialog.open ? insights.runId : null, run.id))
+          planBtn.setAttribute('aria-expanded', planController.expandedOf(run.id))
           planBtn.title = t('web.planOpenLabel')
           // The card is rebuilt on every SSE frame, so the element is not something to hold on to: the id is.
           planBtn.dataset.planRun = run.id
@@ -1276,25 +1276,15 @@
   // The plan dialog is opened by its own icon on the run card. The element is not remembered: `renderSidebar()` rebuilds
   // every card on each SSE frame, so a held reference would be detached from the document by the time Esc is pressed and
   // the focus would land on `body`. The run id survives a re-render; the button is looked up by it.
-  let planOpenerRun = null
-
-  function planButtonFor(runId) {
-    const target = core().planFocusTarget(document, runId)
-    // Only the icon counts as "the button"; the card and the Logs button are fallbacks for focus, not for aria.
-    return target && target.hasAttribute && target.hasAttribute('data-plan-run') ? target : null
-  }
-
-  function setPlanExpanded(runId, expanded) {
-    const button = planButtonFor(runId)
-    if (button) button.setAttribute('aria-expanded', String(expanded))
-  }
+  // The run id, the aria attribute and the focus target live in `plan-controller.js`: the card is rebuilt on every SSE frame,
+  // so a remembered element would be detached by the time the dialog closes.
+  const planController = window.planDialogController.createPlanDialogController(document)
 
   async function openPlanDialog(runId) {
     if (!runId) return
     // The id is the memory; the element is never kept.
-    planOpenerRun = runId
+    planController.open(runId)
     insights.runId = runId
-    setPlanExpanded(runId, true)
     const run = runs.find(entry => entry.id === runId)
     el.planDialogTitle.textContent = t('web.planTitle', { run: run ? run.name : runId })
     el.planDialog.showModal()
@@ -2594,11 +2584,7 @@
   // `body`. The button is looked up by run id at this moment, because the card may have been rebuilt by an SSE frame while
   // the dialog was open — and if the card is gone entirely, the focus still has to land somewhere sensible.
   el.planDialog.addEventListener('close', () => {
-    const runId = planOpenerRun
-    planOpenerRun = null
-    setPlanExpanded(runId, false)
-    const target = core().planFocusTarget(document, runId)
-    if (target) target.focus()
+    planController.close()
   })
   el.planFilterAll.addEventListener('click', () => setPlanFilter('all'))
   el.planFilterOpen.addEventListener('click', () => setPlanFilter('open'))
