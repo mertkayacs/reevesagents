@@ -18,6 +18,7 @@ import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/cor
 import { planTickView } from '../src/core/flow-plan.js'
 import { resumeFlow } from '../src/core/flow-control.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
+import { startFlow } from '../src/core/flow-start.js'
 
 const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []) => {
   if (file === 'git' && args.includes('rev-parse')) return 'bbb222\n'
@@ -1244,21 +1245,20 @@ describe('a spec queued by hand gets the same pointer (block 52)', () => {
 
 describe('a spec handed to flow start --spec names the file it was given (block 54)', () => {
   it('points at the operator file, not at a conventional path that may not exist', () => {
-    // `flow start --spec /tmp/…/my-brief.md`: the operator chose that file, and the pointer must name it. Falling back to
-    // `docs/briefs/S1.md` sends dev to a file that does not exist (block 54, MAJOR).
-    const state = createFlowState({
-      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
-    })
-    const source = join(root, 'my-brief.md')
-    const spec = {
-      id: 'S1', title: 'a brief the operator chose', goal: '', requirements: [], checks: [], report: [],
-      body: ['# S1', ...Array.from({ length: 20 }, (_, i) => `  line ${i + 1}`)].join('\n'),
-      unstructured: true, source_path: source,
-    }
-    saveFlow({
-      ...state, state: 'idle', specs: [spec], dispatched_specs: [],
-      claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
-    })
+    // The flow is started the way the CLI starts it — `startFlow` with `specs` — so `source_path` is whatever the engine records when it
+    // reads the file, not a value this test wrote into the state by hand (block 55, MINOR). Then one tick sends the pointer.
+    mkdirSync(join(root, 'briefs'), { recursive: true })
+    const brief = join(root, 'briefs', 'my-brief.md')
+    writeFileSync(brief, ['# MY BRIEF', '', '- [ ] do the thing', ''].join('\n'))
+
+    const started = startFlow(
+      { run_id: 'run-1', dev: 'dev-1', review: 'rev-1', specs: [brief] },
+      { head: 'a'.repeat(40) },
+    )
+    const queued = readFlow('run-1').specs[0]!
+    // The path the engine recorded is the file the operator pointed at, and it is absolute on disk.
+    expect(queued.source_path).toBe(brief)
+    expect(started.state.state).toBe('idle')
 
     const sent: string[] = []
     stepFlow('run-1', {
@@ -1269,9 +1269,10 @@ describe('a spec handed to flow start --spec names the file it was given (block 
 
     expect(sent).toHaveLength(1)
     const message = sent[0]!
-    // The operator's file, named — and not the conventional path.
-    expect(message).toContain('my-brief.md')
-    expect(message).not.toContain('docs/briefs/S1.md')
+    // The operator's file, named the way the message names paths — relative to the repository it lives in — and never the guess.
+    expect(message).toContain('briefs/my-brief.md')
+    expect(message).not.toContain('docs/briefs/')
+    expect(message).not.toContain(root)
     expect(message.length).toBeLessThanOrEqual(400)
   })
 
