@@ -193,6 +193,24 @@ export interface RenderOptions {
 
 // Deterministic prompt for the dev. The spec's own text is passed through verbatim (it may be
 // written in any language); only the scaffolding is fixed.
+// The pointer the dev receives. A panel is a terminal, not a document: pasting fifteen to thirty lines of brief pushed the input
+// line out of the detector's window, the Enter was never confirmed, and every one of three live runs ended in `unconfirmed` plus an
+// escalation — while a two-line "read the file and do it" went through on the first Enter and produced the work (block 47). The brief
+// stays in the repository, where both the dev and the reviewer read it.
+export const DISPATCH_POINTER_MAX = 400
+
+export function renderPointerPrompt(input: { id: string, title: string, path: string | null }): string {
+  const title = input.title.trim() === '' ? '' : ` — "${input.title.trim()}"`
+  const where = input.path
+    ? `Read ${input.path} in this repository and carry it out in full`
+    : `Carry out the specification of item ${input.id} in full`
+  return [
+    `Item ${input.id}${title}.`,
+    `${where}: one commit, do not push.`,
+    'Report the commit hash and the state of the working tree.',
+  ].join(' ')
+}
+
 export function renderDispatchPrompt(spec: BlockSpec, options: RenderOptions = {}): string {
   const lines: string[] = []
   const prefix = options.flowName ? `Flow "${options.flowName}" — ` : ''

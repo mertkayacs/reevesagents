@@ -465,6 +465,17 @@ recorded in the plan's conflicts), the refused item goes back to the queue inste
 with the next item. It does not escalate: a historical inconsistency can never be repaired, so an escalation would make every
 resumed run escalate again for ever.
 
+**The panel receives a pointer, not the brief (block 47).** A brief of fifteen to thirty lines pasted into a terminal pushes the input
+line out of the detector's window, the Enter is never confirmed, and the round ends in `dispatch_unconfirmed` and an escalation —
+measured on three live runs, while a two-line "read `docs/briefs/<id>.md` and carry it out" went through on the first Enter and
+produced the work. What is dispatched is therefore a pointer (`renderPointerPrompt`, ≤ `DISPATCH_POINTER_MAX` = 400 characters) that
+names the brief file; the body stays in the repository, where the dev and the reviewer read it. A spec with no file falls back to the
+rendered block, which is short by construction.
+
+**An answer that arrives after an unconfirmed send is still the answer (block 47).** `claim.verdict_applied` says the answer was used;
+an item still open for that answer proves it was not, and the settle closes it instead of the flow escalating. A dispatch starts its
+round with no verdict, so the answer that closed the previous item cannot be read as belonging to the new one.
+
 **A long paste must not hide the composer (block 44).** The input line is found structurally — the marked block above the status
 line, whatever its length — and the idle probe falls back to the whole screen when the tail shows neither a busy hint nor a
 composer. A composer holding exactly our text gets one more Enter, and if that fails once, `Escape` then `Enter`, the way an

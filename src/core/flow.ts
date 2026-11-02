@@ -19,7 +19,7 @@
 import { randomUUID } from 'node:crypto'
 import type { PaneBusyState } from './activity.js'
 import type { BlockSpec } from './spec.js'
-import { renderDispatchPrompt } from './spec.js'
+import { DISPATCH_POINTER_MAX, renderDispatchPrompt, renderPointerPrompt } from './spec.js'
 import { isCommitId } from './flow-notes.js'
 import type { FlowVerdict } from './verdict.js'
 import type { PlanItemTick, PlanTickView } from './flow-plan.js'
@@ -820,6 +820,15 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
   }
 }
 
+// What the dev's panel receives: a pointer to the brief when the item has one, the full specification otherwise. `DISPATCH_POINTER_MAX`
+// is the ceiling — a longer paste is what broke the composer detection on three live runs (block 47).
+function messageForDispatch(spec: BlockSpec, observations: FlowObservations): string {
+  const item = observations.plan?.items.find(entry => entry.id === spec.id)
+  if (!item || !item.spec_path) return renderDispatchPrompt(spec)
+  const pointer = renderPointerPrompt({ id: spec.id, title: spec.title, path: item.spec_path })
+  return pointer.length <= DISPATCH_POINTER_MAX ? pointer : renderDispatchPrompt(spec)
+}
+
 function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObservations): FlowDecision {
   const fromPlan = observations.plan?.items.some(item => item.id === spec.id) === true
   return {
@@ -832,8 +841,11 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_review_started_at: null,
     next_claim: {
       ...state.claim,
-      verdict: observations.verdict,
+      // A new round has no answer yet: the verdict that dispatched this item was spent closing the previous one. Carrying it forward made
+      // "the marker says applied" indistinguishable from "this item still owes its close" (block 47).
+      verdict: null,
       verdict_count: observations.verdict_count,
+      verdict_applied: false,
       // The round belongs to this item: the close reads it back, so a later tick cannot close "whatever is active now".
       spec_id: fromPlan ? spec.id : null,
     },
@@ -849,7 +861,7 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_claim_verdict_applied: true,
     next_unsubstantiated_attempts: 0,
     next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
-    message: renderDispatchPrompt(spec),
+    message: messageForDispatch(spec, observations),
   }
 }
 
@@ -1251,7 +1263,15 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
   // recorded and never applied. Deriving it from this tick's observation cannot work — once the answer is collected, the
   // next observation no longer contains it (the review is not waiting any more), so the close was looked for in a place
   // that had already forgotten it (block 25).
-  if (verdict === null || state.claim.verdict_applied) return null
+  if (verdict === null) return null
+  // The marker says the answer was used; an item still open for *that* answer is proof it was not. This is how `landing-ten` sat with
+  // `verdict: ACCEPT`, `verdict_applied: true` and `P2.3b` in flight — an unconfirmed send whose answer arrived anyway, and nothing
+  // applied it (block 47).
+  const boundItem = state.claim.spec_id
+  const owesClose = boundItem !== null
+    && observations.plan !== undefined
+    && observations.plan.items.some(item => item.id === boundItem && item.status !== 'done' && item.status !== 'skipped')
+  if (state.claim.verdict_applied && !owesClose) return null
   // An ACCEPT that is still owed a close outranks the marker: the marker says "this verdict was applied", and a plan item
   // that is still open is proof it was not. The live run showed how that happens — a review timed out, the same item was
   // dispatched again, the reviewer answered afterwards, and the marker left the item `in_work` for ever while the flow

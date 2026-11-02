@@ -1173,6 +1173,71 @@ describe('the settle closes the item the claim names (block 46)', () => {
   })
 })
 
+describe('a pointer, not the brief, goes to the dev (block 47)', () => {
+  it('sends a short pointer with the brief path, not the brief body', () => {
+    // A markdown brief: its body is the long part, which is exactly what used to be pasted into the panel.
+    const body = ['# P1.1 — first', ...Array.from({ length: 30 }, (_, i) => `  line ${i + 1} of the brief body`)].join('\n')
+    const doc = '- [ ] **P1.1** — first'
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: body, format: 'markdown', spec_path: 'docs/briefs/P1.1.md', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
+
+    const sent: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'a'.repeat(40), tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    const message = sent[0]!
+    // Short enough to survive a composer, and it names the file rather than pasting it.
+    expect(message.length).toBeLessThanOrEqual(400)
+    expect(message).toContain('docs/briefs/P1.1.md')
+    expect(message).not.toContain('line 30 of the brief body')
+  })
+})
+
+describe('an answer that arrives after an unconfirmed send is still applied (block 47)', () => {
+  it('closes the item whose verdict is recorded, even though the marker says applied', () => {
+    // `landing-ten`: `claim.head = 5badf48`, `verdict: ACCEPT`, `verdict_applied: true`, `P2.3b` still in flight, flow escalated —
+    // the send was unconfirmed, the reviewer answered anyway, and nothing applied the answer.
+    const doc = '- [ ] **P1.1** — first'
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 't', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) })
+
+    const head = 'h'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle', rounds: 0, active_plan_item: 'P1.1',
+      claim: { head, verdict: 'ACCEPT', verdict_count: 1, verdict_applied: true, spec_id: 'P1.1' },
+    })
+
+    stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).toBe('done')
+    expect(readFlow('run-1').state).not.toBe('escalated')
+  })
+
+})
+
 describe('legacy state without verdict_applied (MAJOR 3)', () => {
   function legacy(extra: { handled?: string | null }): void {
     const state = createFlowState({
