@@ -205,7 +205,12 @@ function createSseHub(): SseHub {
     }
     // The journal summary rides along with the state frame: a badge that needs a second request would be a badge
     // that lags the screen it belongs to.
-    return JSON.stringify({ ...buildWebState(), notifications: withPulse(notificationSummary()) })
+    // `agent_pulse_ms` travels into the state build, not only into the journal summary: the plan badge pulses on the same
+    // clock, and a call without it made every card fall back to fifteen minutes (block 27, MINOR).
+    return JSON.stringify({
+      ...buildWebState({ agent_pulse_ms: loadConfig().global.agent_pulse_ms }),
+      notifications: withPulse(notificationSummary()),
+    })
   }
   const write = (res: ServerResponse, payload: string): void => {
     try { res.write(`data: ${payload}\n\n`) } catch { /* client gone; close handler will drop it */ }
@@ -514,7 +519,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     sweepOrphanSessionsThrottled()
     autoCleanupRuns()
     sendJson(res, 200, {
-      ...buildWebState(),
+      ...buildWebState({ agent_pulse_ms: loadConfig().global.agent_pulse_ms }),
       providers: listWebProviders(),
       language: webLanguagePayload(),
       web_theme: loadConfig().global.web_theme,

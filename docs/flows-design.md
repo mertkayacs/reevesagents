@@ -313,8 +313,10 @@ Two fields carry the notification key and **ship in this build** (blocks 14 and 
   flow's first escalation;
 - `claim.verdict_applied` — has this claim's verdict been carried out? Written in the same state transition as the
   dispatch or the close it caused, so "the answer is known" and "the answer was used" are two facts on disk rather than
-  one inference. A file written before the field existed reads as `true` when it carries a verdict (the old code applied
-  eagerly), and a verdict of `null` is unaffected either way. The tick decides from this field, never from the current
+  one inference. A file written before the field existed is **migrated on read**: when `verdict_handled_for` already names the current
+  head, the answer was applied by the older code and reads as `true`; without that trace it reads as `false` and is applied
+  once. (The earlier text here claimed the opposite for every legacy file, which is how an old ACCEPT ended up closing a
+  *new* item — repaired by hand on 02.11.) The tick decides from this field, never from the current
   observation: once an answer is collected, the next observation no longer contains it — that inference is what left a
   completed item open while every tick answered `plan_incomplete` (block 25);
 - `notify_episode` — a per-flow counter incremented on every transition into `escalated`, so a second escalation
@@ -451,7 +453,10 @@ consumes a verdict and cleared when the HEAD moves. Without it an ACCEPT collect
 re-applied on the following tick and would close the item the tick before had just dispatched.
 
 **Claims settle by observation (block 23, D7).** A claim is not a lock on the world: when the round's notes file answers,
-or the pane's verdict counter grows, the claim is *stale*, not pending — the tick settles it with the decision it would have
+or the pane's verdict counter grows, the claim is *stale*, not pending — and the answer is read for the claim's own
+`(head, round)` regardless of the state the file is in, because a review claim is written while the flow is still `idle`
+or `fixing`. Settling does not re-run the tick from the pre-dispatch state (that could produce a second request); it applies
+the round that was already asked for — the tick settles it with the decision it would have
 taken anyway (`settled_by_observation`), and only a claim nothing observes waits for `PENDING_TTL_SEC`. The decision is
 "changes the state on disk", not `kind: 'none'`, because `flow_done` is also a `none`.
 

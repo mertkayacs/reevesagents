@@ -532,10 +532,14 @@ export function parseFlowState(raw: unknown): FlowState {
       head: text(claim.head),
       verdict,
       verdict_count: count(claim.verdict_count),
-      // Backward compatible and safe: a file written before this field existed reads as "not applied", which is exactly
-      // the state those files are in when their verdict still owes a consequence. Re-firing it is harmless because a close
-      // needs an open item — a flow whose item is already closed has no `active_plan_item` and stops here.
-      verdict_applied: typeof claim.verdict_applied === 'boolean' ? claim.verdict_applied : false,
+      // Migration, not a guess: a file written before this field existed has no way to say "applied", but
+      // `verdict_handled_for` (written by the versions that came before) already records the commit whose answer was
+      // used. Reading that as `true` is what keeps a legacy file from applying an old ACCEPT to a *new* item — the
+      // failure that had to be repaired by hand on 02.11 (block 27, MAJOR 3). Without that trace the field stays `false`
+      // and the verdict is applied once.
+      verdict_applied: typeof claim.verdict_applied === 'boolean'
+        ? claim.verdict_applied
+        : typeof record.verdict_handled_for === 'string' && record.verdict_handled_for === text(claim.head),
     },
     specs: Array.isArray(record.specs) ? record.specs.map(normalizeSpec).filter((spec): spec is BlockSpec => spec !== null) : [],
     dispatched_specs: Array.isArray(record.dispatched_specs)
@@ -1027,8 +1031,19 @@ function settleByObservation(state: FlowState, observations: FlowObservations): 
   if (!fromFile && !fromPane) return null
   // Re-run the engine with the claim out of the way; anything it refuses to decide means the observation does not
   // actually answer this claim, and the claim keeps its rights.
-  const withoutClaim: FlowState = { ...state, pending: null }
+  // Settle it as the round it was, not as a new tick: the claim says which state the flow was in when the request went
+  // out, and re-deciding from "no claim, still idle" is how a second `request_review` was created and sent instead of the
+  // answer being used (block 27, MAJOR 2).
+  const withoutClaim: FlowState = {
+    ...state,
+    pending: null,
+    state: 'reviewing',
+    review_started_at: state.review_started_at ?? pending.at,
+  }
   const decision = flowTick(withoutClaim, observations)
+  // A review request can never be the settlement of a review request: if the engine wants to ask again, this claim is
+  // not answered by anything observable and keeps its rights (and its TTL).
+  if (decision.kind === 'request_review') return null
   // "Did not decide" is "changes nothing on disk" — not `kind: 'none'`, which is also how a legitimate `flow_done` is
   // expressed.
   if (!decisionChangesState(withoutClaim, decision)) return null

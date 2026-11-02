@@ -276,10 +276,13 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
     ? observedHead.trim()
     : isCommitId(state.claim.head) ? state.claim.head : ''
   const staging = requestHead ? stagingPath(state.run_id, requestHead, round, options.root) : undefined
-  // Only the *reading* of an answer is limited to `reviewing`: the path is needed on every tick that
-  // might request a review, idle and fixing included.
-  if (state.state !== 'reviewing') return { source: 'pane', staging_path: staging }
-  const head = state.claim.head
+  // Reading an answer is not limited to `reviewing`: a review claim is written while the flow is still `idle` or
+  // `fixing` (the state advances only when the send settles), so a claim left behind by a dead sender would never read
+  // the file the reviewer has already written. The question is "is a review outstanding?", and a `request_review` claim
+  // answers it whatever the state says (block 27, MAJOR 1).
+  const pendingReview = state.pending?.kind === 'request_review' ? state.pending : null
+  if (state.state !== 'reviewing' && !pendingReview) return { source: 'pane', staging_path: staging }
+  const head = pendingReview?.head && isCommitId(pendingReview.head) ? pendingReview.head : state.claim.head
   if (!isCommitId(head)) return { source: 'pane', staging_path: staging }
   // Staging first — it is what the reviewer wrote — then the **durable** record of the same round: once a
   // valid staging file has been published its copy is gone, and every later tick of this round (the ones

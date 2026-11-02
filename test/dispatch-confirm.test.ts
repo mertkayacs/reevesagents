@@ -591,6 +591,85 @@ describe('a verdict recorded but not applied is answered from the state (D11)', 
   })
 })
 
+describe('a claim written before the state advanced is still settled (MAJOR 1/2)', () => {
+  it('reads the notes file of an outstanding review claim from idle', () => {
+    // The claim is written while the flow is still `idle`; the sender dies; the reviewer answers anyway. Nothing read that
+    // file, because notes were read only in `reviewing`, so the claim sat until its TTL and then escalated a finished round.
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', HEAD, 1, root), 'VERDICT: ACCEPT\n')
+
+    const sent: string[] = []
+    const result = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    expect(result.decision.reason).toBe('flow_done')
+    expect(sent).toHaveLength(0)
+    const after = readFlow('run-1')
+    expect(after.pending).toBeNull()
+    expect(after.state).toBe('done')
+    expect(after.log.some(entry => entry.event === 'settled_by_observation')).toBe(true)
+  })
+
+  it('applies a pane answer once and never asks for the same review again', () => {
+    // MAJOR 2: settling used to re-run the tick from the pre-dispatch state, which could produce *another*
+    // `request_review` — a second paste — instead of consuming the answer that is already on screen.
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false },
+      pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
+    })
+    const sent: string[] = []
+
+    const result = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }, 'MAJOR src/a.ts:1 — x\nVERDICT: CHANGES_REQUESTED'),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // One fix dispatch (the answer applied), zero review requests.
+    expect(result.decision.kind).toBe('dispatch_fix')
+    expect(sent).toHaveLength(1)
+    expect(readFlow('run-1').pending).toBeNull()
+  })
+})
+
+describe('legacy state without verdict_applied (MAJOR 3)', () => {
+  function legacy(extra: { handled?: string | null }): void {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', active_plan_item: 'P1.1', claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 2, verdict_applied: false } })
+    const file = join(root, 'flows', 'run-1.json')
+    const raw = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown> & { claim: Record<string, unknown> }
+    delete raw.claim.verdict_applied
+    raw.verdict_handled_for = extra.handled === undefined ? HEAD : extra.handled
+    raw.verdict_handled_item = 'P1.1'
+    writeFileSync(file, JSON.stringify(raw))
+  }
+
+  it('reads a legacy file whose answer was already applied as applied', () => {
+    legacy({ handled: HEAD })
+    expect(readFlow('run-1').claim.verdict_applied).toBe(true)
+  })
+
+  it('applies a legacy verdict that has no trace of being used — once', () => {
+    legacy({ handled: null })
+    expect(readFlow('run-1').claim.verdict_applied).toBe(false)
+  })
+})
+
 describe('a commit that only touches the plan is not the dev\'s work (D6)', () => {
   it('moves the baseline instead of asking for a review', () => {
     // Seen on the sandbox: the plan and a brief were committed after `flow start`, the flow asked for a review of that
