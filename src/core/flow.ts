@@ -904,6 +904,7 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
   const already = observations.plan.items.find(item =>
     item.id !== id && item.head === head && (item.status === 'done' || item.status === 'skipped'))
   if (!already) return null
+  const refusedItem = observations.plan.items.find(item => item.id === id)
   const detail = `${head.slice(0, 7)} already closed ${already.id}; it cannot close ${id} as well`
   // A conflict that is already recorded is history, not news: closing more items on that head is refused, the line is written once,
   // and the flow carries on with the first open item. Escalating every tick made a resumed run unresumable — `done` is terminal,
@@ -923,6 +924,11 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
     next_review_started_at: state.review_started_at,
     next_claim: { ...state.claim, verdict_applied: true },
     next_active_plan_item: null,
+    // The item was dispatched but must not be closed by this commit: it goes back to the queue, not to `in_work`. Left in flight it
+    // kept the picker convinced that one task was running, so a resumed run never started the next item (block 46, MAJOR 2).
+    ...(refusedItem && (refusedItem.status === 'in_work' || refusedItem.status === 'reviewing')
+      ? { next_plan_status: { id, status: 'queued' as const } }
+      : {}),
     log_detail: detail,
   }
   if (recorded) return { ...refusal, log_detail: undefined }
@@ -1125,10 +1131,11 @@ function settleFromNotes(state: FlowState, observations: FlowObservations): Flow
   // and its own notes handling. This branch exists for the two cases that path cannot serve: the head moved on without the
   // claim, or the flow left `reviewing` before the answer arrived.
   if (state.state === 'reviewing' && state.claim.head === head && state.pending === null) return null
-  // Which plan item the answer closes. `active_plan_item` is the bookkeeping for it and can be missing — the live run had it
-  // cleared while its item was still open — so the item is found from the plan: the first open one that has a brief, which is
-  // the one that was dispatched and reviewed.
-  const planItem = state.active_plan_item
+  // Which plan item the answer closes: the one the claim recorded when its brief was dispatched. `active_plan_item` and "the first
+  // open item with a brief" are fallbacks for states written before the claim carried the binding — using them first closed the
+  // wrong row whenever the two disagreed (block 46, MAJOR 1).
+  const planItem = state.claim.spec_id
+    ?? state.active_plan_item
     ?? observations.plan?.items.find(item => item.status !== 'done' && item.status !== 'skipped' && item.spec !== null)?.id
     ?? null
   // This round was already refused once for a double close; the record in the plan is the memory of that, and re-deciding it every

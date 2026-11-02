@@ -1076,11 +1076,99 @@ describe('a historical double close does not block the run (block 45, defect 3)'
     expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
     expect(readPlan('run-1').items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
 
+    // The refused item went back to the queue rather than staying "in flight" — that is what kept a resumed run from starting the
+    // next item at all.
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.2')!.status).toBe('queued')
+
     // A second tick refuses again but says nothing more, and the flow is free to move.
     stepFlow('run-1', {
       now: NOW + 5_000, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
       evidence_policy: { min_seconds: 0, retries: 1 },
     })
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
+  })
+})
+
+describe('the settle closes the item the claim names (block 46)', () => {
+  it('prefers claim.spec_id when it disagrees with active_plan_item', () => {
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2']) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) })
+
+    const head = 'f'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    // The claim says P1.1; the field says P1.2. The claim wins — it is the item whose brief was dispatched.
+    saveFlow({
+      ...state, state: 'idle', rounds: 0, active_plan_item: 'P1.2',
+      claim: { head, verdict: 'ACCEPT', verdict_count: 1, verdict_applied: false, spec_id: 'P1.1' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes'), { recursive: true })
+    writeFileSync(join(root, 'flows', 'run-1', 'notes', `${head}-r1.md`), 'VERDICT: ACCEPT\n')
+
+    stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    const items = readPlan('run-1').items
+    expect(items.find(item => item.id === 'P1.1')!.status).toBe('done')
+    expect(items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
+  })
+
+  it('starts the next item after a resume that follows a refused double close', () => {
+    // `landing-ten`: the refusal left the item `in_work`, so after `flow resume` the picker believed a task was running and did
+    // nothing at all.
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second', '- [ ] **P1.3** — third'].join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2', 'P1.3']) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    const head = 'g'.repeat(40)
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan({
+      ...plan,
+      items: plan.items.map(item => (item.id === 'P1.1'
+        ? { ...item, status: 'done' as const, head }
+        : { ...item, status: 'in_work' as const })),
+      conflicts: [{ at: AT, item_id: 'P1.2', kind: 'plan_item_double_close' as const, detail: 'historical' }],
+    })
+
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle', rounds: 0, active_plan_item: 'P1.2',
+      claim: { head, verdict: 'ACCEPT', verdict_count: 1, verdict_applied: false, spec_id: 'P1.2' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes'), { recursive: true })
+    writeFileSync(join(root, 'flows', 'run-1', 'notes', `${head}-r1.md`), 'VERDICT: ACCEPT\n')
+
+    stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // Not stuck: the refused item is back in the queue (not "in flight" for ever), the conflict is reported once, and the plan has
+    // moved to the next item.
+    const items = readPlan('run-1').items
+    expect(items.find(item => item.id === 'P1.2')!.status).toBe('queued')
+    expect(items.find(item => item.id === 'P1.3')!.status).not.toBe('queued')
     expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
   })
 })

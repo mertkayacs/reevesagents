@@ -460,7 +460,10 @@ re-applied on the following tick and would close the item the tick before had ju
 **An item is closed by its own round (block 44).** The claim records the item whose brief was dispatched (`spec_id`), and the
 close reads it back — never "whichever item is active now": the live run closed P2.2 with P2.1's commit, the header went into the
 next commit, and P2.3 ("About") was closed with work nobody did. One commit closes one item: a second close on a head that already
-closed something is `plan_item_double_close`, journalled and escalated, not a silent skip of the next row.
+closed something is refused — the item is not closed by somebody else's commit, `plan_item_double_close` is journalled once (and
+recorded in the plan's conflicts), the refused item goes back to the queue instead of staying "in flight", and the flow carries on
+with the next item. It does not escalate: a historical inconsistency can never be repaired, so an escalation would make every
+resumed run escalate again for ever.
 
 **A long paste must not hide the composer (block 44).** The input line is found structurally — the marked block above the status
 line, whatever its length — and the idle probe falls back to the whole screen when the tail shows neither a busy hint nor a
