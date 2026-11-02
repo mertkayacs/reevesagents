@@ -548,9 +548,28 @@ describe('a verdict recorded but not applied is answered from the state (D11)', 
     const raw = JSON.parse(readFileSync(join(root, 'flows', 'run-1.json'), 'utf-8')) as { claim: Record<string, unknown> }
     delete raw.claim.verdict_applied
     writeFileSync(join(root, 'flows', 'run-1.json'), JSON.stringify(raw))
-    // A file without the field reads as "applied": the old code applied verdicts eagerly, and re-firing them would be worse
-    // than a missed close that the operator can see.
+    // A file without the field reads as "not applied": that is the state those files are in when their verdict still owes
+    // a consequence, and a close needs an open item, so re-firing cannot close something twice.
+    expect(readFlow('run-1').claim.verdict_applied).toBe(false)
+
+    // And the restart carries it out — once.
+    const sent: string[] = []
+    const first = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(first.decision.kind).toBe('dispatch_fix')
+    expect(sent).toHaveLength(1)
     expect(readFlow('run-1').claim.verdict_applied).toBe(true)
+
+    const second = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(second.decision.kind).not.toBe('dispatch_fix')
+    expect(sent).toHaveLength(1)
   })
 
   it('reads an old state without the field and keeps working', () => {

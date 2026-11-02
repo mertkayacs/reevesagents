@@ -532,9 +532,10 @@ export function parseFlowState(raw: unknown): FlowState {
       head: text(claim.head),
       verdict,
       verdict_count: count(claim.verdict_count),
-      // Backward compatible: a file written before this field existed has a verdict that was applied by the old code
-      // path (or none at all), so it reads as applied and never re-fires.
-      verdict_applied: typeof claim.verdict_applied === 'boolean' ? claim.verdict_applied : verdict !== null,
+      // Backward compatible and safe: a file written before this field existed reads as "not applied", which is exactly
+      // the state those files are in when their verdict still owes a consequence. Re-firing it is harmless because a close
+      // needs an open item — a flow whose item is already closed has no `active_plan_item` and stops here.
+      verdict_applied: typeof claim.verdict_applied === 'boolean' ? claim.verdict_applied : false,
     },
     specs: Array.isArray(record.specs) ? record.specs.map(normalizeSpec).filter((spec): spec is BlockSpec => spec !== null) : [],
     dispatched_specs: Array.isArray(record.dispatched_specs)
@@ -1071,6 +1072,8 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
     // Without a plan an ACCEPT is the legacy close, and `tickReviewing` has already done it: a flow that is idle with an
     // ACCEPT and no plan is simply done with its work. With a plan the item is still open and must be closed.
     if (!observations.plan) return null
+    // Nothing to close means the answer was already used: an item that was closed leaves no active one behind.
+    if (state.active_plan_item === null) return null
     const accepted = planAcceptDecision(state, observations, observations.plan)
     return {
       ...accepted,

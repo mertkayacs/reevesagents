@@ -122,7 +122,7 @@ enumerating statuses. `owner_action` is derived on write, never accepted from a 
 | `pending` | in the plan, not queued (no brief yet or not reached) | import; `plan set` (triage, or un-setting `needs_brief`) |
 | `needs_brief` | has no brief; the engine will not guess | `plan next` when the first eligible item has no snapshot spec; `plan set` |
 | `queued` | brief attached, dispatch expected | `plan attach`, `plan next`, the engine re-queuing after a refused dispatch |
-| `in_work` | a dispatch for it is in flight or the dev is fixing | **engine only** (claim of a dispatch, fix decisions) |
+| `in_work` | a dispatch for it is in flight or the dev is fixing | **engine only** (claim of a dispatch, fix decisions, and the close of an accepted round that arrived before the item was marked `reviewing`) |
 | `reviewing` | a review of its head is running | **engine only** (`request_review`) |
 | `done` | ACCEPT of the closing commit, or a human said so | engine **only** on a substantiated ACCEPT (`closeItemOnAccept`); `plan set --status done --yes [--note <why>]` |
 | `blocked_owner` | the dev or the reviewer reported a decision only the owner can take | the engine, from an escalation carrying `owner_decision`; `plan set` |
@@ -147,7 +147,7 @@ human command may do (`HUMAN_TRANSITIONS`). The engine table:
 | `pending` | `needs_brief`, `queued`, `skipped`, `blocked_owner`, `done` (a manual close for work finished before the flow existed) |
 | `needs_brief` | `pending`, `queued`, `skipped`, `blocked_owner`, `done` |
 | `queued` | `pending`, `needs_brief`, `in_work`, `done`, `skipped`, `blocked_owner` |
-| `in_work` | `queued`, `reviewing`, `blocked_owner` |
+| `in_work` | `queued`, `reviewing`, `done`, `blocked_owner` |
 | `reviewing` | `in_work`, `queued`, `done`, `blocked_owner` |
 | `blocked_owner` | `pending`, `needs_brief`, `queued`, `skipped`, `done` |
 | `done`, `skipped` | — terminal |

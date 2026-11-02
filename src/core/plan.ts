@@ -78,7 +78,10 @@ export const PLAN_TRANSITIONS: Record<PlanStatus, readonly PlanStatus[]> = {
   pending: ['needs_brief', 'queued', 'skipped', 'blocked_owner', 'done'],
   needs_brief: ['pending', 'queued', 'skipped', 'blocked_owner', 'done'],
   queued: ['pending', 'needs_brief', 'in_work', 'done', 'skipped', 'blocked_owner'],
-  in_work: ['queued', 'reviewing', 'blocked_owner'],
+  // `done` straight from `in_work`: an ACCEPT can arrive before the tick that would mark the item `reviewing` (a resumed
+  // flow, a review answered in the same write). Refusing that close left a finished item open while the flow had already
+  // cleared its active item — the sandbox showed it as `P1.1.1: in_work` with the work committed and accepted.
+  in_work: ['queued', 'reviewing', 'done', 'blocked_owner'],
   reviewing: ['in_work', 'queued', 'done', 'blocked_owner'],
   blocked_owner: ['pending', 'needs_brief', 'queued', 'skipped', 'done'],
   done: [],
