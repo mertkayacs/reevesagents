@@ -14,7 +14,7 @@ import type { FlowObservations, FlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { notesRef, stagingPath } from '../src/core/flow-notes.js'
 import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
-import { attachSpec, createPlan, planPath, savePlan } from '../src/core/plan.js'
+import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
 const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []) => {
@@ -368,6 +368,105 @@ describe('a valid notes file is evidence by itself (D8)', () => {
     })
     expect(result.decision.reason).toBe('flow_done')
     expect(result.decision.reason).not.toBe('review_unsubstantiated')
+  })
+})
+
+describe('an ACCEPT collected in idle closes the item (D10)', () => {
+  function planWith(ids: string[], briefed: string[]) {
+    const doc = ids.map(id => `- [ ] **${id}** — ${id}`).join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of briefed) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    return plan
+  }
+
+  function idleAccepting(active: string, handledFor: string | null = null): void {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'idle', active_plan_item: active, verdict_handled_for: handledFor,
+      claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5 },
+    })
+  }
+
+  it('closes the item, reports 1/2 and names the next one as waiting for a brief', () => {
+    planWith(['P1.1', 'P1.2'], ['P1.1'])
+    // The marker is already set: the review timed out, the item was re-dispatched, the reviewer answered afterwards. A
+    // plan item that is still open proves the ACCEPT was not applied, so it is applied now.
+    idleAccepting('P1.1', HEAD)
+    const sent: string[] = []
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(result.decision.reason).toBe('plan_incomplete')
+    const plan = readPlan('run-1')
+    expect(plan.items.find(item => item.id === 'P1.1')!.status).toBe('done')
+    expect(plan.items.filter(item => item.status === 'done')).toHaveLength(1)
+    expect(sent).toHaveLength(0)
+    // The journal names the close through the decision detail; the item itself is `done` in the mirror.
+    expect(readFlow('run-1').log.at(-1)?.detail).toContain('needs a brief for P1.2')
+    expect(plan.items.find(item => item.id === 'P1.1')!.head).toBe(HEAD)
+  })
+
+  it('changes nothing on the tick after it', () => {
+    planWith(['P1.1', 'P1.2'], ['P1.1'])
+    idleAccepting('P1.1')
+    const first = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(first.decision.reason).toBe('plan_incomplete')
+
+    const second = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    // Nothing moves on the tick after: the item stays closed, nothing is dispatched, the plan still reports `1/2`.
+    expect(second.decision.kind).not.toBe('dispatch_spec')
+    const plan = readPlan('run-1')
+    expect(plan.items.filter(item => item.status === 'done')).toHaveLength(1)
+    expect(readFlow('run-1').active_plan_item).toBeNull()
+  })
+
+  it('dispatches the next item when that one already has a brief', () => {
+    planWith(['P1.1', 'P1.2'], ['P1.1', 'P1.2'])
+    idleAccepting('P1.1')
+    const sent: string[] = []
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('plan_item_dispatched')
+    expect(readFlow('run-1').active_plan_item).toBe('P1.2')
+    expect(sent).toHaveLength(1)
+  })
+
+  it('closes a flow with an ACCEPT and no plan', () => {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({ ...state, state: 'idle', claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 5 } })
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: null, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    // Without a plan the legacy path already closed it in `reviewing`; an idle flow holding an ACCEPT is simply finished.
+    expect(['head_unchanged', 'flow_done']).toContain(result.decision.reason)
+    expect(readFlow('run-1').state).toBe('idle')
   })
 })
 

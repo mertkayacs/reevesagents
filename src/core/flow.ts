@@ -213,6 +213,9 @@ export interface FlowState {
   // The commit whose verdict this flow has already acted on from `idle`. Without it an ACCEPT that arrived while the
   // flow was idle would be re-applied on every tick — closing the item it just dispatched. Reset when the head moves.
   verdict_handled_for: string | null
+  // The plan item that verdict was applied to. `verdict_handled_for` alone cannot tell "the ACCEPT closed P1.1" from "a
+  // verdict was handled on this commit and P1.2 is now open", and the difference is whether a close is still owed.
+  verdict_handled_item: string | null
   // Where `resume` returns the flow to, and when the pause happened. Null unless `state` is
   // `paused`: a resume that guessed would silently restart a pipeline in the wrong state.
   paused_from: FlowStatus | null
@@ -388,6 +391,7 @@ export interface FlowDecision {
   // The round key a dispatch was built from, recorded so the same file answer is not consumed twice.
   next_answered_round?: string | null
   next_verdict_handled_for?: string | null
+  next_verdict_handled_item?: string | null
   // The journal event for this decision, when the default (`kind`, or `reason` for a hold) would hide what happened.
   log_event?: string
   // Extra journal lines written with this decision — never the prompt, never a path.
@@ -468,6 +472,7 @@ export function createFlowState(init: FlowInit): FlowState {
     unsubstantiated_attempts: 0,
     answered_round: null,
     verdict_handled_for: null,
+    verdict_handled_item: null,
     active_plan_item: null,
     paused_from: null,
     paused_at: null,
@@ -525,6 +530,7 @@ export function parseFlowState(raw: unknown): FlowState {
     unsubstantiated_attempts: count(record.unsubstantiated_attempts),
     answered_round: typeof record.answered_round === 'string' ? record.answered_round : null,
     verdict_handled_for: typeof record.verdict_handled_for === 'string' ? record.verdict_handled_for : null,
+    verdict_handled_item: typeof record.verdict_handled_item === 'string' ? record.verdict_handled_item : null,
     active_plan_item: typeof record.active_plan_item === 'string' ? record.active_plan_item : null,
     // A paused file always names where it came from; a missing field defaults to `idle`, which is
     // the only target a flow without a recorded origin could safely resume into.
@@ -785,6 +791,9 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     // rounds will count against its budget. A spec outside the plan leaves this null, which is why
     // `off_plan_spec` exists in the journal.
     next_active_plan_item: observations.plan?.items.some(item => item.id === spec.id) ? spec.id : null,
+    // Dispatching an item spends the verdict of this commit for that item: the answer that closed the previous one cannot
+    // be read as a close still owed for this one.
+    next_verdict_handled_item: observations.plan?.items.some(item => item.id === spec.id) ? spec.id : null,
     next_unsubstantiated_attempts: 0,
     next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
     message: renderDispatchPrompt(spec),
@@ -1032,7 +1041,17 @@ function reanchor(state: FlowState, head: string): FlowDecision {
 // following tick.
 function settledVerdictDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
   const verdict = state.claim.verdict
-  if (verdict === null || state.verdict_handled_for === state.claim.head) return null
+  if (verdict === null) return null
+  // An ACCEPT that is still owed a close outranks the marker: the marker says "this verdict was applied", and a plan item
+  // that is still open is proof it was not. The live run showed how that happens — a review timed out, the same item was
+  // dispatched again, the reviewer answered afterwards, and the marker left the item `in_work` for ever while the flow
+  // answered `head_unchanged` (block 24, D10).
+  const owesClose = verdict === 'ACCEPT'
+    && observations.plan !== undefined
+    && state.active_plan_item !== null
+    && state.verdict_handled_item !== state.active_plan_item
+    && observations.plan.items.some(item => item.id === state.active_plan_item && item.status !== 'done')
+  if (state.verdict_handled_for === state.claim.head && !owesClose) return null
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
 
   if (verdict === 'ACCEPT') {
@@ -1040,7 +1059,13 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
     // ACCEPT and no plan is simply done with its work. With a plan the item is still open and must be closed.
     if (!observations.plan) return null
     const accepted = planAcceptDecision(state, observations, observations.plan)
-    return { ...accepted, next_verdict_handled_for: state.claim.head }
+    return {
+      ...accepted,
+      next_verdict_handled_for: state.claim.head,
+      next_verdict_handled_item: state.active_plan_item,
+      // The item is closed here, so the flow has nothing in flight unless the decision dispatched the next one.
+      next_active_plan_item: accepted.next_active_plan_item === undefined ? null : accepted.next_active_plan_item,
+    }
   }
 
   if (observations.plan) {
@@ -1152,7 +1177,16 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
 
   // Whatever path consumes this verdict, it is consumed for this commit: the marker is what keeps `idle` from applying the
   // same ACCEPT a second time after the flow comes back there (block 21, D4).
-  const handled = (decision: FlowDecision): FlowDecision => ({ ...decision, next_verdict_handled_for: state.claim.head })
+  // The marker records the commit *and* the item the answer was applied to: the item is the one that was active when the
+  // verdict arrived, which the decision may already have moved past.
+  const handled = (decision: FlowDecision): FlowDecision => ({
+    ...decision,
+    next_verdict_handled_for: state.claim.head,
+    // A decision that already names the item it spent the verdict on (a dispatch of the next one) keeps it.
+    next_verdict_handled_item: decision.next_verdict_handled_item !== undefined
+      ? decision.next_verdict_handled_item
+      : state.active_plan_item,
+  })
 
   if (observations.verdict === 'ACCEPT') {
     // With a plan the queue comes from the document, not from `state.specs` (§5): the accepted item closes and
@@ -1396,6 +1430,9 @@ function withDelta(
     verdict_handled_for: decision.next_verdict_handled_for !== undefined
       ? decision.next_verdict_handled_for
       : (decision.next_claim.head !== state.claim.head ? null : state.verdict_handled_for),
+    verdict_handled_item: decision.next_verdict_handled_item !== undefined
+      ? decision.next_verdict_handled_item
+      : (decision.next_claim.head !== state.claim.head ? null : state.verdict_handled_item),
     active_plan_item: decision.next_active_plan_item === undefined ? state.active_plan_item : decision.next_active_plan_item,
     // A new episode starts when the flow *becomes* escalated, which is exactly when a human has to be told.
     notify_episode: options.advance && state.state !== 'escalated' && decision.next_state === 'escalated'
