@@ -1,12 +1,16 @@
 // @vitest-environment happy-dom
 //
-// The Esc path, driven through a real `<dialog>` in a real (if minimal) DOM instead of a hand-written fake.
+// The close path, driven through a real `<dialog>` in a real (if minimal) DOM instead of a hand-written fake.
 //
-// What happy-dom does and does not do, measured rather than assumed: `new KeyboardEvent('keydown', { key: 'Escape' })` on an
-// open `<dialog>` leaves `dialog.open === true` and fires nothing. It does deliver `cancel`, so the platform sequence is
-// reproduced here the way a browser performs it — `cancel` then `close()` — and the controller's `close` handler is what the
-// test then observes. A real browser's own Esc handling is checked by hand (see `docs/GUIDE.md`), because no DOM emulator in
-// this repository implements it.
+// What this file proves: our handler. When the dialog closes, the controller clears the run it was opened for, returns focus to
+// the icon that exists at that moment (or to the card, or to `#logs-btn`), and puts `aria-expanded` back to `false`.
+//
+// What it does not prove: that pressing Escape in a browser is what closes the dialog in the first place. happy-dom does not do
+// that — measured: `new KeyboardEvent('keydown', { key: 'Escape' })` on an open `<dialog>` leaves `dialog.open === true` and
+// fires nothing, and it does not turn the keydown into `cancel` either. So the test dispatches `cancel` and calls
+// `dialog.close()` itself (see `pressEscape`), which is exactly the boundary: it starts at "the dialog is closing", not at "the
+// user pressed Esc". That first hop — Esc → `cancel` → `close` — is checked by hand in a real browser; `docs/GUIDE.md` says
+// where.
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

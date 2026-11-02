@@ -884,11 +884,12 @@ are dropped (their text stays in `title`, which the card sets) so the chip and i
 The chip is a **label**, never a control: it reports the tone, the numbers and the pulse, and clicking it does nothing.
 Beside it, and only when the run has a plan, sits the plan button — a small icon (`#plan-btn`, `.flow-plan-btn`) with
 `aria-label` "Plan", `aria-haspopup="dialog"` and `aria-expanded`. It opens `#plan-dialog`, filled from
-`GET /api/plan?run=…`; Esc or Close returns focus to the icon (the Esc half is driven in
-`test/web/plan-dialog-dom.test.ts` through a real `<dialog>` — `cancel` then `close`, the sequence a browser performs — and
-checked once by hand, because happy-dom does not close a `<dialog>` on its own Escape: measured, `open` stays `true` after the
-keydown). A run without a plan draws no icon at all (no disabled
-placeholder). The log dialog has no Plan tab: logs are logs.
+`GET /api/plan?run=…`; closing it (Esc or Close) returns focus to the icon. What
+`test/web/plan-dialog-dom.test.ts` covers is the close handler on a real `<dialog>` — the test dispatches `cancel` and calls
+`close()` itself; what it cannot cover is Escape producing that close, because happy-dom leaves a `<dialog>` open on an Escape
+keydown (measured, `open` stays `true`). That hop is a manual check in a browser.
+
+A run without a plan draws no icon at all (no disabled placeholder). The log dialog has no Plan tab: logs are logs.
 
 The mapping is `flowBadgeView` (`src/core/flow-label.ts`) and it decides the tone, the words and the pulse in one place;
 the browser maps a tone to a class and holds no second copy of the rule. `pulse` is an expiry, not a state: the server

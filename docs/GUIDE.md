@@ -318,11 +318,15 @@ cron usually wants that.
 
 ### Reading the plan indicator on a run card
 
-The chip itself is not clickable — it only reports the state. Keyboard check: open the plan with the icon, press **Esc**, and
-the focus comes back to the icon; that last step is verified by hand, because no DOM emulator in this repository implements a
-browser's own Escape handling for `<dialog>` (happy-dom delivers `cancel` but leaves the dialog open — measured). The small **Plan** icon beside it opens that run's plan
-(the icon is drawn only when the run has one); Esc or Close brings you back to it. The **Logs** button opens the
-notification journal on its own.
+The chip itself is not clickable — it only reports the state. The small **Plan** icon beside it opens that run's plan (the
+icon is drawn only when the run has one); Esc or Close brings you back to it. The **Logs** button opens the notification
+journal on its own.
+
+What the tests cover for that last step and what they do not: the automated test closes a real `<dialog>` and checks that the
+focus comes back to the icon (or to the run's card, or to Logs, if the card is gone). It does **not** check that Escape is what
+closes the dialog — the test dispatches `cancel` and calls `close()` itself, because happy-dom leaves a `<dialog>` open when it
+receives an Escape keydown (measured). That first hop, Esc → close, is therefore a manual check in a real browser: open the plan
+with the icon, press Esc, confirm the dialog closes and the focus sits on the icon.
 
 Under the run name: **`flow: plan 1/3`** in amber means the flow is walking its plan and needs nobody; **`flow: done 3/3`**
 in green means the plan finished and the work is ready to look at; **`flow: needs attention`** in red means something waits
