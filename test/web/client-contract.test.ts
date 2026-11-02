@@ -186,7 +186,9 @@ describe('web client flow chip', () => {
 
     // The chip reads the label the server rendered through core/flow-label.ts.
     expect(js).toContain('run.flow.label')
-    expect(js).toContain("flow.className = 'run-flow'")
+    // The chip carries the tone the server decided: the classes are a mapping, never a second copy of the rule.
+    expect(js).toContain('flow-badge--')
+    expect(js).toContain('is-pulsing')
     expect(js).toContain('flow.dataset.attention')
     // No second copy of the badge text or of the attention wording in the browser bundle.
     expect(js).not.toContain('flow: review')
@@ -197,6 +199,12 @@ describe('web client flow chip', () => {
     expect(js).not.toContain('flow.style.color')
     expect(css).toContain('.run-flow {')
     expect(css).toContain('.run-flow[data-attention]')
+    // One class per tone, and the pulse is opt-in so a stale badge cannot keep breathing.
+    for (const tone of ['progress', 'done', 'attention', 'paused']) {
+      expect(css).toContain(`.flow-badge--${tone}`)
+    }
+    expect(css).toContain('.flow-badge.is-pulsing')
+    expect(css).toContain('prefers-reduced-motion: reduce')
     expect(css).toContain('var(--warn)')
   })
 })

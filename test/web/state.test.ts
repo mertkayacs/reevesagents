@@ -210,11 +210,13 @@ describe('web flow badge', () => {
 
     const escalated = buildWebState({ liveTmuxTarget: () => true, language: 'en' }).runs[0]!.flow!
     expect(escalated.attention).toBe('escalated')
-    expect(escalated.label).toBe('flow: escalated')
+    // The label now says what the reader has to do, not which state the file is in; the tone carries the colour.
+    expect(escalated.label).toBe('flow: needs attention')
+    expect(escalated.tone).toBe('attention')
     expect(escalated.attention_label).toBe('rounds spent')
 
     const russian = buildWebState({ liveTmuxTarget: () => true, language: 'ru' }).runs[0]!.flow!
-    expect(russian.label).toBe('поток: эскалация')
+    expect(russian.label).toBe('поток: нужно внимание')
     expect(russian.attention_label).toBe('раунды израсходованы')
 
     seedFlow({ state: 'reviewing', rounds: 1, review_started_at: Date.now() - 1_000_000 })
@@ -236,7 +238,8 @@ describe('web flow badge', () => {
     // The condition goes away; the very next snapshot reflects it without any cleanup step.
     seedFlow({ state: 'done', rounds: 6 })
     const after = buildWebState({ liveTmuxTarget: () => true }).runs[0]!.flow!
-    expect(after.label).toBe('flow: done')
+    expect(after.label).toBe('flow: closed')
+    expect(after.tone).toBe('neutral')
     expect(after.attention).toBeNull()
 
     // And nothing was written into the lifecycle record on the way.

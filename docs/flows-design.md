@@ -852,6 +852,26 @@ changes a written contract, so the change is deliberate and recorded:
   `locales/en.ts` because `test/i18n.test.ts:48`–`:59` reads every `'web.*'` key out of
   `src/surfaces/webui/client/app.js` and fails the build otherwise.
 
+#### The plan indicator on a run card
+
+The chip under a run's name answers one question: **does this flow still need me?** It carries the numbers in the label,
+because a colour alone is not information — `done` used to mean both "the plan finished" and "a flow without a plan
+stopped".
+
+| flow state | plan | label | tone | pulse |
+| --- | --- | --- | --- | --- |
+| `idle` / `reviewing` / `fixing` | `1/3` | `flow: plan 1/3` | `progress` (amber) | no |
+| `done` | `3/3` | `flow: done 3/3` | `done` (green) | while fresh |
+| any | attention: `escalated`, `review_timeout`, `needs_brief`, `blocked_owner`, `composer_dirty`/`dispatch_unconfirmed` | `flow: needs attention` (+ the item in the tooltip) | `attention` (red) | while fresh |
+| `paused` / `orphaned` | any | `flow: paused (1/3)` | `paused` | no |
+| `done` | none | `flow: closed` | `neutral` | no |
+| any | none | `flow: review (2/3)` — the round budget | `neutral` | no |
+
+The mapping is `flowBadgeView` (`src/core/flow-label.ts`) and it decides the tone, the words and the pulse in one place;
+the browser maps a tone to a class and holds no second copy of the rule. `pulse` is an expiry, not a state: the server
+sets it only while the flow file is younger than `agent_pulse_ms` (0 turns it off), so nothing breathes for ever — and a
+closed flow never pulses at all. `prefers-reduced-motion: reduce` drops the animation and keeps the colour and the words.
+
 ### 4.5 Escalation rides the approvals mechanism
 
 On `escalated` the tick calls `raiseEscalationApproval` (`src/core/flow-escalation.ts:39`), which creates one approval

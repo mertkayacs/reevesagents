@@ -316,6 +316,15 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+### Reading the plan indicator on a run card
+
+Under the run name: **`flow: plan 1/3`** in amber means the flow is walking its plan and needs nobody; **`flow: done 3/3`**
+in green means the plan finished and the work is ready to look at; **`flow: needs attention`** in red means something waits
+for you — an escalation, a review past its deadline, an item without a brief, an item its owner blocked, or a dispatch that
+was not confirmed (the tooltip names which). **`flow: paused (1/3)`** and **`flow: closed`** are neutral. Green and red
+breathe only while the state is new (`agent_pulse_ms`), and a page with reduced motion shows the colour and the words
+without animation.
+
 ### A recorded verdict is carried out once, from the state
 
 When the flow holds a verdict it has not acted on (`claim.verdict` set, `claim.verdict_applied: false`), the next tick

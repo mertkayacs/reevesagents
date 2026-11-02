@@ -185,6 +185,13 @@ export interface FlowBadge {
   attention: FlowAttention | null
   // The item the plan is waiting for, when `attention` is `plan_waiting`.
   plan: PlanAttention | null
+  // How far the plan got, when the flow has one. The badge needs the numbers, not just "done": a finished plan and a
+  // flow that never had one both end in `done`, and the label has to tell them apart.
+  plan_progress: { done: number, total: number } | null
+  // Why a closed flow closed, so `closed` can be shown without pretending a plan finished.
+  close_reason: string | null
+  // When the flow file last changed: the "is this news?" input for a pulse that is not meant to last for ever.
+  updated_at: number
 }
 
 // Same comparison the engine makes, so a badge can never say "overdue" while the tick still waits:
@@ -193,6 +200,7 @@ export function flowBadge(
   state: FlowState,
   now: number = Date.now(),
   plan: PlanAttention | null = null,
+  planProgress: { done: number, total: number } | null = null,
 ): FlowBadge {
   const overdue = state.state === 'reviewing'
     && state.review_started_at !== null
@@ -210,6 +218,9 @@ export function flowBadge(
     review_overdue: overdue,
     attention: escalation ?? planAttention,
     plan: planAttention === null ? null : plan,
+    plan_progress: planProgress,
+    close_reason: state.close_reason ?? null,
+    updated_at: Date.parse(state.updated_at) || 0,
   }
 }
 
@@ -224,6 +235,19 @@ export function planAttentionOf(runId: string, root?: string): PlanAttention | n
       if (item.spec === null && item.status !== 'done' && item.status !== 'skipped') return { reason: 'needs_brief', item: item.id }
     }
     return null
+  } catch {
+    return null
+  }
+}
+
+// How far the plan got. `null` when the flow has no plan, which is a different thing from `0/0`.
+export function planProgressOf(runId: string, root?: string): { done: number, total: number } | null {
+  try {
+    const plan = readPlan(runId, { root })
+    const total = plan.items.length
+    if (total === 0) return null
+    const done = plan.items.filter(item => item.status === 'done' || item.status === 'skipped').length
+    return { done, total }
   } catch {
     return null
   }
@@ -277,7 +301,7 @@ export function flowSectionLines(state: FlowState, options: FlowSectionOptions =
 // skips a damaged file instead of breaking the board, while `flow status` still reports it (§3.3).
 export function readFlowBadge(runId: string, now: number = Date.now(), root?: string): FlowBadge | null {
   try {
-    return flowBadge(readFlow(runId, { root }), now, planAttentionOf(runId, root))
+    return flowBadge(readFlow(runId, { root }), now, planAttentionOf(runId, root), planProgressOf(runId, root))
   } catch {
     return null
   }

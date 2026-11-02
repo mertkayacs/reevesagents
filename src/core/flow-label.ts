@@ -25,6 +25,65 @@ export function flowBadgeText(t: FlowTranslate, badge: FlowBadge, options: { com
   return t('flow.badge.rounds', { status, rounds: badge.rounds, max: badge.max_rounds })
 }
 
+// The plan indicator on a run card: tone, label, and whether it should pulse.
+//
+// The label carries the numbers because the colour alone is not information — "done" used to mean both "the plan finished"
+// and "a flow that never had a plan stopped", and a reader who cannot tell green from amber needs the same answer in words.
+// `pulse` is not part of the tone: a colour that breathes for ever is noise, so the caller decides whether the state is
+// still news (`fresh`), and a closed or paused flow never pulses.
+export type FlowBadgeTone = 'progress' | 'done' | 'attention' | 'paused' | 'neutral'
+
+export interface FlowBadgeView {
+  label: string
+  tone: FlowBadgeTone
+  pulse: boolean
+  // The longer text for `title`: why the badge says what it says.
+  detail: string | null
+}
+
+export function flowBadgeView(
+  t: FlowTranslate,
+  badge: FlowBadge,
+  options: { fresh?: boolean } = {},
+): FlowBadgeView {
+  const fresh = options.fresh === true
+  const progress = badge.plan_progress
+  const detail = flowAttentionText(t, badge)
+
+  if (badge.attention !== null) {
+    return {
+      label: t('flow.badge.attention'),
+      tone: 'attention',
+      pulse: fresh && badge.status !== 'done' && badge.status !== 'paused',
+      detail: detail ?? t(`flow.attention.${badge.attention}` as TranslationKey),
+    }
+  }
+  if (badge.status === 'paused' || badge.status === 'orphaned') {
+    return { label: flowBadgeText(t, badge), tone: 'paused', pulse: false, detail: detail }
+  }
+  if (badge.status === 'done') {
+    // A finished plan is a different fact from a closed flow that had none.
+    if (progress !== null && progress.done >= progress.total) {
+      return {
+        label: t('flow.badge.plan_done', { done: progress.done, total: progress.total }),
+        tone: 'done',
+        pulse: fresh,
+        detail: t('flow.badge.plan_done_detail'),
+      }
+    }
+    return { label: t('flow.badge.closed'), tone: 'neutral', pulse: false, detail: badge.close_reason }
+  }
+  if (progress !== null) {
+    return {
+      label: t('flow.badge.plan_progress', { done: progress.done, total: progress.total }),
+      tone: 'progress',
+      pulse: false,
+      detail: t('flow.badge.plan_progress_detail'),
+    }
+  }
+  return { label: flowBadgeText(t, badge), tone: 'neutral', pulse: false, detail: detail }
+}
+
 export function flowAttentionText(t: FlowTranslate, badge: FlowBadge): string | null {
   if (!badge.attention) return null
   const base = t(`flow.attention.${badge.attention}` as TranslationKey)

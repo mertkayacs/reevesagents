@@ -16,7 +16,7 @@ import { providerColor, providerDisplayName } from '../../utils/display.js'
 import { listRunApprovals, type ApprovalRisk } from '../../core/approvals.js'
 import type { FlowAttention, FlowBadge } from '../../core/flow-view.js'
 import { readFlowBadge } from '../../core/flow-view.js'
-import { flowAttentionText, flowBadgeText, type FlowTranslate } from '../../core/flow-label.js'
+import { flowAttentionText, flowBadgeView, type FlowTranslate } from '../../core/flow-label.js'
 import { loadConfig } from '../../core/config.js'
 import { translate } from '../../i18n/catalog.js'
 import type { LanguageCode, Provider, RunRecord, RunViewStatus, TaskStatus } from '../../core/types.js'
@@ -28,6 +28,8 @@ export interface WebStateOptions {
   language?: LanguageCode
   // The clock the review deadline is measured against.
   now?: number
+  // How long a badge counts as news (`agent_pulse_ms`); 0 turns the pulse off.
+  agent_pulse_ms?: number
 }
 
 // The flow badge as a surface shows it. `label` and `attention_label` arrive pre-rendered from
@@ -40,6 +42,13 @@ export interface WebRunFlow {
   attention: FlowAttention | null
   attention_label: string | null
   review_overdue: boolean
+  // The plan indicator: tone drives the colour, `label` its text, `pulse` whether it is still news. `plan` and
+  // `done_kind` are here so a host can explain the badge without re-reading the flow file.
+  tone: 'progress' | 'done' | 'attention' | 'paused' | 'neutral'
+  pulse: boolean
+  plan: { done: number, total: number } | null
+  done_kind: 'plan_complete' | 'closed_no_plan' | 'stopped' | null
+  detail: string | null
 }
 
 export interface WebTerminal {
@@ -123,15 +132,30 @@ function monogram(nickname: string, provider: string): string {
   return (alnum.slice(0, 2) || provider.slice(0, 2)).toUpperCase()
 }
 
-function webFlow(badge: FlowBadge, t: FlowTranslate): WebRunFlow {
+function webFlow(badge: FlowBadge, t: FlowTranslate, options: { now?: number, pulseMs?: number } = {}): WebRunFlow {
+  // "Still news" is an expiry, not a state: a badge that pulses for ever is ignored within a day. The flow file's own
+  // `updated_at` is the clock — no extra timer, and a restart does not restart the pulse.
+  const pulseMs = options.pulseMs ?? 15 * 60 * 1000
+  const fresh = badge.updated_at > 0 && (options.now ?? Date.now()) - badge.updated_at < pulseMs
+  const view = flowBadgeView(t, badge, { fresh })
+  const doneKind = badge.status !== 'done'
+    ? null
+    : badge.plan_progress !== null && badge.plan_progress.done >= badge.plan_progress.total
+      ? 'plan_complete' as const
+      : badge.close_reason === 'stopped by the operator' ? 'stopped' as const : 'closed_no_plan' as const
   return {
     status: badge.status,
     rounds: badge.rounds,
     max_rounds: badge.max_rounds,
-    label: flowBadgeText(t, badge),
+    label: view.label,
     attention: badge.attention,
     attention_label: flowAttentionText(t, badge),
     review_overdue: badge.review_overdue,
+    tone: view.tone,
+    pulse: view.pulse,
+    plan: badge.plan_progress,
+    done_kind: doneKind,
+    detail: view.detail,
   }
 }
 
@@ -188,7 +212,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       canStop: run.status === 'running' && !run.ended_at,
       canDelete: run.status === 'ended' || run.ended_at !== null,
       terminals,
-      flow: flow ? webFlow(flow, t) : null,
+      flow: flow ? webFlow(flow, t, { now, pulseMs: options.agent_pulse_ms }) : null,
     }
   })
   const history = listRunHistory().map<WebRunHistory>(record => ({

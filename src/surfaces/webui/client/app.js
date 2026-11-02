@@ -1060,12 +1060,15 @@
       // its wording; attention is an attribute on the same chip, painted by app.css.
       if (run.flow) {
         const flow = document.createElement('span')
-        flow.className = 'run-flow'
+        // The tone is decided on the server (`flowBadgeView`), so the classes here are a mapping and nothing else: a second
+        // copy of "green means the plan finished" in JavaScript is how two surfaces start disagreeing.
+        const tone = run.flow.tone || 'neutral'
+        flow.className = `run-flow flow-badge flow-badge--${tone}${run.flow.pulse ? ' is-pulsing' : ''}`
         flow.textContent = run.flow.label
         if (run.flow.attention) {
           flow.dataset.attention = run.flow.attention
-          flow.title = run.flow.attention_label || run.flow.label
         }
+        flow.title = run.flow.detail || run.flow.attention_label || run.flow.label
         headBody.appendChild(flow)
       }
       head.appendChild(headBody)
