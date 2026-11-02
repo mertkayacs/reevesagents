@@ -941,6 +941,23 @@ Both check the state before calling and map the transition's own refusal (the st
 answer means the same thing whichever check caught it. While a flow is `paused` the tick observes nothing and sends nothing; `resume`
 returns it to the state it was paused from and keeps an answer the flow still owes.
 
+#### A lost round is an operator's to free
+
+The engine holds a row while a round is in flight, and `HUMAN_TRANSITIONS` has no entries for `in_work`/`reviewing` — a running pipeline
+owns them. That rule assumes the round exists. When the flow's bookkeeping moves on without the step it owed (a `resume` anchored over a
+work commit), the row is `in_work`, no review was requested, and the operator cannot touch it: the refusal says "pause or stop the flow to
+intervene" and the pause changes nothing.
+
+Two things follow, and they are the whole of §4.4's operator escape:
+
+- **A parked flow hands the row to the human.** `flow plan set` passes `intervention: { paused, round_live }`; when the flow is `paused` and
+  `round_live` is false, `in_work`/`reviewing` may become `queued`, `pending`, `blocked_owner`, `done` or `skipped`. With a live round the
+  refusal stands whatever the state — closing an item without the review it waits for is the one shortcut the engine must not allow.
+- **`flow release-round`** frees a round that is gone: the flow must be `paused`, an item must be in flight, and `review_started_at` and
+  `pending` must both be empty. It puts the row back in `queued` (the plan mutation happens first, so a failure there leaves the round held
+  rather than the row orphaned), clears the flow's hold, and journals `round_released <item>: <reason>`. The next tick dispatches the item
+  again.
+
 #### The plan indicator on a run card
 
 The chip under a run's name answers one question: **does this flow still need me?** It carries the numbers in the label,

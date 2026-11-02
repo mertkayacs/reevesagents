@@ -316,6 +316,31 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+### When the plan is stuck in `in_work` with no review coming
+
+A round can be lost: the item says `in_work`, the dev's commit is there, and no review was ever requested — the flow's own bookkeeping moved
+on without the step it owed (a `resume` that anchored over a work commit did exactly that on 2026-11-02). The tick then answers
+`head_unchanged` for ever, and `flow plan set` refuses to touch the row because the engine still holds it.
+
+The way out is three commands, in this order:
+
+```bash
+flow pause --run <id>                                   # a human is intervening
+flow plan --run <id>                                    # shows the row: in_work, and the round it believes in
+flow release-round --run <id> --reason "the commit was never reviewed"
+flow resume --run <id>
+flow tick --run <id>                                    # dispatches the item again
+```
+
+`flow release-round` frees the round only when it really is lost: the flow is `paused`, an item is in flight, and **no review was
+requested** (`review_started_at` and `pending` both empty). It puts the row back in `queued` and writes `round_released <item>: <reason>`
+to the journal, so the release is visible after the fact. On a live round it refuses — closing an item without the review it is waiting for
+is the one thing a human must not do.
+
+While a flow is `paused` (or `stopped`), `flow plan set` also reaches the two statuses the engine normally owns: `in_work` and
+`reviewing` may be put back in the queue, parked for the owner, closed or skipped. That is what pausing is for. With a live round the
+refusal stands even on a paused flow.
+
 ### Pausing the plan and picking it up again
 
 A plan can be parked without closing it. From the CLI: `flow pause --run <id>` — the tick then sends nothing (no brief, no review

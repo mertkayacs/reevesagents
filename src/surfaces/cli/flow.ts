@@ -15,7 +15,7 @@ import type { FlowStepResult } from '../../core/flow-runner.js'
 import { stepFlow } from '../../core/flow-runner.js'
 import { tickAllFlows } from '../../core/flow-ticker.js'
 import { startFlow } from '../../core/flow-start.js'
-import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
+import { addFlowSpecs, pauseFlow, releaseRound, resumeFlow, stopFlow } from '../../core/flow-control.js'
 import type { NotesCounts } from '../../core/flow-notes.js'
 import { listNotesHeads, readNotesRound } from '../../core/flow-notes.js'
 import { loadConfig } from '../../core/config.js'
@@ -407,6 +407,26 @@ export function registerFlow(program: Command): void {
         console.log(`flow      ${runId} resumed into ${resumed.state.state}`)
         console.log(`rounds    ${resumed.state.rounds}/${resumed.state.max_rounds}`)
         console.log('next      `flow tick --run <id>` picks it up')
+      } catch (err) {
+        fail(err)
+      }
+    })
+
+  flow
+    .command('release-round')
+    .description('free a round the engine lost: the item is in flight, but no review was requested and nothing is pending')
+    .option('--run <id>', 'run id (a unique prefix is accepted)')
+    .option('--reason <text>', 'why: appended to the journal as `round_released <item>: <reason>`')
+    .option('--json', 'output JSON')
+    .action((opts: { run?: string, reason?: string, json?: boolean }) => {
+      try {
+        const result = releaseRound(resolveFlowRunId(opts.run ?? ''), { reason: opts.reason })
+        if (opts.json === true) {
+          console.log(JSON.stringify({ run_id: result.state.run_id, released: result.item, state: result.state.state }, null, 2))
+          return
+        }
+        console.log(`released  ${result.item} — no review was requested for that round; the next tick dispatches it again`)
+        console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
       } catch (err) {
         fail(err)
       }

@@ -112,6 +112,19 @@ export const HUMAN_TRANSITIONS: Record<PlanStatus, readonly PlanStatus[]> = {
   skipped: [],
 }
 
+// What a human may reach from a status the engine normally owns, once the flow is paused and no round is live. `in_work` and `reviewing`
+// both mean "a round was started"; a human intervening on a paused flow can put the row back in the queue, close it, or park it for the
+// owner — but not claim a review that never happened.
+const MANUAL_INTERVENTION: Record<PlanStatus, readonly PlanStatus[]> = {
+  ...HUMAN_TRANSITIONS,
+  in_work: ['queued', 'pending', 'blocked_owner', 'done', 'skipped'],
+  reviewing: ['queued', 'pending', 'blocked_owner', 'done', 'skipped'],
+}
+
+function manualTargets(from: PlanStatus): readonly PlanStatus[] {
+  return MANUAL_INTERVENTION[from] ?? []
+}
+
 export function canSetStatus(from: PlanStatus, to: PlanStatus): boolean {
   return from === to || HUMAN_TRANSITIONS[from].includes(to)
 }
@@ -540,6 +553,10 @@ export interface SetStatusInput {
   yes?: boolean
   now: number
   at?: string
+  // What the caller knows about the flow itself. A paused (or stopped) flow means a human is intervening, so a row the engine owns may be
+  // moved — but only while no round is actually live. A live round is the one thing a human must not close by hand, whatever the state
+  // (block 56): that would be closing an item without the review it is waiting for.
+  intervention?: { paused: boolean, round_live: boolean }
 }
 
 export function setItemStatus(plan: Plan, input: SetStatusInput): { plan: Plan, previous: PlanStatus } {
@@ -551,7 +568,14 @@ export function setItemStatus(plan: Plan, input: SetStatusInput): { plan: Plan, 
   if (input.status === item.status) return { plan, previous: item.status }
   // The human subset, not the engine's table: see `HUMAN_TRANSITIONS` for why `queued -> in_work` and
   // `in_work -> queued` are not a human's to make.
-  if (!canSetStatus(item.status, input.status)) throw humanRefusal(item, input.status)
+  if (!canSetStatus(item.status, input.status)) {
+    // A paused flow hands the row to the human (`HUMAN_TRANSITIONS` has no entries for the two busy statuses, because a *running* pipeline
+    // owns them). The refusal text said "pause or stop the flow to intervene" and then the pause changed nothing — the operator had no way
+    // to free a round the engine itself had lost (block 56).
+    const intervened = input.intervention?.paused === true && input.intervention.round_live !== true
+    const engineOwned = item.id === input.id && manualTargets(item.status).includes(input.status)
+    if (!(intervened && engineOwned)) throw humanRefusal(item, input.status)
+  }
   const at = isoAt(input)
 
   if ((input.status === 'done' || input.status === 'skipped') && input.yes !== true) {

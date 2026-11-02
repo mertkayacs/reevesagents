@@ -16,7 +16,7 @@ import { notesRef, stagingPath } from '../src/core/flow-notes.js'
 import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
 import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import { planTickView } from '../src/core/flow-plan.js'
-import { resumeFlow } from '../src/core/flow-control.js'
+import { releaseRound, resumeFlow } from '../src/core/flow-control.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 import { startFlow } from '../src/core/flow-start.js'
 
@@ -1695,5 +1695,44 @@ describe('the notes reference the flow reports for the round', () => {
   it('is the durable path derived from the same head and round as the staging file', () => {
     expect(notesRef(HEAD, 1)).toBe('notes/d60048c000000000000000000000000000000000-r1.md')
     expect(stagingPath('run-1', HEAD, 1, root)).toContain('notes/inbox/')
+  })
+})
+
+describe('a released round is dispatched again (block 56)', () => {
+  it('takes the same item once the lost round is freed', () => {
+    // The live shape: `A1` is `in_work`, the flow is parked, and the engine holds a round that was never requested. Releasing it and
+    // resuming must hand the row back to the pipeline — the next tick dispatches `A1` again instead of answering `head_unchanged` forever.
+    const doc = '- [ ] **P1.1** — first'
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 't', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.md', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) })
+
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'paused', paused_from: 'idle', active_plan_item: 'P1.1', review_started_at: null,
+      claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1' },
+    })
+
+    expect(releaseRound('run-1', { reason: 'lost round' }).item).toBe('P1.1')
+    resumeFlow('run-1')
+
+    const sent: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'a'.repeat(40), tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // Dispatched again: the pointer names the brief, and the item is in flight once more.
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toContain('docs/briefs/P1.1.md')
+    expect(readFlow('run-1').active_plan_item).toBe('P1.1')
+    expect(readFlow('run-1').log.some(entry => entry.event === 'round_released')).toBe(true)
   })
 })

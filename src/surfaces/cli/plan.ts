@@ -18,7 +18,7 @@ import { appendLog } from '../../core/flow.js'
 import { readGitHead } from '../../core/flow-runner.js'
 import { saveFlow } from '../../core/flow-store.js'
 import { readRun } from '../../core/runs.js'
-import { addFlowSpecs } from '../../core/flow-control.js'
+import { addFlowSpecs, roundIsLive } from '../../core/flow-control.js'
 import type { Plan, PlanItem, PlanStatus, SetStatusInput } from '../../core/plan.js'
 import {
   attachSpec, createPlan, importInto, mutatePlan, PLAN_STATUSES, PlanError, planComplete, planExists,
@@ -375,12 +375,22 @@ export function registerPlanCommands(flow: Command): void {
       const json = jsonOption(cmd, opts)
       try {
         const runId = resolveFlowRunId(runOption(cmd))
+        // A paused flow is the operator's; `stopped` closes it as `done`, so the row is nobody's to move by then.
+        const parkedFlow = readFlow(runId)
+        const flowIsParked = () => parkedFlow.state === 'paused'
+        const flowHasLiveRound = () => roundIsLive(parkedFlow)
         const input: SetStatusInput = {
           id: opts.item,
           status: opts.status as PlanStatus,
           note: opts.note,
           yes: opts.yes === true,
           now: Date.now(),
+          // A paused (or stopped) flow is a human at the console, so the engine's hold on a busy row is lifted — unless a round is actually
+          // live, which is the one thing a human may not close by hand (block 56).
+          intervention: {
+            paused: flowIsParked(),
+            round_live: flowHasLiveRound(),
+          },
         }
         const dryRun = opts.dryRun === true
         const result = dryRun

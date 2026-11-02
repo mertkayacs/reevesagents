@@ -691,3 +691,46 @@ describe('planExists', () => {
     })
   })
 })
+
+describe('a paused flow hands a busy row to the human (block 56)', () => {
+  function busyPlan() {
+    const imported = importNew('- [ ] **P1.1** — the only item')
+    return { plan: imported.plan, id: imported.plan.items[0]!.id }
+  }
+
+  it('lets a paused flow close an item the engine was holding with no live round', () => {
+    // The refusal used to say "pause or stop the flow to intervene" and the pause changed nothing: the operator was stuck with a round the
+    // engine had lost (block 56).
+    const { plan, id } = busyPlan()
+    const inWork = { ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) }
+
+    const moved = setItemStatus(inWork, {
+      id, status: 'done', yes: true, note: 'the round was lost: the commit was never reviewed', now: NOW, at: AT,
+      intervention: { paused: true, round_live: false },
+    })
+
+    expect(moved.plan.items[0]!.status).toBe('done')
+    // A manual close without an accepted commit leaves a conflict behind, so the plan says why it was closed.
+    expect(moved.plan.conflicts.at(-1)).toMatchObject({ item_id: id, kind: 'ticked_by_hand' })
+  })
+
+  it('still refuses while a round is live, even when paused', () => {
+    const { plan, id } = busyPlan()
+    const reviewing = { ...plan, items: plan.items.map(item => ({ ...item, status: 'reviewing' as const })) }
+
+    expect(() => setItemStatus(reviewing, {
+      id, status: 'done', yes: true, note: 'x', now: NOW, at: AT,
+      intervention: { paused: true, round_live: true },
+    })).toThrow(/the engine owns reviewing while a round is in flight/)
+  })
+
+  it('still refuses while the flow is running', () => {
+    const { plan, id } = busyPlan()
+    const inWork = { ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) }
+
+    expect(() => setItemStatus(inWork, {
+      id, status: 'done', yes: true, note: 'x', now: NOW, at: AT,
+      intervention: { paused: false, round_live: false },
+    })).toThrow(/the engine owns in_work/)
+  })
+})

@@ -23,6 +23,7 @@ import type { FlowStoreOptions } from './flow-store.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import { docsOnlySince, readGitHead } from './flow-runner.js'
 import { isRunsLockTimeout, withRunsLock } from './runs.js'
+import { mutatePlan, setItemStatus } from './plan.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { planExists, readPlan } from './plan.js'
 import { pruneClosedFlowNotes } from './flow-notes.js'
@@ -136,6 +137,69 @@ export function resumeFlow(runId: string, options: FlowControlOptions = {}): Flo
       `cannot resume a flow in state ${state.state} (only a paused or escalated flow can be resumed)`,
     )
   })
+}
+
+// A round the engine lost: the item is in flight, no review was requested, and nothing is pending. It happens when the flow's own
+// bookkeeping moves on without the step it owed (a resume anchored over a work commit, `flow-a` on 2026-11-02), and it leaves the operator
+// unable to touch the row because the engine still says "a round is in flight". Releasing it is an operator decision, journalled, and it
+// hands the row back to the pipeline: the next tick dispatches it again.
+export function releaseRound(runId: string, options: FlowControlOptions & { reason?: string } = {}): { state: FlowState, path: string, item: string } {
+  // Read and decide before taking any lock: the plan mutation below takes the runs lock itself, and two nested acquisitions would time out.
+  const before = readFlow(runId, { root: options.root })
+  const item = before.active_plan_item
+  if (!item) throw new FlowStateError(`flow for run ${before.run_id} has no plan item in flight; there is no round to release`)
+  if (roundIsLive(before)) {
+    throw new FlowStateError(
+      `flow for run ${before.run_id} has a live round on ${item} (a review was requested); wait for the verdict, or stop the flow`,
+    )
+  }
+  if (before.state !== 'paused') {
+    // Only a parked flow is released: otherwise the next tick could be mid-send, and the round would be freed underneath it.
+    throw new FlowStateError(`flow for run ${before.run_id} is ${before.state}; pause it first, then release the round`)
+  }
+
+  // The flow's hold is only half of it: the plan also says `in_work`, and the picker skips a row that is in flight. Putting the row back in
+  // the queue is what makes the next tick dispatch it again — and it is done first, so a failure here leaves the round held rather than the
+  // row orphaned in the queue (block 56).
+  try {
+    mutatePlan(runId, plan => {
+      const row = plan?.items.find(entry => entry.id === item)
+      if (!plan || !row || (row.status !== 'in_work' && row.status !== 'reviewing')) return { plan: null, value: null }
+      const moved = setItemStatus(plan, {
+        id: item, status: 'queued', now: options.now ?? Date.now(), at: options.at,
+        intervention: { paused: true, round_live: false },
+      })
+      return { plan: moved.plan, value: null }
+    }, { root: options.root })
+  } catch {
+    // A plan that cannot be read or written is not a reason to leave the round held: the flow's side is released next, and the operator sees
+    // the row in `flow plan`.
+  }
+
+  const result = transition(runId, options, (state) => {
+    if (state.active_plan_item !== item) {
+      throw new FlowStateError(`the round on ${item} changed while it was being released; run it again`)
+    }
+    const at = options.at ?? new Date().toISOString()
+    return {
+      ...state,
+      active_plan_item: null,
+      review_started_at: null,
+      pending: null,
+      updated_at: at,
+      log: [...state.log, {
+        at,
+        event: 'round_released',
+        detail: `${item}${options.reason ? `: ${options.reason}` : ''}`,
+      }].slice(-FLOW_LOG_LIMIT),
+    }
+  })
+  return { ...result, item }
+}
+
+// A round is live when a review was actually requested for it: that is the fact the engine must not let a human bypass.
+export function roundIsLive(state: FlowState): boolean {
+  return state.review_started_at !== null || state.pending !== null
 }
 
 export function stopFlow(runId: string, options: FlowControlOptions = {}): FlowControlResult {

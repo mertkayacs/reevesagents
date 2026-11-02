@@ -13,7 +13,7 @@ import {
   createFlowState,
 } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
-import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../src/core/flow-control.js'
+import { addFlowSpecs, pauseFlow, releaseRound, resumeFlow, stopFlow } from '../src/core/flow-control.js'
 import { processInstanceOf } from '../src/core/flow-dispatch-gate.js'
 
 import type { FlowPorts } from '../src/core/flow-runner.js'
@@ -674,5 +674,46 @@ describe('a claim left behind by a dead process', () => {
     expect(result.decision.kind).toBe('escalate')
     expect(result.decision.reason).toBe('dispatch_unresolved')
     expect(readFlow('run-1', { root }).state).toBe('escalated')
+  })
+})
+
+describe('releasing a round the engine lost (block 56)', () => {
+  function seedPaused(item: string | null, live: boolean) {
+    const state = makeState()
+    saveFlow({
+      ...state, state: 'paused', paused_from: 'idle', active_plan_item: item,
+      review_started_at: live ? 1_700_000_000_000 : null,
+      claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: item },
+    })
+  }
+
+  it('frees the item and journals round_released', () => {
+    seedPaused('A1', false)
+    const result = releaseRound('run-1', { reason: 'the commit was never reviewed' })
+
+    const after = readFlow('run-1')
+    expect(result.item).toBe('A1')
+    expect(after.active_plan_item).toBeNull()
+    expect(after.review_started_at).toBeNull()
+    const entry = after.log.at(-1)!
+    expect(entry.event).toBe('round_released')
+    expect(entry.detail).toContain('A1: the commit was never reviewed')
+  })
+
+  it('refuses while a review was actually requested', () => {
+    seedPaused('A1', true)
+    expect(() => releaseRound('run-1')).toThrow(/live round on A1 \(a review was requested\)/)
+    expect(readFlow('run-1').active_plan_item).toBe('A1')
+  })
+
+  it('refuses on a flow that is not parked', () => {
+    const state = makeState()
+    saveFlow({ ...state, state: 'idle', active_plan_item: 'A1' })
+    expect(() => releaseRound('run-1')).toThrow(/is idle; pause it first/)
+  })
+
+  it('refuses when nothing is in flight', () => {
+    seedPaused(null, false)
+    expect(() => releaseRound('run-1')).toThrow(/no plan item in flight/)
   })
 })
