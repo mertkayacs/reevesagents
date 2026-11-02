@@ -593,6 +593,22 @@ button { letter-spacing: 0; }
 /* The plan indicator. Four tones, each with the words its colour stands for — "1/3", "done 3/3",
    "needs attention" — because colour alone is not information. The pulse marks news, not a state:
    the server sets `is-pulsing` only while the flow file is fresh, so it expires on its own. */
+.flow-plan-state {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+  color: var(--muted);
+}
+
+.flow-plan-state.is-paused {
+  color: color-mix(in srgb, var(--warn) 80%, var(--muted));
+}
+
+.plan-play-pause {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+}
+
 .flow-badge--progress {
   border-color: color-mix(in srgb, var(--warn) 35%, var(--border-faint));
   color: var(--warn);

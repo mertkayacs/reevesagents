@@ -248,6 +248,8 @@
     <div class="mcp-panel">
       <div class="dialog-header">
         <div id="plan-dialog-title" class="dialog-title">Plan</div>
+        <button id="plan-play-pause" class="btn btn-secondary plan-play-pause" type="button"
+                aria-label="Pause the plan" aria-pressed="false">Pause</button>
       </div>
       <div id="plan-panel" class="insights-panel">
         <div class="plan-progress">
@@ -269,6 +271,7 @@
           <div class="empty-body">Import the project document with `reevesagents flow plan import`.</div>
         </div>
       </div>
+      <div id="plan-error" class="dialog-error" hidden></div>
       <div class="dialog-actions">
         <button id="plan-close" class="btn" type="button">Close</button>
       </div>

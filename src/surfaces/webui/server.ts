@@ -14,7 +14,9 @@ import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './g
 import { buildWebState, listWebProviders } from './state.js'
 import { shouldTick, tickAllFlows } from '../../core/flow-ticker.js'
 import { planExists, planItemView, planProgress, readPlan } from '../../core/plan.js'
-import { resolveFlowRunId } from '../../core/flow-view.js'
+import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
+import { pauseFlow, resumeFlow } from '../../core/flow-control.js'
+import { flowPath, readFlow } from '../../core/flow-store.js'
 import {
   NotificationError, appendNotification, markNotificationsRead, notificationSummary, readNotifications,
 } from '../../core/notifications.js'
@@ -596,6 +598,38 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
       })
     } catch (err) {
       sendJson(res, 404, { error: errMessage(err) })
+    }
+    return
+  }
+  // The plan's play/pause. It is the same operator operation the CLI has (`flow pause` / `flow resume`), so the buttons in the UI
+  // cannot drift from the command line: the transition table, the parked state and the re-anchoring on resume are the engine's.
+  if (method === 'POST' && (path === '/api/flow/pause' || path === '/api/flow/resume')) {
+    const pausing = path === '/api/flow/pause'
+    try {
+      const body = await readJsonBody(req)
+      const requested = typeof body.run_id === 'string' ? body.run_id : ''
+      if (!requested) {
+        sendJson(res, 400, { error: 'run_id is required' })
+        return
+      }
+      const runId = resolveFlowRunId(requested)
+      const before = readFlow(runId)
+      // `done` is terminal: a finished plan has nothing to pause, and saying so is better than pretending it worked.
+      if (pausing && before.state === 'done') {
+        sendJson(res, 409, { error: 'not_pausable', state: before.state })
+        return
+      }
+      if (pausing && before.state === 'paused') {
+        sendJson(res, 409, { error: 'already_paused', state: before.state })
+        return
+      }
+      const result = pausing ? pauseFlow(runId) : resumeFlow(runId)
+      sendJson(res, 200, { run_id: runId, flow: flowStatusPayload(result.state, flowPath(runId)) })
+    } catch (err) {
+      const message = errMessage(err)
+      // A run without a flow is the caller's mistake, not a server fault; everything else is reported as it comes.
+      if (/no flow|not found|unknown/i.test(message)) sendJson(res, 404, { error: message })
+      else sendJson(res, 400, { error: message })
     }
     return
   }

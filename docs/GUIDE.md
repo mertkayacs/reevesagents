@@ -316,6 +316,16 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+### Pausing the plan and picking it up again
+
+A plan can be parked without closing it. From the CLI: `flow pause --run <id>` — the tick then sends nothing (no brief, no review
+request), the state, the round and the item in flight are kept. `flow resume --run <id>` returns to exactly where it stopped and
+continues on the next tick; a verdict the flow already had is carried out after the resume, not thrown away.
+
+From the Web UI: open the plan with the chip's icon and press **Pause** in the dialog's header; the same button then reads
+**Resume**. The card shows a small pause glyph next to the plan icon while the flow is parked, and the chip reads `flow: paused
+(1/3)`. A finished flow cannot be paused (`not_pausable`), and a second pause answers `already_paused`.
+
 ### Reading the plan indicator on a run card
 
 The chip itself is not clickable — it only reports the state. The small **Plan** icon beside it opens that run's plan (the

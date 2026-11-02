@@ -308,6 +308,8 @@
     planDialog: document.getElementById('plan-dialog'),
     planDialogTitle: document.getElementById('plan-dialog-title'),
     planClose: document.getElementById('plan-close'),
+    planPlayPause: document.getElementById('plan-play-pause'),
+    planError: document.getElementById('plan-error'),
     planPanel: document.getElementById('plan-panel'),
     logsPanel: document.getElementById('logs-panel'),
     planList: document.getElementById('plan-list'),
@@ -1079,6 +1081,21 @@
         if (planBtn) {
           planBtn.addEventListener('click', () => { void openPlanDialog(run.id) })
           headBody.appendChild(planBtn)
+
+          // Whether the plan is running or paused, next to the icon that opens it. A glyph, not a button: pausing belongs to the
+          // dialog (one obvious control, with a label), and the card only has to say which state it is in.
+          const planState = document.createElement('span')
+          const paused = run.flow.status === 'paused'
+          planState.className = `flow-plan-state${paused ? ' is-paused' : ''}`
+          planState.dataset.paused = String(paused)
+          planState.setAttribute('aria-label', paused ? t('web.planPaused') : t('web.planRunning'))
+          planState.title = planState.getAttribute('aria-label')
+          planState.innerHTML = paused
+            ? '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">'
+              + '<path d="M5.5 3.5v9M10.5 3.5v9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>'
+            : '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">'
+              + '<path d="M5.5 3.2l7 4.8-7 4.8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/></svg>'
+          headBody.appendChild(planState)
         }
       }
       head.appendChild(headBody)
@@ -1281,6 +1298,8 @@
     insights.runId = runId
     const run = runs.find(entry => entry.id === runId)
     el.planDialogTitle.textContent = t('web.planTitle', { run: run ? run.name : runId })
+    insights.flowState = run && run.flow ? run.flow.status : null
+    renderPlanPlayPause(insights.flowState === 'paused')
     el.planDialog.showModal()
     await loadPlan(runId)
     renderPlan()
@@ -1290,6 +1309,37 @@
   function closePlanDialog() {
     if (!el.planDialog.open) return
     el.planDialog.close()
+  }
+
+  // The dialog's play/pause: the same operation as `flow pause` / `flow resume`, through one route. The button's label and
+  // `aria-pressed` follow the flow's state, so "Pause" never lies about a flow that is already parked.
+  function renderPlanPlayPause(paused) {
+    el.planPlayPause.textContent = paused ? t('web.planResume') : t('web.planPause')
+    el.planPlayPause.setAttribute('aria-pressed', String(paused))
+    el.planPlayPause.setAttribute('aria-label', paused ? t('web.planResumeLabel') : t('web.planPauseLabel'))
+  }
+
+  async function togglePlanPlayPause() {
+    const runId = insights.runId
+    if (!runId) return
+    const paused = insights.flowState === 'paused'
+    el.planPlayPause.disabled = true
+    try {
+      const payload = await api('POST', `/api/flow/${paused ? 'resume' : 'pause'}`, { run_id: runId })
+      insights.flowState = payload && payload.flow ? payload.flow.state : insights.flowState
+      renderPlanPlayPause(insights.flowState === 'paused')
+      // The card's chip and glyph come from the next snapshot; ask for one now so the click is not invisible until the poll.
+      await refreshState()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      // One line under the dialog's actions: the route answers `not_pausable` for a finished plan, and the operator needs the words.
+      if (el.planError) {
+        el.planError.textContent = message
+        el.planError.hidden = false
+      }
+    } finally {
+      el.planPlayPause.disabled = false
+    }
   }
 
   async function loadPlan(runId) {
@@ -2586,6 +2636,7 @@
   el.logsBtn.addEventListener('click', () => { void openInsightsDialog() })
   el.insightsClose.addEventListener('click', () => el.insightsDialog.close())
   el.planClose.addEventListener('click', closePlanDialog)
+  el.planPlayPause.addEventListener('click', () => { void togglePlanPlayPause() })
   // Esc closes the dialog natively; the focus has to come back to the icon that opened it, or the keyboard user lands on
   // `body`. The button is looked up by run id at this moment, because the card may have been rebuilt by an SSE frame while
   // the dialog was open — and if the card is gone entirely, the focus still has to land somewhere sensible.

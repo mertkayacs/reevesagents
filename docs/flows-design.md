@@ -465,6 +465,12 @@ recorded in the plan's conflicts), the refused item goes back to the queue inste
 with the next item. It does not escalate: a historical inconsistency can never be repaired, so an escalation would make every
 resumed run escalate again for ever.
 
+**Play/pause is the operator's, and it is the engine's own operation (block 49).** `POST /api/flow/pause` and `/api/flow/resume`
+call `pauseFlow`/`resumeFlow` — the same functions the CLI uses — so the transition table, the parked state and the re-anchoring on
+resume cannot drift between the two surfaces. While a flow is `paused` the tick observes nothing and sends nothing; `resume` returns
+it to the state it was paused from, keeping an answer the flow still owes. The dialog's button and the card's glyph only reflect
+that state: the chip stays a label, and the plan icon stays the only opener.
+
 **The panel receives a pointer, not the brief (block 47).** A brief of fifteen to thirty lines pasted into a terminal pushes the input
 line out of the detector's window, the Enter is never confirmed, and the round ends in `dispatch_unconfirmed` and an escalation —
 measured on three live runs, while a two-line "read `docs/briefs/<id>.md` and carry it out" went through on the first Enter and

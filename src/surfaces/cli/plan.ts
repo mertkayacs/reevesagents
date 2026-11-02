@@ -141,7 +141,8 @@ export function registerPlanCommands(flow: Command): void {
           console.log(JSON.stringify(planPayload(imported, displayPath(planPath(runId))), null, 2))
           return
         }
-        printPlan(imported, { perItem: readFlow(runId).max_rounds, total: readFlow(runId).max_total_rounds })
+        const flow = readFlow(runId)
+        printPlan(imported, { perItem: flow.max_rounds, total: flow.max_total_rounds, paused: flow.state === 'paused' })
         if (imported.conflicts.length > 0) process.exitCode = 3
       } catch (err) {
         failPlan(err)
@@ -498,9 +499,11 @@ function readDocument(path: string): string {
   }
 }
 
-function printPlan(plan: Plan, budgets: { perItem: number, total: number }): void {
+function printPlan(plan: Plan, budgets: { perItem: number, total: number, paused?: boolean }): void {
   console.log(`plan      ${plan.source_path}  (imported ${plan.imported_at}, hash ${plan.source_hash.slice(0, 8)})`)
   console.log(`progress  ${statusCountsLine(plan)}`)
+  // A paused plan is a fact the operator needs before wondering why nothing moves: the tick sends nothing while it is parked.
+  if (budgets.paused === true) console.log('paused    yes (flow pause; `flow resume` continues from here)')
   const waiting: string[] = []
   // An item waiting for a brief is `pending` as far as the status table goes (it becomes `needs_brief` only
   // when `plan next` looks at it), so the line is built from the specs, not from the status.
