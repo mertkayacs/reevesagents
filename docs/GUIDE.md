@@ -318,7 +318,9 @@ cron usually wants that.
 
 ### Reading the plan indicator on a run card
 
-The chip itself is not clickable — it only reports the state. The small **Plan** icon beside it opens that run's plan
+The chip itself is not clickable — it only reports the state. Keyboard check: open the plan with the icon, press **Esc**, and
+the focus comes back to the icon; that last step is verified by hand, because no DOM emulator in this repository implements a
+browser's own Escape handling for `<dialog>` (happy-dom delivers `cancel` but leaves the dialog open — measured). The small **Plan** icon beside it opens that run's plan
 (the icon is drawn only when the run has one); Esc or Close brings you back to it. The **Logs** button opens the
 notification journal on its own.
 
