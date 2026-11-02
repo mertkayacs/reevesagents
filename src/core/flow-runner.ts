@@ -789,9 +789,19 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
         const escalated = escalateOnDirtyComposer(after, phase.decision, at)
         return { state: escalated, status: 'unconfirmed', path: saveFlow(escalated, { root: options.root }) }
       }
-      if (send.reason === 'pane_changed' || send.reason === 'unconfirmed') {
-        // The text is in the input box but the submit was not confirmed. Consume the decision so the
-        // same text is never pasted twice; the status stays put and the log says why.
+      if (send.reason === 'pane_changed') {
+        // The Enter was never pressed: the pane stopped looking idle between the paste and the submit, and the composer
+        // did not hold our text. Nothing was submitted, so **no round exists** and the decision is not consumed — the
+        // reviewer received no request (the review of d096765 on the live run said exactly this). The claim is released
+        // and the next tick asks again; because our text is still in the box, `sendWhenIdle` sends the Enter only and
+        // never a second paste.
+        const released = releaseDispatch(after, send.reason, at)
+        return { state: released, status: 'refused', path: saveFlow(released, { root: options.root }) }
+      }
+      if (send.reason === 'unconfirmed') {
+        // The Enter went in and nothing confirmed it. This is the ambiguous case, and for a review request the round
+        // still starts (§3.6b): the reviewer may be working on the commit we pasted, and a round the flow has forgotten
+        // is a round whose answer is never read. A fix round does not advance.
         const stuck = applyUnconfirmedDispatch(after, phase.decision, send.reason, at)
         return { state: stuck, status: 'unconfirmed', path: saveFlow(stuck, { root: options.root }) }
       }

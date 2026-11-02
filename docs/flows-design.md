@@ -612,6 +612,20 @@ happens before that hint is a guess, and the guesses are named:
 | `pane_changed` | the pane stopped reading `idle` right before the Enter, and the composer did **not** hold our text | the claim is released and the next tick retries when the pane is free |
 | `unconfirmed` | the Enter went in, the busy hint never came, and a second Enter (only when the composer still holds exactly our text) did not wake the pane | `dispatch_unconfirmed` in the journal; for a review request the round still starts (§3.6b) |
 
+**What "our text" looks like in a real composer.** Not what we typed. A live Codex pane renders a long paste on one
+line and cuts it (`› Review commit d096765…`), and folds a very long one into `[Pasted Content 1020 chars]`. Exact
+equality with the prompt therefore never holds there, and the check that required it reported `pane_changed` for a
+paste that was sitting in the box — the live run of 2026-11-02 did exactly that. `composerHoldsOurs` accepts three
+shapes: the exact text, the paste placeholder, and a visible prefix of at least 32 characters (the floor keeps a bare
+`› ` from matching).
+
+**`pane_changed` is not `unconfirmed`.** The first is the pre-Enter refusal: the pane moved on, the composer did not
+hold our text, and **nothing was submitted** — so no round exists, the decision is not consumed, the claim is released
+and the next tick asks again (the Enter goes in without a second paste, because our text is still in the box). The
+second is post-Enter ambiguity, and a review request there still starts its round. Conflating them cost the live run a
+review: the request was consumed as if it had been delivered, the reviewer had never received it, and the flow waited
+for notes that could not arrive.
+
 **Why Codex needs the composer test and not a longer timeout.** On this machine a Codex pane redraws while our paste
 settles: the frame reflows, the busy probe sees a half-drawn `Working` line, and the old code called that
 `pane_changed` — leaving a perfectly good prompt sitting in the composer until a human pressed Enter (D2 of the live

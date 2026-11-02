@@ -747,7 +747,7 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // else's text: pasting again stacks onto it (nine copies of one prompt in one pane), so refuse.
   const composer = composerText(paneText, agent.provider)
   if (composer === null) return { sent: false, reason: 'unknown' }
-  const alreadyOurs = composer !== '' && normalizeComposer(composer) === normalizeComposer(text)
+  const alreadyOurs = composer !== '' && composerHoldsOurs(composer, text)
   if (composer !== '' && !alreadyOurs) return { sent: false, reason: 'composer_dirty' }
 
   if (!alreadyOurs) {
@@ -782,7 +782,7 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   if (detectPaneBusy(beforeEnter, agent.provider) !== 'idle') {
     // Only the composer decides: the busy probe is what the redraw trips, and it says nothing about whose text is in
     // the box. Our exact text in it means the paste landed and the Enter is the only step missing.
-    const holdsOurs = normalizeComposer(composerText(beforeEnter, agent.provider) ?? '') === normalizeComposer(text)
+    const holdsOurs = composerHoldsOurs(composerText(beforeEnter, agent.provider) ?? '', text)
     if (!holdsOurs) return { sent: false, reason: 'pane_changed' }
   }
   try {
@@ -804,7 +804,7 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   const afterBusy = detectPaneBusy(after, agent.provider)
   const afterReady = detectPaneReady(after, agent.provider)
   if (afterBusy !== 'idle' || afterReady !== 'ready') return { sent: false, reason: 'unconfirmed' }
-  const stillOurs = normalizeComposer(composerText(after, agent.provider) ?? '') === normalizeComposer(text)
+  const stillOurs = composerHoldsOurs(composerText(after, agent.provider) ?? '', text)
   if (!stillOurs) return { sent: false, reason: 'unconfirmed' }
   try {
     driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])
@@ -838,6 +838,20 @@ function waitForBusy(
 // provider must still read as ours, while a different text must not.
 function normalizeComposer(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
+}
+
+// Does the composer hold the text we pasted? Exact equality is not enough, and the live codex pane showed why: a long
+// paste is rendered on one line and cut with an ellipsis (`› Review commit d60048c…`), and a very long one is folded
+// into `[Pasted Content 1020 chars]`. Both are our paste and nobody else's, so a visible prefix of what we typed (with
+// a floor, so a bare `› ` cannot match) and the paste placeholder both count.
+function composerHoldsOurs(composer: string, text: string): boolean {
+  const seen = normalizeComposer(composer)
+  const want = normalizeComposer(text)
+  if (seen === '' || want === '') return false
+  if (seen === want) return true
+  if (/^\[Pasted (?:Content|text) \d+ (?:chars|lines)\]/i.test(seen)) return true
+  const visible = seen.replace(/[\u2026.]+$/, '').trimEnd()
+  return visible.length >= 32 && want.startsWith(visible)
 }
 
 export function sendText(agentId: string, text: string, options: RuntimeOptions = {}): void {

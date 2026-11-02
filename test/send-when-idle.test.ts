@@ -235,6 +235,37 @@ describe('sendWhenIdle', () => {
     expect(driver.count('send-keys')).toBe(1)
   })
 
+  it('sends the Enter when a long paste is cut with an ellipsis on one line', async () => {
+    // The live pane of 2026-11-02 showed the real shape: `› Review commit d096765…` — one line, cut by the pane width.
+    // Exact equality with the prompt can never hold there, and refusing made the dispatch look like a pane change.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const prompt = 'Review commit d096765cc5bdda7bdb6769ef9dd99afc5031df0c in ~/projects/reevesagents-flow. This is round 1 of 6.'
+    const redrawn = [
+      '› Review commit d096765cc5bdda7bdb6769ef9dd99afc5031',
+      '  ◦ Working (1s • esc to interrupt)',
+    ].join('\n')
+    driver.captures = [CODEX_IDLE, redrawn, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', prompt, { driver, ...FAST })).toEqual({ sent: true })
+    expect(driver.pasted()).toEqual([prompt])
+    expect(driver.count('send-keys')).toBe(1)
+  })
+
+  it('sends the Enter when codex folded the paste into a placeholder', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const redrawn = [
+      '› [Pasted Content 1020 chars]',
+      '  ◦ Working (1s • esc to interrupt)',
+    ].join('\n')
+    driver.captures = [CODEX_IDLE, redrawn, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', 'x'.repeat(2000), { driver, ...FAST })).toEqual({ sent: true })
+    expect(driver.count('load-buffer')).toBe(1)
+    expect(driver.count('send-keys')).toBe(1)
+  })
+
   it('still refuses when the redraw holds somebody else\'s text', async () => {
     // The other half of D2: a pane that moved on is a refusal, and `composer_dirty` is what the flow escalates on.
     const { sendWhenIdle } = await seed()

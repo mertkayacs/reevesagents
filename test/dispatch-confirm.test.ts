@@ -75,7 +75,7 @@ function seedIdleFlow(): FlowState {
   return state
 }
 
-function ports(send: (_pane: string, _text: string) => { sent: true } | { sent: false, reason: 'pane_changed' }, paneText = '') {
+function ports(send: (_pane: string, _text: string) => { sent: true } | { sent: false, reason: 'unconfirmed' | 'pane_changed' }, paneText = '') {
   return { paneBusy: () => 'idle' as const, peek: () => paneText, send }
 }
 
@@ -85,7 +85,7 @@ describe('an unconfirmed review request is still a round (D1)', () => {
     const pasted: string[] = []
     const result = stepFlow('run-1', {
       now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
-      ports: ports((_pane, text) => { pasted.push(text); return { sent: false, reason: 'pane_changed' } }),
+      ports: ports((_pane, text) => { pasted.push(text); return { sent: false, reason: 'unconfirmed' } }),
       evidence_policy: { min_seconds: 0, retries: 1 },
     })
 
@@ -110,11 +110,41 @@ describe('an unconfirmed review request is still a round (D1)', () => {
     expect(readFlow('run-1').state).toBe('reviewing')
   })
 
+  it('does not consume the round when the Enter was never pressed', () => {
+    // `pane_changed` is the pre-Enter refusal, and the live review of d096765 said what it means: the reviewer never
+    // received the request, so a round that starts here waits for notes that cannot arrive. No round, no clock — the
+    // claim is released and the next tick asks again.
+    seedIdleFlow()
+    const pasted: string[] = []
+    const first = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: ports((_pane, text) => { pasted.push(text); return { sent: false, reason: 'pane_changed' } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(first.status).toBe('refused')
+    const after = readFlow('run-1')
+    expect(after.state).toBe('idle')
+    expect(after.review_started_at).toBeNull()
+    expect(after.pending).toBeNull()
+
+    // The retry: the pane is free, the composer still holds our text, so the same prompt goes out without a second paste
+    // (the port stands in for `sendWhenIdle`, which is what proves that in test/send-when-idle.test.ts).
+    const again = stepFlow('run-1', {
+      now: NOW + 3_000, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: ports((_pane, text) => { pasted.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(again.status).toBe('applied')
+    expect(pasted).toHaveLength(2)
+    expect(readFlow('run-1').state).toBe('reviewing')
+  })
+
   it('reads the answer the reviewer wrote after the unconfirmed request, and accepts it', () => {
     seedIdleFlow()
     stepFlow('run-1', {
       now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
-      ports: ports(() => ({ sent: false, reason: 'pane_changed' })),
+      ports: ports(() => ({ sent: false, reason: 'unconfirmed' })),
       evidence_policy: { min_seconds: 30, retries: 1 },
     })
 
