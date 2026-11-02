@@ -1192,11 +1192,11 @@ function bootstrapDecision(state: FlowState, observations: FlowObservations): Fl
     // Nothing to start and no plan to start it from: the only thing left to do is write the stale value away.
     return staleId === null ? null : dispatch(hold(state, 'head_unchanged'))
   }
-  // The picker must not take the same item twice: a stale id that still has a brief is skipped (the work was already sent for
-  // it), a stale id without one is simply dropped — skipping it would make the picker jump over a ready item that follows.
-  const staleItem = staleId === null ? undefined : plan.items.find(item => item.id === staleId)
-  const skip = inFlightId ?? (staleItem && staleItem.spec ? staleId : null)
-  const next = planNext(plan, { skip })
+  // `skip` is for the item that is genuinely in flight and must not be started twice. A stale id is *not* in flight — whatever
+  // its status says, `queued` included — so it is never passed on: it has just been cleared above, and if it is the first ready
+  // item the picker takes it. (Block 38: handing it over as `skip` still made the picker jump past a ready item, and the
+  // previous fix only stopped doing that for items without a brief.)
+  const next = planNext(plan, { skip: inFlightId })
   // `needs_brief` / `blocked_owner` / `in_flight` are states of the document, reported by `flow plan status` on every
   // read. Escalating or holding on them from `idle` would repeat one line every tick and would let a ready item later
   // in the document be picked over a blocked one, which block 13's rule forbids.
@@ -1475,8 +1475,10 @@ export function decisionChangesState(state: FlowState, decision: FlowDecision): 
   if (state.claim.verdict_count !== decision.next_claim.verdict_count) return true
   if (state.review_started_at !== decision.next_review_started_at) return true
   // A hold that clears a stale `active_plan_item` must reach the disk; otherwise the field survives and blocks the plan for
-  // ever, which is the defect the clear exists for.
-  if ((decision.next_active_plan_item ?? state.active_plan_item) !== state.active_plan_item) return true
+  // ever, which is the defect the clear exists for. `undefined` means "the decision does not touch the field", `null` means
+  // "cleared" — `??` conflated them and hid every clear (block 38, MAJOR 2).
+  const nextActive = decision.next_active_plan_item === undefined ? state.active_plan_item : decision.next_active_plan_item
+  if (nextActive !== state.active_plan_item) return true
   if (decision.kind === 'dispatch_spec' && decision.spec_id) {
     return !state.dispatched_specs.includes(decision.spec_id)
   }

@@ -820,11 +820,11 @@ describe('a closed item must not stay in flight (D11)', () => {
     expect(readFlow('run-1').log.some(entry => entry.event === 'stale_active_item_cleared')).toBe(true)
   })
 
-  it('does not hand a queued stale id to the picker, so the next ready item is not skipped', () => {
+  it('does not hand a queued stale id to the picker, so the first ready item is not skipped', () => {
     // The mirror can lag: the item was closed and the flow still names it, and that item is `queued` again (a re-imported
-    // document). Passing it as `skip` made the picker jump over the one item that was ready (block 37, MAJOR).
+    // document). It is not in flight, so it must not be skipped — the picker takes it (it is the first ready item), which is
+    // exactly what "skip only what is really running" means (block 38, MAJOR 1).
     const plan = planWithTwo(['P1.1', 'P1.2'])
-    // P1.1 is `queued` (not in flight), P1.2 is ready with a brief — and it is P1.1 that the flow names.
     savePlan({ ...plan, items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'queued' as const } : item)) })
     idleNaming('P1.1')
     const sent: string[] = []
@@ -835,14 +835,34 @@ describe('a closed item must not stay in flight (D11)', () => {
       evidence_policy: { min_seconds: 0, retries: 1 },
     })
 
-    // P1.2 was chosen — not skipped along with the stale id.
+    // The first ready item was taken — not jumped over because the field happened to name it.
     expect(result.decision.reason).toBe('plan_item_dispatched')
-    expect(readFlow('run-1').active_plan_item).toBe('P1.2')
+    expect(readFlow('run-1').active_plan_item).toBe('P1.1')
     expect(sent).toHaveLength(1)
     // One recovery record, and the decision keeps its own event.
     const log = readFlow('run-1').log
     expect(log.filter(entry => entry.event === 'stale_active_item_cleared')).toHaveLength(1)
     expect(log.some(entry => entry.event === 'dispatch_spec' || entry.event === 'plan_item_dispatched')).toBe(true)
+  })
+
+  it('writes the clear even when the tick holds on a dirty tree', () => {
+    // `next_active_plan_item: null` is a value, not "the field is untouched": with `??` the change was invisible, so the hold
+    // was silent and both journal lines vanished — the field stayed on disk (block 38, MAJOR 2).
+    const plan = planWithTwo(['P1.1'])
+    savePlan(plan)
+    idleNaming('P1.1')
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: false, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(result.decision.reason).toBe('tree_dirty')
+    const after = readFlow('run-1')
+    expect(after.active_plan_item).toBeNull()
+    const log = after.log
+    expect(log.filter(entry => entry.event === 'stale_active_item_cleared')).toHaveLength(1)
+    expect(log.some(entry => entry.event === 'tree_dirty')).toBe(true)
   })
 
   it('writes the stale value away even when there is nothing left to start', () => {

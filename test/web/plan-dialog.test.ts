@@ -31,10 +31,13 @@ class FakeDialog {
     for (const listener of this.listeners.close ?? []) listener()
   }
   addEventListener(name: string, listener: () => void): void { (this.listeners[name] ||= []).push(listener) }
-  // What a browser does with Escape on a modal dialog: the keydown reaches the dialog, which closes itself and dispatches
-  // `close`. The test sends a real `keydown` event; nothing calls `close()` directly.
-  dispatchEvent(event: { type?: string, key?: string }): void {
-    if (event && event.type === 'keydown' && event.key === 'Escape' && this.open) this.close()
+  // What a browser does with Escape on a modal dialog: the dialog receives a `keydown` for Escape, closes itself and dispatches
+  // `close`. Node has no `KeyboardEvent`, so the test builds a real `Event` named `keydown` with a `key` property — the event
+  // object goes through `dispatchEvent`, not a direct `close()` call.
+  dispatchEvent(event: Event): boolean {
+    const key = (event as Event & { key?: string }).key
+    if (event && event.type === 'keydown' && key === 'Escape' && this.open) this.close()
+    return true
   }
 }
 
@@ -85,6 +88,13 @@ function loadController(): (_doc: unknown, _core?: unknown) => Controller {
   }
 }
 
+// A genuine DOM event: `Event('keydown')` with the key a browser puts on it.
+function escapeKeydown(): Event {
+  const event = new Event('keydown', { cancelable: true })
+  Object.defineProperty(event, 'key', { value: 'Escape' })
+  return event
+}
+
 const planButton = (doc: FakeDoc, runId: string): FakeEl => {
   const button = doc.mount(new FakeEl('plan', runId))
   button.setAttribute('data-plan-run', runId)
@@ -113,7 +123,7 @@ describe('closing the plan dialog puts focus back where the user was', () => {
     expect(second.getAttribute('aria-expanded')).toBe('true')
 
     // The user presses Esc: a real keydown on the dialog.
-    dialog.dispatchEvent({ type: 'keydown', key: 'Escape' })
+    dialog.dispatchEvent(escapeKeydown())
 
     expect(dialog.open).toBe(false)
     expect(controller.openRunId).toBeNull()
@@ -157,13 +167,13 @@ describe('closing the plan dialog puts focus back where the user was', () => {
 
     dialog.showModal()
     controller.open('run-1')
-    dialog.dispatchEvent({ type: 'keydown', key: 'Escape' })
+    dialog.dispatchEvent(escapeKeydown())
     expect(card.focused).toBe(1)
 
     doc.unmount(card)
     dialog.showModal()
     controller.open('run-1')
-    dialog.dispatchEvent({ type: 'keydown', key: 'Escape' })
+    dialog.dispatchEvent(escapeKeydown())
     expect(logs.focused).toBe(1)
   })
 
@@ -188,7 +198,7 @@ describe('closing the plan dialog puts focus back where the user was', () => {
     controller.attach(dialog)
     dialog.showModal()
     controller.open('run-1')
-    dialog.dispatchEvent({ type: 'keydown', key: 'Escape' })
+    dialog.dispatchEvent(escapeKeydown())
 
     expect(second.getAttribute('aria-expanded')).toBe('false')
     expect(controller.openRunId).toBeNull()
