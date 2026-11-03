@@ -239,6 +239,64 @@ export type StagingRead =
   | { ok: true, text: string, verdict: FlowVerdict, counts: NotesCounts, source: 'staging' }
   | { ok: false, reason: NotesMiss | string }
 
+// The inbox is where a reviewer writes its answer, and the prompt names a file inside it. `flow start --replace` removes
+// the whole notes directory, so without this the prompt can name a path whose parent does not exist: the answer then has
+// nowhere to go and the reviewer has to invent the directory itself (block 69, second live fact). Best effort — a
+// directory that cannot be created must not stop a review request.
+export function ensureNotesInbox(runId: string, root?: string): void {
+  const dir = inboxDir(runId, root)
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    try { chmodSync(dir, 0o700) } catch { /* the directory may be owned elsewhere */ }
+  } catch {
+    // The prompt still names the path, and a reviewer that can write will create it.
+  }
+}
+
+// One answer for one commit, whatever round number it was written under. `reviewRound()` derives its round from
+// `state.rounds`, and that counter moves without a review happening (a phantom fix, an operator's manual retry): the
+// answer the reviewer wrote for head H is still the answer for head H, and it is found by the commit it names rather than
+// by a number the flow happens to be on (block 69). A newer round of the same head wins, and the durable record answers
+// when the staging file was already published and removed.
+export interface NewestNotesRead {
+  ok: boolean
+  round?: number
+  text?: string
+  verdict?: FlowVerdict
+  counts?: NotesCounts
+  // Where it was read from: a staging file is still unpublished and has to be published by the tick that consumes it.
+  source?: 'staging' | 'durable'
+  reason?: NotesMiss | string
+}
+
+export function readNewestNotes(runId: string, head: string, options: NotesOptions = {}): NewestNotesRead {
+  const wanted = assertHead(head).toLowerCase()
+  let names: string[]
+  try {
+    names = readdirSync(inboxDir(runId, options.root))
+  } catch {
+    names = []
+  }
+  const stagingRounds = names
+    .map(name => new RegExp(`^${wanted}-r(\\d+)\\.md$`, 'i').exec(name))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map(match => Number(match[1]!))
+    .sort((a, b) => b - a)
+  let reason: NotesMiss | string = 'missing'
+  for (const round of stagingRounds) {
+    const read = readStaging(runId, head, round, options)
+    if (read.ok) return { ok: true, round, text: read.text, verdict: read.verdict, counts: read.counts, source: 'staging' }
+    reason = read.reason
+  }
+  const durableRoundsNewestFirst = durableRounds(runId, wanted, options.root).sort((a, b) => b - a)
+  for (const round of durableRoundsNewestFirst) {
+    const read = readDurable(runId, head, round, options)
+    if (read.ok) return { ok: true, round, text: read.text, verdict: read.verdict, counts: read.counts, source: 'durable' }
+    reason = read.reason
+  }
+  return { ok: false, reason }
+}
+
 // The durable record of one round, validated the same way. It answers ticks *after* the staging file was
 // published and removed — which is every tick that held on a busy dev pane after the file arrived, so
 // without this the round could never be answered at all. Already sanitised on disk; the text is

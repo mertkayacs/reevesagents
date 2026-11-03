@@ -64,6 +64,9 @@ export interface FlowStatusPayload {
   close_reason: string | null
   queue: { id: string, title: string, source_path: string | null }[]
   dispatched_specs: string[]
+  // A dispatch whose submit was never confirmed, so an operator can see why a round has not started — the journal always
+  // knew; `flow status` and `/api/state` did not (block 69).
+  dispatch: FlowDispatchNote | null
   repo: string
   updated_at: string
   last_decision: { at: string, event: string, detail: string } | null
@@ -75,6 +78,32 @@ export interface FlowQueueEntry {
   id: string
   title: string
   source_path: string | null
+}
+
+// A dispatch that was not confirmed, as a surface reports it.
+export interface FlowDispatchNote {
+  state: 'unconfirmed'
+  // The journal's own words for it: `unconfirmed review_requested <head>` or the retry attempt.
+  reason: string
+  at: string
+}
+
+// Was the last dispatch confirmed? The journal is the sequence — a state field would have to be cleared by every later
+// success, and the entries already say it: `dispatch_unconfirmed` / `dispatch_retry_enter` leave the dispatch open, a
+// settled decision (`request_review`, `dispatch_fix`, `dispatch_spec`) or a refusal closes it. The brief's point is that
+// this fact used to live only in the log, where nobody watching the flow could see it (block 69).
+const SETTLED_DISPATCH_EVENTS = /^(?:request_review|dispatch_fix|dispatch_spec|plan_item_dispatched)$/
+export function flowDispatchNote(state: FlowState): FlowDispatchNote | null {
+  for (let index = state.log.length - 1; index >= 0; index -= 1) {
+    const entry = state.log[index]!
+    if (entry.event === 'dispatch_unconfirmed' || entry.event === 'dispatch_retry_enter') {
+      return { state: 'unconfirmed', reason: redactSecrets(entry.detail), at: entry.at }
+    }
+    if (entry.event === 'dispatch_claimed' || entry.event === 'dispatch_refused') continue
+    if (SETTLED_DISPATCH_EVENTS.test(entry.event)) return null
+    // Anything else (a hold, a pause, a round release) says nothing about the dispatch: keep looking backwards.
+  }
+  return null
 }
 
 // A queued block is summarised, never dumped: `body` is repository-authored text and the payload is
@@ -165,6 +194,7 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
     close_reason: state.close_reason ? redactSecrets(state.close_reason) : null,
     queue,
     dispatched_specs: state.dispatched_specs,
+    dispatch: flowDispatchNote(state),
     repo: shortHomePath(state.repo),
     updated_at: state.updated_at,
     // `flow status` and an MCP host both want "why is it sitting there" in one field.
@@ -178,7 +208,7 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
 // The badge a run row shows. Derived on every read from the flow document, never stored in a run
 // record: a heuristic written into a lifecycle field outlives the reason that produced it, and the
 // next reader cannot tell "escalated" from "was escalated an hour ago".
-export type FlowAttention = 'escalated' | 'review_timeout' | 'plan_waiting'
+export type FlowAttention = 'escalated' | 'review_timeout' | 'dispatch_unconfirmed' | 'plan_waiting'
 
 // What the plan is waiting for, when it is waiting for a human. Supplied by the caller that read `plan.json`:
 // the badge is a view, and the plan is a separate file (`docs/plan-model-design.md` §2.2).
@@ -218,9 +248,14 @@ export function flowBadge(
     && state.review_started_at !== null
     && now - state.review_started_at >= state.review_timeout_sec * 1000
   // `escalated` and a timed-out review outrank the plan: they are pipeline problems, and the plan waiting is the
-  // normal "somebody has to write a brief" case. A parked or closed flow owns no plan attention.
+  // normal "somebody has to write a brief" case. A dispatch that was never confirmed is a pipeline problem too — the
+  // round has not started — so it outranks the plan and sits below the two that need a human's decision (block 69).
   const escalation = state.state === 'escalated' ? 'escalated' : overdue ? 'review_timeout' : null
-  const planAttention = escalation === null && plan !== null && (state.state === 'idle' || state.state === 'reviewing' || state.state === 'fixing')
+  const stalled = escalation === null && state.state !== 'done' && state.state !== 'orphaned' && state.state !== 'paused'
+    && flowDispatchNote(state) !== null
+    ? 'dispatch_unconfirmed' as const
+    : null
+  const planAttention = escalation === null && stalled === null && plan !== null && (state.state === 'idle' || state.state === 'reviewing' || state.state === 'fixing')
     ? 'plan_waiting' as const
     : null
   return {
@@ -228,7 +263,7 @@ export function flowBadge(
     rounds: state.rounds,
     max_rounds: state.max_rounds,
     review_overdue: overdue,
-    attention: escalation ?? planAttention,
+    attention: escalation ?? stalled ?? planAttention,
     plan: planAttention === null ? null : plan,
     plan_progress: planProgress,
     close_reason: state.close_reason ?? null,

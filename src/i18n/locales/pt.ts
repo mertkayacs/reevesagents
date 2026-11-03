@@ -56,6 +56,7 @@ export const pt = {
     'flow.attention.escalated': 'rondas esgotadas',
     'flow.attention.review_timeout': 'revisão expirada',
     'flow.attention.plan_waiting': 'plano: à espera de um brief',
+    'flow.attention.dispatch_unconfirmed': 'envio não confirmado',
     'flow.badge.rounds': 'fluxo: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'fluxo: {{status}}',
   'flow.badge.plan_progress': 'fluxo: plano {{done}}/{{total}}',

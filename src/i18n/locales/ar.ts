@@ -57,6 +57,7 @@ export const ar = {
     'flow.attention.escalated': 'انتهت الجولات',
     'flow.attention.review_timeout': 'انتهت مهلة المراجعة',
     'flow.attention.plan_waiting': 'الخطة: في انتظار موجز',
+    'flow.attention.dispatch_unconfirmed': 'الإرسال غير مؤكد',
     'flow.badge.rounds': 'التدفق: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'التدفق: {{status}}',
   'flow.badge.plan_progress': 'التدفق: خطة {{done}}/{{total}}',

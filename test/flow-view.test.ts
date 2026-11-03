@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os'
 import type { FlowState } from '../src/core/flow.js'
 import { createFlowState } from '../src/core/flow.js'
 import { flowPath, saveFlow } from '../src/core/flow-store.js'
-import { flowStatusPayload, readFlowBadge, resolveFlowRunId } from '../src/core/flow-view.js'
+import { flowBadge, flowDispatchNote, flowStatusPayload, readFlowBadge, resolveFlowRunId } from '../src/core/flow-view.js'
 
 // The published payload: one shape for `flow status --json` and for the MCP `flow_status` tool, so
 // a host CLI and a terminal cannot be told different things about the same flow.
@@ -154,5 +154,49 @@ describe('flowStatusPayload', () => {
       claim: { head: 'abc1234', verdict: 'CHANGES_REQUESTED', verdict_count: 3, verdict_applied: false, spec_id: null },
       last_decision: null,
     })
+  })
+})
+
+describe('a dispatch nobody confirmed is visible, not only journalled (block 69)', () => {
+  const UNCONFIRMED = [
+    { at: '2026-01-01T00:00:00.000Z', event: 'dispatch_claimed', detail: 'review_requested abc1234' },
+    { at: '2026-01-01T00:00:01.000Z', event: 'dispatch_unconfirmed', detail: 'unconfirmed review_requested abc1234' },
+    { at: '2026-01-01T00:00:02.000Z', event: 'hold', detail: 'awaiting_verdict' },
+  ]
+
+  it('reports it in the payload, with the journal\'s own words', () => {
+    const state = makeState('run-unconfirmed', {
+      state: 'idle',
+      log: UNCONFIRMED,
+    })
+
+    expect(flowDispatchNote(state)).toEqual({
+      state: 'unconfirmed',
+      reason: 'unconfirmed review_requested abc1234',
+      at: '2026-01-01T00:00:01.000Z',
+    })
+    expect(flowStatusPayload(state).dispatch).toMatchObject({ state: 'unconfirmed' })
+  })
+
+  it('keeps it while the retry is pending, and drops it once a dispatch settles', () => {
+    const retry = makeState('run-retry', {
+      log: [...UNCONFIRMED, { at: '2026-01-01T00:01:00.000Z', event: 'dispatch_retry_enter', detail: 'unconfirmed_paste: attempt 1/3' }],
+    })
+    expect(flowDispatchNote(retry)?.reason).toContain('attempt 1/3')
+
+    const settled = makeState('run-settled', {
+      log: [...UNCONFIRMED, { at: '2026-01-01T00:02:00.000Z', event: 'request_review', detail: 'review_requested abc1234' }],
+    })
+    expect(flowDispatchNote(settled)).toBeNull()
+  })
+
+  it('puts the flow badge into the attention tone', () => {
+    // The chip already knows how to say "a human has to look"; a dispatch that never started is exactly that.
+    const state = makeState('run-badge', { state: 'idle', log: UNCONFIRMED })
+    const badge = flowBadge(state, Date.parse('2026-01-01T00:00:03.000Z'))
+    expect(badge.attention).toBe('dispatch_unconfirmed')
+    // A closed or parked flow owns no attention: nobody is waiting for it to move.
+    expect(flowBadge({ ...state, state: 'paused' }).attention).not.toBe('dispatch_unconfirmed')
+    expect(flowBadge({ ...state, state: 'done' }).attention).not.toBe('dispatch_unconfirmed')
   })
 })

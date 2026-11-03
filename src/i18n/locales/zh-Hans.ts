@@ -57,6 +57,7 @@ export const zhHans = {
     'flow.attention.escalated': '轮次已用完',
     'flow.attention.review_timeout': '评审超时',
     'flow.attention.plan_waiting': '计划：等待任务书',
+    'flow.attention.dispatch_unconfirmed': '派发未确认',
     'flow.badge.rounds': '流程：{{status}}（{{rounds}}/{{max}}）',
     'flow.badge.status': '流程：{{status}}',
   'flow.badge.plan_progress': '流程：计划 {{done}}/{{total}}',

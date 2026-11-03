@@ -288,7 +288,7 @@ describe('the engine with a plan', () => {
       items: plan.items.map(item => ({ ...item, status: 'in_work' as const, rounds: 2 })),
     }
     const state = reviewingState({ active_plan_item: 'P1.1', rounds: 2 })
-    const decision = flowTick(state, observationsFor(state, spent, { verdict: 'CHANGES_REQUESTED' }))
+    const decision = flowTick(state, observationsFor(state, spent, { verdict: 'CHANGES_REQUESTED', verdict_source: 'file' }))
 
     expect(decision.reason).toBe('rounds_exhausted')
     expect(decision.next_state).toBe('reviewing')
@@ -299,11 +299,11 @@ describe('the engine with a plan', () => {
     const plan = planWithBriefs(['P1.1', 'P1.2'])
     // `max_total_rounds` is 5: four spent rounds still allow the fifth.
     const fourSpent = reviewingState({ active_plan_item: 'P1.1', rounds: 4, claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null } })
-    const allowed = flowTick(fourSpent, observationsFor(fourSpent, plan, { verdict: 'CHANGES_REQUESTED' }))
+    const allowed = flowTick(fourSpent, observationsFor(fourSpent, plan, { verdict: 'CHANGES_REQUESTED', verdict_source: 'file' }))
     expect(allowed.kind).toBe('dispatch_fix')
 
     const fiveSpent = reviewingState({ active_plan_item: 'P1.1', rounds: 5 })
-    const escalated = flowTick(fiveSpent, observationsFor(fiveSpent, plan, { verdict: 'CHANGES_REQUESTED' }))
+    const escalated = flowTick(fiveSpent, observationsFor(fiveSpent, plan, { verdict: 'CHANGES_REQUESTED', verdict_source: 'file' }))
     expect(escalated.reason).toBe('total_rounds_exhausted')
     expect(escalated.next_state).toBe('escalated')
   })
@@ -482,7 +482,12 @@ describe('the runner with a plan on disk', () => {
     }
     seedFlow(spent)
 
-    const result = stepFlow('run-1', { now: NOW, at: AT, head: 'aaa111', tree_clean: true, plan: undefined, ports: portsFor('MAJOR x\nVERDICT: CHANGES_REQUESTED'), verdict_evidence: EVIDENCE })
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: 'aaa111', tree_clean: true, plan: undefined,
+      ports: portsFor('MAJOR x\nVERDICT: CHANGES_REQUESTED'), verdict_evidence: EVIDENCE,
+      // A fix round acts only on the notes file the prompt named (block 69).
+      notes: { source: 'file', verdict: 'CHANGES_REQUESTED', head: 'aaa111', ref: 'notes/aaa111-r1.md', text: 'MAJOR x', counts: { blocker: 0, major: 1, minor: 0 } },
+    })
 
     expect(result.decision.reason).toBe('rounds_exhausted')
     const after = readPlan('run-1')
@@ -545,7 +550,11 @@ describe('the runner with a plan on disk', () => {
     const plan = planWithBriefs(['P1.1'])
     seedFlow(plan)
 
-    stepFlow('run-1', { now: NOW, at: AT, head: 'aaa111', tree_clean: true, plan: undefined, ports: portsFor('MAJOR x\nVERDICT: CHANGES_REQUESTED'), verdict_evidence: EVIDENCE })
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'aaa111', tree_clean: true, plan: undefined,
+      ports: portsFor('MAJOR x\nVERDICT: CHANGES_REQUESTED'), verdict_evidence: EVIDENCE,
+      notes: { source: 'file', verdict: 'CHANGES_REQUESTED', head: 'aaa111', ref: 'notes/aaa111-r1.md', text: 'MAJOR x', counts: { blocker: 0, major: 1, minor: 0 } },
+    })
 
     expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.rounds).toBe(1)
   })

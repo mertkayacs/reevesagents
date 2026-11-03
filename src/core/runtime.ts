@@ -152,7 +152,11 @@ function pasteTextToPane(driver: RuntimeDriver, paneId: string, text: string): v
   const bufferName = `reeves_${randomUUID().slice(0, 8)}`
   driver.tmux(['load-buffer', '-b', bufferName, '-'], text)
   try {
-    driver.tmux(['paste-buffer', '-b', bufferName, '-t', paneId])
+    // `-p` is bracketed paste: tmux wraps the text in the escape sequences a modern composer understands as one paste.
+    // Without it every character arrives as a keystroke, the provider renders the whole prompt into its input box, and a
+    // single Enter does not submit it — the prompt sat in the codex composer until a human pressed Enter (block 69).
+    // tmux only emits the brackets for an application that enabled the mode, so a plain shell is unaffected.
+    driver.tmux(['paste-buffer', '-p', '-b', bufferName, '-t', paneId])
   } finally {
     try { driver.tmux(['delete-buffer', '-b', bufferName]) } catch { /* buffer already gone */ }
   }
@@ -682,6 +686,9 @@ export const DEFAULT_IDLE_SEND_TIMINGS: IdleSendTimings = {
 
 export type SendRefusal =
   | 'busy' | 'unknown' | 'stale_pane' | 'headless' | 'pane_changed' | 'unconfirmed'
+  // The paste is still sitting in the composer and the Enter never started a turn: nothing was submitted, and the next
+  // attempt needs one keystroke, not a second paste (block 69).
+  | 'unconfirmed_paste'
   // The composer is not initialised yet (no provider hint): nothing was pasted, retry later.
   | 'target_not_ready'
   // The composer already holds text that is not ours: pasting would stack onto it.
@@ -746,7 +753,13 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // holding our own text has no placeholder to hint with — the pane is ready, it is just waiting for the Enter.
   const composer = composerText(paneText, agent.provider)
   if (composer === null) return { sent: false, reason: 'unknown' }
-  const alreadyOurs = composer !== '' && composerHoldsOurs(composer, text)
+  // A configurable window, not a fixed nap: a cold provider can spend most of a minute before its first
+  // turn shows a busy marker, and the flow calls that a failed dispatch. It is also the window in which a collapsed
+  // paste counts as ours, so it is computed before the composer is judged.
+  const confirmMs = Math.max(timings.confirmMs ?? timings.submitWaitMs, 0)
+  const pollMs = Math.max(timings.confirmPollMs ?? 1000, 1)
+  const ownership: ComposerOwnership = { pastedAt: lastPasteAtByPane.get(agent.tmux_pane_id) ?? null, windowMs: confirmMs }
+  const alreadyOurs = composer !== '' && composerHoldsOurs(composer, text, ownership)
   if (!alreadyOurs && detectPaneReady(paneText, agent.provider) === 'not_ready') {
     return { sent: false, reason: 'target_not_ready' }
   }
@@ -759,7 +772,13 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
       return { sent: false, reason: 'stale_pane' }
     }
   }
-  if (!alreadyOurs) lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
+  // The pane holds our paste as of now — either we have just put it there, or the composer still reads as ours. Recording
+  // it keeps the collapsed-paste marker attributable across a retry tick (block 69).
+  lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
+  // The window starts at the paste that just happened, not at the one before it: the marker the provider draws is the
+  // paste this call made.
+  ownership.pastedAt = lastPasteAtByPane.get(agent.tmux_pane_id) ?? null
+  ownership.now = Date.now()
   // Best effort: the text is already pasted, so a bookkeeping failure must never abort the
   // submit and leave the prompt sitting in the input box with nothing recorded.
   if (!agent.ended_at && agent.task_status === 'queued') {
@@ -784,7 +803,7 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   if (detectPaneBusy(beforeEnter, agent.provider) !== 'idle') {
     // Only the composer decides: the busy probe is what the redraw trips, and it says nothing about whose text is in
     // the box. Our exact text in it means the paste landed and the Enter is the only step missing.
-    const holdsOurs = composerHoldsOurs(composerText(beforeEnter, agent.provider) ?? '', text)
+    const holdsOurs = composerHoldsOurs(composerText(beforeEnter, agent.provider) ?? '', text, ownership)
     if (!holdsOurs) return { sent: false, reason: 'pane_changed' }
   }
   try {
@@ -792,10 +811,6 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   } catch {
     return { sent: false, reason: 'stale_pane' }
   }
-  // A configurable window, not a fixed nap: a cold provider can spend most of a minute before its first
-  // turn shows a busy marker, and the flow calls that a failed dispatch.
-  const confirmMs = Math.max(timings.confirmMs ?? timings.submitWaitMs, 0)
-  const pollMs = Math.max(timings.confirmPollMs ?? 1000, 1)
   if (waitForBusy(agent, options, driver, confirmMs, pollMs)) return { sent: true }
 
   // The Enter was pressed and the pane never turned busy. One more Enter is allowed only when two things
@@ -803,16 +818,17 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // `unknown` — a modal, a login screen, a half-drawn frame — must not receive a keystroke at all), and the
   // composer still holds exactly our text (a submit that did not land, not a blind repeat).
   const after = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
-  const stillOurs = composerHoldsOurs(composerText(after, agent.provider) ?? '', text)
+  const stillOurs = composerHoldsOurs(composerText(after, agent.provider) ?? '', text, ownership)
   // A confirmed submit does not have to announce itself as "busy". Two independent witnesses are enough: our text is out
   // of the composer, and the pane's ledger grew (a tool line, a shell line, a file edit). Providers that never print a
   // busy marker — or print it later than the window — used to look like a failed dispatch while the agent was already
   // working on it (block 23, D9).
   if (!stillOurs && countWorkLines(after) > countWorkLines(beforeEnter)) return { sent: true }
   const afterBusy = detectPaneBusy(after, agent.provider)
-  const afterReady = detectPaneReady(after, agent.provider)
-  if (afterBusy !== 'idle' || afterReady !== 'ready') return { sent: false, reason: 'unconfirmed' }
-  if (!stillOurs) return { sent: false, reason: 'unconfirmed' }
+  // A pane that is not idle cannot take a keystroke, and a box that no longer holds our text is not ours to submit. The
+  // readiness *hint* is deliberately not asked for here: with our text (a collapsed marker included) in the box there is
+  // no placeholder left to hint with, and demanding one made a live composer look dead (block 69, the live codex box).
+  if (afterBusy !== 'idle' || !stillOurs) return { sent: false, reason: 'unconfirmed' }
   // Exactly one retry, and it is the operator's: `Escape`, then `Enter`. Never a bare second Enter — an extra keystroke queued behind
   // the first one is how a delayed Enter answers the *next* prompt (block 45, MAJOR 2). One attempt, only while the text is still
   // exactly ours, and after it the answer is final: `unconfirmed` rather than a third press.
@@ -823,7 +839,16 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   } catch {
     return { sent: false, reason: 'stale_pane' }
   }
-  return waitForBusy(agent, options, driver, Math.min(confirmMs, 5000), pollMs) ? { sent: true } : { sent: false, reason: 'unconfirmed' }
+  if (waitForBusy(agent, options, driver, Math.min(confirmMs, 5000), pollMs)) return { sent: true }
+  // Nothing started a turn. When the box still holds our paste, the honest answer is `unconfirmed_paste`: no round
+  // exists, and the next attempt needs one Enter rather than a second paste (block 69). The paste stamp is refreshed
+  // because the composer was just read as ours, so the next tick's marker is not mistaken for a stranger's text.
+  const finalText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  if (composerHoldsOurs(composerText(finalText, agent.provider) ?? '', text, ownership)) {
+    lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
+    return { sent: false, reason: 'unconfirmed_paste' }
+  }
+  return { sent: false, reason: 'unconfirmed' }
 }
 
 // The window is measured in *simulated* time — the sum of the waits this function asked for — not on the
@@ -851,16 +876,40 @@ function normalizeComposer(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
 }
 
+// `[Pasted Content 1022 chars]` — codex folds a long paste into this marker instead of drawing the text.
+const PASTED_MARKER = /^\[Pasted (?:Content|text) \d+ (?:chars|lines)\]/i
+
+export interface ComposerOwnership {
+  // When this process last pasted into the pane, and how long such a paste counts as ours. A marker older than the
+  // window could be somebody else's, so the window is what makes the marker evidence rather than a guess.
+  pastedAt?: number | null
+  now?: number
+  windowMs?: number
+}
+
+function withinPasteWindow(options: ComposerOwnership): boolean {
+  if (typeof options.pastedAt !== 'number') return false
+  if (!Number.isFinite(options.pastedAt)) return false
+  const windowMs = options.windowMs ?? 0
+  if (windowMs <= 0) return false
+  const age = (options.now ?? Date.now()) - options.pastedAt
+  return age >= 0 && age <= windowMs
+}
+
 // Does the composer hold the text we pasted? Exact equality is not enough, and the live codex pane showed why: a long
 // paste is rendered on one line and cut with an ellipsis (`› Review commit d60048c…`), and a very long one is folded
 // into `[Pasted Content 1020 chars]`. Both are our paste and nobody else's, so a visible prefix of what we typed (with
 // a floor, so a bare `› ` cannot match) and the paste placeholder both count.
-function composerHoldsOurs(composer: string, text: string): boolean {
+//
+// The placeholder is a *collapsed* paste, so it no longer carries the text and cannot be compared: it counts only while
+// a paste of ours is recent (`windowMs`), which is what keeps a prompt somebody else pasted from being submitted as ours
+// (block 69).
+export function composerHoldsOurs(composer: string, text: string, ownership: ComposerOwnership = {}): boolean {
   const seen = normalizeComposer(composer)
   const want = normalizeComposer(text)
   if (seen === '' || want === '') return false
   if (seen === want) return true
-  if (/^\[Pasted (?:Content|text) \d+ (?:chars|lines)\]/i.test(seen)) return true
+  if (PASTED_MARKER.test(seen) && withinPasteWindow(ownership)) return true
   const visible = seen.replace(/[\u2026.]+$/, '').trimEnd()
   return visible.length >= 32 && want.startsWith(visible)
 }

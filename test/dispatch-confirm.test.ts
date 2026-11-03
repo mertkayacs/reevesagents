@@ -628,9 +628,10 @@ describe('a claim written before the state advanced is still settled (MAJOR 1/2)
     expect(after.log.some(entry => entry.event === 'settled_by_observation')).toBe(true)
   })
 
-  it('applies a pane answer once and never asks for the same review again', () => {
+  it('applies the round\'s answer once and never asks for the same review again', () => {
     // MAJOR 2: settling used to re-run the tick from the pre-dispatch state, which could produce *another*
     // `request_review` — a second paste — instead of consuming the answer that is already on screen.
+    // The answer is the reviewer's file: a CHANGES_REQUESTED read from the pane is not bound to the commit (block 69).
     const state = createFlowState({
       run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
     })
@@ -638,11 +639,13 @@ describe('a claim written before the state advanced is still settled (MAJOR 1/2)
       ...state, state: 'idle', claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
       pending: { op_id: 'op-1', kind: 'request_review', target: 'review', head: HEAD, spec_id: null, at: NOW },
     })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', HEAD, 1, root), 'MAJOR src/a.ts:1 — x\nVERDICT: CHANGES_REQUESTED\n')
     const sent: string[] = []
 
     const result = stepFlow('run-1', {
       now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: null,
-      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }, 'MAJOR src/a.ts:1 — x\nVERDICT: CHANGES_REQUESTED'),
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
       evidence_policy: { min_seconds: 0, retries: 1 },
     })
 

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FlowState } from '../src/core/flow.js'
 import { PENDING_TTL_SEC, applyDecisionToState, createFlowState, flowTick } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { durablePath, panePath, publishNotes, stagingPath } from '../src/core/flow-notes.js'
-import type { FlowPorts, FlowStepResult, StepFlowOptions } from '../src/core/flow-runner.js'
+import type { FlowPorts, FlowStepResult, NotesRead, StepFlowOptions } from '../src/core/flow-runner.js'
 import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
 
 // The effect layer: observation reads, and the claim -> act -> settle dispatch. Nothing here sends
@@ -55,6 +55,20 @@ function seed(state = makeState()): FlowState {
 
 function flowFile(): string {
   return join(root, 'flows', 'run-1.json')
+}
+
+// A file answer for the round, as the runner's own seam takes it. Since block 69 a CHANGES_REQUESTED read from the pane
+// is not bound to a commit and is never applied, so a test that wants a fix dispatch describes the file the reviewer
+// wrote — the channel the engine actually reads for a non-ACCEPT verdict.
+function fileAnswer(verdict: 'ACCEPT' | 'CHANGES_REQUESTED', head: string): NotesRead {
+  return {
+    source: 'file',
+    verdict,
+    head,
+    ref: `notes/${head}-r1.md`,
+    text: 'MAJOR src/core/flow.ts:120 — the claim is not re-read',
+    counts: { blocker: 0, major: 1, minor: 0 },
+  }
 }
 
 // A capture with `times` verdicts, so the reviewer's counter is a fixture instead of a mock.
@@ -359,7 +373,8 @@ describe('stepFlow', () => {
       send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed' as const })),
     })
 
-    const first = step(ports, { head: 'aaa111' })
+    // The answer is the reviewer's file: a pane CHANGES_REQUESTED is not bound to a commit and is not applied (block 69).
+    const first = step(ports, { head: 'aaa111', notes: fileAnswer('CHANGES_REQUESTED', 'aaa111') })
 
     expect(first.decision.kind).toBe('dispatch_fix')
     expect(first.status).toBe('unconfirmed')
@@ -372,7 +387,7 @@ describe('stepFlow', () => {
     expect(readFlow('run-1').log.at(-1)?.event).toBe('dispatch_unconfirmed')
 
     // The next tick sees the same verdict on screen and decides nothing: no second paste.
-    const second = step(ports, { head: 'aaa111' })
+    const second = step(ports, { head: 'aaa111', notes: fileAnswer('CHANGES_REQUESTED', 'aaa111') })
     expect(second.decision.kind).toBe('none')
     expect(second.decision.reason).toBe('awaiting_verdict')
     expect(ports.send).toHaveBeenCalledTimes(1)
@@ -403,7 +418,7 @@ describe('stepFlow', () => {
     }))
     const ports = makePorts({ peek: () => verdictCapture(2) })
 
-    const result = step(ports, { head: 'aaa111' })
+    const result = step(ports, { head: 'aaa111', notes: fileAnswer('CHANGES_REQUESTED', 'aaa111') })
 
     expect(result.status).toBe('applied')
     expect(ports.send).not.toHaveBeenCalled()
@@ -443,7 +458,8 @@ describe('a full round', () => {
 
     state = applyDecisionToState(state, flowTick(state, {
       now: NOW, head: 'bbb222', tree_clean: true, dev_pane: 'idle', review_pane: 'idle',
-      verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_notes: 'MAJOR: x', verdict_evidence: EVIDENCE,
+      // A non-ACCEPT verdict acts only from the notes file the prompt asked for (block 69).
+      verdict: 'CHANGES_REQUESTED', verdict_source: 'file', verdict_count: 2, verdict_notes: 'MAJOR: x', verdict_evidence: EVIDENCE,
     }), AT)
     expect(state.state).toBe('fixing')
     expect(state.rounds).toBe(1)
@@ -580,7 +596,7 @@ describe('the notes channel in the runner', () => {
       review_started_at: NOW,
       claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     }))
-    const fast = step(makePorts({ peek: () => verdictCapture(1) }), {
+    const fast = step(makePorts({ peek: () => verdictCapture(1, 'ACCEPT') }), {
       head: NOTES_HEAD,
       verdict_evidence: { elapsed_ms: 1_000, notes_bytes: 0, notes_findings: 0, pane_tool_lines: 0 },
     })
@@ -603,17 +619,17 @@ describe('the notes channel in the runner', () => {
     expect(durable).toContain('ВЕРДИКТ: CHANGES_REQUESTED')
   })
 
-  it('falls back to the pane when the notes file is unusable, and says why in the journal', () => {
+  it('does not apply a pane answer when the notes file is unusable', () => {
+    // The file is the channel a non-ACCEPT verdict has to come through (block 69): an unusable file plus a pane
+    // CHANGES_REQUESTED is a hold, not a fix round — the pane verdict is not bound to this commit.
     seed(reviewingState())
     writeStaging('run-1', NOTES_HEAD, 1, 'MAJOR x.ts:1 — no verdict line here\n')
     const ports = makePorts({ peek: () => verdictCapture(1) })
 
     const result = step(ports, { head: NOTES_HEAD })
 
-    expect(result.decision.kind).toBe('dispatch_fix')
-    const entry = readFlow('run-1').log.at(-1)!
-    expect(entry.detail).toContain('notes_invalid')
-    expect(entry.detail).toContain('no verdict line at the end')
+    expect(result.decision.reason).toBe('awaiting_verdict')
+    expect(ports.send).not.toHaveBeenCalled()
     // The staging file is kept for a retry, and no durable record was published from it.
     expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(true)
     expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(false)
@@ -667,7 +683,8 @@ describe('verdict evidence', () => {
 
   it('does not apply a verdict that arrives in a second with nothing recorded, and asks again once', () => {
     reviewingWithEvidence(FAST_REVIEW)
-    const ports = makePorts({ peek: () => verdictCapture(1) })
+    // The pane may answer ACCEPT and nothing else (block 69); a one-second stamp is still not evidence.
+    const ports = makePorts({ peek: () => verdictCapture(1, 'ACCEPT') })
 
     const result = step(ports, { head: 'aaa111', verdict_evidence: FAST_REVIEW, evidence_policy: { min_seconds: 30, retries: 1 } })
 
@@ -685,11 +702,12 @@ describe('verdict evidence', () => {
   })
 
   it('counts the findings a pane answer named, not only the ones in a file', () => {
-    // The reviewer answered in the pane with three real MAJOR lines: that is evidence of a review, and
-    // counting only the notes file used to reject it and send the round to the retry/escalation path.
+    // The reviewer answered in the pane with the finding lines: that is evidence of a review, and counting only the notes
+    // file used to reject it and send the round to the retry/escalation path. The pane can only answer ACCEPT (block 69),
+    // so that answer closes the flow instead of dispatching a fix.
     seed(makeState({ state: 'reviewing', review_started_at: NOW - 90_000, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } }))
     const pane = [
-      'VERDICT: CHANGES_REQUESTED',
+      'VERDICT: ACCEPT',
       'MAJOR src/core/flow.ts:120 — the claim is not re-read',
       'MINOR docs/GUIDE.md:80 — wording',
     ].join('\n')
@@ -698,7 +716,7 @@ describe('verdict evidence', () => {
     // The evidence is measured by the runner here, not injected: that measurement is the thing under test.
     const result = step(ports, { head: 'aaa111', verdict_evidence: undefined })
 
-    expect(result.decision.kind).toBe('dispatch_fix')
+    expect(result.decision.reason).toBe('flow_done')
   })
 
   it('escalates when the reviewer keeps stamping', () => {
@@ -708,7 +726,7 @@ describe('verdict evidence', () => {
       unsubstantiated_attempts: 1,
       claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     }))
-    const ports = makePorts({ peek: () => verdictCapture(1) })
+    const ports = makePorts({ peek: () => verdictCapture(1, 'ACCEPT') })
 
     const result = step(ports, { head: 'aaa111', verdict_evidence: FAST_REVIEW, evidence_policy: { min_seconds: 30, retries: 1 } })
 
@@ -720,27 +738,28 @@ describe('verdict evidence', () => {
 
   it('accepts a normal review: a minute of work with a finding on record', () => {
     reviewingWithEvidence(MINUTE)
-    const ports = makePorts({ peek: () => verdictCapture(1) })
+    const ports = makePorts({ peek: () => verdictCapture(1, 'ACCEPT') })
 
     const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE, evidence_policy: { min_seconds: 30, retries: 1 } })
 
-    expect(result.decision.kind).toBe('dispatch_fix')
+    // A substantiated pane ACCEPT closes the flow (no plan, no queued block).
+    expect(result.decision.reason).toBe('flow_done')
     expect(result.status).toBe('applied')
-    expect(result.state.rounds).toBe(1)
+    expect(result.state.state).toBe('done')
   })
 
   it('lets review_min_seconds = 0 disable only the time half', () => {
     reviewingWithEvidence(FAST_REVIEW)
-    const ports = makePorts({ peek: () => verdictCapture(1) })
+    const ports = makePorts({ peek: () => verdictCapture(1, 'ACCEPT') })
     const policy = { min_seconds: 0, retries: 1 }
 
-    // Instant but with a finding: accepted.
+    // Instant but with a finding: accepted (and a pane ACCEPT closes the flow).
     const fast = step(ports, {
       head: 'aaa111',
       verdict_evidence: { ...FAST_REVIEW, notes_findings: 1, notes_bytes: 120 },
       evidence_policy: policy,
     })
-    expect(fast.decision.kind).toBe('dispatch_fix')
+    expect(fast.decision.reason).toBe('flow_done')
 
     // Instant and empty: still rejected, because the notes half is not optional.
     seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } }))
@@ -775,11 +794,11 @@ describe('verdict evidence', () => {
   it('escalates instead of pasting when the composer holds somebody else\'s text', () => {
     seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } }))
     const ports = makePorts({
-      peek: () => verdictCapture(1),
+      peek: () => '',
       send: vi.fn(() => ({ sent: false as const, reason: 'composer_dirty' as const })),
     })
 
-    const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE })
+    const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE, notes: fileAnswer('CHANGES_REQUESTED', 'aaa111') })
 
     expect(result.state.state).toBe('escalated')
     expect(result.state.log.at(-1)!.detail).toContain('composer holds text that is not ours')
@@ -790,11 +809,11 @@ describe('verdict evidence', () => {
   it('holds without consuming the round when the target is not ready', () => {
     seed(makeState({ state: 'reviewing', review_started_at: NOW, claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } }))
     const ports = makePorts({
-      peek: () => verdictCapture(1),
+      peek: () => '',
       send: vi.fn(() => ({ sent: false as const, reason: 'target_not_ready' as const })),
     })
 
-    const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE })
+    const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE, notes: fileAnswer('CHANGES_REQUESTED', 'aaa111') })
 
     expect(result.status).toBe('refused')
     expect(result.state.state).toBe('reviewing')
@@ -826,7 +845,7 @@ describe('an answer consumed once', () => {
     const held = step(second, { head: NOTES_HEAD })
     expect(second.send).not.toHaveBeenCalled()
     expect(held.decision.reason).toBe('awaiting_verdict')
-    expect(readFlow('run-1').answered_round).toBe(`${NOTES_HEAD}-r1`)
+    expect(readFlow('run-1').answered_round).toBe(`notes/${NOTES_HEAD}-r1.md`)
   })
 
   it('sees the dev\'s new commit even when the round\'s answer is already consumed', () => {
@@ -837,7 +856,7 @@ describe('an answer consumed once', () => {
     writeStaging('run-1', NOTES_HEAD, 1, ROUND_TEXT)
     const unconfirmed = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed' as const })) })
     expect(step(unconfirmed, { head: NOTES_HEAD }).status).toBe('unconfirmed')
-    expect(readFlow('run-1').answered_round).toBe(`${NOTES_HEAD}-r1`)
+    expect(readFlow('run-1').answered_round).toBe(`notes/${NOTES_HEAD}-r1.md`)
     expect(readFlow('run-1').state).toBe('reviewing')
 
     // The dev committed: a new head, same (consumed) answer still on disk.
@@ -864,6 +883,126 @@ describe('an answer consumed once', () => {
     const applied = step(retry, { head: NOTES_HEAD })
     expect(applied.decision.kind).toBe('dispatch_fix')
     expect(retry.send).toHaveBeenCalledTimes(1)
-    expect(readFlow('run-1').answered_round).toBe(`${NOTES_HEAD}-r1`)
+    expect(readFlow('run-1').answered_round).toBe(`notes/${NOTES_HEAD}-r1.md`)
+  })
+})
+
+describe('a dispatch nobody confirmed (block 69)', () => {
+  // The live incident: the prompt landed in the codex composer, the Enter never started a turn, and the round was spent
+  // anyway — so the flow sat in `awaiting_verdict` until the timeout while the prompt waited for a human's Enter.
+  const fixingState = (): FlowState => makeState({
+    state: 'fixing',
+    claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+  })
+
+  it('spends no round, and the next tick sends the same prompt again', () => {
+    seed(fixingState())
+    const first = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed_paste' as const })) })
+
+    const stuck = step(first, { head: 'bbb222' })
+
+    expect(stuck.decision.kind).toBe('request_review')
+    expect(stuck.status).toBe('refused')
+    const after = readFlow('run-1')
+    // Nothing advanced: not the state, not the round, not the review clock, not the verdict counter.
+    expect(after.state).toBe('fixing')
+    expect(after.rounds).toBe(0)
+    expect(after.review_started_at).toBeNull()
+    expect(after.claim.verdict_count).toBe(0)
+    expect(after.pending).toBeNull()
+    expect(after.enter_retries).toBe(1)
+    expect(after.log.at(-1)).toMatchObject({ event: 'dispatch_retry_enter', detail: 'unconfirmed_paste: attempt 1/3' })
+
+    // The next tick asks for the same review: `sendWhenIdle` sees our text in the box and presses Enter only.
+    const second = makePorts({ send: vi.fn(() => ({ sent: true as const })) })
+    const applied = step(second, { head: 'bbb222' })
+
+    expect(applied.decision.kind).toBe('request_review')
+    expect(applied.status).toBe('applied')
+    expect(second.send).toHaveBeenCalledTimes(1)
+    expect(second.send.mock.calls[0]![1]).toBe(first.send.mock.calls[0]![1])
+    expect(readFlow('run-1').state).toBe('reviewing')
+  })
+
+  it('asks a human after three Enter retries instead of waiting for the review timeout', () => {
+    seed({ ...fixingState(), enter_retries: 3 })
+    const ports = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed_paste' as const })) })
+
+    const result = step(ports, { head: 'bbb222' })
+
+    expect(result.status).toBe('unconfirmed')
+    const after = readFlow('run-1')
+    expect(after.state).toBe('escalated')
+    expect(after.enter_retries).toBe(0)
+    expect(after.log.at(-1)!.detail).toContain('3 Enters did not submit it')
+    expect(after.log.some(entry => entry.event === 'escalate' && entry.detail.includes('review_dispatch_unconfirmed'))).toBe(true)
+  })
+
+  it('writes the retry into the journal, once per attempt', () => {
+    seed(fixingState())
+    const ports = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed_paste' as const })) })
+
+    step(ports, { head: 'bbb222' })
+    step(ports, { head: 'bbb222', now: NOW + 60_000, at: '2026-01-01T00:01:00.000Z' })
+
+    const retries = readFlow('run-1').log.filter(entry => entry.event === 'dispatch_retry_enter')
+    expect(retries.map(entry => entry.detail)).toEqual([
+      'unconfirmed_paste: attempt 1/3',
+      'unconfirmed_paste: attempt 2/3',
+    ])
+    expect(readFlow('run-1').enter_retries).toBe(2)
+  })
+})
+
+describe('a verdict has to name the commit it judges (block 69)', () => {
+  it('refuses a fix on a verdict read from the scrollback of an older commit', () => {
+    seed(makeState({
+      state: 'reviewing',
+      review_started_at: NOW - 120_000,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 3, verdict_applied: false, spec_id: null },
+    }))
+    // The pane still holds the verdicts of earlier rounds: the counter grows (3 → 5) while nothing was written for this head.
+    const ports = makePorts({ peek: () => verdictCapture(5) })
+
+    const result = step(ports, { head: 'aaa111' })
+
+    expect(result.decision.kind).toBe('none')
+    expect(result.decision.reason).toBe('awaiting_verdict')
+    expect(result.decision.log_detail).toContain('not bound to aaa111')
+    expect(ports.send).not.toHaveBeenCalled()
+    expect(readFlow('run-1').rounds).toBe(0)
+    expect(ports.send).toHaveBeenCalledTimes(0)
+  })
+
+  it('reads the answer of a head whose round counter moved, instead of a file nobody wrote', () => {
+    // The live 6f25848: a phantom fix left `rounds` at 1, so the reader looked for `<head>-r2.md` while the reviewer's
+    // answer sat in `<head>-r1.md`. The commit is the binding, not the counter.
+    seed(reviewingState({ rounds: 1 }))
+    writeStaging('run-1', NOTES_HEAD, 1, `MAJOR src/core/flow.ts:120 — the claim is not re-read\nВЕРДИКТ: CHANGES_REQUESTED\n`)
+
+    const result = step(makePorts(), { head: NOTES_HEAD })
+
+    expect(result.decision.kind).toBe('dispatch_fix')
+    expect(result.decision.notes_ref).toBe(`notes/${NOTES_HEAD}-r1.md`)
+    expect(readFlow('run-1').answered_round).toBe(`notes/${NOTES_HEAD}-r1.md`)
+    expect(result.decision.message).toContain('MAJOR src/core/flow.ts:120')
+  })
+
+  it('creates notes/inbox before a prompt names a file in it', () => {
+    // `flow start --replace` removes the whole notes directory; the prompt still names `notes/inbox/<head>-r1.md`, so the
+    // engine has to put the directory back or the answer has nowhere to go.
+    seed(makeState({
+      state: 'fixing',
+      claim: { head: NOTES_HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    }))
+    const inbox = join(root, 'flows', 'run-1', 'notes', 'inbox')
+    expect(existsSync(inbox)).toBe(false)
+
+    const result = step(makePorts(), { head: 'fff9999' })
+
+    expect(result.decision.kind).toBe('request_review')
+    expect(result.decision.message).toContain('notes/inbox/')
+    expect(existsSync(inbox)).toBe(true)
+    expect(statSync(inbox).mode & 0o777).toBe(0o700)
   })
 })

@@ -378,6 +378,25 @@ describe('flow status', () => {
     expect(JSON.parse((await runCli(['flow', 'status', '--run', 'run-c1', '--json'])).out).hold).toBeNull()
   })
 
+  it('says out loud that a dispatch was never confirmed (block 69)', async () => {
+    // The incident: the prompt sat in the codex composer, nothing started, and `flow status` looked healthy because the
+    // fact lived only in the journal.
+    const { state } = seedFlow()
+    saveFlow({
+      ...state,
+      log: [
+        { at: '2026-01-01T00:00:00.000Z', event: 'dispatch_claimed', detail: 'review_requested aaaa111' },
+        { at: '2026-01-01T00:00:01.000Z', event: 'dispatch_unconfirmed', detail: 'unconfirmed review_requested aaaa111' },
+      ],
+    }, { root: tmpDir })
+
+    const { out } = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(out).toContain('dispatch  unconfirmed — unconfirmed review_requested aaaa111')
+
+    const { out: json } = await runCli(['flow', 'status', '--run', 'run-c1', '--json'])
+    expect(JSON.parse(json).dispatch).toMatchObject({ state: 'unconfirmed' })
+  })
+
   it('prints the driver from its receipt, and says none recorded without one (block 68)', async () => {
     seedFlow()
 

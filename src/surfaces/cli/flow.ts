@@ -10,7 +10,7 @@
 import type { Command } from 'commander'
 import type { FlowState } from '../../core/flow.js'
 import { flowPath, readFlow } from '../../core/flow-store.js'
-import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
+import { flowDispatchNote, flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
 import type { FlowStepResult } from '../../core/flow-runner.js'
 import { stepFlow } from '../../core/flow-runner.js'
 import { tickAllFlows } from '../../core/flow-ticker.js'
@@ -108,6 +108,10 @@ function printStatus(state: FlowState, path: string): void {
   if (state.pending) {
     console.log(`dispatch  ${state.pending.kind} -> ${state.pending.target} claimed, unsettled (${state.pending.op_id})`)
   }
+  // A dispatch nobody confirmed, said out loud: the round has not started, and until block 69 only the journal knew
+  // (the incident: the prompt sat in the codex composer while the flow reported nothing wrong).
+  const dispatchNote = flowDispatchNote(state)
+  if (dispatchNote) console.log(`dispatch  unconfirmed — ${dispatchNote.reason}`)
   // A parked flow explains itself here: which state a resume returns to, or why it was parked. The
   // state line alone would leave the operator guessing.
   if (state.state === 'paused') {

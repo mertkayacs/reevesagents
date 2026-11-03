@@ -211,12 +211,12 @@ human is highlighted with the same warning colour as a stale run.
   the flow is escalated, and a human has to clear or send that text before resuming.
   `target_not_ready` — the pane has not drawn its composer yet (a fresh agent, a modal, a login screen);
   nothing was pasted and the round was not spent, so the next `flow tick` retries.
-  `dispatch_unconfirmed` — the text is in the pane but the Enter did not visibly start a turn; the claim is
-  released, the engine presses Enter again only if the composer still holds exactly that text, and the
-  round's answer is not dispatched a second time: the flow waits for the dev to commit (a new head is picked
-  up even though the round's answer is already consumed, and it starts the next review) or for you to look
-  at the pane. A *refused* dispatch is different — nothing was pasted,
-  so the next `flow tick` retries the same answer.
+  `dispatch_unconfirmed` / `dispatch_retry_enter` — the text reached the pane but the Enter did not visibly
+  start a turn. When the composer **still holds the prompt**, no round was started: the engine journalled
+  `dispatch_retry_enter` and the next tick presses Enter only (up to three attempts, then the flow escalates
+  with `review_dispatch_unconfirmed` so a human can submit it). When the composer is empty and nothing started,
+  the round runs anyway and the answer arrives on a later tick. A *refused* dispatch is different — nothing
+  was pasted, so the next `flow tick` retries the same answer.
 - A flow whose run was stopped, deleted or swept is parked as `orphaned`: `flow status`
   prints the reason, nothing is ticked, and `flow stop` is how you close it. Deleting
   the run's history record deletes the flow file too — that is the only automatic
@@ -470,20 +470,25 @@ the fix to the dev, an `ACCEPT` closes the plan item and takes the next one. It 
 
 `dispatch_unconfirmed` means the prompt reached the pane but nothing proved that the agent started on it: the busy
 hint never appeared inside `dispatch_confirm_seconds` (default 90 s), even after the one extra Enter the engine is
-allowed to press when the composer still holds exactly its text. What to do, in order:
+allowed to press while the composer still holds its text. `flow status` says so out loud
+(`dispatch unconfirmed — <reason>`), and the run's flow chip turns into the attention tone.
 
-1. **Look at the pane.** `reevesagents attach <agent>` and read the composer. If the prompt is still sitting there, the
-   agent never submitted it: press Enter once by hand and let it run — the engine never types the same text again, so
-   there is no risk of a double prompt. If the composer is empty and the agent is working, the dispatch simply
-   confirmed late; nothing to do.
-2. **Check the round, not the tick.** For a review request the round has already started (the clock is running and the
-   notes file is read as soon as the reviewer writes it), so the answer will arrive on a later tick even though the
-   send was reported as unconfirmed. `flow status` shows `review: waiting` and the deadline.
+1. **If it says `dispatch_retry_enter attempt N/3`** the prompt is still in the composer and no round was started: the
+   engine presses Enter on the next tick by itself (nothing is pasted again). After the third attempt the flow
+   escalates with `review_dispatch_unconfirmed` — press Enter once in that pane, then `flow resume`.
+2. **If the composer is empty** the dispatch simply confirmed late or the provider swallowed the submit: the round has
+   already started, the clock is running, and the answer arrives on a later tick. `flow status` shows
+   `review: waiting` with the deadline.
 3. **Only then decide.** If the agent is idle with an empty composer and no notes file appeared by the deadline, the
    round times out and the flow escalates with `review_timeout`; `flow resume` gives it a fresh budget once you know
    why (a provider that was not ready, a wrong pane, a login screen).
 4. **Never paste twice.** A second paste of the same prompt is how a queued Enter ends up answering something nobody
    asked for, so the engine refuses it by design and so should you.
+
+A `CHANGES_REQUESTED` is acted on only when it comes from the reviewer's notes file (`notes/inbox/<head>-r<N>.md`): a
+verdict read out of the pane's scrollback belongs to whatever commit was on screen when it was written, and the engine
+will hold (`awaiting_verdict`) rather than send the dev a fix for a review nobody made of that commit. A pane `ACCEPT`
+is still accepted — it closes work, it cannot invent it.
 
 `pane_changed` is a different message: the paste landed but the pane stopped looking idle before the Enter, and the
 composer no longer held the engine's text. Nothing was submitted; the next tick retries when the pane is free.

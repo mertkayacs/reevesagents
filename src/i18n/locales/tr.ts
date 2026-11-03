@@ -54,6 +54,7 @@ export const tr = {
     'flow.attention.escalated': 'tur hakkı bitti',
     'flow.attention.review_timeout': 'inceleme zaman aşımı',
     'flow.attention.plan_waiting': 'plan: brif bekliyor',
+    'flow.attention.dispatch_unconfirmed': 'gönderim onaylanmadı',
     'flow.badge.rounds': 'akış: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'akış: {{status}}',
   'flow.badge.plan_progress': 'akış: plan {{done}}/{{total}}',

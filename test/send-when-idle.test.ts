@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentRecord, Provider, RunRecord } from '../src/core/types.js'
 import type { RuntimeDriver } from '../src/core/runtime.js'
+import { composerHoldsOurs } from '../src/core/runtime.js'
 
 let tmpDir: string
 
@@ -266,29 +267,37 @@ describe('sendWhenIdle', () => {
       '  ◦ Working (1s • esc to interrupt)',
     ].join('\n')
     driver.captures = [CODEX_IDLE, redrawn, CODEX_BUSY]
+    // A real confirm window: the collapsed marker is ours only while a paste of ours is recent (block 69).
+    const timings = { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 30_000, confirmPollMs: 1000 }
 
-    expect(sendWhenIdle('agent-1', 'x'.repeat(2000), { driver, ...FAST })).toEqual({ sent: true })
+    expect(sendWhenIdle('agent-1', 'x'.repeat(2000), { driver, timings })).toEqual({ sent: true })
     expect(driver.count('load-buffer')).toBe(1)
     expect(driver.count('send-keys')).toBe(1)
   })
 
-  it('submits our own text even when the composer shows no readiness hint', async () => {
-    // The sandbox pane: our paste in the box, no placeholder left to hint with, so the readiness probe said
-    // `target_not_ready` and the Enter was never pressed — while the prompt sat there in full view.
+  it('presses Enter only, for a collapsed paste it made on a previous attempt', async () => {
+    // The sandbox pane: our paste collapsed into the marker, no placeholder left to hint with, so the readiness probe
+    // said `target_not_ready` and the Enter was never pressed — while the prompt sat there in full view. The second
+    // attempt knows the box holds our paste (this process put it there a moment ago) and sends nothing but the Enter.
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
     const ours = [
       '› [Pasted Content 1020 chars]R followed by file:line, then what is wrong',
       '  GPT-6-Luna high · ~/projects/flow-demo',
     ].join('\n')
-    // The pane already holds our paste from the previous attempt: nothing to type, only the Enter to press.
-    driver.captures = [ours, ours, CODEX_BUSY]
-
     const prompt = 'x'.repeat(1020) + 'R followed by file:line, then what is wrong'
-    expect(sendWhenIdle('agent-1', prompt, { driver, ...FAST })).toEqual({ sent: true })
-    // No second paste: the text was already there.
-    expect(driver.pasted()).toEqual([])
-    expect(driver.count('send-keys')).toBe(1)
+    const timings = { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 30_000, confirmPollMs: 1000 }
+
+    // First attempt: a clean composer, so this call pastes, the Enter never starts a turn, and the box keeps our marker.
+    driver.captures = [CODEX_IDLE, ours, ours, ours, ours]
+    expect(sendWhenIdle('agent-1', prompt, { driver, timings })).toEqual({ sent: false, reason: 'unconfirmed_paste' })
+    expect(driver.pasted()).toEqual([prompt])
+
+    // Second attempt: the pane already holds our paste — nothing to type, only the Enter to press.
+    driver.captures = [ours, ours, CODEX_BUSY]
+    expect(sendWhenIdle('agent-1', prompt, { driver, timings })).toEqual({ sent: true })
+    expect(driver.pasted()).toEqual([prompt])
+    expect(driver.count('send-keys')).toBe(4)   // Enter, Escape, Enter, then the retry's Enter
   })
 
   it('still refuses when the redraw holds somebody else\'s text', async () => {
@@ -568,12 +577,36 @@ describe('the repeated Enter', () => {
   it('gives up after that one retry instead of pressing a third time', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    // Still our text after Escape and Enter: the pane is not co-operating, and the answer is `unconfirmed`.
+    // Still our text after Escape and Enter: the pane is not co-operating, so the answer is `unconfirmed_paste` — nothing
+    // was submitted and the box still holds the prompt, which is what the flow retries with one Enter (block 69).
     driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT]
 
-    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed' })
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed_paste' })
     const keys = driver.calls.filter(call => call.args[0] === 'send-keys').map(call => call.args[3])
     expect(keys).toEqual(['Enter', 'Escape', 'Enter'])
     expect(driver.pasted()).toEqual(['hello'])
+  })
+})
+
+// The collapsed paste codex draws instead of a long prompt: `[Pasted Content 1022 chars]`. It no longer carries the text,
+// so it counts as ours only while a paste of ours into that pane is recent — evidence, not a guess (block 69).
+describe('a collapsed paste belongs to us only while it is fresh', () => {
+  const prompt = 'x'.repeat(1022)
+  const marker = '[Pasted Content 1022 chars]'
+
+  it('counts the marker while our paste is inside the window', () => {
+    expect(composerHoldsOurs(marker, prompt, { pastedAt: 1_000, now: 2_000, windowMs: 30_000 })).toBe(true)
+    expect(composerHoldsOurs('[Pasted text 40 lines]', prompt, { pastedAt: 1_000, now: 1_500, windowMs: 30_000 })).toBe(true)
+  })
+
+  it('refuses it once the window has passed, and when we never pasted at all', () => {
+    expect(composerHoldsOurs(marker, prompt, { pastedAt: 1_000, now: 31_001, windowMs: 30_000 })).toBe(false)
+    // No paste of ours in this pane: the marker is somebody else's text, whatever it says.
+    expect(composerHoldsOurs(marker, prompt, { pastedAt: null, now: 2_000, windowMs: 30_000 })).toBe(false)
+    expect(composerHoldsOurs(marker, prompt)).toBe(false)
+  })
+
+  it('still recognises our own text exactly, however old the paste is', () => {
+    expect(composerHoldsOurs('hello', 'hello', { pastedAt: 1_000, now: 999_999, windowMs: 1 })).toBe(true)
   })
 })

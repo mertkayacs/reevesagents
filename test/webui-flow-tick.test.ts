@@ -222,6 +222,34 @@ describe('the dashboard advances nothing', () => {
   })
 })
 
+describe('a dispatch nobody confirmed reaches the panel (block 69)', () => {
+  it('puts the run\'s flow chip into the attention tone, with the reason as its label', async () => {
+    const state = readFlow('run-1', { root })
+    saveFlow({
+      ...state,
+      log: [
+        { at: '2026-11-01T00:00:00.000Z', event: 'dispatch_claimed', detail: 'review_requested aaaa111' },
+        { at: '2026-11-01T00:00:01.000Z', event: 'dispatch_unconfirmed', detail: 'unconfirmed review_requested aaaa111' },
+      ],
+    }, { root })
+
+    vi.resetModules()
+    const { startWebServer } = await import('../src/surfaces/webui/server.js')
+    const handle = await startWebServer({ port: 0 })
+    try {
+      const payload = JSON.parse((await httpGet(`${handle.url}/api/state`)).text) as {
+        runs: { flow: { attention: string | null, attention_label: string | null, tone: string } | null }[]
+      }
+      const flow = payload.runs[0]!.flow!
+      expect(flow.attention).toBe('dispatch_unconfirmed')
+      expect(flow.tone).toBe('attention')
+      expect(flow.attention_label).toBe('dispatch not confirmed')
+    } finally {
+      await handle.close()
+    }
+  })
+})
+
 describe('the panel shows the driver, not a setting', () => {
   it('answers tick: null on a machine that has never recorded a pass', async () => {
     vi.resetModules()

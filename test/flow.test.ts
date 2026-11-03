@@ -176,7 +176,7 @@ describe('flowTick — never write into a pane that is not confirmed idle', () =
     })
     const decision = flowTick(
       reviewing,
-      makeObservations({ dev_pane: 'busy', verdict: 'CHANGES_REQUESTED', verdict_count: 2 }),
+      makeObservations({ dev_pane: 'busy', verdict: 'CHANGES_REQUESTED', verdict_source: 'file', verdict_count: 2 }),
     )
     expect(decision.kind).toBe('none')
     expect(decision.reason).toBe('dev_busy')
@@ -196,6 +196,7 @@ describe('flowTick — the round budget is cumulative and terminal', () => {
       reviewing,
       makeObservations({
         verdict: 'CHANGES_REQUESTED',
+        verdict_source: 'file',
         verdict_count: 2,
         verdict_notes: 'MAJOR: null is treated as absent',
       }),
@@ -216,7 +217,7 @@ describe('flowTick — the round budget is cumulative and terminal', () => {
     })
     const decision = flowTick(
       spent,
-      makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_count: 2, verdict_notes: 'BLOCKER: still broken' }),
+      makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_source: 'file', verdict_count: 2, verdict_notes: 'BLOCKER: still broken' }),
     )
     expect(decision.kind).toBe('escalate')
     expect(decision.reason).toBe('rounds_exhausted')
@@ -226,7 +227,7 @@ describe('flowTick — the round budget is cumulative and terminal', () => {
     // An escalated flow cannot be re-ticked into another round: five passes produce no action.
     let escalated = applyDecisionToState(spent, decision, AT)
     for (let pass = 0; pass < 5; pass += 1) {
-      const next = flowTick(escalated, makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_count: 9 }))
+      const next = flowTick(escalated, makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_source: 'file', verdict_count: 9 }))
       expect(next.kind).toBe('none')
       expect(next.reason).toBe('flow_closed')
       escalated = applyDecisionToState(escalated, next, AT)
@@ -242,7 +243,7 @@ describe('flowTick — the round budget is cumulative and terminal', () => {
       rounds: 5,
       claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null },
     })
-    const fix = flowTick(state, makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_count: 2 }))
+    const fix = flowTick(state, makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_source: 'file', verdict_count: 2 }))
     expect(fix.kind).toBe('dispatch_fix')
     state = applyDecisionToState(state, fix, AT)
     expect(state.rounds).toBe(6)
@@ -255,7 +256,7 @@ describe('flowTick — the round budget is cumulative and terminal', () => {
 
     const second = flowTick(
       state,
-      makeObservations({ head: 'bbb222', verdict: 'CHANGES_REQUESTED', verdict_count: 3 }),
+      makeObservations({ head: 'bbb222', verdict: 'CHANGES_REQUESTED', verdict_source: 'file', verdict_count: 3 }),
     )
     expect(second.kind).toBe('escalate')
     expect(second.reason).toBe('rounds_exhausted')
@@ -547,7 +548,7 @@ describe('the dispatch claim', () => {
 
     const escalation = flowTick(
       makeState({ state: 'reviewing', rounds: 6, claim: { head: 'aaa111', verdict: null, verdict_count: 1, verdict_applied: false, spec_id: null } }),
-      makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_count: 2 }),
+      makeObservations({ verdict: 'CHANGES_REQUESTED', verdict_source: 'file', verdict_count: 2 }),
     )
     expect(escalation.kind).toBe('escalate')
     expect(claimPendingDispatch(idle, escalation, { op_id: 'op-2', now: NOW, at: AT })).toBe(idle)

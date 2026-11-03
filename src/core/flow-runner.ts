@@ -24,19 +24,22 @@ import type { PaneBusyState } from './activity.js'
 import type { EvidencePolicy, FlowDecision, FlowHold, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
 import { DEFAULT_EVIDENCE_POLICY } from './flow.js'
 import {
+  MAX_ENTER_RETRIES,
   appendLog,
   applyDecisionToState,
   applyUnconfirmedDispatch,
   escalateOnDirtyComposer,
+  escalateUnconfirmedDispatch,
   claimPendingDispatch,
   decisionChangesState,
   flowTick,
   releaseDispatch,
+  retryEnterDispatch,
 } from './flow.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import {
-  durablePath, findingsText, isCommitId, notesRef, pruneClosedFlowNotes, pruneNotes,
-  publishNotesIfChanged, readDurable, readStaging, stagingPath, writePaneCapture,
+  countFindings, durablePath, ensureNotesInbox, findingsText, isCommitId, notesRef, pruneClosedFlowNotes, pruneNotes,
+  publishNotesIfChanged, readDurable, readNewestNotes, readStaging, stagingPath, writePaneCapture,
 } from './flow-notes.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { loadConfig } from './config.js'
@@ -179,6 +182,8 @@ export interface NotesRead {
   // measured on this: a 16-byte `VERDICT: ACCEPT` with «no findings» is a substantiated answer, and counting only
   // its finding lines reported `notes=0/0b` for a file that was right there (D3).
   evidence_text?: string
+  // The round of the file that answered, when it was found by the head rather than by the round this tick computed.
+  round?: number
 }
 
 // Is the flow's run still there, and are both of its role agents still part of it? An archived run
@@ -262,6 +267,10 @@ export function roundNotesPaths(state: FlowState, options: { root?: string } = {
   const head = state.claim.head
   const round = reviewRound(state)
   if (!isCommitId(head)) return { staging: '', durable: '', ref: '' }
+  // The prompt names a file inside `notes/inbox`, so the directory has to exist before the prompt is pasted: a
+  // `flow start --replace` removes the whole notes directory, and a reviewer whose answer has nowhere to go is a round
+  // nobody can read (block 69).
+  ensureNotesInbox(state.run_id, options.root)
   return {
     staging: stagingPath(state.run_id, head, round, options.root),
     durable: durablePath(state.run_id, head, round, options.root),
@@ -282,6 +291,10 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
     ? observedHead.trim()
     : isCommitId(state.claim.head) ? state.claim.head : ''
   const staging = requestHead ? stagingPath(state.run_id, requestHead, round, options.root) : undefined
+  // The prompt names a file inside `notes/inbox`, so the directory has to exist before the review is requested: a
+  // `flow start --replace` removes the whole notes directory, and a reviewer whose answer has nowhere to go is a round
+  // nobody can read (block 69).
+  if (requestHead) ensureNotesInbox(state.run_id, options.root)
   // Reading an answer is not limited to `reviewing`, and not limited to the claim's head either. Two live runs showed both
   // halves of that: one had already returned to `idle` with the file written for the commit it had reviewed, the other sat on
   // the right head with the file beside it — in both, the answer existed and nothing looked. The file is the source of truth
@@ -298,26 +311,52 @@ function readRoundNotes(state: FlowState, options: ObserveFlowOptions, observedH
   // so the journal reports why the file was unusable rather than a bare "missing".
   const stagingRead = readStaging(state.run_id, head, round, { root: options.root })
   const durableRead = stagingRead.ok ? null : readDurable(state.run_id, head, round, { root: options.root })
-  const read = stagingRead.ok ? stagingRead : (durableRead && durableRead.ok ? durableRead : stagingRead)
-  if (read.ok) {
+  const exact = stagingRead.ok ? stagingRead : (durableRead && durableRead.ok ? durableRead : stagingRead)
+  // The commit is the binding, not the counter. The round above is derived from `state.rounds`, and that number moves
+  // without a review happening (a phantom fix, an operator's retry) — the answer then sits in `<head>-r<earlier>.md`
+  // while this tick looks at a later number and finds nothing, so the verdict exists on disk and the flow never reads it
+  // (block 69, the live 6f25848). When the exact round has no file, the head's newest one answers instead.
+  const newest = exact.ok || exact.reason !== 'missing'
+    ? null
+    : readNewestNotes(state.run_id, head, { root: options.root })
+  const found = stagingRead.ok
+    ? { text: stagingRead.text, verdict: stagingRead.verdict, counts: stagingRead.counts, round, publishable: true }
+    : durableRead?.ok
+      ? { text: durableRead.text, verdict: durableRead.verdict, counts: durableRead.counts, round, publishable: false }
+      : newest?.ok && newest.round !== undefined
+        ? {
+          text: newest.text ?? '',
+          verdict: newest.verdict as FlowVerdict,
+          counts: newest.counts ?? countFindings(newest.text ?? ''),
+          round: newest.round,
+          publishable: newest.source === 'staging',
+        }
+        : null
+  if (found) {
     return {
       source: 'file',
-      verdict: read.verdict,
-      text: findingsText(read.text),
-      ref: notesRef(head, round),
-      counts: read.counts,
+      verdict: found.verdict,
+      text: findingsText(found.text),
+      ref: notesRef(head, found.round),
+      counts: found.counts,
       staging_path: staging,
       head,
-      evidence_text: read.text,
+      evidence_text: found.text,
       // Only a staging text is published later; a durable one is already the record.
-      raw: stagingRead.ok ? read.text : undefined,
+      raw: found.publishable ? found.text : undefined,
+      round: found.round,
     }
   }
+  // `missing` is the ordinary case (no file written yet); anything else is worth a journal line — including a file of
+  // this head that exists but cannot be read (the head-scoped attempt's reason when it found one).
+  const exactReason = 'reason' in exact ? exact.reason : undefined
+  const invalid = exactReason === undefined || exactReason === 'missing'
+    ? (newest !== null && !newest.ok && newest.reason !== 'missing' ? newest.reason : undefined)
+    : exactReason
   return {
     source: 'pane',
     staging_path: staging,
-    // `missing` is the ordinary case (no file written yet); anything else is worth a journal line.
-    invalid: read.reason === 'missing' ? undefined : read.reason,
+    ...(invalid === undefined ? {} : { invalid }),
   }
 }
 
@@ -584,6 +623,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     notes_raw: fromFile ? notes.raw : undefined,
     notes_staging_path: notes.staging_path,
     notes_head: notes.head,
+    notes_round: notes.round,
     pane_text: reviewPane === 'unknown' ? undefined : paneText,
     evidence_policy: options.evidence_policy ?? evidencePolicy(),
     // The plan owns the queue only when it exists: a flow without one keeps `state.specs`, which is what
@@ -721,7 +761,9 @@ function publishRoundNotes(
   if (observations.notes_raw === undefined) return          // the answer came from the pane
   if (decision.reason === 'review_unsubstantiated') return  // the answer was rejected
   try {
-    publishNotesIfChanged(state.run_id, head, reviewRound(state), observations.notes_raw, { root: options.root })
+    // The round is the file's own: a reader that found `<head>-r1.md` while the counter said 2 publishes that round,
+    // instead of minting a second record for an answer the reviewer wrote once (block 69).
+    publishNotesIfChanged(state.run_id, head, observations.notes_round ?? reviewRound(state), observations.notes_raw, { root: options.root })
     pruneNotes(state.run_id, { root: options.root })
   } catch {
     // A publish failure leaves the staging file where the next tick finds it.
@@ -922,6 +964,18 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
         // never a second paste.
         const released = releaseDispatch(after, send.reason, at)
         return { state: released, status: 'refused', path: saveFlow(released, { root: options.root }) }
+      }
+      if (send.reason === 'unconfirmed_paste') {
+        // The paste is still in the composer and the Enter did not start a turn: **no round exists**, so the decision is
+        // not applied (rounds and `review_started_at` stay put) and the claim is released. The next tick presses Enter
+        // only — `sendWhenIdle` sees our text in the box and pastes nothing — up to three times; after that a human is
+        // asked, because nothing else can submit it (block 69).
+        if (after.enter_retries >= MAX_ENTER_RETRIES) {
+          const escalated = escalateUnconfirmedDispatch(after, phase.decision, at)
+          return { state: escalated, status: 'unconfirmed', path: saveFlow(escalated, { root: options.root }) }
+        }
+        const retried = retryEnterDispatch(after, send.reason, at)
+        return { state: retried, status: 'refused', path: saveFlow(retried, { root: options.root }) }
       }
       if (send.reason === 'unconfirmed') {
         // The Enter went in and nothing confirmed it. This is the ambiguous case, and for a review request the round

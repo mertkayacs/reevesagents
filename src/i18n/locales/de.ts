@@ -52,6 +52,7 @@ export const de = {
     'flow.attention.escalated': 'Runden aufgebraucht',
     'flow.attention.review_timeout': 'Review-Zeit abgelaufen',
     'flow.attention.plan_waiting': 'Plan: wartet auf ein Briefing',
+    'flow.attention.dispatch_unconfirmed': 'Versand nicht bestätigt',
     'flow.badge.rounds': 'Flow: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'Flow: {{status}}',
   'flow.badge.plan_progress': 'Flow: Plan {{done}}/{{total}}',

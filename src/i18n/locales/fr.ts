@@ -53,6 +53,7 @@ export const fr = {
     'flow.attention.escalated': 'tours épuisés',
     'flow.attention.review_timeout': 'délai de revue dépassé',
     'flow.attention.plan_waiting': 'plan : en attente d’un brief',
+    'flow.attention.dispatch_unconfirmed': 'envoi non confirmé',
     'flow.badge.rounds': 'flux : {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'flux : {{status}}',
   'flow.badge.plan_progress': 'flux : plan {{done}}/{{total}}',

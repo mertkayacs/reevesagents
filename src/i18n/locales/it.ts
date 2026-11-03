@@ -54,6 +54,7 @@ export const it = {
     'flow.attention.escalated': 'turni esauriti',
     'flow.attention.review_timeout': 'revisione scaduta',
     'flow.attention.plan_waiting': 'piano: in attesa di un brief',
+    'flow.attention.dispatch_unconfirmed': 'invio non confermato',
     'flow.badge.rounds': 'flusso: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'flusso: {{status}}',
   'flow.badge.plan_progress': 'flusso: piano {{done}}/{{total}}',

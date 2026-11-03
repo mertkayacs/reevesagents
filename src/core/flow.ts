@@ -242,6 +242,10 @@ export interface FlowState {
   // How many verdicts of the current review have been rejected as unsubstantiated (§Evidence). Reset to
   // zero whenever a substantiated verdict is consumed, so a later round gets its own allowance.
   unsubstantiated_attempts: number
+  // How many Enter-only retries of the current dispatch were spent. A paste that landed without a confirmed submit starts
+  // no round, so the next tick presses Enter again; three such attempts are allowed, then a human is asked (block 69).
+  // Optional in the file: a flow written before the field existed has spent none.
+  enter_retries: number
   // The plan item whose brief the dispatch in flight was rendered from. An ACCEPT closes *this* item, not
   // "the next one in the document": the two differ as soon as a round runs long enough for the plan to change.
   active_plan_item: string | null
@@ -355,6 +359,9 @@ export interface FlowObservations {
   notes_head?: string
   // The plan's recorded conflicts, so a guard can tell "this already happened and was reported" from "this is happening now".
   plan_conflicts?: Array<{ kind?: string, detail?: string, item_id?: string }>
+  // The round number of the notes file that answered — the file's own, which is not necessarily the round this tick
+  // would compute: the reader finds a head's newest file, and a counter that moved must not hide it (block 69).
+  notes_round?: number
 }
 
 // What a tick can measure about the review behind a verdict.
@@ -404,6 +411,7 @@ export type FlowReason =
   | 'dispatch_pending'
   | 'dispatch_unresolved'
   | 'review_unsubstantiated'
+  | 'review_dispatch_unconfirmed'
   | 'plan_incomplete'
   | 'plan_item_double_close'
   | 'plan_in_flight'
@@ -520,6 +528,7 @@ export function createFlowState(init: FlowInit): FlowState {
     hold: null,
     pending: null,
     unsubstantiated_attempts: 0,
+    enter_retries: 0,
     answered_round: null,
     verdict_handled_for: null,
     verdict_handled_item: null,
@@ -614,6 +623,7 @@ export function parseFlowState(raw: unknown): FlowState {
     hold: parseHold(record.hold),
     pending: parsePendingDispatch(record.pending),
     unsubstantiated_attempts: count(record.unsubstantiated_attempts),
+    enter_retries: count(record.enter_retries),
     answered_round: typeof record.answered_round === 'string' ? record.answered_round : null,
     verdict_handled_for: typeof record.verdict_handled_for === 'string' ? record.verdict_handled_for : null,
     verdict_handled_item: typeof record.verdict_handled_item === 'string' ? record.verdict_handled_item : null,
@@ -931,7 +941,9 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
     notes,
     next_unsubstantiated_attempts: 0,
     next_verdict_handled_for: state.claim.head,
-    next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
+    // The reference of the file that answered, whatever round it is: the reader finds a head's newest file, and a round
+    // counter that moved must not make the same answer look like a new one (block 69).
+    next_answered_round: observations.verdict_source === 'file' ? (observations.notes_ref ?? undefined) : undefined,
     message: renderFixPrompt({
       head: state.claim.head,
       notes,
@@ -1004,7 +1016,9 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
     next_verdict_handled_item: observations.plan?.items.some(item => item.id === spec.id) ? spec.id : null,
     next_claim_verdict_applied: true,
     next_unsubstantiated_attempts: 0,
-    next_answered_round: observations.verdict_source === 'file' ? `${state.claim.head}-r${reviewRoundFor(state)}` : undefined,
+    // The reference of the file that answered, whatever round it is: the reader finds a head's newest file, and a round
+    // counter that moved must not make the same answer look like a new one (block 69).
+    next_answered_round: observations.verdict_source === 'file' ? (observations.notes_ref ?? undefined) : undefined,
     message: messageForDispatch(state, spec, observations),
   }
 }
@@ -1571,17 +1585,29 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
     return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now, observations.notes_staging_path)
   }
 
-  // A file answer is bound to `(head, round)`, which is why it does not need the pane's verdict counter —
-  // but an answer already acted on is not fresh again. Without the second half, `dispatch_unconfirmed`
-  // (claim released, staging file kept) made every following tick rebuild and re-paste the same prompt.
-  const fileRound = `${state.claim.head}-r${reviewRoundFor(state)}`
-  const fileAnswered = fromFile && state.answered_round === fileRound
+  // A file answer is bound to `(head, round)`, which is why it does not need the pane's verdict counter — but an answer
+  // already acted on is not fresh again. The comparison is against the *file's own* reference, not the round this tick
+  // would compute: the reader looks for any round of the head, so a counter that moved (a phantom fix, a manual retry)
+  // must not make a consumed answer look fresh (block 69).
+  const fileAnswered = fromFile && observations.notes_ref !== undefined && state.answered_round === observations.notes_ref
   const fresh = observations.verdict !== null && !fileAnswered
     && (fromFile || observations.verdict_count > state.claim.verdict_count)
   if (!fresh) {
     // Nothing answered within the budget: a reviewer that crashed, hit a login screen or is stuck
     // on a modal never prints a verdict, so the flow escalates instead of waiting for ever.
     return timedOut ? expired() : hold(state, 'awaiting_verdict')
+  }
+
+  // A pane verdict is not bound to a commit. The capture window still holds the verdicts of earlier rounds, so a
+  // CHANGES_REQUESTED read there says nothing about *this* head — the counter only notices that one more appeared. The
+  // file the prompt asked for names the commit it judges, so a fix round needs it; a pane answer is accepted only as an
+  // ACCEPT (a close), which the head and the baseline already pin down (block 69).
+  if (observations.verdict !== null && observations.verdict !== 'ACCEPT' && !fromFile) {
+    return hold(
+      state,
+      'awaiting_verdict',
+      `a ${observations.verdict} read from the pane is not bound to ${state.claim.head.slice(0, 7)}; waiting for its notes file`,
+    )
   }
 
   // A verdict is only an answer if there is a review behind it: a reviewer that answers in one second
@@ -1647,12 +1673,6 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
   const gate = reviewGate(state, observations)
   if (gate) return gate
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
-}
-
-// The round the notes of this tick belong to — the same number the runner builds the file paths with
-// (`reviewRound` in flow-runner is `rounds + 1`), so the `answered_round` key matches the files on disk.
-function reviewRoundFor(state: FlowState): number {
-  return state.rounds + 1
 }
 
 // Is this verdict evidence of a review? Both halves are required: enough wall time since the request, and
@@ -1728,6 +1748,47 @@ export function escalateOnDirtyComposer(state: FlowState, decision: FlowDecision
     log_detail: 'composer_dirty: the pane composer holds text that is not ours; nothing was pasted',
   }
   return applyDecisionToState(state, stuck, at)
+}
+
+// How many Enter-only retries a dispatch gets before a human is asked. Three ticks is about three minutes: enough for a
+// composer that swallowed one Enter, short enough that a flow does not sit on a prompt nobody submitted (block 69).
+export const MAX_ENTER_RETRIES = 3
+
+// The paste is still in the box and the Enter did not start a turn: no round exists, so the decision is NOT applied — the
+// round counter and `review_started_at` stay where they were. The attempt is counted and journalled, the claim is
+// released, and the next tick presses Enter without pasting again (`sendWhenIdle` sees the composer holds our text).
+export function retryEnterDispatch(state: FlowState, reason: string, at = isoNow()): FlowState {
+  const attempt = state.enter_retries + 1
+  return {
+    ...state,
+    pending: null,
+    enter_retries: attempt,
+    log: appendLog(state, {
+      at,
+      event: 'dispatch_retry_enter',
+      detail: `${reason}: attempt ${attempt}/${MAX_ENTER_RETRIES}`,
+    }),
+    updated_at: at,
+  }
+}
+
+// Out of Enter retries: the prompt sits in the pane and nothing submits it, so a human has to press Enter. The flow
+// escalates with a reason that says exactly that, and the counter is cleared for whatever comes next.
+export function escalateUnconfirmedDispatch(state: FlowState, decision: FlowDecision, at = isoNow()): FlowState {
+  const pane = decision.target === 'dev' ? 'dev' : 'review'
+  const stuck: FlowDecision = {
+    ...decision,
+    kind: 'escalate',
+    reason: 'review_dispatch_unconfirmed',
+    message: undefined,
+    target: undefined,
+    next_state: 'escalated',
+    next_review_started_at: null,
+    notes: `the prompt is in the ${pane} pane and ${MAX_ENTER_RETRIES} Enters did not submit it`,
+    log_detail: `review_dispatch_unconfirmed: the prompt is in the ${pane} pane and ${MAX_ENTER_RETRIES} Enters did not submit it — press Enter there`,
+  }
+  const escalated = applyDecisionToState(state, stuck, at)
+  return { ...escalated, enter_retries: 0 }
 }
 
 // The run (or one of its role agents) is gone: the flow is parked instead of being ticked against

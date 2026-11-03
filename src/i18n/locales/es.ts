@@ -56,6 +56,7 @@ export const es = {
     'flow.attention.escalated': 'rondas agotadas',
     'flow.attention.review_timeout': 'revisión agotada',
     'flow.attention.plan_waiting': 'plan: esperando un brief',
+    'flow.attention.dispatch_unconfirmed': 'envío sin confirmar',
     'flow.badge.rounds': 'flujo: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'flujo: {{status}}',
   'flow.badge.plan_progress': 'flujo: plan {{done}}/{{total}}',

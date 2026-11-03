@@ -69,7 +69,7 @@ free"** — must land here, not in the flow caller:
 type PaneBusyState = 'busy' | 'idle' | 'unknown'   // unknown = no verified detector for this provider
 type SendOutcome =
   | { sent: true }
-  | { sent: false; reason: 'busy' | 'unknown' | 'stale_pane' | 'unconfirmed' }
+  | { sent: false; reason: 'busy' | 'unknown' | 'stale_pane' | 'unconfirmed' | 'unconfirmed_paste' }
 
 runtime.paneBusy(agentId): PaneBusyState        // reads via the injected driver
 runtime.sendWhenIdle(agentId, text): SendOutcome // paste → Enter → confirm; never writes when busy or unknown
@@ -736,21 +736,25 @@ happens before that hint is a guess, and the guesses are named:
 | `sent: true` | the busy hint appeared within the window | the round (or the fix) begins |
 | `composer_dirty` | the composer held text that is not ours | nothing is pasted; the flow escalates, a human reads the pane |
 | `pane_changed` | the pane stopped reading `idle` right before the Enter, and the composer did **not** hold our text | the claim is released and the next tick retries when the pane is free |
-| `unconfirmed` | the Enter went in, the busy hint never came, and a second Enter (only when the composer still holds exactly our text) did not wake the pane | `dispatch_unconfirmed` in the journal; for a review request the round still starts (§3.6b) |
+| `unconfirmed_paste` | the Enter never started a turn and the composer still holds our paste (the exact text or our collapsed marker) | nothing was submitted, so **no round exists**: the claim is released, `dispatch_retry_enter` is journalled, and the next tick presses Enter only — three attempts, then a human (block 69, §3.6c) |
+| `unconfirmed` | the Enter went in, the busy hint never came, and the composer no longer holds our text (a second Enter, only while the text is still ours, did not wake the pane either) | `dispatch_unconfirmed` in the journal; for a review request the round still starts (§3.6b) |
 
 **What "our text" looks like in a real composer.** Not what we typed. A live Codex pane renders a long paste on one
 line and cuts it (`› Review commit d096765…`), and folds a very long one into `[Pasted Content 1020 chars]`. Exact
 equality with the prompt therefore never holds there, and the check that required it reported `pane_changed` for a
 paste that was sitting in the box — the live run of 2026-11-02 did exactly that. `composerHoldsOurs` accepts three
 shapes: the exact text, the paste placeholder, and a visible prefix of at least 32 characters (the floor keeps a bare
-`› ` from matching).
+`› ` from matching). The placeholder is a *collapsed* paste — it no longer carries the text, so it counts as ours only
+while a paste of ours into that pane is recent (`dispatch_confirm_seconds`, refreshed whenever the composer is read as
+ours). Without that window a marker somebody else pasted would be submitted as our prompt (block 69).
 
 **`pane_changed` is not `unconfirmed`.** The first is the pre-Enter refusal: the pane moved on, the composer did not
 hold our text, and **nothing was submitted** — so no round exists, the decision is not consumed, the claim is released
 and the next tick asks again (the Enter goes in without a second paste, because our text is still in the box). The
 second is post-Enter ambiguity, and a review request there still starts its round. Conflating them cost the live run a
 review: the request was consumed as if it had been delivered, the reviewer had never received it, and the flow waited
-for notes that could not arrive.
+for notes that could not arrive. Block 69 split the ambiguous case in two: a box that still holds our paste is
+`unconfirmed_paste` (nothing was submitted, no round exists), and only a box that no longer holds it stays `unconfirmed`.
 
 **Why Codex needs the composer test and not a longer timeout.** On this machine a Codex pane redraws while our paste
 settles: the frame reflows, the busy probe sees a half-drawn `Working` line, and the old code called that
@@ -770,6 +774,37 @@ read only in `reviewing`, and the next tick answers `head_unchanged` — so the 
 confirmed one would; what it does not do is paste again, because the claim is consumed in that write and the claim is
 what a paste needs. A fix round keeps the older rule: it does not advance, and a human reads the journal line.
 
+**An unconfirmed *paste* is not a round (block 69, D1 amended).** The live `flow-finish` run of 2026-11-03 put a 1510
+character review request into the codex composer, the single Enter never started a turn, and `applyUnconfirmedDispatch`
+spent the round anyway: the flow went to `awaiting_verdict`, read a `CHANGES_REQUESTED` from the scrollback of an older
+commit three minutes later, and dispatched a fix for a review nobody had made of that head. Two facts separate that case
+from the "still a round" rule above: the prompt was *still in the box* (nothing was submitted), and the verdict it read
+was not bound to the commit. So a paste that is still there answers `unconfirmed_paste` and the flow keeps its round; a
+send whose text is gone but whose busy hint never came keeps the older rule unchanged.
+
+### 3.6c One driver of the composer, and a verdict that names its commit (block 69)
+
+- **Bracketed paste.** `pasteTextToPane` uses `tmux paste-buffer -p`, so the provider receives the prompt as one paste
+  instead of a stream of keystrokes. Without it codex renders the whole request into its input box, folds it into
+  `[Pasted Content N chars]`, and a single Enter does not submit it.
+- **Three Enter retries, then a human.** A dispatch that answers `unconfirmed_paste` is journalled as
+  `dispatch_retry_enter ... attempt N/3`, the claim is released, and the next tick presses Enter without pasting again
+  (the composer still holds our text, so `sendWhenIdle` sends the keystroke only). After the third attempt the flow
+  escalates with `review_dispatch_unconfirmed`: the prompt is in the pane and only a human can submit it.
+- **A non-ACCEPT verdict must come from the file.** The pane capture still holds the verdicts of earlier rounds, and
+  `claim.verdict_count` is a counter, not a binding: when one more verdict line appeared in the window it was applied to
+  whatever head the flow was on. A `CHANGES_REQUESTED` read from the pane is therefore refused (`hold awaiting_verdict`
+  with the reason); only the notes file the prompt asked for names the commit it judged. A pane ACCEPT is still accepted
+  — it closes work and the head plus the baseline already pin it down.
+- **The answer is found by its commit, not by the round counter.** `readRoundNotes` reads the round the prompt named and,
+  when that file is missing, the newest file of the *head* — `<head>-r*.md`, staging first, durable second. A counter
+  that moved without a review (a phantom fix, an operator's retry) used to send the reader to a file nobody had written
+  while the answer sat next to it (the live `6f25848`). The journal and `answered_round` carry the file's own reference.
+- **The inbox exists before the prompt names it.** Observing a flow with a valid head creates `notes/inbox` (0700), so a
+  prompt never names a path whose parent is missing — `flow start --replace` removes the whole notes directory.
+- **The fact is visible.** `flow status` prints `dispatch unconfirmed — <reason>` and `/api/state` carries it as the
+  flow's attention (`dispatch_unconfirmed`, red chip). Until block 69 only the journal knew, so a flow whose prompt was
+  never submitted looked healthy.
 **Evidence counts the file, not its finding lines (D3).** The evidence rule measured `notes_text`, which is the filtered
 finding lines — so a 16-byte `VERDICT: ACCEPT` with `no findings` measured `notes=0/0b` and the first honest answer of a
 fast reviewer was rejected as unsubstantiated. The observation now carries the whole text of the round's file
