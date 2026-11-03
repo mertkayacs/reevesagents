@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentRecord, Provider, RunRecord } from '../src/core/types.js'
 import type { RuntimeDriver } from '../src/core/runtime.js'
-import { composerHoldsOurs, resetPaneObservations } from '../src/core/runtime.js'
+import { composerHoldsOurs, flattenPrompt, resetPaneObservations } from '../src/core/runtime.js'
 
 let tmpDir: string
 
@@ -569,30 +569,53 @@ describe('the repeated Enter', () => {
     expect(driver.count('send-keys')).toBe(1)   // the first Enter only
   })
 
-  it('retries once with Escape and Enter, never with a bare second Enter', async () => {
-    // The operator's unstick: Escape, then Enter. An extra Enter queued behind the first is how a delayed keystroke answers the next
-    // prompt (block 45, MAJOR 2).
+  it('presses Enter again when the first one was swallowed, and reports the repeat', async () => {
+    // Block 75: the provider keeps our prompt in the box and the first Enter only closes the paste. A second Enter, taken only
+    // while the pane is still idle and the box still holds our text, submits the turn.
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
 
-    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: true })
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: true, enter_retries: 1 })
     expect(driver.pasted()).toEqual(['hello'])
     const keys = driver.calls.filter(call => call.args[0] === 'send-keys').map(call => call.args[3])
-    expect(keys).toEqual(['Enter', 'Escape', 'Enter'])
+    expect(keys).toEqual(['Enter', 'Enter'])
   })
 
-  it('gives up after that one retry instead of pressing a third time', async () => {
+  it('stops at three Enters and leaves the prompt for the next tick', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    // Still our text after Escape and Enter: the pane is not co-operating, so the answer is `unconfirmed_paste` — nothing
-    // was submitted and the box still holds the prompt, which is what the flow retries with one Enter (block 69).
-    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT]
+    // Still our text after three Enters: the pane is not co-operating, so the answer is `unconfirmed_paste` — nothing was
+    // submitted and the box still holds the prompt, which is what the flow retries with one Enter (block 69).
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT]
 
-    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toMatchObject({ sent: false, reason: 'unconfirmed_paste' })
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST }))
+      .toMatchObject({ sent: false, reason: 'unconfirmed_paste', enter_retries: 2 })
     const keys = driver.calls.filter(call => call.args[0] === 'send-keys').map(call => call.args[3])
-    expect(keys).toEqual(['Enter', 'Escape', 'Enter'])
+    expect(keys).toEqual(['Enter', 'Enter', 'Enter'])   // three, and never a fourth
     expect(driver.pasted()).toEqual(['hello'])
+  })
+
+  it('does not press again when the pane turned busy between the check and the key', async () => {
+    // The second Enter is decided on a fresh look: the turn started after the confirm window, so a repeat keystroke would
+    // interrupt it. The send itself is confirmed — the pane went busy and its ledger grew — and exactly one Enter was pressed.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toMatchObject({ sent: true })
+    expect(driver.count('send-keys')).toBe(1)
+  })
+
+  it('does not press again when the pane reads unknown', async () => {
+    // A modal is not a pane to type into, however much our text is still in the box.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const modal = ['  \u258c Select an environment', '  1. staging', '  2. production', '  \u2190 for agents \u00b7 ? for shortcuts'].join('\n')
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, modal]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toMatchObject({ sent: false, reason: 'unconfirmed' })
+    expect(driver.count('send-keys')).toBe(1)
   })
 })
 
@@ -735,5 +758,23 @@ describe('the glyph is not enough on its own (block 73, review round 1)', () => 
     expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unknown' })
     expect(driver.pasted()).toEqual([])
     expect(driver.count('send-keys')).toBe(0)
+  })
+})
+
+describe('the prompt leaves as one line (block 75)', () => {
+  it('flattens newlines at the pane, so the first Enter submits instead of closing the paste', async () => {
+    // The live `fix_dispatched` of 2026-11-03: a multi-line prompt arrived as one bracketed paste, the provider's first Enter
+    // only closed it, and the engine recorded `dispatch_refused pane_changed` while the prompt sat in the composer.
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_BUSY]
+
+    expect(sendWhenIdle('agent-1', 'first line\nsecond line\n\nthird line', { driver, ...FAST })).toEqual({ sent: true })
+    expect(driver.pasted()).toEqual(['first line second line  third line'])
+  })
+
+  it('handles CR as well, and leaves a single-line prompt untouched', () => {
+    expect(flattenPrompt('a\r\nb\rc')).toBe('a b c')
+    expect(flattenPrompt('one line')).toBe('one line')
   })
 })

@@ -1864,3 +1864,38 @@ describe('a late note keeps the brief of the round it answers (block 63)', () =>
     expect(prompt!).toContain('Judge the work as CONFORMANCE TO that brief')
   })
 })
+
+describe('a repeat Enter is on the record (block 75)', () => {
+  it('journals one `submit_retry enter <n>` line per repeat, with the head it was for', () => {
+    seedIdleFlow()
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      // The port stands in for `sendWhenIdle`, whose own repeat is covered in test/send-when-idle.test.ts.
+      ports: {
+        paneBusy: () => 'idle' as const,
+        peek: () => '',
+        send: () => ({ sent: true as const, enter_retries: 1 }),
+      },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(result.status).toBe('applied')
+    const retries = readFlow('run-1').log.filter(entry => entry.event === 'submit_retry')
+    expect(retries).toHaveLength(1)
+    expect(retries[0]!.detail).toBe(`enter 1 · ${HEAD}`)
+  })
+
+  it('keeps the template multi-line: flattening belongs to the pane, not to the decision', () => {
+    seedIdleFlow()
+    const messages: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: ports((_pane, message) => { messages.push(message); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // What the journal and the tests read stays readable; `pasteTextToPane` is what hands the pane one line.
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toContain('\n')
+  })
+})

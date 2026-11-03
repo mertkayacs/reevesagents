@@ -62,6 +62,23 @@ import type { FlowVerdict } from './verdict.js'
 // What the flow knows about a paste it already made and has not had confirmed. It travels with the send because a
 // scheduled tick is a new process: `sendWhenIdle`'s own paste map is empty there, and this record is the evidence that a
 // collapsed `[Pasted Content N chars]` marker is ours (block 69, review round 2).
+// One `submit_retry enter <n>` line per repeat Enter a send needed. The head comes from the decision, so the line says which
+// prompt had to be pressed twice (block 75).
+function withEnterRetries(
+  state: FlowState,
+  decision: FlowDecision,
+  retries: number | undefined,
+  at: string,
+): FlowState {
+  if (retries === undefined || retries <= 0) return state
+  const head = decision.head ?? state.claim.head
+  let next = state
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    next = { ...next, log: appendLog(next, { at, event: 'submit_retry', detail: `enter ${attempt} · ${head}` }) }
+  }
+  return next
+}
+
 export interface DispatchSendOptions {
   pasted?: { at: number } | null
 }
@@ -1023,8 +1040,11 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     // must not be applied twice. Kept inside the gate so a control command waits for the outcome
     // instead of reading a half-finished dispatch.
     const settle = withStateLock<SettlePhaseResult>(() => {
-      const after = readFlow(runId, { root: options.root })
-      if (after.pending?.op_id !== dispatch.op_id) return { state: after, status: 'skipped' }
+      const settledState = readFlow(runId, { root: options.root })
+      if (settledState.pending?.op_id !== dispatch.op_id) return { state: settledState, status: 'skipped' }
+      // A repeat Enter is a fact of this send, and the journal says so before the outcome is settled: one line per repeat, with
+      // the head the prompt was for, so a swallowed Enter is visible in `flow logs` (block 75).
+      const after = withEnterRetries(settledState, phase.decision, send.enter_retries, at)
       if (send.sent) {
         const next = applyDecisionToState(after, phase.decision, at)
         const path = saveFlow(next, { root: options.root })

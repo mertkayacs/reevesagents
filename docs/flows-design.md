@@ -860,6 +860,29 @@ finding lines — so a 16-byte `VERDICT: ACCEPT` with `no findings` measured `no
 fast reviewer was rejected as unsubstantiated. The observation now carries the whole text of the round's file
 (staging first, durable second) for evidence, while the prompt and the journal keep the findings.
 
+### 3.6d One prompt, one line, and up to three Enters (block 75)
+
+The live `fix_dispatched` of 2026-11-03 left its prompt in the hermes composer: the engine recorded `dispatch_refused
+pane_changed` at 17:38:55, the first Enter only *closed* the paste, and a second Enter two seconds later — a human's — started
+the turn.
+
+- **The prompt leaves as one line.** `pasteTextToPane` flattens it (`flattenPrompt`: CR and LF become spaces) at the moment of
+  the paste. Briefs, review notes and criteria live in files and the prompt is a short pointer, so nothing is lost; a
+  multi-line bracketed paste arrives as one block and a provider's first Enter closes it instead of submitting. The templates
+  (`renderReviewPrompt`, `renderFixPrompt`) stay multi-line — they are what the journal and the tests read.
+- **A swallowed Enter is retried, up to three.** After the paste and `pasteSettleMs` the engine presses Enter, polls for the
+  turn (`waitForBusy`) and, while the pane still reads free and the box still holds exactly our prompt, presses again — three
+  Enters per send at most. Before every repeat the pane is read again: `busy` is a turn already running (the key would
+  interrupt it), copy mode scrolls instead of typing, and a box that no longer holds our text is not ours to submit. A pane the
+  detector cannot classify (`unknown`) does not stop the repeat when the composer itself reads our prompt: that is what a long,
+  wrapped prompt looks like, and it is exactly the case this loop exists for.
+- **The repeat is on the record.** `sendWhenIdle` reports `enter_retries`, and the runner journals one `submit_retry enter <n>`
+  line per repeat with the head the prompt was for. Three Enters without a turn fall through to the existing
+  `dispatch_unconfirmed` escalation — no new mechanism.
+- **The composer comparison ignores whitespace.** A pane wraps a long prompt by breaking a word, which inserts a space that was
+  never typed; comparing with whitespace removed is what keeps a wrapped prompt reading as ours (the pre-Enter check called one
+  `pane_changed` for exactly that reason).
+
 ### 3.6 Starting the plan from `idle` (block 19)
 
 `planNext` used to be reached **only** from `planAcceptDecision`, and `tickIdle` returned `head_unchanged` on its first
