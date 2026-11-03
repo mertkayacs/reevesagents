@@ -229,6 +229,52 @@ describe('the glyph counts only where the composer is (block 73, review round 1)
     expect(inspectPane(draft, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
   })
 
+  it('stops at transcript content: a stale marker above an answer is not this composer', () => {
+    // The shape the second pass named: the previous turn's `›`, its answer, the verdict, and then a composer that drew no glyph
+    // at all (the incident of 2026-11-03). One look must stay `unknown` — the fallback has to confirm it with a second capture.
+    const frame = [
+      '› разберись с парсером',
+      '• Fixed the parser and the reader.',
+      'VERDICT: ACCEPT',
+      'Ask Codex to do anything',
+      'GPT-6-Luna high · ~/repo',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    const first = inspectPane(frame, 'codex', { now: 10_000 })
+    expect(first.state).toBe('unknown')
+    expect(first.reason).toBe('placeholder_pending')
+    // And it is idle only once a second capture agrees — the placeholder path, not the glyph path.
+    expect(inspectPane(frame, 'codex', { now: 11_200, previous: first.sample }))
+      .toMatchObject({ state: 'idle', reason: 'composer_placeholder' })
+  })
+
+  it('stops at plain answer prose that carries no marker at all', () => {
+    // The frame the second pass named: a stale `›`, an answer printed at the left margin without a bullet, and a composer
+    // that drew no glyph. Prose is not the box's text, and the walk must not cross it.
+    const frame = [
+      '› разберись с парсером',
+      'Fixed the parser. The suite passes.',
+      'Ask Codex to do anything',
+      'GPT-6-Luna high · ~/repo',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    const first = inspectPane(frame, 'codex', { now: 10_000 })
+    expect(first.state).toBe('unknown')
+    expect(first.reason).toBe('placeholder_pending')
+    expect(inspectPane(frame, 'codex', { now: 11_200, previous: first.sample }))
+      .toMatchObject({ state: 'idle', reason: 'composer_placeholder' })
+  })
+
+  it('stops at an answer bullet as well as at a verdict line', () => {
+    const bulleted = [
+      '› починить сборку',
+      '• Ran the suite — 1621 passed.',
+      'Ask Codex to do anything',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(bulleted, 'codex', { now: 10_000 }).state).toBe('unknown')
+  })
+
   it('keeps a bare prompt and a placeholder composer working', () => {
     expect(inspectPane('› \n  ← for agents · ? for shortcuts', 'codex', { now: 10_000 }))
       .toMatchObject({ state: 'idle', reason: 'composer_glyph' })

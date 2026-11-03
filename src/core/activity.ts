@@ -94,10 +94,16 @@ export function paneTail(paneText: string, count = BUSY_TAIL_LINES): string[] {
 // What the pane draws, line by line, with the terminal chrome removed and blank rows dropped. One reader for every
 // classifier below, so "the same frame" means the same thing everywhere.
 function renderedLines(paneText: string): string[] {
+  return rawRenderedLines(paneText).map(line => line.trim())
+}
+
+// The same rows, untrimmed: a composer draws its continuation lines inside the box, indented, while a finished turn's prose
+// starts at the left margin. That is the only thing in plain text that separates the two (see `composerGlyph`).
+function rawRenderedLines(paneText: string): string[] {
   return stripAnsi(paneText)
     .split('\n')
-    .map(line => line.replace(/\r/g, '').trim())
-    .filter(line => line !== '')
+    .map(line => line.replace(/\r/g, ''))
+    .filter(line => line.trim() !== '')
 }
 
 // Readiness: is the composer *initialised*, not merely free of a busy marker? A provider draws its
@@ -140,17 +146,34 @@ function composerRow(lines: string[]): { line: string, index: number } | null {
 // sitting over it. A marker separated from the composer row by one of these is a marker from an earlier turn.
 const DIALOG_LINE = /^\s*[▌▐╭╮╰╯│┌┐└┘├┤]/
 
+// A finished turn's output rather than the box's own text: the answer bullets both CLIs print (`•`, `◦`, `●`, `⏺`, `·`), a
+// tool ledger row (`│`, `├`), a diff line at the left margin, and the vocabulary a review turn ends with (`VERDICT:`, a
+// `MAJOR:`/`MINOR:`/`NIT` finding). A marker above one of those introduces an earlier turn, not this composer: the walk stops
+// there (block 73, review round 1, second pass).
+const TRANSCRIPT_LINE = /^\s*(?:[•◦●⏺·]\s|[│├┃]|VERDICT:|(?:MAJOR|MINOR|NIT)\b|[-+]\s)/
+
+
 // Is the marker that introduces this composer block on screen? The block is the rows between the marker and the composer row:
 // its own text and nothing else. Bounded, because a frame is not a document.
+//
+// The walk stops at anything that is not the box's own text — a chrome row, a dialog's frame, or a line of a finished turn's
+// output. Only the first two were enough for the modal case; a stale `›` followed by an answer and a `VERDICT:` line still
+// reached the composer row through ordinary prose and was read as a live glyph (block 73, review round 1, second pass). A
+// marker that close to transcript content is not this composer's, so the pane falls through to the placeholder path and its
+// confirming second capture — `unknown` until the frame is seen twice, never `idle` on one look.
 const COMPOSER_BLOCK_MAX = 200
 
-function composerGlyph(lines: string[], signals: ProviderSignals, row: number): boolean {
+function composerGlyph(lines: string[], raw: string[], signals: ProviderSignals, row: number): boolean {
   const marked = (index: number): boolean => index >= 0 && signals.idle.some(marker => marker.test(lines[index]!))
   if (marked(row)) return true
   for (let index = row - 1; index >= 0 && row - index <= COMPOSER_BLOCK_MAX; index -= 1) {
     const line = lines[index]!
-    if (isChrome(line) || DIALOG_LINE.test(line)) return false
+    if (isChrome(line) || DIALOG_LINE.test(line) || TRANSCRIPT_LINE.test(line)) return false
     if (marked(index)) return true
+    // A row at the left margin is a finished turn's output that carries no marker of its own — the box draws its own
+    // continuation rows indented. Without this, plain prose between a stale `›` and a composer that drew no glyph walked the
+    // whole way up and called the pane idle (block 73, review round 1, second pass).
+    if (!/^\s/.test(raw[index] ?? '')) return false
   }
   return false
 }
@@ -328,7 +351,7 @@ export function inspectPane(
   //    sent (block 44). A `›` from an earlier turn is separated from the current composer by the answer that followed it: a
   //    rule, a status glyph or a dialog's own frame. Reading such a marker as the composer turned a pane with a modal over
   //    its input box into `idle`, and a paste landed on a pane that had no composer at all (block 73, review round 1).
-  if (composerGlyph(lines, signals, composer.index)) {
+  if (composerGlyph(lines, rawRenderedLines(paneText), signals, composer.index)) {
     return { state: 'idle', reason: 'composer_glyph', sample }
   }
 
