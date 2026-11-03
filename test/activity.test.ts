@@ -183,3 +183,54 @@ describe('a composer without the glyph (block 73)', () => {
     expect(inspectPane(glyph, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
   })
 })
+
+describe('the glyph counts only where the composer is (block 73, review round 1)', () => {
+  it('does not read a prompt quoted in the body as a live composer', () => {
+    // A pane whose input box has been replaced by a modal, with an old prompt a few rows above it: the `›` belongs to a turn
+    // that ended, and a paste here would land on a pane that has nothing to paste into.
+    const frame = [
+      '› разберись с парсером',
+      'VERDICT: CHANGES_REQUESTED',
+      '▌ Select an environment',
+      '  1. staging',
+      '  2. production',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    const inspection = inspectPane(frame, 'codex', { now: 10_000 })
+    expect(inspection.state).toBe('unknown')
+    expect(inspection.reason).not.toBe('composer_glyph')
+  })
+
+  it('does not read a marker that an answer separates from the composer', () => {
+    // The real shape: the previous turn's marker, the answer, a rule, then the modal. The marker's block ends at the rule.
+    // (No `esc to interrupt` in this frame: where a busy hint is read from is block 74's subject, not this one's.)
+    const frame = [
+      '› починить сборку',
+      'done — 3 files changed',
+      '────────────────────────────',
+      '▌ Allow this command?',
+      '  1. yes',
+      '  2. no',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(frame, 'codex', { now: 10_000 }).state).toBe('unknown')
+  })
+
+  it('still reads a marker whose block is the box itself, however many rows it fills', () => {
+    // A draft of three lines: the marker introduces the block and nothing else sits between them (block 44's case for a
+    // brief that was pasted and not sent).
+    const draft = [
+      '› first line of the brief',
+      '  second line of the brief',
+      '  third line of the brief',
+      'GPT-6-Luna high · ~/repo',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(draft, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+  })
+
+  it('keeps a bare prompt and a placeholder composer working', () => {
+    expect(inspectPane('› \n  ← for agents · ? for shortcuts', 'codex', { now: 10_000 }))
+      .toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+  })
+})

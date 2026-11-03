@@ -102,7 +102,10 @@ frame's structure, with the asymmetry stated in its rules:
 - a busy marker **anywhere in the captured frame** (the whole 40-row capture, and the frame joined into one line so a
   wrapped status line still matches) → `busy`;
 - copy mode, no composer row, or a frame without the provider's own footer under it → `unknown`;
-- the glyph, wherever it sits → `idle`;
+- the glyph, but only where the composer is: on the composer row, or introducing the block of rows that runs down to it and
+  holds nothing but the box's own text (a one-line draft, or a thirty-line brief that was pasted and not sent) → `idle`. A
+  marker separated from the composer row by an answer, a rule or a dialog's frame is a marker from an earlier turn, not a
+  composer: reading it as one let a paste land on a pane whose input box a modal had replaced;
 - the exact placeholder *where the composer belongs*, with the provider's footer below it, no busy marker anywhere, and the
   same frame captured twice at least a second apart → `idle`;
 - anything else → `unknown`, and `unknown` never becomes `idle` with time.

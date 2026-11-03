@@ -718,3 +718,22 @@ describe('a composer without the glyph (block 73)', () => {
     expect(driver.count('send-keys')).toBe(0)
   })
 })
+
+describe('the glyph is not enough on its own (block 73, review round 1)', () => {
+  it('refuses a pane whose composer a modal replaced, even with an old prompt in the frame', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [[
+      '› разберись с парсером',
+      'VERDICT: CHANGES_REQUESTED',
+      '▌ Select an environment',
+      '  1. staging',
+      '  2. production',
+      '← for agents · ? for shortcuts',
+    ].join('\n')]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unknown' })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(0)
+  })
+})

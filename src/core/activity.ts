@@ -136,6 +136,25 @@ function composerRow(lines: string[]): { line: string, index: number } | null {
   return null
 }
 
+// A dialog's own frame: the block and box glyphs both providers draw around a modal, which replaces the composer instead of
+// sitting over it. A marker separated from the composer row by one of these is a marker from an earlier turn.
+const DIALOG_LINE = /^\s*[▌▐╭╮╰╯│┌┐└┘├┤]/
+
+// Is the marker that introduces this composer block on screen? The block is the rows between the marker and the composer row:
+// its own text and nothing else. Bounded, because a frame is not a document.
+const COMPOSER_BLOCK_MAX = 200
+
+function composerGlyph(lines: string[], signals: ProviderSignals, row: number): boolean {
+  const marked = (index: number): boolean => index >= 0 && signals.idle.some(marker => marker.test(lines[index]!))
+  if (marked(row)) return true
+  for (let index = row - 1; index >= 0 && row - index <= COMPOSER_BLOCK_MAX; index -= 1) {
+    const line = lines[index]!
+    if (isChrome(line) || DIALOG_LINE.test(line)) return false
+    if (marked(index)) return true
+  }
+  return false
+}
+
 // What the composer draws when it is empty, with the provider's marker removed if it is there.
 function composerLineText(line: string, provider: Provider): string {
   const marker = SIGNALS[provider]?.marker
@@ -304,8 +323,14 @@ export function inspectPane(
   if (composer === null) return { state: 'unknown', reason: 'composer_not_found', sample }
   const row = composer.line
 
-  // 3. The glyph, wherever it is: the composer can sit above the tail window while it holds a long paste (block 44).
-  if (signals.idle.some(marker => marker.test(whole))) return { state: 'idle', reason: 'composer_glyph', sample }
+  // 3. The glyph, but only where the composer is. The box's marker introduces a block of rows that runs down to the composer
+  //    row with nothing but the box's own text in between — one row for a draft, thirty for a brief that was pasted and not
+  //    sent (block 44). A `›` from an earlier turn is separated from the current composer by the answer that followed it: a
+  //    rule, a status glyph or a dialog's own frame. Reading such a marker as the composer turned a pane with a modal over
+  //    its input box into `idle`, and a paste landed on a pane that had no composer at all (block 73, review round 1).
+  if (composerGlyph(lines, signals, composer.index)) {
+    return { state: 'idle', reason: 'composer_glyph', sample }
+  }
 
   // 4. The fallback: the placeholder in the composer's place, the provider's own footer **under it**, no busy marker, and the
   //    same frame seen twice. Every one of those is required — the absence of a busy marker alone proves nothing, and a
