@@ -392,6 +392,32 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(fenced, 'codex', { now: 10_000 }).state).toBe('idle')
   })
 
+  it('is not busy when an exact quoted status row is continued by ordinary prose (block 74, review round 1)', () => {
+    // No token, no bullet, no fence: the report simply runs on under the quoted line, and prose is a separator too — the box
+    // draws its own rows at its text column, everything further left is the answer. The pane is free, and it is not busy.
+    const prose = [
+      '◦ Working (8s • esc to interrupt)',
+      'The tests passed and the tree is clean, so the pane was idle when the next tick looked at it.',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(prose, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+  })
+
+  it('is not busy when an exact quoted status row sits directly before the composer', () => {
+    // The hardest shape: the quotation is the last row of the report, immediately above the box, so it occupies the status
+    // position itself. It continues the answer instead of opening a block, and that is what the pane is read on.
+    const directly = [
+      'The tests passed and the tree is clean.',
+      '◦ Working (8s • esc to interrupt)',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(directly, 'codex', { now: 10_000 }).state).not.toBe('busy')
+  })
+
   it('reads a real turn as busy whatever the body says', () => {
     const quoting = [
       '  ◦ Working (8s • esc to interrupt)',

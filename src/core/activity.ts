@@ -119,10 +119,33 @@ function renderedLines(paneText: string): string[] {
 // The same rows, untrimmed: a composer draws its continuation lines inside the box, indented, while a finished turn's prose
 // starts at the left margin. That is the only thing in plain text that separates the two (see `composerGlyph`).
 function rawRenderedLines(paneText: string): string[] {
-  return stripAnsi(paneText)
-    .split('\n')
-    .map(line => line.replace(/\r/g, ''))
-    .filter(line => line.trim() !== '')
+  return renderFrame(paneText).raw
+}
+
+// The frame, with one more thing the trimmed view cannot carry: which rows open a paragraph. A row that follows a blank line (or
+// the top of the frame) starts a block; a row pressed against the one above it continues it. That is what separates a turn's
+// status line from a quotation of it that happens to sit in the same place (block 74, review round 1).
+interface RenderedFrame {
+  lines: string[]
+  raw: string[]
+  startsBlock: boolean[]
+}
+
+function renderFrame(paneText: string): RenderedFrame {
+  const frame: RenderedFrame = { lines: [], raw: [], startsBlock: [] }
+  let blank = true
+  for (const line of stripAnsi(paneText).split('\n')) {
+    const row = line.replace(/\r/g, '')
+    if (row.trim() === '') {
+      blank = true
+      continue
+    }
+    frame.lines.push(row.trim())
+    frame.raw.push(row)
+    frame.startsBlock.push(blank)
+    blank = false
+  }
+  return frame
 }
 
 // Readiness: is the composer *initialised*, not merely free of a busy marker? A provider draws its
@@ -217,8 +240,7 @@ function composerGlyph(lines: string[], raw: string[], signals: ProviderSignals,
 // the agent's own report that happens to look like it — a quotation of `◦ Working (… • esc to interrupt)` — has the rest of the
 // report between itself and the box.
 function separatedFromComposer(
-  lines: string[],
-  raw: string[],
+  frame: RenderedFrame,
   statusRow: number,
   composer: { index: number } | null,
 ): boolean {
@@ -226,7 +248,10 @@ function separatedFromComposer(
   const from = Math.min(statusRow, composer.index)
   const to = Math.max(statusRow, composer.index)
   for (let index = from + 1; index < to; index += 1) {
-    if (TRANSCRIPT_LINE.test(raw[index] ?? '') || DIALOG_LINE.test(lines[index] ?? '')) return true
+    // A transcript row, a dialog's frame — or simply prose: a composer draws its own rows at its text column, and anything
+    // further left is the answer's text, token or not.
+    if (TRANSCRIPT_LINE.test(frame.raw[index] ?? '') || DIALOG_LINE.test(frame.lines[index] ?? '')) return true
+    if (indentOf(frame.raw[index] ?? '') < COMPOSER_TEXT_COLUMN) return true
   }
   return false
 }
@@ -360,6 +385,9 @@ export type PaneReason =
   | 'placeholder_absent'
   | 'placeholder_pending'
   | 'samples_disagree'
+  // A row of the status shape sits where the status line goes, but nothing tells it apart from a quotation of one: the pane is
+  // neither busy nor free (block 74, review round 1).
+  | 'status_ambiguous'
 
 export interface PaneInspection {
   state: PaneBusyState
@@ -384,7 +412,8 @@ export function inspectPane(
   const signals = SIGNALS[provider]
   if (!signals) return { state: 'unknown', reason: 'no_detector', sample: { at: now, fingerprint: '' } }
   const whole = stripAnsi(paneText)
-  const lines = renderedLines(paneText)
+  const frame = renderFrame(paneText)
+  const lines = frame.lines
   const sample: PaneSample = { at: now, fingerprint: paneFingerprint(lines) }
   if (lines.length === 0) return { state: 'unknown', reason: 'empty_capture', sample }
 
@@ -404,14 +433,22 @@ export function inspectPane(
   // three-row fragment has no status block to speak of; what it shows is read the conservative way.
   const shape = lines.length > BUSY_TAIL_LINES ? BUSY_SHAPE[provider] : null
   const statusIndex = shape ? statusRows.findIndex(statusLine => shape.test(statusLine)) : 0
-  // The status row belongs to this composer only when no transcript sits between the two: a report that quotes the working
-  // line — exactly, in the bottom rows — has the rest of the report under it, and that is what separates the two (block 74,
-  // review round 1). A wrapped status line keeps its second half in between, which is neither transcript nor a dialog.
-  const quoted = statusIndex >= 0 && separatedFromComposer(lines, rawRenderedLines(paneText), statusStart + statusIndex, composer)
-  if (statusIndex >= 0 && !quoted) {
+  if (statusIndex >= 0) {
+    const statusRow = statusStart + statusIndex
     const fromStatus = statusRows.slice(statusIndex)
     const statusText = fromStatus.join(' ')
-    if (signals.busy.some(marker => marker.test(fromStatus[0]!) || marker.test(statusText))) {
+    const hints = signals.busy.some(marker => marker.test(fromStatus[0]!) || marker.test(statusText))
+    // Codex draws its status line *above* the box, so an exact quotation of that line sits in the same place the real one does.
+    // What tells them apart is where the row sits relative to the transcript — nothing between it and the composer, and it
+    // opens a block of its own rather than continuing the answer above it (block 74, review round 1). Hermes carries the hint
+    // on the box row and on the bar under it, where there is no such ambiguity.
+    const aboveBox = provider === 'codex'
+    const quoted = aboveBox && separatedFromComposer(frame, statusRow, composer)
+    if (hints && !quoted) {
+      // The row is where the status line goes. If it continues the transcript above it, the pane is not busy — but it is not
+      // free either, because a turn's status line running straight on from an answer looks exactly the same. `unknown` refuses
+      // the paste the same way and never calls a quoting report a running turn.
+      if (aboveBox && !frame.startsBlock[statusRow]!) return { state: 'unknown', reason: 'status_ambiguous', sample }
       return { state: 'busy', reason: 'busy_hint', sample }
     }
   }

@@ -103,9 +103,12 @@ frame's structure, with the asymmetry stated in its rules:
   status shape downwards (codex draws `◦ Working (… • esc to interrupt)` — glyph, status verb, parenthesised progress — and
   hermes puts the interruption word on its status bar or on the box row it takes over while a turn runs), joined so a wrapped
   status line still matches → `busy`. A report bullet that merely quotes that line carries prose after the parenthesis and is
-  not the status shape; an *exact* quotation that lands in the bottom rows is refused too, because no transcript may sit
-  between the status row and the composer — a turn's status line is straight above the box, a quotation has the rest of the
-  report (a finding line, a fence) between the two. The body of a pane is
+  not the status shape. An *exact* quotation that lands in the status position is decided by where it sits, not by what it
+  says: nothing transcript-like may lie between the status row and the composer — a finding line, a fence, a blockquote, or
+  simply prose at the left margin (the box draws its own rows at its text column) — and the row must open a block of its own
+  rather than continue the answer above it. A row that carries the hint, sits in the status position and continues the answer
+  is read `unknown` (`status_ambiguous`), never `busy`: it refuses the paste the same way, and it does not call a quoting
+  report a running turn. The body of a pane is
   prose: an agent may quote `◦ Working (… • esc to interrupt)` or `enter прервать` in a report, a diff or a log, and on
   2026-11-03 exactly that held a free `flow-finish` pane `busy` for six minutes;
 - copy mode, no composer row, or a frame without the provider's own footer under it → `unknown`;
