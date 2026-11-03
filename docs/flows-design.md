@@ -485,6 +485,14 @@ every state snapshot — an SSE frame that parks the flow from another tab flips
 On the card a small glyph beside the plan icon reports the same state (`flow-plan-state`, `data-paused`); the chip stays a label,
 and the plan icon stays the only opener.
 
+**The reviewer receives the brief, and judges conformance to it (block 61).** A review request carries the round's plan item and the path
+to its brief (`docs/briefs/<id>.md`, or `spec.source_path` for a spec handed to `flow start --spec`), plus one paragraph of contract: the
+verdict answers "does this commit do what the brief requires, no more and no less", a requirement that is not in the brief is not a reason
+for a verdict, and a brief that contradicts a general rule is a BLOCKER that quotes the line. Without it the reviewer had only the diff and
+the general prohibitions, and filled the gap with its own expectations — it rejected an empty `faq.html` that the brief explicitly asked to
+be empty. The general rules did not change: secrets, safety and weakened tests are still failures, but they are prohibitions on the work
+rather than a licence to invent what the work should contain.
+
 **The panel receives a pointer, not the brief — for a plan item and for a spec alike (blocks 47, 52).** A brief of fifteen to thirty lines pasted into a terminal pushes the input
 line out of the detector's window, the Enter is never confirmed, and the round ends in `dispatch_unconfirmed` and an escalation —
 measured on three live runs, while a two-line "read `docs/briefs/<id>.md` and carry it out" went through on the first Enter and

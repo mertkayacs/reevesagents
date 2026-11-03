@@ -1736,3 +1736,40 @@ describe('a released round is dispatched again (block 56)', () => {
     expect(readFlow('run-1').log.some(entry => entry.event === 'round_released')).toBe(true)
   })
 })
+
+describe('a review request carries the brief of its round (block 61)', () => {
+  it('sends the item id and the brief path with the verdict instructions', () => {
+    // The reviewer used to receive only the diff and the general rules, and it filled the gap with its own expectations: on `flow-a` it
+    // rejected an empty `faq.html` that the brief asked to be empty (block 61).
+    const doc = '- [ ] **A3** — create an empty faq.html'
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'A3', text: JSON.stringify({ id: 'A3', title: 't', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/A3.md', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    // The round belongs to an item: `spec_id` is what `requestReview` reads to name it in the prompt.
+    saveFlow({
+      ...state, state: 'idle',
+      claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'A3' },
+    })
+
+    const sent: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'b'.repeat(40), tree_clean: true,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    const review = sent.find(text => text.includes('VERDICT:'))
+    expect(review).toBeDefined()
+    expect(review!).toContain('plan item A3')
+    expect(review!).toContain('docs/briefs/A3.md')
+    expect(review!).toContain('CONFORMANCE TO that brief')
+  })
+})

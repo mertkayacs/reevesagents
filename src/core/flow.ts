@@ -23,6 +23,7 @@ import type { BlockSpec } from './spec.js'
 import { DISPATCH_POINTER_MAX, renderPointerPrompt } from './spec.js'
 import { isCommitId } from './flow-notes.js'
 import { displayPath } from '../utils/paths.js'
+import { readPlan } from './plan.js'
 import type { FlowVerdict } from './verdict.js'
 import type { PlanItemTick, PlanTickView } from './flow-plan.js'
 import {
@@ -676,6 +677,10 @@ export function renderReviewPrompt(parts: {
   notes_path?: string
   // A re-request after a verdict was rejected as unsubstantiated: say so, and say what has to change.
   strict?: boolean
+  // The plan item this round is about, and the brief that defines it. Without them the reviewer has only the general rules and fills the
+  // gap with its own expectations — on `flow-a` it rejected an empty `faq.html` that the brief explicitly asked to be empty (block 61).
+  plan_item?: string | null
+  brief_path?: string | null
 }): string {
   const lines = [
     `Review commit ${parts.head} in ${parts.repo}.`,
@@ -685,6 +690,21 @@ export function renderReviewPrompt(parts: {
     'Answer with one line "VERDICT: ACCEPT" or "VERDICT: CHANGES_REQUESTED", then your findings,',
     'one per line, each starting with BLOCKER, MAJOR or MINOR. Keep it under 30 lines.',
   ]
+  if (parts.brief_path) {
+    // The brief is the contract of this round. Stated once, plainly, and placed before the verdict instructions so it frames them: judge the
+    // work against what was asked, and do not invent requirements — a reviewer's own idea of "what else a page needs" is not evidence.
+    lines.push(
+      '',
+      parts.plan_item
+        ? `This round is plan item ${parts.plan_item}; its brief is ${parts.brief_path}.`
+        : `This round's brief is ${parts.brief_path}.`,
+      `Judge the work as CONFORMANCE TO that brief: does the commit do what the brief requires, no more and no less?`,
+      'A requirement that is not in the brief is not a reason for a verdict — not a missing feature, not a style preference, not "this could',
+      'be better". If the brief asks for an empty file, an empty file is correct. The brief wins over your own expectations; if it',
+      'contradicts the general rules you were given (secrets, safety, tests weakened to pass), say so as a BLOCKER and quote the line of',
+      'the brief — a conflict between the brief and a rule is the operator\'s to settle, not yours to guess.',
+    )
+  }
   if (parts.strict) {
     lines.push(
       '',
@@ -757,6 +777,8 @@ function reviewRequest(
   notesPath?: string,
   strict = false,
 ): FlowDecision {
+  const roundItem = state.claim.spec_id ?? state.active_plan_item
+  const roundBrief = briefPathFor(state, roundItem)
   return {
     kind: 'request_review',
     reason,
@@ -779,8 +801,25 @@ function reviewRequest(
       max_rounds: state.max_rounds,
       notes_path: notesPath,
       strict,
+      // The item and its brief: `claim.spec_id` is the item this round belongs to, and the plan knows where its brief lives.
+      plan_item: roundItem,
+      brief_path: roundBrief,
     }),
   }
+}
+
+// Where the brief for an item lives: the plan's own record when it has one, the conventional path otherwise. Read here, not in the prompt
+// renderer, so the renderer stays a pure function of its arguments.
+function briefPathFor(state: FlowState, item: string | null): string | null {
+  if (!item) return null
+  try {
+    const plan = readPlan(state.run_id)
+    const row = plan?.items.find(entry => entry.id === item)
+    if (row?.spec_path) return row.spec_path
+  } catch {
+    // A damaged plan must not stop a review from being requested; the conventional path is still the best guess.
+  }
+  return `docs/briefs/${item}.md`
 }
 
 // Attach the notes of the round this decision just consumed. The journal then says "round 2 →

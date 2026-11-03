@@ -316,6 +316,9 @@ cron usually wants that.
   repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
   path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
 
+The reviewer receives the brief of the item it is reviewing, so a verdict is about conformance to that brief: if the brief asks for an
+empty file, an empty file is an ACCEPT, not a defect.
+
 ### When the plan is stuck in `in_work` with no review coming
 
 A round can be lost: the item says `in_work`, the dev's commit is there, and no review was ever requested — the flow's own bookkeeping moved
