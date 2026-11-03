@@ -345,6 +345,28 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(frame, 'codex', { now: 10_000 }).state).toBe('idle')
   })
 
+  it('does not read a report bullet in the bottom rows as the status line (block 74, review round 1)', () => {
+    // A bullet that quotes the working line sits in the bottom rows, opens with the same glyph, and carries `esc to interrupt`
+    // in its text. It is a report, not the status block.
+    const quotedBullet = [
+      '• Working (8s • esc to interrupt) was what it printed, then the pane went idle',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(quotedBullet, 'codex', { now: 10_000 }))
+      .toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+
+    // The same words without the trailing prose are the status line itself.
+    const statusLine = [
+      '• Working (8s • esc to interrupt)',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(statusLine, 'codex', { now: 10_000 })).toMatchObject({ state: 'busy', reason: 'busy_hint' })
+  })
+
   it('reads a real turn as busy whatever the body says', () => {
     const quoting = [
       '  ◦ Working (8s • esc to interrupt)',

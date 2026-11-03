@@ -50,7 +50,11 @@ export const BUSY_STATUS_MARGIN = 1
 // this shape is a sentence the agent printed — its own report quoting the hint, a diff quoting it, a log — and a pane free
 // of a turn is not busy because of it (block 74).
 const BUSY_SHAPE: Partial<Record<Provider, RegExp>> = {
-  codex: /^[◦●•·]\s/,
+  // Codex prints a glyph, a status verb and its parenthesised progress — `◦ Working (8s • esc to interrupt)`, or the same line
+  // cut by the pane's width after `esc to`. A report bullet that merely *quotes* the line carries prose after the parenthesis
+  // (`• Working (8s • esc to interrupt) was what it printed`) and is not the status shape: matching any leading bullet read a
+  // free pane busy (block 74, review round 1).
+  codex: /^[◦●•·]\s+(?:Working|Thinking|Running|Waiting)\s*\([^)]*(?:\)\s*)?$/i,
   hermes: /^\s*(?:☤|❯|─{2,})/,
 }
 

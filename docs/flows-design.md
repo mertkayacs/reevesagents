@@ -100,8 +100,10 @@ pane drew the placeholder and the footer but no `›` in front of the placeholde
 frame's structure, with the asymmetry stated in its rules:
 
 - a busy marker **on the status rows only** — the bottom four rows of the frame, and from the first row of the provider's
-  status shape downwards (codex leads with its working glyph, hermes puts the interruption word on its status bar or on the
-  box row it takes over while a turn runs), joined so a wrapped status line still matches → `busy`. The body of a pane is
+  status shape downwards (codex draws `◦ Working (… • esc to interrupt)` — glyph, status verb, parenthesised progress — and
+  hermes puts the interruption word on its status bar or on the box row it takes over while a turn runs), joined so a wrapped
+  status line still matches → `busy`. A report bullet that merely quotes that line carries prose after the parenthesis and is
+  not the status shape. The body of a pane is
   prose: an agent may quote `◦ Working (… • esc to interrupt)` or `enter прервать` in a report, a diff or a log, and on
   2026-11-03 exactly that held a free `flow-finish` pane `busy` for six minutes;
 - copy mode, no composer row, or a frame without the provider's own footer under it → `unknown`;
