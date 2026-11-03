@@ -1773,3 +1773,43 @@ describe('a review request carries the brief of its round (block 61)', () => {
     expect(review!).toContain('CONFORMANCE TO that brief')
   })
 })
+
+describe('an off-plan spec carries its brief into the review (block 62)', () => {
+  it('names the spec file in the review prompt of the round it was dispatched for', () => {
+    // `flow start --spec <file>` puts a spec in flight with no plan row: `claim.spec_id` is null, so a lookup through the plan finds
+    // nothing and the prompt used to arrive with no brief at all. The path now travels with the round (block 62, MAJOR).
+    mkdirSync(join(root, 'briefs'), { recursive: true })
+    const brief = join(root, 'briefs', 'off-plan.md')
+    writeFileSync(brief, '# OFF PLAN\n\n- [ ] create an empty faq.html\n')
+
+    startFlow({ run_id: 'run-1', dev: 'dev-1', review: 'rev-1', specs: [brief] }, { head: 'a'.repeat(40) })
+
+    const dispatched: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'a'.repeat(40), tree_clean: true,
+      ports: ports((_pane, text) => { dispatched.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(dispatched).toHaveLength(1)
+    // The dispatch is a pointer, and the round remembers which file that pointer named.
+    expect(dispatched[0]).toContain('briefs/off-plan.md')
+    expect(readFlow('run-1').claim.brief_path).toBe('briefs/off-plan.md')
+    // No plan row — that is the whole point of the case.
+    expect(readFlow('run-1').claim.spec_id).toBeNull()
+
+    // The dev commits; the next tick asks for the review, and that prompt must carry the same brief.
+    const reviewed: string[] = []
+    stepFlow('run-1', {
+      now: NOW, at: AT, head: 'b'.repeat(40), tree_clean: true,
+      ports: ports((_pane, text) => { reviewed.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    const prompt = reviewed.find(text => text.includes('VERDICT:'))
+    expect(prompt).toBeDefined()
+    expect(prompt!).toContain("This round's brief is briefs/off-plan.md")
+    expect(prompt!).toContain('Judge the work as CONFORMANCE TO that brief')
+    // And not a claim about a plan item that does not exist.
+    expect(prompt!).not.toContain('plan item')
+  })
+})

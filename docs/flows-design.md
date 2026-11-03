@@ -485,12 +485,17 @@ every state snapshot — an SSE frame that parks the flow from another tab flips
 On the card a small glyph beside the plan icon reports the same state (`flow-plan-state`, `data-paused`); the chip stays a label,
 and the plan icon stays the only opener.
 
-**The reviewer receives the brief, and judges conformance to it (block 61).** A review request carries the round's plan item and the path
-to its brief (`docs/briefs/<id>.md`, or `spec.source_path` for a spec handed to `flow start --spec`), plus one paragraph of contract: the
+**The reviewer receives the brief, and judges conformance to it (blocks 61, 62).** A review request carries the round's plan item and the
+path to its brief, plus one paragraph of contract: the
 verdict answers "does this commit do what the brief requires, no more and no less", a requirement that is not in the brief is not a reason
 for a verdict, and a brief that contradicts a general rule is a BLOCKER that quotes the line. Without it the reviewer had only the diff and
-the general prohibitions, and filled the gap with its own expectations — it rejected an empty `faq.html` that the brief explicitly asked to
-be empty. The general rules did not change: secrets, safety and weakened tests are still failures, but they are prohibitions on the work
+the general prohibitions, and filled the gap with its own expectations — it rejected an empty `faq.html` that the brief explicitly asked to be empty.
+
+The path travels **with the round**, in `claim.brief_path`, recorded at dispatch and carried through the review request and the fix rounds:
+a plan item's `spec_path`, or the file a spec was read from (repository-relative inside the project, shortened outside it). It has to: a
+spec queued with `flow start --spec` or `flow add-spec` has no plan row at all — `claim.spec_id` is `null` by design — so a lookup through
+the plan finds nothing, and the prompt for exactly that kind of round arrived with no brief. Older state files read as `brief_path: null`,
+and the lookup falls back to the plan, then to the conventional `docs/briefs/<id>.md`. The general rules did not change: secrets, safety and weakened tests are still failures, but they are prohibitions on the work
 rather than a licence to invent what the work should contain.
 
 **The panel receives a pointer, not the brief — for a plan item and for a spec alike (blocks 47, 52).** A brief of fifteen to thirty lines pasted into a terminal pushes the input

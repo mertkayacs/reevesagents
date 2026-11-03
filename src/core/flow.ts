@@ -118,6 +118,9 @@ export interface FlowClaim {
   // The plan item whose brief was dispatched for this round. The close uses it, not "whatever item is active now": the live run
   // closed P2.2 with the commit that belonged to P2.1 (block 44).
   spec_id: string | null
+  // Where the brief of this round lives, recorded with the dispatch. A plan item's brief is its `spec_path`; a spec queued with
+  // `flow start --spec` has no plan row at all, and without this its review prompt arrived with no brief (block 62).
+  brief_path?: string | null
 }
 
 export interface FlowRoles {
@@ -559,6 +562,9 @@ export function parseFlowState(raw: unknown): FlowState {
         : typeof record.verdict_handled_for === 'string' && record.verdict_handled_for === text(claim.head),
       // Absent on older files: the close falls back to `active_plan_item`, which is what those files were written with.
       spec_id: typeof claim.spec_id === 'string' ? claim.spec_id : null,
+      // Absent rather than null when there is nothing to say: the field is new, and a state file that never had one should read back
+      // exactly as it was written.
+      ...(typeof claim.brief_path === 'string' && claim.brief_path !== '' ? { brief_path: claim.brief_path } : {}),
     },
     specs: Array.isArray(record.specs) ? record.specs.map(normalizeSpec).filter((spec): spec is BlockSpec => spec !== null) : [],
     dispatched_specs: Array.isArray(record.dispatched_specs)
@@ -778,7 +784,7 @@ function reviewRequest(
   strict = false,
 ): FlowDecision {
   const roundItem = state.claim.spec_id ?? state.active_plan_item
-  const roundBrief = briefPathFor(state, roundItem)
+  const roundBrief = state.claim.brief_path ?? briefPathFor(state, roundItem)
   return {
     kind: 'request_review',
     reason,
@@ -791,7 +797,8 @@ function reviewRequest(
     // screen cannot be mistaken for this head's answer.
     // The item whose brief this round is about survives the review request: the close reads `claim.spec_id`, and resetting it here
     // sent the ACCEPT back to "whichever item is active", which is the binding error of block 44 all over again (block 45, MAJOR 1).
-    next_claim: { head, verdict: null, verdict_count: verdictCount, verdict_applied: false, spec_id: state.claim.spec_id },
+    // The brief of the round survives the request: the next request after a fix round must name the same file, not fall back to a guess.
+    next_claim: { head, verdict: null, verdict_count: verdictCount, verdict_applied: false, spec_id: state.claim.spec_id, ...(state.claim.brief_path ? { brief_path: state.claim.brief_path } : {}) },
     target: 'review',
     head,
     message: renderReviewPrompt({
@@ -806,6 +813,19 @@ function reviewRequest(
       brief_path: roundBrief,
     }),
   }
+}
+
+// The brief a dispatch is about: a plan item's `spec_path`, or the file a spec was read from — shortened the way every message shortens a
+// path (relative inside the repository, `displayPath` outside), so the reviewer can open it and the prompt stays a sentence, not an OS path.
+function dispatchBriefPath(state: FlowState, spec: BlockSpec, observations: FlowObservations): string {
+  const row = observations.plan?.items.find(entry => entry.id === spec.id)
+  if (row?.spec_path) return row.spec_path
+  const source = spec.source_path
+  if (source) {
+    const relativePath = relative(state.repo, source)
+    return relativePath !== '' && !relativePath.startsWith('..') ? relativePath : displayPath(source)
+  }
+  return `docs/briefs/${spec.id}.md`
 }
 
 // Where the brief for an item lives: the plan's own record when it has one, the conventional path otherwise. Read here, not in the prompt
@@ -909,6 +929,9 @@ function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObser
       verdict_applied: false,
       // The round belongs to this item: the close reads it back, so a later tick cannot close "whatever is active now".
       spec_id: fromPlan ? spec.id : null,
+      // The brief travels with the round, not with the plan: an off-plan spec has no row to look the path up in later, and its review
+      // prompt was the one that arrived without a brief (block 62).
+      brief_path: dispatchBriefPath(state, spec, observations),
     },
     target: 'dev',
     spec_id: spec.id,
@@ -1308,7 +1331,7 @@ function reanchor(state: FlowState, head: string): FlowDecision {
     next_state: state.state,
     next_rounds: state.rounds,
     next_review_started_at: state.review_started_at,
-    next_claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: state.claim.spec_id },
+    next_claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: state.claim.spec_id, ...(state.claim.brief_path ? { brief_path: state.claim.brief_path } : {}) },
     next_verdict_handled_for: null,
     log_detail: `documentation commit ${head.slice(0, 7)}: baseline moved, nothing to review`,
   }
