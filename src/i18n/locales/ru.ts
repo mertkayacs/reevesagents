@@ -238,6 +238,7 @@ export const ru = {
     'web.planMissingSince': 'Нет в документе с',
     'web.ticksNow': 'тики: {{driver}} · {{age}} с назад',
     'web.ticksNext': 'следующий через {{next}} с',
+    'web.ticksWaiting': 'ждём тик',
     'web.ticksNone': 'тики: нет — водителя нет',
     'web.config': 'Конфигурация',
     'config.agentPulse': 'Пульс агента (мс)',

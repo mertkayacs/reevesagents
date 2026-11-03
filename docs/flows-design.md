@@ -112,11 +112,13 @@ There is exactly one driver, and it is external to the product (block 68):
 **The receipt.** Every *real* pass — `flow tick --run <id>` or `flow tick --all`, never `--dry-run` — writes
 `~/.reeves/tick-status.json`: `{ at, mode: "run"|"all", driver, pid, advanced, held, skipped }`. That file is the
 only thing a surface reports about the driver: `flow status` and the TUI print
-`tick last <N>s ago · driver <driver>`, `/api/state` carries the same fields as `tick` (plus `active`/`next_in_s`
-when the machine's own `systemctl --user show reeves-flow-tick.timer` answers — `next_in_s` is parsed out of whatever
-shape systemd prints, a formatted date, microseconds, or the monotonic elapse a `OnBootSec` timer reports; an empty
-elapse simply yields no countdown), and a machine that has never recorded a pass says so instead of guessing.
-`--dry-run` writes nothing: a question is not a pass.
+`tick last <N>s ago · driver <driver>`, `/api/state` carries the same fields as `tick` (plus `active`/`next_at` when the
+machine's own `systemctl --user show reeves-flow-tick.timer` answers — the elapse is parsed out of whatever shape systemd
+prints, a formatted date, microseconds, or the monotonic elapse a `OnBootSec` timer reports, and leaves as an absolute
+moment; an empty elapse simply yields no deadline), and a machine that has never recorded a pass says so instead of
+guessing. The payload carries marks only, never a countdown: `at` and `next_at` are stable between receipts, the panel
+subtracts its own clock (corrected by the `now` that `/api/state` — not the stream — carries), and a frame whose state did
+not change is therefore not a frame at all (block 71). `--dry-run` writes nothing: a question is not a pass.
 
 **Two tickers cannot double-paste.** The claim (`pending` + `op_id`, §2.4) is what makes that true: the second
 passenger re-reads the state inside the lock, sees a claim it did not make, and holds. The test

@@ -16,7 +16,7 @@ import { planExists, planItemView, planProgress, readPlan } from '../../core/pla
 import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
 import { pauseFlow, resumeFlow } from '../../core/flow-control.js'
 import { flowPath, readFlow } from '../../core/flow-store.js'
-import { readTickStatus, systemdTimerState, tickAgeSeconds } from '../../core/tick-status.js'
+import { readTickStatus, systemdTimerState } from '../../core/tick-status.js'
 import {
   NotificationError, appendNotification, markNotificationsRead, notificationSummary, readNotifications,
 } from '../../core/notifications.js'
@@ -63,6 +63,7 @@ const DEFAULT_WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), 'web')
 const STATIC_ROUTES: Record<string, { file: string; type: string }> = {
   '/app.css': { file: 'app.css', type: 'text/css; charset=utf-8' },
   '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
+  '/tick-line.js': { file: 'tick-line.js', type: 'text/javascript; charset=utf-8' },
   '/insights-core.js': { file: 'insights-core.js', type: 'text/javascript; charset=utf-8' },
   '/plan-controller.js': { file: 'plan-controller.js', type: 'text/javascript; charset=utf-8' },
   '/plan-error.js': { file: 'plan-error.js', type: 'text/javascript; charset=utf-8' },
@@ -196,32 +197,38 @@ interface SseHub {
   close: () => void
 }
 
-// The driver's state as the panel shows it: the receipt the last real pass left, plus — when the machine has one —
-// the systemd timer's own answer. `active`/`next_in_s` are optional on purpose: macOS, a container, or a cron-driven
-// machine has no timer, and none of them should see an error or a log line for it (block 68).
+// The driver's state as the panel shows it: the receipt the last real pass left, plus — when the machine has one — the
+// systemd timer's own answer. Every field is a *fact with a timestamp*, never a countdown: a frame carries nothing that
+// changes by itself, so `payload === last` can still say "nothing happened" (block 71). `active`/`next_at` are optional
+// on purpose: macOS, a container, or a cron-driven machine has no timer, and none of them should see an error for it.
 export interface WebTick {
   driver: string
+  // When the last real pass ran (ISO).
   at: string
-  age_s: number
+  // When the next one is due (epoch ms), fixed at the moment the timer was probed — the probe is cached, so the deadline
+  // does not drift frame after frame. Absent when the machine has no timer or systemd has no next elapse to give.
+  next_at?: number
   advanced: number
   held: number
   skipped: number
   active?: boolean
-  next_in_s?: number
 }
 
 // A frame is built every 1.5 s and `systemctl --user show` is a D-Bus round trip: one probe per minute is enough to
 // notice a timer that was installed, stopped or restarted, and it keeps the dashboard's own cost flat.
 const SYSTEMD_PROBE_MS = 60_000
-let timerProbe: { at: number, state: { active: boolean, next_in_s?: number } | null } | null = null
+let timerProbe: { at: number, state: { active: boolean, next_at?: number } | null } | null = null
 
-function timerStateCached(now: number): { active: boolean, next_in_s?: number } | null {
+function timerStateCached(now: number): { active: boolean, next_at?: number } | null {
   if (timerProbe && now - timerProbe.at < SYSTEMD_PROBE_MS) return timerProbe.state
   const state = systemdTimerState({ now })
   timerProbe = { at: now, state }
   return state
 }
 
+// No countdowns here, and never again: "seconds ago" and "seconds left" change on their own, so every frame differed
+// from the last one, `payload === last` never matched, and the whole sidebar was rebuilt every 1.5 s (block 71). The
+// marks below are stable between receipts; the panel subtracts its own clock.
 export function flowTickPayload(now: number = Date.now()): WebTick | null {
   // `null` is the honest answer for a machine whose flows are ticked by hand: no driver has ever recorded a pass, and
   // inventing one would be the same class of lie as the removed setting.
@@ -230,7 +237,6 @@ export function flowTickPayload(now: number = Date.now()): WebTick | null {
   const payload: WebTick = {
     driver: status.driver,
     at: status.at,
-    age_s: tickAgeSeconds(status, now),
     advanced: status.advanced,
     held: status.held,
     skipped: status.skipped,
@@ -238,7 +244,7 @@ export function flowTickPayload(now: number = Date.now()): WebTick | null {
   const timer = timerStateCached(now)
   if (timer) {
     payload.active = timer.active
-    if (timer.next_in_s !== undefined) payload.next_in_s = timer.next_in_s
+    if (timer.next_at !== undefined) payload.next_at = timer.next_at
   }
   return payload
 }
@@ -561,6 +567,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     sendJson(res, 200, {
       ...buildWebState({ agent_pulse_ms: loadConfig().global.agent_pulse_ms }),
       tick: flowTickPayload(),
+      // The server's clock, once: the panel needs it to turn the marks in `tick` into seconds, and a clock inside the
+      // stream would make every frame differ — which is the defect this block removes (block 71).
+      now: Date.now(),
       providers: listWebProviders(),
       language: webLanguagePayload(),
       web_theme: loadConfig().global.web_theme,

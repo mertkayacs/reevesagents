@@ -237,6 +237,7 @@ export const tr = {
     'web.planMissingSince': 'Eksik olduğu tarih',
     'web.ticksNow': 'tikler: {{driver}} · {{age}}s önce',
     'web.ticksNext': 'sonraki {{next}}s',
+    'web.ticksWaiting': 'tik bekleniyor',
     'web.ticksNone': 'tikler: yok — sürücü yok',
     'web.config': 'Yapılandırma',
     'web.configSubtitle': 'Genel ayarları düzenle.',

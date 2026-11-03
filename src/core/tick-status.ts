@@ -129,7 +129,9 @@ export function tickStateText(status: TickStatus | null, now: number = Date.now(
 
 export interface TimerState {
   active: boolean
-  next_in_s?: number
+  // The next elapse as an absolute moment (epoch ms), never as "seconds from now": a countdown is a value that changes on
+  // its own, and a value like that has no business in a payload compared against its own previous copy (block 71).
+  next_at?: number
 }
 
 export interface TimerStateOptions {
@@ -245,17 +247,18 @@ export function systemdTimerState(options: TimerStateOptions = {}): TimerState |
   const activeState = fields.get('ActiveState')
   if (!activeState) return null
   const state: TimerState = { active: activeState === 'active' }
-  // The next elapse arrives in one of three shapes (microseconds, a formatted date, or a monotonic duration); whatever
-  // it is, the panel is given seconds until the next pass, never a number that came out of parsing prose as NaN.
+  // The next elapse arrives in one of three shapes (microseconds, a formatted date, or a monotonic duration). However it
+  // comes, it leaves as an absolute moment: the countdown belongs to whoever renders it, and the probe is the only place
+  // that has to know the clock (block 71).
   const realtime = parseSystemdTimestamp(fields.get('NextElapseUSecRealtime') ?? '')
   if (realtime !== null) {
-    state.next_in_s = Math.max(0, Math.round((realtime - now) / 1000))
+    state.next_at = realtime
     return state
   }
   const elapse = parseSystemdTimespan(fields.get('NextElapseUSecMonotonic') ?? '')
   if (elapse !== null) {
     const current = (options.monotonicNow ?? monotonicSeconds)()
-    if (current !== null) state.next_in_s = Math.max(0, Math.round(elapse - current))
+    if (current !== null) state.next_at = now + Math.round((elapse - current) * 1000)
   }
   return state
 }

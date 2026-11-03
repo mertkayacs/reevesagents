@@ -239,6 +239,7 @@ export const pt = {
     'web.planMissingSince': 'Ausente desde',
     'web.ticksNow': 'ticks: {{driver}} · há {{age}}s',
     'web.ticksNext': 'próximo em {{next}}s',
+    'web.ticksWaiting': 'à espera de um tick',
     'web.ticksNone': 'ticks: nenhum — sem driver',
     'web.config': 'Configuração',
     'web.configSubtitle': 'Editar as definições globais.',

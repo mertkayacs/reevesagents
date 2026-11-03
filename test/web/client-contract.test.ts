@@ -454,3 +454,40 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(planSection).not.toContain('innerHTML')
   })
 })
+
+describe('the stream does not rebuild the sidebar for the clock (block 71)', () => {
+  const html = readClientFile('index.html')
+  const js = readClientFile('app.js')
+
+  it('updates the driver line first, then skips everything else when only time passed', () => {
+    // The defect: the frame carried `age_s`/`next_in_s`, so every 1.5 s frame looked different and the whole card list was
+    // rebuilt. The handler now refreshes the one line and bails out when the rest of the state is unchanged.
+    const handler = js.slice(js.indexOf('events.onmessage = (e) => {'), js.indexOf('function setConn(state)'))
+    const tickLine = handler.indexOf('renderPlanTicks()')
+    const bail = handler.indexOf('if (key === lastFrameKey) return')
+    const apply = handler.indexOf('applyState(data)')
+
+    expect(handler).toContain('const key = ticks.frameKey(data)')
+    expect(tickLine).toBeGreaterThan(-1)
+    expect(bail).toBeGreaterThan(tickLine)
+    expect(apply).toBeGreaterThan(bail)
+  })
+
+  it('ticks the line with a local timer, and rebuilds it when the tab wakes up', () => {
+    expect(js).toContain('setInterval(updatePlanTicksClock, 1000)')
+    expect(js).toContain("document.addEventListener('visibilitychange'")
+    // The line is drawn from marks with this browser's clock, corrected by the server's.
+    expect(js).toContain('ticks.lineText(insights.tick, Date.now() + clockOffset, t)')
+    expect(js).toContain('clockOffset = data.now - Date.now()')
+  })
+
+  it('ships the module that computes it, and keeps countdowns out of both sides', () => {
+    expect(html).toContain('src="tick-line.js"')
+    expect(html.indexOf('tick-line.js')).toBeLessThan(html.indexOf('src="app.js"'))
+    expect(js).not.toContain('age_s')
+    expect(js).not.toContain('next_in_s')
+    const server = readFileSync(join(process.cwd(), 'src/surfaces/webui/server.ts'), 'utf8')
+    expect(server).not.toContain('age_s')
+    expect(server).not.toContain('next_in_s')
+  })
+})

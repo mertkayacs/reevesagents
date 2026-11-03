@@ -414,12 +414,19 @@
   // --- initial load + live stream ------------------------------------------
 
   async function loadState() {
-    const data = await api('GET', '/api/state')
-    applyState(data)
+    // The same reader as every later refresh: it is the call that measures the server clock, and a first load without that
+    // measurement renders the driver line from a clock the browser has not corrected yet (block 71).
+    await refreshState()
   }
+
+  // The server clock, measured once per snapshot: the stream cannot carry it (a clock in the frame is exactly the value
+  // that made every frame different), so the offset is refreshed whenever a snapshot is read — including on every
+  // (re)connection, which is when a browser tab that slept needs it most.
+  let clockOffset = 0
 
   async function refreshState() {
     const data = await api('GET', '/api/state')
+    if (typeof data.now === 'number' && Number.isFinite(data.now)) clockOffset = data.now - Date.now()
     applyState(data)
   }
 
@@ -468,13 +475,30 @@
     if (!welcomeChecked) { welcomeChecked = true; maybeShowWelcome() }
   }
 
+  // The state the last rendered frame described, minus the driver line. A frame whose state is identical changed nothing
+  // but time — and time is not an event: it must not rebuild the cards (block 71).
+  let lastFrameKey = ''
+
   function subscribe() {
     const events = new EventSource('/api/events')
-    events.onopen = () => setConn('live')
+    events.onopen = () => {
+      setConn('live')
+      // A (re)connection re-reads the snapshot: it carries the server clock, and the driver line must be rebuilt from the
+      // marks rather than from whatever the previous connection was showing.
+      void refreshState().catch(() => {})
+    }
     events.onerror = () => setConn('down')
     events.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
+        const key = ticks.frameKey(data)
+        // The driver line first: a new receipt, a new deadline or a changed `active` is news even when nothing else moved.
+        if (data.tick !== undefined) {
+          insights.tick = data.tick
+          renderPlanTicks()
+        }
+        if (key === lastFrameKey) return
+        lastFrameKey = key
         // Everything a frame carries goes through the same consumer as the first load. The previous version only
         // copied runs/history/approvals and dropped `notifications`, so a read (or a new event) on the stream never
         // reached the badge, the pulse or the open Logs list.
@@ -1348,20 +1372,29 @@
   // Who advances the flows, in one line. The panel never drives them — the external ticker does — so this only reports
   // the driver's own receipt, and says so plainly when no pass has been recorded (block 68). A timer that systemd
   // reports as not active takes the attention tone: a driver that stopped is the reason a flow sits still.
+  // The driver line, from the marks the frame carries (`at`, `next_at`) and this browser's clock — never from a countdown
+  // the server computed, because a countdown makes every frame look new (block 71). `clockOffset` corrects a browser clock
+  // that disagrees with the server's; it comes from `/api/state`, the one payload that may carry "now".
+  //
+  // `tick-line.js` is part of the client build and is served from the same allowlist as this file; the fallback exists so
+  // a page that somehow loads without it still draws a (static) line instead of failing inside an SSE handler.
+  const ticks = window.tickLine || {
+    lineText: (tick, _now, translate) => (tick ? translate('web.ticksNow', { driver: tick.driver, age: 0 }) : translate('web.ticksNone')),
+    tone: (tick) => (!tick || tick.active === false ? 'attention' : 'neutral'),
+    frameKey: (data) => JSON.stringify([data.runs, data.history, data.approvals, data.notifications]),
+  }
   function renderPlanTicks() {
     if (!el.planTicks) return
-    const tick = insights.tick
     el.planTicks.hidden = false
-    if (!tick) {
-      el.planTicks.dataset.tone = 'attention'
-      el.planTicks.textContent = t('web.ticksNone')
-      return
-    }
-    el.planTicks.dataset.tone = tick.active === false ? 'attention' : 'neutral'
-    const head = t('web.ticksNow', { driver: tick.driver, age: tick.age_s })
-    el.planTicks.textContent = typeof tick.next_in_s === 'number'
-      ? `${head} · ${t('web.ticksNext', { next: tick.next_in_s })}`
-      : head
+    el.planTicks.dataset.tone = ticks.tone(insights.tick)
+    el.planTicks.textContent = ticks.lineText(insights.tick, Date.now() + clockOffset, t)
+  }
+
+  // Once a second, and only the line: the sidebar is rebuilt when state changes, not when time passes.
+  function updatePlanTicksClock() {
+    if (!el.planTicks || !insights.tick) return
+    if (el.planDialog && !el.planDialog.open) return
+    renderPlanTicks()
   }
 
   // A refusal is a code (`not_pausable`, `already_paused`, …), and a code is not a sentence: `plan-error.js` owns the translation, the
@@ -2780,6 +2813,14 @@
     if (!value) return t('web.unknown')
     return `${String(value).replace('T', ' ').slice(0, 16)}Z`
   }
+
+  // A second of local clock for the driver line only. It touches `#plan-ticks` and nothing else: the cards are rebuilt
+  // when the state changes, never because time passed (block 71).
+  globalThis.setInterval(updatePlanTicksClock, 1000)
+  document.addEventListener('visibilitychange', () => {
+    // A tab that slept comes back with a stale countdown; the marks and the corrected clock fix it without a request.
+    if (!document.hidden) updatePlanTicksClock()
+  })
 
   initBrandDuck()
   loadState().catch((err) => {

@@ -233,6 +233,7 @@ export const de = {
     'web.planMissingSince': 'Fehlt seit',
     'web.ticksNow': 'ticks: {{driver}} · vor {{age}}s',
     'web.ticksNext': 'nächste in {{next}}s',
+    'web.ticksWaiting': 'warte auf Tick',
     'web.ticksNone': 'ticks: keiner — kein Treiber',
     'web.config': 'Config',
     'web.configSubtitle': 'Globale Einstellungen bearbeiten.',

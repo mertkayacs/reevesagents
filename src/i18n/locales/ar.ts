@@ -240,6 +240,7 @@ export const ar = {
     'web.planMissingSince': 'مفقود منذ',
     'web.ticksNow': 'النقرات: {{driver}} · قبل {{age}} ثانية',
     'web.ticksNext': 'التالي بعد {{next}} ثانية',
+    'web.ticksWaiting': 'بانتظار النقرة',
     'web.ticksNone': 'النقرات: لا يوجد — لا مشغّل',
     'web.config': 'الإعدادات',
     'web.configSubtitle': 'حرّر الإعدادات العامة.',

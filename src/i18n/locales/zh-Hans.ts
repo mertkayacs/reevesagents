@@ -240,6 +240,7 @@ export const zhHans = {
     'web.planMissingSince': '缺失自',
     'web.ticksNow': '滴答: {{driver}} · 上次 {{age}} 秒前',
     'web.ticksNext': '下次 {{next}} 秒后',
+    'web.ticksWaiting': '等待下次滴答',
     'web.ticksNone': '滴答: 无 — 没有驱动',
     'web.config': '配置',
     'web.configSubtitle': '编辑全局设置。',

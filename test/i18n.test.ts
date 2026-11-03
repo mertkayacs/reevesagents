@@ -87,7 +87,7 @@ const INSIGHTS_KEYS = [
   'web.planRounds', 'web.planNotes', 'web.planBrief', 'web.planStatus_pending', 'web.planStatus_needs_brief',
   'web.planStatus_queued', 'web.planStatus_in_work', 'web.planStatus_reviewing', 'web.planStatus_done',
   'web.planStatus_blocked_owner', 'web.planStatus_skipped', 'web.planStatus_missing', 'web.planMissingSince',
-  'web.ticksNow', 'web.ticksNext', 'web.ticksNone',
+  'web.ticksNow', 'web.ticksNext', 'web.ticksNone', 'web.ticksWaiting',
 ]
 
 describe('insights dialog key parity', () => {

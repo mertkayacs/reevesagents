@@ -139,6 +139,35 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
+// Every SSE frame that arrives inside a window, so a test can say "nothing happened" without guessing at timing.
+function collectFrames(url: string, ms: number): Promise<string[]> {
+  return new Promise(resolve => {
+    const frames: string[] = []
+    const parsed = new (globalThis as unknown as {
+      URL: new (_input: string) => { hostname: string, port: string, pathname: string }
+    }).URL(url)
+    const req = requestFn({
+      hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method: 'GET',
+      agent: false, headers: { accept: 'text/event-stream' },
+    }, res => {
+      let buffer = ''
+      res.setEncoding('utf-8')
+      res.on('data', (chunk: string) => {
+        buffer += chunk
+        let index = buffer.indexOf('\n\n')
+        while (index >= 0) {
+          frames.push(buffer.slice(0, index))
+          buffer = buffer.slice(index + 2)
+          index = buffer.indexOf('\n\n')
+        }
+      })
+    })
+    req.on('error', () => { /* the timer below ends the window */ })
+    req.end()
+    setTimeout(() => { req.destroy(); resolve(frames) }, ms)
+  })
+}
+
 describe('the dashboard advances nothing', () => {
   it('leaves the flow alone while a client is connected, even with a pre-block-68 config', async () => {
     // `flow_tick_ms` is not a setting any more, but an old config may still carry it — and 40 ms is as aggressive as
@@ -283,11 +312,12 @@ describe('the panel shows the driver, not a setting', () => {
     const handle = await startWebServer({ port: 0 })
     try {
       const state = JSON.parse((await httpGet(`${handle.url}/api/state`)).text) as {
-        tick: { active?: boolean, next_in_s?: number }
+        tick: { active?: boolean, next_at?: number }
       }
       expect(state.tick.active).toBe(true)
-      expect(typeof state.tick.next_in_s).toBe('number')
-      expect(state.tick.next_in_s).toBeGreaterThan(0)
+      // An absolute deadline, not a countdown: a value that moves on its own would make every frame look new (block 71).
+      expect(typeof state.tick.next_at).toBe('number')
+      expect(state.tick.next_at).toBeGreaterThan(Date.now())
     } finally {
       await handle.close()
     }
@@ -307,16 +337,19 @@ describe('the panel shows the driver, not a setting', () => {
     const stream = openSse(`${handle.url}/api/events`)
     try {
       const state = JSON.parse((await httpGet(`${handle.url}/api/state`)).text) as {
-        tick: { driver: string, at: string, age_s: number, advanced: number, held: number, skipped: number }
+        tick: { driver: string, at: string, advanced: number, held: number, skipped: number }
       }
       expect(state.tick).toMatchObject({
         driver: 'systemd:reeves-flow-tick.timer', at, advanced: 1, held: 2, skipped: 3,
       })
-      expect(state.tick.age_s).toBeGreaterThanOrEqual(4)
-      // `active`/`next_in_s` are absent here: this host's probe (mocked to answer nothing) has no timer to report, and
+      expect(state.tick.at).toBe(at)
+      // No countdown in the payload — ever: `age_s` and `next_in_s` are what made every frame differ.
+      expect(state.tick).not.toHaveProperty('age_s')
+      expect(state.tick).not.toHaveProperty('next_in_s')
+      // `active`/`next_at` are absent here: this host's probe (mocked to answer nothing) has no timer to report, and
       // a machine without systemd must not gain invented fields.
       expect(state.tick).not.toHaveProperty('active')
-      expect(state.tick).not.toHaveProperty('next_in_s')
+      expect(state.tick).not.toHaveProperty('next_at')
 
       const frame = framePayload(await stream.firstFrame) as { tick: { driver: string, advanced: number } }
       expect(frame.tick.driver).toBe('systemd:reeves-flow-tick.timer')
@@ -325,5 +358,95 @@ describe('the panel shows the driver, not a setting', () => {
       stream.close()
       await handle.close()
     }
+  })
+})
+
+describe('the stream carries no value that ticks on its own (block 71)', () => {
+  const RECEIPT = {
+    at: new Date(Date.now() - 8_000).toISOString(), mode: 'all', driver: 'systemd:reeves-flow-tick.timer',
+    pid: 4242, advanced: 1, held: 0, skipped: 0,
+  }
+
+  it('sends nothing while only time passes: two polls, one frame', async () => {
+    // The defect: `tick.age_s` (and `next_in_s`) changed on every pass, so `payload === last` never matched and the whole
+    // sidebar was rebuilt every 1.5 s. With marks instead of countdowns, an idle fleet sends exactly the frame the client
+    // asked for when it connected.
+    writeFileSync(join(root, 'tick-status.json'), JSON.stringify(RECEIPT), 'utf-8')
+    vi.resetModules()
+    const { startWebServer } = await import('../src/surfaces/webui/server.js')
+    const handle = await startWebServer({ port: 0 })
+    try {
+      // Two POLL_MS windows: at least two snapshots are built and compared.
+      const frames = await collectFrames(`${handle.url}/api/events`, 3_600)
+      expect(frames).toHaveLength(1)
+      expect(framePayload(frames[0]!)).toHaveProperty('tick.at', RECEIPT.at)
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('sends a frame when a new receipt lands', async () => {
+    writeFileSync(join(root, 'tick-status.json'), JSON.stringify(RECEIPT), 'utf-8')
+    vi.resetModules()
+    const { startWebServer } = await import('../src/surfaces/webui/server.js')
+    const handle = await startWebServer({ port: 0 })
+    try {
+      const stream = collectFrames(`${handle.url}/api/events`, 3_600)
+      // A pass runs while the dashboard is open: the receipt is the news, and it has to reach the panel.
+      setTimeout(() => {
+        writeFileSync(join(root, 'tick-status.json'), JSON.stringify({
+          ...RECEIPT, at: new Date().toISOString(), advanced: 0, held: 1,
+        }), 'utf-8')
+      }, 400)
+      const frames = await stream
+      expect(frames.length).toBeGreaterThanOrEqual(2)
+      const last = framePayload(frames.at(-1)!) as { tick: { held: number } }
+      expect(last.tick.held).toBe(1)
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('carries a changed `active` even when nothing else moved', async () => {
+    // The reason the tick is not excluded from the frame comparison: the timer's own state is news too.
+    writeFileSync(join(root, 'tick-status.json'), JSON.stringify(RECEIPT), 'utf-8')
+    const active = (): string => 'NextElapseUSecRealtime=\nActiveState=active\n'
+    execFileSync.mockImplementation((file: string, args: string[] = []) => {
+      if (file === 'git' && args.includes('rev-parse')) return 'aaa111\n'
+      if (file === 'git' && args.includes('status')) return ''
+      if (file === 'systemctl') return active()
+      return ''
+    })
+    vi.resetModules()
+    const serverA = await import('../src/surfaces/webui/server.js')
+    const handleA = await serverA.startWebServer({ port: 0 })
+    let running: { tick: { active?: boolean, at: string } }
+    try {
+      running = JSON.parse((await httpGet(`${handleA.url}/api/state`)).text) as typeof running
+    } finally {
+      await handleA.close()
+    }
+
+    execFileSync.mockImplementation((file: string, args: string[] = []) => {
+      if (file === 'git' && args.includes('rev-parse')) return 'aaa111\n'
+      if (file === 'git' && args.includes('status')) return ''
+      if (file === 'systemctl') return 'NextElapseUSecRealtime=\nActiveState=inactive\n'
+      return ''
+    })
+    // A fresh module, so the 60 s probe cache does not answer on behalf of the old timer.
+    vi.resetModules()
+    const serverB = await import('../src/surfaces/webui/server.js')
+    const handleB = await serverB.startWebServer({ port: 0 })
+    let stopped: { tick: { active?: boolean, at: string } }
+    try {
+      stopped = JSON.parse((await httpGet(`${handleB.url}/api/state`)).text) as typeof stopped
+    } finally {
+      await handleB.close()
+    }
+
+    expect(running.tick.active).toBe(true)
+    expect(stopped.tick.active).toBe(false)
+    // Same receipt, same fleet: the payload differs exactly in `active`, which is what makes the frame worth sending.
+    expect(stopped.tick.at).toBe(running.tick.at)
   })
 })

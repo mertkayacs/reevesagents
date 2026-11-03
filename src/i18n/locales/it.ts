@@ -237,6 +237,7 @@ export const it = {
     'web.planMissingSince': 'Assente da',
     'web.ticksNow': 'ticks: {{driver}} · {{age}}s fa',
     'web.ticksNext': 'prossimo tra {{next}}s',
+    'web.ticksWaiting': 'in attesa di un tick',
     'web.ticksNone': 'ticks: nessuno — nessun driver',
     'web.config': 'Configurazione',
     'web.configSubtitle': 'Modifica le impostazioni globali.',

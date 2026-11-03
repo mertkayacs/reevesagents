@@ -121,7 +121,8 @@ describe('the systemd timer probe', () => {
 
     const state = systemdTimerState({ now: NOW, run })
 
-    expect(state).toEqual({ active: true, next_in_s: 30 })
+    // An absolute moment, not a countdown: the payload the panel reads carries marks, so nothing in it changes by itself.
+    expect(state).toEqual({ active: true, next_at: Date.UTC(2026, 10, 3, 13, 0, 30) })
   })
 
   it('computes it from microseconds when systemd answers in the machine form', () => {
@@ -131,7 +132,7 @@ describe('the systemd timer probe', () => {
       'ActiveState=active',
     ].join('\n')
 
-    expect(systemdTimerState({ now: NOW, run })).toEqual({ active: true, next_in_s: 45 })
+    expect(systemdTimerState({ now: NOW, run })).toEqual({ active: true, next_at: next })
   })
 
   it('falls back to the monotonic elapse when the timer has no realtime one', () => {
@@ -145,7 +146,8 @@ describe('the systemd timer probe', () => {
 
     const state = systemdTimerState({ now: NOW, run, monotonicNow: () => 339_000 })
 
-    expect(state).toEqual({ active: true, next_in_s: 45 })
+    // 339044.544s of boot clock, 339000s elapsed: 44.5s from now, as a moment.
+    expect(state).toEqual({ active: true, next_at: NOW + 44_544 })
   })
 
   it('reports active without a next run when systemd has no elapse to give', () => {
@@ -164,6 +166,7 @@ describe('the systemd timer probe', () => {
       'NextElapseUSecRealtime=Tue 2026-11-03 12:59:00 UTC',
       'ActiveState=active',
     ].join('\n')
-    expect(systemdTimerState({ now: NOW, run })).toEqual({ active: true, next_in_s: 0 })
+    // A deadline in the past is still reported as the moment it was: turning it into "0s left" belongs to the renderer.
+    expect(systemdTimerState({ now: NOW, run })).toEqual({ active: true, next_at: Date.UTC(2026, 10, 3, 12, 59, 0) })
   })
 })

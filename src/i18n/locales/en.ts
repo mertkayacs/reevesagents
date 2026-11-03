@@ -238,6 +238,7 @@ export const en = {
   'web.planMissingSince': 'Missing since',
   'web.ticksNow': 'ticks: {{driver}} · last {{age}}s ago',
   'web.ticksNext': 'next {{next}}s',
+  'web.ticksWaiting': 'waiting for a tick',
   'web.ticksNone': 'ticks: none — no driver',
   'web.config': 'Config',
   'config.agentPulse': 'Agent pulse (ms)',
