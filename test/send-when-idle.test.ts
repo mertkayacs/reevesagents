@@ -596,25 +596,29 @@ describe('the repeated Enter', () => {
     expect(driver.pasted()).toEqual(['hello'])
   })
 
-  it('does not press again when the pane turned busy between the check and the key', async () => {
-    // The second Enter is decided on a fresh look: the turn started after the confirm window, so a repeat keystroke would
-    // interrupt it. The send itself is confirmed — the pane went busy and its ledger grew — and exactly one Enter was pressed.
+  it('does not press again when the retry guard sees the pane busy', async () => {
+    // The first Enter was swallowed — the box still holds our text and nothing is running — and by the time the guard looks
+    // again a turn is under way. A repeat keystroke would interrupt it, so there is none: exactly one Enter, and the send is
+    // reported unconfirmed rather than pressed blind (block 75).
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_BUSY]
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
 
-    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toMatchObject({ sent: true })
-    expect(driver.count('send-keys')).toBe(1)
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST }))
+      .toMatchObject({ sent: false, reason: 'unconfirmed', enter_retries: 1 })
+    expect(driver.count('send-keys')).toBe(1)   // no second Enter
   })
 
-  it('does not press again when the pane reads unknown', async () => {
-    // A modal is not a pane to type into, however much our text is still in the box.
+  it('does not press again when the pane reads unknown, even with our text in the box', async () => {
+    // Copy mode is the shape that keeps our text *and* cannot take a key: the badge makes the pane `unknown`, and `unknown`
+    // never receives a keystroke (block 75).
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    const modal = ['  \u258c Select an environment', '  1. staging', '  2. production', '  \u2190 for agents \u00b7 ? for shortcuts'].join('\n')
-    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, modal]
+    const copyModeWithOurs = ['[12/345]', '› hello', '  ← for agents · ? for shortcuts'].join('\n')
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, copyModeWithOurs]
 
-    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toMatchObject({ sent: false, reason: 'unconfirmed' })
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST }))
+      .toMatchObject({ sent: false, reason: 'unconfirmed' })
     expect(driver.count('send-keys')).toBe(1)
   })
 })

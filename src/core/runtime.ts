@@ -921,12 +921,10 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   for (let enter = 1; enter <= MAX_SUBMIT_ENTERS; enter += 1) {
     if (enter > 1) {
       after = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
-      const fresh = inspectPane(after, agent.provider).state
-      // A running turn, or a pane in copy mode, never receives another key: the first is an interruption, the second scrolls.
-      if (fresh === 'busy' || paneInCopyMode(after)) return retried('unconfirmed')
-      // `unknown` is refused *unless* the composer itself reads our prompt. That is the guard's purpose — a modal, a login screen
-      // or a half-drawn frame never shows our text — while a long prompt that wraps past the detector's four-row window does, and
-      // the whole point of this loop is that such a prompt can be submitted (block 75).
+      // A repeat needs the pane to read **positively idle** on a fresh look: `busy` is a turn already running (the key would
+      // interrupt it) and `unknown` is a pane we cannot see — a modal, a copy mode, a half-drawn frame — and neither takes a key,
+      // whatever the composer seems to hold (block 75).
+      if (inspectPane(after, agent.provider).state !== 'idle') return retried('unconfirmed')
       if (!composerHoldsOurs(composerText(after, agent.provider) ?? '', text, ownership)) {
         return retried('unconfirmed')
       }
@@ -948,10 +946,8 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
     if (!stillOurs && countWorkLines(after) > countWorkLines(beforeEnter)) {
       return sentOutcome()
     }
-    // A running turn or a pane in copy mode cannot take a keystroke, and a box that no longer holds our text is not ours to
-    // submit. `unknown` alone does not stop the repeat: a long prompt that wraps past the detector's window reads `unknown`
-    // there, and the box reading our text is the stronger evidence (block 75).
-    if (inspectPane(after, agent.provider).state === 'busy' || paneInCopyMode(after) || !stillOurs) {
+    // A pane that is not idle cannot take a keystroke, and a box that no longer holds our text is not ours to submit.
+    if (inspectPane(after, agent.provider).state !== 'idle' || !stillOurs) {
       return retried('unconfirmed')
     }
     // Still idle, still ours: the Enter was swallowed. Count the repeat and try once more, up to the cap.

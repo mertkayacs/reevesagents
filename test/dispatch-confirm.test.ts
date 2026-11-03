@@ -1885,6 +1885,44 @@ describe('a repeat Enter is on the record (block 75)', () => {
     expect(retries[0]!.detail).toBe(`enter 1 · ${HEAD}`)
   })
 
+  it('carries the spec in the retry detail when the decision has one', () => {
+    // A plan dispatch names an item, and the retry line carries the same head and spec the dispatch itself did.
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    const brief = (id: string) => JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] })
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2']) {
+      plan = attachSpec(plan, { id, text: brief(id), format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    // An ACCEPT collected in `idle` with the plan item still open: the tick closes P1.1 and dispatches P1.2's brief.
+    const base = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...base, state: 'idle', rounds: 0,
+      claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 2, verdict_applied: false, spec_id: null },
+      active_plan_item: 'P1.1',
+    })
+
+    const dispatched = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: {
+        paneBusy: () => 'idle' as const,
+        peek: () => '',
+        send: () => ({ sent: true as const, enter_retries: 1 }),
+      },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(dispatched.decision.reason).toBe('plan_item_dispatched')
+    // P1.1 was accepted and closed; the brief that went out is P1.2's, and the retry names the same item.
+    expect(dispatched.decision.spec_id).toBe('P1.2')
+    const retries = readFlow('run-1').log.filter(entry => entry.event === 'submit_retry')
+    expect(retries).toHaveLength(1)
+    expect(retries[0]!.detail).toBe(`enter 1 · ${HEAD} · spec P1.2`)
+  })
+
   it('keeps the template multi-line: flattening belongs to the pane, not to the decision', () => {
     seedIdleFlow()
     const messages: string[] = []

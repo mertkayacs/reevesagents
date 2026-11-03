@@ -72,9 +72,11 @@ function withEnterRetries(
 ): FlowState {
   if (retries === undefined || retries <= 0) return state
   const head = decision.head ?? state.claim.head
+  // The same context the dispatch itself carries: the head the prompt was for, and the spec when the decision has one.
+  const spec = decision.spec_id === undefined || decision.spec_id === null ? '' : ` · spec ${decision.spec_id}`
   let next = state
   for (let attempt = 1; attempt <= retries; attempt += 1) {
-    next = { ...next, log: appendLog(next, { at, event: 'submit_retry', detail: `enter ${attempt} · ${head}` }) }
+    next = { ...next, log: appendLog(next, { at, event: 'submit_retry', detail: `enter ${attempt} · ${head}${spec}` }) }
   }
   return next
 }
