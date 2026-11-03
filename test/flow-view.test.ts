@@ -33,6 +33,7 @@ function makeState(runId: string, overrides: Partial<FlowState> = {}): FlowState
       run_id: runId,
       repo: join(homedir(), 'projects', 'demo'),
       roles: { dev: 'dev-1', review: 'rev-1' },
+      head: 'a'.repeat(40),
       at: '2026-01-01T00:00:00.000Z',
     }),
     ...overrides,

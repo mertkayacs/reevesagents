@@ -197,6 +197,12 @@ export interface FlowState {
   // Absolute path, because git needs it. Every payload renders it home-shortened (§4.1).
   repo: string
   roles: FlowRoles
+  // When `flow start` created this flow (ISO). The marker that the file describes a flow that was actually
+  // started: it is written once, never moved, and, unlike the `flow_started` journal entry (the journal is
+  // capped at FLOW_LOG_LIMIT, so a long flow loses it), it survives for the life of the flow. `saveFlow`
+  // refuses a state without it — a file that carries no start is not a pipeline, and a surface that reads it
+  // would draw a closed flow that never ran (block 63, BUG 2).
+  started_at: string
   state: FlowStatus
   rounds: number
   // With a plan this is the budget of **one item**; without one it stays the flow's round budget, exactly as
@@ -482,6 +488,7 @@ export function createFlowState(init: FlowInit): FlowState {
     notify_episode: 0,
     repo: init.repo,
     roles: { dev, review },
+    started_at: init.at ?? isoNow(),
     state: 'idle',
     rounds: 0,
     max_rounds: init.max_rounds && init.max_rounds > 0 ? Math.floor(init.max_rounds) : MAX_ROUNDS,
@@ -532,6 +539,14 @@ export function parseFlowState(raw: unknown): FlowState {
   if (!dev || !review) throw new FlowStateError('flow state has no dev/review agent ids')
   const claim = asRecord(record.claim) ?? {}
   const verdict = claim.verdict === 'ACCEPT' || claim.verdict === 'CHANGES_REQUESTED' ? claim.verdict : null
+  const log = parseLog(record.log)
+  // A file written before `started_at` existed was still created by `flow start`, which binds the flow to a commit
+  // and journals `flow_started`. Deriving the marker from those two facts keeps an older file readable — and
+  // re-savable — instead of failing the first write after an upgrade, while a file that carries neither has no
+  // start to recover: it reads back with an empty marker, which `saveFlow` then refuses to persist again.
+  const startedAt = text(record.started_at)
+    || log.find(entry => entry.event === 'flow_started')?.at
+    || (text(claim.head) ? (text(record.updated_at) || isoNow()) : '')
   return {
     schema_version: FLOW_SCHEMA_VERSION,
     run_id: runId,
@@ -539,6 +554,7 @@ export function parseFlowState(raw: unknown): FlowState {
     notify_episode: count(record.notify_episode),
     repo: text(record.repo),
     roles: { dev, review },
+    started_at: startedAt,
     state: status,
     rounds: count(record.rounds),
     max_rounds: count(record.max_rounds, MAX_ROUNDS) || MAX_ROUNDS,
@@ -588,28 +604,33 @@ export function parseFlowState(raw: unknown): FlowState {
     orphan_reason: text(record.orphan_reason).slice(0, 200) || null,
     close_reason: text(record.close_reason).slice(0, 200) || null,
     plan: parsePlanSummary(record.plan),
-    log: Array.isArray(record.log)
-      ? record.log
-        .map(asRecord)
-        .filter((entry): entry is Record<string, unknown> => entry !== null)
-        .map(entry => {
-          const parsed: FlowLogEntry = { at: text(entry.at), event: text(entry.event), detail: text(entry.detail) }
-          const ref = text(entry.notes_ref)
-          if (ref) parsed.notes_ref = ref
-          const counts = asRecord(entry.notes_counts)
-          if (counts) {
-            parsed.notes_counts = {
-              blocker: count(counts.blocker),
-              major: count(counts.major),
-              minor: count(counts.minor),
-            }
-          }
-          return parsed
-        })
-        .slice(-FLOW_LOG_LIMIT)
-      : [],
+    log,
     updated_at: text(record.updated_at) || isoNow(),
   }
+}
+
+// The bounded journal, parsed once per read: `parseFlowState` needs it for the `started_at` migration above and
+// for the state itself, and two copies of this mapping would be two chances to drift.
+function parseLog(raw: unknown): FlowLogEntry[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map(asRecord)
+    .filter((entry): entry is Record<string, unknown> => entry !== null)
+    .map(entry => {
+      const parsed: FlowLogEntry = { at: text(entry.at), event: text(entry.event), detail: text(entry.detail) }
+      const ref = text(entry.notes_ref)
+      if (ref) parsed.notes_ref = ref
+      const counts = asRecord(entry.notes_counts)
+      if (counts) {
+        parsed.notes_counts = {
+          blocker: count(counts.blocker),
+          major: count(counts.major),
+          minor: count(counts.minor),
+        }
+      }
+      return parsed
+    })
+    .slice(-FLOW_LOG_LIMIT)
 }
 
 // A missing `pending` is "nothing in flight", which is what a flow written before the claim

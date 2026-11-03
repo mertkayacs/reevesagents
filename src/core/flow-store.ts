@@ -144,10 +144,13 @@ export function readFlowFile(path: string, runId = ''): FlowState {
 }
 
 export function saveFlow(state: FlowState, options: FlowStoreOptions = {}): string {
-  // A flow is born only through `flow start`, which binds it to a Git HEAD and records the
-  // `flow_started` journal entry. Never materialise a default/empty state as a closed flow: that
-  // file is indistinguishable from a flow that ran and finished to status consumers.
-  if (state.state === 'done' && !state.claim.head.trim() && state.log.length === 0) {
+  // A flow exists only through `flow start`: it binds the flow to a Git HEAD and stamps `started_at`. A state
+  // without one of them is not a pipeline, and persisting it gives every reader a flow that never ran — the
+  // phantom a run with no flow grew on a live board (block 63, BUG 2). Both facts are immutable and are written
+  // before anything else can touch the file, so this refuses only states nobody started; the bounded journal is
+  // deliberately *not* the marker, because it drops `flow_started` after FLOW_LOG_LIMIT entries and a live flow
+  // would then fail its next save.
+  if (!state.claim.head.trim() || !state.started_at.trim()) {
     throw new FlowStateError('flow has not been started; state was not saved')
   }
   const path = flowPath(state.run_id, options.root)

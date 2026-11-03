@@ -141,7 +141,8 @@ beforeEach(() => {
   mkdirSync(dirname(planPath('run-1')), { recursive: true })
   savePlan(plan)
   saveFlow(createFlowState({
-    run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 2, max_total_rounds: 5,
+    run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, head: 'a'.repeat(40),
+    max_rounds: 2, max_total_rounds: 5,
   }))
 })
 

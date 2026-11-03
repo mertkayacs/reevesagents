@@ -54,6 +54,7 @@ beforeEach(() => {
     run_id: 'run-p',
     repo: tmpDir,
     roles: { dev: 'dev-1', review: 'rev-1' },
+    head: 'a'.repeat(40),
     max_rounds: 6,
     review_timeout_sec: 1800,
     at: '2026-11-02T09:00:00.000Z',

@@ -39,12 +39,68 @@ describe('flow store', () => {
     expect(readFlow('run-1', { root })).toEqual(state)
   })
 
-  it('refuses to persist a default state for a flow that was never started', () => {
+  it('refuses to persist a flow that was never started, in any status', () => {
     const state = makeState('run-1', '2026-01-01T00:00:00.000Z')
-    const emptyClosed = { ...state, state: 'done' as const, claim: { ...state.claim, head: '' }, log: [] }
+    const headless = { ...state, claim: { ...state.claim, head: '' }, log: [] }
 
-    expect(() => saveFlow(emptyClosed, { root })).toThrow(/flow has not been started/)
+    // The reported shape (block 63, BUG 2) and its neighbours: the status and the journal say nothing about
+    // whether a flow was started, so a guard keyed on them would let `idle` — or `done` with one log entry —
+    // through. The head is the fact, and it is checked for every save.
+    for (const status of ['done', 'idle', 'reviewing', 'escalated'] as const) {
+      expect(() => saveFlow({ ...headless, state: status }, { root })).toThrow(/flow has not been started/)
+    }
+    expect(() => saveFlow({ ...headless, state: 'idle' as const, log: [{ at: 'now', event: 'flow_started', detail: '' }] }, { root }))
+      .toThrow(/flow has not been started/)
+    expect(() => saveFlow({ ...headless, state: 'paused' as const, paused_from: 'idle' }, { root }))
+      .toThrow(/flow has not been started/)
     expect(existsSync(flowPath('run-1', root))).toBe(false)
+  })
+
+  it('refuses a state whose start marker is missing even when it carries a head', () => {
+    const state = makeState('run-1', '2026-01-01T00:00:00.000Z')
+
+    // `started_at` is stamped by `flow start` and never moves; a head alone is a claim about a commit, not
+    // evidence that a pipeline existed. Nothing that came out of `flow start` can hit this, which is why the
+    // check is safe to apply to every save instead of to one reported shape.
+    expect(() => saveFlow({ ...state, started_at: '' }, { root })).toThrow(/flow has not been started/)
+    expect(() => saveFlow({ ...state, started_at: '   ' }, { root })).toThrow(/flow has not been started/)
+    expect(existsSync(flowPath('run-1', root))).toBe(false)
+  })
+
+  it('writes the start marker, and reads a file that predates it back into a savable flow', () => {
+    const state = makeState('run-1', '2026-01-01T00:00:00.000Z')
+    const path = saveFlow(state, { root })
+    expect(JSON.parse(readFileSync(path, 'utf-8')).started_at).toBe('2026-01-01T00:00:00.000Z')
+
+    // A file written before the marker existed: `flow start` bound it to a commit and journalled the start,
+    // so the marker is recovered from that entry instead of leaving a live flow unsavable after an upgrade.
+    const legacy = { ...JSON.parse(readFileSync(path, 'utf-8')) } as Record<string, unknown>
+    delete legacy.started_at
+    legacy.log = [{ at: '2025-12-31T23:00:00.000Z', event: 'flow_started', detail: 'aaa111 1 queued' }]
+    writeFileSync(path, JSON.stringify(legacy), 'utf-8')
+
+    const read = readFlow('run-1', { root })
+    expect(read.started_at).toBe('2025-12-31T23:00:00.000Z')
+    expect(() => saveFlow({ ...read, updated_at: '2026-01-02T00:00:00.000Z' }, { root })).not.toThrow()
+  })
+
+  it('reads a file with neither a head nor a start marker as a flow nobody started', () => {
+    const path = flowPath('run-1', root)
+    mkdirSync(join(root, 'flows'), { recursive: true })
+    // What an older build could leave behind: an empty state that a status reader would draw as a closed flow.
+    writeFileSync(path, JSON.stringify({
+      ...makeState('run-1'),
+      state: 'done',
+      started_at: undefined,
+      claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      log: [],
+    }), 'utf-8')
+
+    // Reading it stays explicit rather than pretending nothing is there, but the state carries no start, so it
+    // cannot be written again and no later save can turn it into a pipeline.
+    const read = readFlow('run-1', { root })
+    expect(read.started_at).toBe('')
+    expect(() => saveFlow({ ...read, close_reason: 'touched' }, { root })).toThrow(/flow has not been started/)
   })
 
   it('leaves the previous document intact when the swap fails', () => {

@@ -376,7 +376,7 @@ describe('mutatePlan', () => {
       process.env.REEVES_REGISTRY = root
       try {
         saveFlow(createFlowState({
-          run_id: 'run-1', repo: root, roles: { dev: 'd', review: 'r' }, max_rounds: 3,
+          run_id: 'run-1', repo: root, roles: { dev: 'd', review: 'r' }, head: 'a'.repeat(40), max_rounds: 3,
           review_timeout_sec: 60, at: '2026-11-02T09:00:00.000Z',
         }), { root })
         const value = mutatePlan('run-1', current => {
@@ -500,7 +500,7 @@ describe('a torn summary', () => {
       process.env.REEVES_REGISTRY = root
       try {
         saveFlow(createFlowState({
-          run_id: 'run-1', repo: root, roles: { dev: 'd', review: 'r' }, max_rounds: 3,
+          run_id: 'run-1', repo: root, roles: { dev: 'd', review: 'r' }, head: 'a'.repeat(40), max_rounds: 3,
           review_timeout_sec: 60, at: '2026-11-02T09:00:00.000Z',
         }), { root })
         // A crash between the two writes: the plan exists, the summary never landed.

@@ -53,7 +53,8 @@ beforeEach(() => {
   savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const, rounds: 2 })) })
   saveFlow({
     ...createFlowState({
-      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 2, max_total_rounds: 5, at: AT,
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, head: 'a'.repeat(40),
+      max_rounds: 2, max_total_rounds: 5, at: AT,
     }),
     state: 'escalated',
     notify_episode: 1,
