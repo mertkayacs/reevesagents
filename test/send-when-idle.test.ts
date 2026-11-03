@@ -693,7 +693,7 @@ describe('a composer without the glyph (block 73)', () => {
   it('sends nothing when the second capture shows the turn had started', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()
-    const busy = ['  ◦ Working (2s • esc to interrupt)', ...CODEX_NO_GLYPH.split('\n')].join('\n')
+    const busy = ['  ◦ Working (2s • esc to interrupt)', '', ...CODEX_NO_GLYPH.split('\n')].join('\n')
     driver.captures = [CODEX_NO_GLYPH, busy]
     const timings = { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 5_000, confirmPollMs: 1000 }
 

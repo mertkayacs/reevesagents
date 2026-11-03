@@ -129,13 +129,17 @@ interface RenderedFrame {
   lines: string[]
   raw: string[]
   startsBlock: boolean[]
+  // The row is followed by a blank row in the frame. The pane pads its status block from the box, and that padding is a layout
+  // fact — not a word — which is what a quotation inside a report cannot fake (block 74, review round 1).
+  blankAfter: boolean[]
 }
 
 function renderFrame(paneText: string): RenderedFrame {
-  const frame: RenderedFrame = { lines: [], raw: [], startsBlock: [] }
+  const frame: RenderedFrame = { lines: [], raw: [], startsBlock: [], blankAfter: [] }
+  const rows = stripAnsi(paneText).split('\n').map(line => line.replace(/\r/g, ''))
   let blank = true
-  for (const line of stripAnsi(paneText).split('\n')) {
-    const row = line.replace(/\r/g, '')
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]!
     if (row.trim() === '') {
       blank = true
       continue
@@ -143,6 +147,7 @@ function renderFrame(paneText: string): RenderedFrame {
     frame.lines.push(row.trim())
     frame.raw.push(row)
     frame.startsBlock.push(blank)
+    frame.blankAfter.push(rows[index + 1] !== undefined && rows[index + 1]!.trim() === '')
     blank = false
   }
   return frame
@@ -234,6 +239,20 @@ function composerGlyph(lines: string[], raw: string[], signals: ProviderSignals,
     if (indentOf(raw[index] ?? '') < COMPOSER_TEXT_COLUMN) return false
   }
   return false
+}
+
+// The last row of the status line: the shaped row plus whatever continuation the pane's width put under it. A continuation is
+// box-column text — `interrupt)` under `◦ Working (3s • esc to` — and the walk stops at the first row that is not.
+function statusLineEnd(frame: RenderedFrame, statusRow: number, composer: { index: number } | null): number {
+  const limit = Math.min(composer === null ? frame.lines.length : composer.index, frame.lines.length)
+  let end = statusRow
+  for (let index = statusRow + 1; index < limit; index += 1) {
+    const raw = frame.raw[index] ?? ''
+    if (TRANSCRIPT_LINE.test(raw) || DIALOG_LINE.test(frame.lines[index] ?? '')) break
+    if (indentOf(raw) < COMPOSER_TEXT_COLUMN) break
+    end = index
+  }
+  return end
 }
 
 // Is there transcript between this status row and the composer row? A turn's status line sits straight above the box; a line of
@@ -445,10 +464,17 @@ export function inspectPane(
     const aboveBox = provider === 'codex'
     const quoted = aboveBox && separatedFromComposer(frame, statusRow, composer)
     if (hints && !quoted) {
-      // The row is where the status line goes. If it continues the transcript above it, the pane is not busy — but it is not
-      // free either, because a turn's status line running straight on from an answer looks exactly the same. `unknown` refuses
-      // the paste the same way and never calls a quoting report a running turn.
-      if (aboveBox && !frame.startsBlock[statusRow]!) return { state: 'unknown', reason: 'status_ambiguous', sample }
+      // The row is where the status line goes. Two layout facts decide whether it is the provider's or a quotation:
+      //   • it opens a block of its own rather than continuing the answer above it, and
+      //   • the pane pads it from the box below — the status line is followed by a blank row.
+      // A quotation inside a report can satisfy either one, never both: a paragraph break can precede it, and a run of prose
+      // follows it. What satisfies neither is read `unknown`: it refuses the paste the same way and never calls a quoting
+      // report a running turn.
+      // The padding sits at the end of the status line, which a narrow pane may have wrapped onto a second row.
+      const statusEnd = statusLineEnd(frame, statusRow, composer)
+      if (aboveBox && !(frame.startsBlock[statusRow]! && frame.blankAfter[statusEnd]!)) {
+        return { state: 'unknown', reason: 'status_ambiguous', sample }
+      }
       return { state: 'busy', reason: 'busy_hint', sample }
     }
   }

@@ -141,6 +141,7 @@ describe('a composer without the glyph (block 73)', () => {
   it('keeps busy above the fallback: a placeholder with an interrupt hint is busy, not free', () => {
     const busy = [
       '  ◦ Working (8s • esc to interrupt)',
+      '',
       '  Ask Codex to do anything',
       '  GPT-6-Luna high · ~/projects/flow-finish',
       '  ← for agents · ? for shortcuts',
@@ -150,7 +151,7 @@ describe('a composer without the glyph (block 73)', () => {
     // Even with a confirming second look: busy outranks idle, always.
     expect(inspectPane(busy, 'codex', { now: 12_000, previous: first.sample })).toMatchObject({ state: 'busy' })
     // A narrow pane wraps the status line onto two rows: still busy.
-    expect(inspectPane('  ◦ Working (3s • esc to\n  interrupt)\n  Ask Codex to do anything', 'codex', { now: 10_000 }).state)
+    expect(inspectPane('  ◦ Working (3s • esc to\n  interrupt)\n\n  Ask Codex to do anything', 'codex', { now: 10_000 }).state)
       .toBe('busy')
     // Nine rows above the composer is the body, not the status line: busy no longer follows the hint up there (block 74).
     const far = [busy, ...Array.from({ length: 9 }, (_, index) => `  row ${index}`)].join('\n')
@@ -360,6 +361,7 @@ describe('busy is read off the status rows only (block 74)', () => {
     // The same words without the trailing prose are the status line itself.
     const statusLine = [
       '• Working (8s • esc to interrupt)',
+      '',
       '› Ask Codex to do anything',
       '  GPT-6-Luna high · ~/projects/flow-finish',
       '  ← for agents · ? for shortcuts',
@@ -418,9 +420,38 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(directly, 'codex', { now: 10_000 }).state).not.toBe('busy')
   })
 
+  it('is not busy when a quoted status row opens a paragraph straight above the composer (block 74, review round 1)', () => {
+    // The paragraph break is real — the report starts a new block — but the pane pads its status line from the box, and this
+    // row runs straight into the box. A layout fact, not a word, is what decides it.
+    const paragraph = [
+      'The suite passed and the tree is clean.',
+      '',
+      '◦ Working (8s • esc to interrupt)',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    const inspection = inspectPane(paragraph, 'codex', { now: 10_000 })
+    expect(inspection.state).not.toBe('busy')
+    expect(inspection).toMatchObject({ state: 'unknown', reason: 'status_ambiguous' })
+
+    // The same block with the padding the pane draws under a real status line is a turn.
+    const padded = [
+      'The suite passed and the tree is clean.',
+      '',
+      '◦ Working (8s • esc to interrupt)',
+      '',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(padded, 'codex', { now: 10_000 })).toMatchObject({ state: 'busy', reason: 'busy_hint' })
+  })
+
   it('reads a real turn as busy whatever the body says', () => {
     const quoting = [
       '  ◦ Working (8s • esc to interrupt)',
+      '',
       '  Ask Codex to do anything',
       '  GPT-6-Luna high · ~/repo',
       '  ← for agents · ? for shortcuts',

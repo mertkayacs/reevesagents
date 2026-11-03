@@ -106,7 +106,8 @@ frame's structure, with the asymmetry stated in its rules:
   not the status shape. An *exact* quotation that lands in the status position is decided by where it sits, not by what it
   says: nothing transcript-like may lie between the status row and the composer — a finding line, a fence, a blockquote, or
   simply prose at the left margin (the box draws its own rows at its text column) — and the row must open a block of its own
-  rather than continue the answer above it. A row that carries the hint, sits in the status position and continues the answer
+  rather than continue the answer above it, *and* be padded from the box: the pane leaves a blank row under its status line, and
+  a paragraph break above a quotation is not that padding. A row that carries the hint, sits in the status position and continues the answer
   is read `unknown` (`status_ambiguous`), never `busy`: it refuses the paste the same way, and it does not call a quoting
   report a running turn. The body of a pane is
   prose: an agent may quote `◦ Working (… • esc to interrupt)` or `enter прервать` in a report, a diff or a log, and on

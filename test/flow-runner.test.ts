@@ -1128,6 +1128,7 @@ describe('the tick asks for the review instead of holding dev_busy (block 74)', 
     seed(makeState({ state: 'idle' }))
     const running = [
       '  ◦ Working (8s • esc to interrupt)',
+      '',
       '› Ask Codex to do anything',
       '  GPT-6-Luna high · ~/projects/flow-finish',
       '  ← for agents · ? for shortcuts',
