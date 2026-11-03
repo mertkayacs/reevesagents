@@ -45,6 +45,10 @@ export interface FlowStatusPayload {
   // The dispatch in flight: a claim written by a tick that has not settled it yet. This is why a
   // flow can be sitting still while a send is in progress.
   pending: { kind: string, target: string, at: number } | null
+  // Why the flow is standing still, and since when (block 64). `reason` is the engine's own word (`tree_dirty`,
+  // `head_unchanged`, `awaiting_verdict`, …) and `detail` the human sentence a detailed hold carries. Null when the flow
+  // is moving or waiting on a dispatch, which `pending` already describes.
+  hold: { reason: string, since: string, detail?: string } | null
   // What the last review could prove: the numbers the evidence rule looked at. Never the notes text.
   last_evidence: { elapsed_ms: number, notes_findings: number, notes_bytes: number, pane_tool_lines: number } | null
   // The newest round's notes, as a reference and counters — never the text (§11.3 of the notification
@@ -126,6 +130,11 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
     },
     pending: state.pending
       ? { kind: state.pending.kind, target: state.pending.target, at: state.pending.at }
+      : null,
+    // The reason the flow is standing still, so a host does not have to run a `--dry-run` tick to find out. The field is
+    // passed through, never derived: `since` is when the hold started, not when this payload was built.
+    hold: state.hold
+      ? { reason: state.hold.reason, since: state.hold.since, ...(state.hold.detail ? { detail: state.hold.detail } : {}) }
       : null,
     // The last decision that saw a verdict carries the numbers the evidence rule used; a state written
     // before this field existed simply has none.

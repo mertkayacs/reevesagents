@@ -207,9 +207,8 @@ describe('pause and resume', () => {
 })
 
 describe('a paused flow is inert', () => {
-  it('neither observes nor sends on a tick', () => {
+  it('neither observes nor sends on a tick, and records the pause once', () => {
     const state = seed(makeState({ state: 'paused', paused_from: 'idle', paused_at: NOW }))
-    const before = readFileSync(flowFile(), 'utf-8')
     const ports = makePorts({
       // Any observation of a paused flow is a bug: these throw instead of counting calls.
       paneBusy: () => { throw new Error('a paused flow must not read a pane') },
@@ -223,8 +222,15 @@ describe('a paused flow is inert', () => {
     expect(result.decision.reason).toBe('flow_paused')
     expect(result.status).toBe('skipped')
     expect(result.send).toBeUndefined()
-    expect(readFileSync(flowFile(), 'utf-8')).toBe(before)
-    expect(readFlow('run-1', { root }).state).toBe(state.state)
+    // The pause is why it stands, so it is written — once. The state, the rounds and `updated_at` do not move, and a
+    // repeat tick writes nothing at all (block 64).
+    const parked = readFlow('run-1', { root })
+    expect(parked.hold).toMatchObject({ reason: 'flow_paused' })
+    expect(parked.state).toBe(state.state)
+    expect(parked.updated_at).toBe(state.updated_at)
+    const afterPause = readFileSync(flowFile(), 'utf-8')
+    expect(step(ports).status).toBe('skipped')
+    expect(readFileSync(flowFile(), 'utf-8')).toBe(afterPause)
   })
 
   it('sends nothing after a stop either', () => {
@@ -269,9 +275,12 @@ describe('orphaned', () => {
     expect(parked.state).toBe('orphaned')
     expect(parked.orphan_reason).toContain('no longer in the registry')
     expect(parked.log.filter(entry => entry.event === 'flow_orphaned')).toHaveLength(1)
+    // The first hold after the park records the reason; after that a tick every two seconds must not rewrite the file
+    // or append the same line again (block 64).
+    expect(step(ports).status).toBe('skipped')
+    expect(readFlow('run-1', { root }).hold).toMatchObject({ reason: 'flow_orphaned' })
     const afterFirst = readFileSync(flowFile(), 'utf-8')
 
-    // A tick every two seconds must not rewrite the file or append the same line again.
     for (let pass = 0; pass < 3; pass += 1) {
       const again = step(ports)
       expect(again.decision.reason).toBe('flow_orphaned')

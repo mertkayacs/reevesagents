@@ -192,6 +192,9 @@ human is highlighted with the same warning colour as a stale run.
   moment the command waits for it and, past 15 seconds, answers "a dispatch is in
   flight — try again in a moment" without changing anything.
 - **When a flow stops on its own, the journal says why** (`reevesagents flow logs --run <id>`):
+  `flow status` also prints the current hold (`hold tree_dirty since …`), so "standing and silent" is no
+  longer a diagnosis: the reason the engine is waiting — a dirty tree, no new commit, a busy dev pane, a
+  paused or orphaned flow — is in the state, and `flow status --json` carries it as `hold`.
   `review_unsubstantiated` — the reviewer answered too fast or without recording a finding; the engine
   re-asked once with a stricter prompt and then escalated, so look at the reviewer's agent: `flow notes`
   shows what it actually wrote, and a second `flow tick` after a `flow resume` retries the round.

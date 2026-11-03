@@ -109,8 +109,71 @@ describe('observeFlow', () => {
   })
 })
 
+describe('a flow that stands still says why (block 64)', () => {
+  it('writes the hold on the first tick, keeps `updated_at` where the last move left it, and repeats silently', () => {
+    // The live case: a block in the queue and a dirty tree. Until this the reason existed only in the ticker's stdout, so
+    // `flow status` said `idle` and the operator had to run a `--dry-run` tick to learn why nothing happened.
+    const seeded = seed(makeState({
+      specs: [{ id: 'block_01', title: 'One', goal: 'g', requirements: ['r'], checks: ['c'], report: [], body: '' }],
+    }))
+
+    const first = step(makePorts(), { tree_clean: false })
+
+    expect(first.decision.reason).toBe('tree_dirty')
+    expect(first.status).toBe('skipped')
+    const held = readFlow('run-1', { root })
+    expect(held.hold).toEqual({ reason: 'tree_dirty', since: AT })
+    // The hold is not a move: the badge and the `tick` line still read the stamp of the last real one.
+    expect(held.updated_at).toBe(seeded.updated_at)
+    expect(held.state).toBe(seeded.state)
+    // One line, and it is the hold: the fixture was built by the factory (no `flow_started` line), so the journal went
+    // from empty to exactly this.
+    expect(held.log.map(entry => entry.event)).toEqual(['hold'])
+
+    const afterFirst = readFileSync(flowFile(), 'utf-8')
+    const second = step(makePorts(), { tree_clean: false })
+
+    expect(second.status).toBe('skipped')
+    expect(readFileSync(flowFile(), 'utf-8')).toBe(afterFirst)
+    expect(readFlow('run-1', { root }).log).toHaveLength(held.log.length)
+  })
+
+  it('keeps the first stamp while the reason stands, and clears the hold when the flow moves', () => {
+    seed(makeState({ hold: { reason: 'tree_dirty', since: '2025-12-31T00:00:00.000Z' } }))
+
+    // The same reason on a later tick keeps `since`: it is when the flow started standing, not when it was last looked at.
+    step(makePorts(), { tree_clean: false, now: NOW + 60_000, at: '2026-01-01T00:01:00.000Z' })
+    expect(readFlow('run-1', { root }).hold).toEqual({ reason: 'tree_dirty', since: '2025-12-31T00:00:00.000Z' })
+
+    // The tree is clean now, so the engine asks for the review: that is a move, and a moved flow is not holding.
+    const moved = step(makePorts())
+
+    expect(moved.decision.kind).toBe('request_review')
+    const after = readFlow('run-1', { root })
+    expect(after.hold).toBeNull()
+    expect(after.state).toBe('reviewing')
+  })
+
+  it('journals one hold for a flow with nothing to do, not one per tick', () => {
+    // `head_unchanged` is the commonest hold of all: a flow whose dev has not committed yet. Ten passes must leave one
+    // line and one hold, not ten — the ticker runs every minute, and a journal of repeats is a journal nobody reads.
+    const seeded = seed()
+    const ports = makePorts()
+
+    for (let pass = 0; pass < 10; pass += 1) {
+      const result = step(ports, { head: seeded.claim.head, now: NOW + pass * 1000, at: `2026-01-01T00:00:0${pass % 10}.000Z` })
+      expect(result.decision.reason).toBe('head_unchanged')
+    }
+
+    const after = readFlow('run-1', { root })
+    expect(after.hold).toEqual({ reason: 'head_unchanged', since: AT })
+    expect(after.log.filter(entry => entry.event === 'hold')).toHaveLength(1)
+    expect(after.updated_at).toBe(seeded.updated_at)
+  })
+})
+
 describe('stepFlow', () => {
-  it('sends nothing and writes nothing when a pane is busy or unknown', () => {
+  it('sends nothing when a pane is busy or unknown, and records the hold once', () => {
     for (const pane of ['busy', 'unknown'] as const) {
       const seeded = seed()
       const before = readFileSync(flowFile(), 'utf-8')
@@ -121,8 +184,17 @@ describe('stepFlow', () => {
       expect(result.status).toBe('skipped')
       expect(result.send).toBeUndefined()
       expect(ports.send).not.toHaveBeenCalled()
-      expect(readFileSync(flowFile(), 'utf-8')).toBe(before)
-      expect(readFlow('run-1').state).toBe(seeded.state)
+      // The reason the dev was not dispatched lives in the state now, and `updated_at` still says when the flow last
+      // moved. The second pass has nothing new to say: no write, no journal line (block 64).
+      const held = readFlow('run-1')
+      expect(held.hold).toMatchObject({ reason: pane === 'busy' ? 'dev_busy' : 'dev_pane_unknown' })
+      expect(held.updated_at).toBe(seeded.updated_at)
+      expect(held.state).toBe(seeded.state)
+      const afterHold = readFileSync(flowFile(), 'utf-8')
+      expect(afterHold).not.toBe(before)
+      expect(step(ports).status).toBe('skipped')
+      expect(readFileSync(flowFile(), 'utf-8')).toBe(afterHold)
+      expect(readFlow('run-1').log.filter(entry => entry.event === 'hold')).toHaveLength(1)
     }
   })
 

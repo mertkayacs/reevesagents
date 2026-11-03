@@ -21,9 +21,10 @@ import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { PaneBusyState } from './activity.js'
-import type { EvidencePolicy, FlowDecision, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
+import type { EvidencePolicy, FlowDecision, FlowHold, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
 import { DEFAULT_EVIDENCE_POLICY } from './flow.js'
 import {
+  appendLog,
   applyDecisionToState,
   applyUnconfirmedDispatch,
   escalateOnDirtyComposer,
@@ -651,8 +652,10 @@ interface ClaimPhaseResult {
   decision: FlowDecision
   // Set when the decision sends something: the claim is already on disk when we get here.
   dispatch: ClaimedDispatch | null
-  // Set when the decision sends nothing but still changes the state (an escalation, a timer stamp).
-  settled: { state: FlowState, path: string } | null
+  // Set when the decision sends nothing but still changes the state (an escalation, a timer stamp). `status` separates
+  // "the flow moved" from "the flow recorded why it is standing": a hold that becomes visible for the first time is
+  // written, but it is not an advance, and the ticker and `flow_step` report it as the hold it is (block 64).
+  settled: { state: FlowState, path: string, status?: FlowApplyStatus } | null
 }
 
 interface SettlePhaseResult {
@@ -736,6 +739,28 @@ function pruneClosedNotes(state: FlowState, options: StepFlowOptions): void {
   }
 }
 
+// The hold a decision leaves behind: the engine's reason, the moment this hold started, and the human sentence when the
+// engine has one. `since` moves only when the reason (or its detail) changed, so `flow status` says how long the flow
+// has been standing instead of when the ticker last looked at it.
+function holdOfDecision(state: FlowState, decision: FlowDecision, at: string): FlowHold | null {
+  if (decision.kind !== 'none') return null
+  const same = state.hold !== null
+    && state.hold.reason === decision.reason
+    && (state.hold.detail ?? null) === (decision.log_detail ?? null)
+  return {
+    reason: decision.reason,
+    since: same && state.hold ? state.hold.since : at,
+    ...(decision.log_detail ? { detail: decision.log_detail } : {}),
+  }
+}
+
+// Is the hold the same one the file already records? A repeat writes nothing at all — not even a save — which is what
+// keeps a 2 s tick from touching the state file every pass.
+function sameHold(current: FlowHold | null, next: FlowHold | null): boolean {
+  if (current === null || next === null) return current === next
+  return current.reason === next.reason && (current.detail ?? null) === (next.detail ?? null)
+}
+
 // One engine step: claim, act, settle.
 export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStepResult {
   const ports = options.ports ?? defaultFlowPorts
@@ -763,17 +788,35 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     const state = readFlow(runId, { root: options.root })
     const decision = flowTick(state, observations)
     if (!decisionChangesState(state, decision)) {
-      // A hold that says something new (the plan is waiting for a brief, an item is blocked) is journalled once;
-      // the same hold on the next tick is silent, so an autonomous driver cannot turn the journal into noise. The
-      // state itself is untouched — a hold changes nothing, which is why this branch used to write nothing at all
-      // and the reason never reached the log.
-      const quiet = decision.kind === 'none' && !decision.log_detail
-      const detail = decision.log_detail ?? decision.reason
-      if (quiet || state.log.at(-1)?.detail === detail) {
+      // A hold leaves a trace now (block 64). Before this, `tree_dirty` and its neighbours existed only in the ticker's
+      // stdout: the file said `idle`, the journal said nothing, and `flow status` could not answer "why is it standing".
+      // The reason and the moment it started live in the state; the journal takes one `hold` line per reason and stays
+      // silent on a repeat, which is what keeps a 2 s tick from turning the log into noise.
+      const nextHold = holdOfDecision(state, decision, at)
+      const journalled = state.log.at(-1)?.detail === (decision.log_detail ?? decision.reason)
+      if (sameHold(state.hold, nextHold) && journalled) {
         return { state, decision, dispatch: null, settled: null }
       }
-      const noted = applyDecisionToState(state, decision, at)
-      return { state, decision, dispatch: null, settled: { state: noted, path: saveFlow(noted, { root: options.root }) } }
+      // A detailed hold (the plan is waiting for a brief) keeps the journal line it always had; a silent one gets the
+      // one line that names it. `updated_at` is deliberately carried over: a hold is not a move, and the badge and the
+      // `tick` line in `flow status` read that stamp to say when the last real move happened.
+      const noted = decision.log_detail && !journalled ? applyDecisionToState(state, decision, at) : state
+      const log = journalled || decision.log_detail
+        ? noted.log
+        : appendLog(noted, { at, event: 'hold', detail: decision.reason })
+      const held: FlowState = { ...noted, hold: nextHold, log, updated_at: state.updated_at }
+      return {
+        state,
+        decision,
+        dispatch: null,
+        // A detailed hold has always been applied (it writes the sentence into the journal); a silent one only becomes
+        // visible now, and stays a hold the driver does not count as a move.
+        settled: {
+          state: held,
+          path: saveFlow(held, { root: options.root }),
+          status: decision.log_detail ? 'applied' : 'skipped',
+        },
+      }
     }
     const { message, target } = decision
     if (!message || !target) {
@@ -812,14 +855,17 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     emitFlowAttention(phase.settled?.state ?? before, phase.decision)
     raiseEscalationFor(phase.settled?.state ?? before, phase.decision)
     emitPlanAttention(before, observations, phase.decision)
-    if (phase.settled) {
+    // A hold that only becomes visible wrote the reason, not an answer: publishing the reviewer's file here would
+    // record a round nobody accepted and remove the staging copy the next tick still needs (the bug that made a
+    // rejected answer unpublishable). `status: 'skipped'` is exactly that case — see `holdOfDecision`.
+    if (phase.settled && phase.settled.status !== 'skipped') {
       publishRoundNotes(before, observations, phase.decision, options)
       pruneClosedNotes(phase.settled.state, options)
     }
     return {
       observations,
       decision: phase.decision,
-      status: phase.settled ? 'applied' : 'skipped',
+      status: phase.settled?.status ?? (phase.settled ? 'applied' : 'skipped'),
       state: phase.settled?.state ?? phase.state,
       path: phase.settled?.path,
     }

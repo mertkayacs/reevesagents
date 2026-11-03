@@ -184,6 +184,18 @@ export interface FlowPlanSummary {
   waiting: number
 }
 
+export interface FlowHold {
+  // The engine's reason, unchanged from the decision (`tree_dirty`, `head_unchanged`, …): the operator can match it
+  // against `flow tick --dry-run` and the journal without translating anything.
+  reason: string
+  // When this hold started (ISO), not when a tick last looked at it: a repeat keeps the first stamp, so
+  // `flow status` can say how long the flow has been standing still.
+  since: string
+  // The human sentence a detailed hold carries (the plan is waiting for a brief for P1.2, an item is blocked). Absent
+  // for the holds that only name a reason.
+  detail?: string
+}
+
 export interface FlowState {
   schema_version: number
   run_id: string
@@ -221,6 +233,9 @@ export interface FlowState {
   // id is absent from `dispatched_specs`.
   specs: BlockSpec[]
   dispatched_specs: string[]
+  // Why the flow is standing still, and since when. Optional in the file: a state written before this field existed
+  // reads as "not holding", which is the only safe reading — the alternative would be inventing a reason (block 64).
+  hold: FlowHold | null
   // The dispatch in flight, or null. Optional in the file: a flow written before the claim existed
   // reads as "nothing in flight", which is the pre-claim behaviour and why the version stays 1.
   pending: FlowPendingDispatch | null
@@ -502,6 +517,7 @@ export function createFlowState(init: FlowInit): FlowState {
     claim: { head: init.head ?? '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     specs: init.specs ?? [],
     dispatched_specs: [],
+    hold: null,
     pending: null,
     unsubstantiated_attempts: 0,
     answered_round: null,
@@ -594,6 +610,7 @@ export function parseFlowState(raw: unknown): FlowState {
     dispatched_specs: Array.isArray(record.dispatched_specs)
       ? record.dispatched_specs.map(text).filter(entry => entry !== '')
       : [],
+    hold: parseHold(record.hold),
     pending: parsePendingDispatch(record.pending),
     unsubstantiated_attempts: count(record.unsubstantiated_attempts),
     answered_round: typeof record.answered_round === 'string' ? record.answered_round : null,
@@ -639,6 +656,19 @@ function parseLog(raw: unknown): FlowLogEntry[] {
       return parsed
     })
     .slice(-FLOW_LOG_LIMIT)
+}
+
+// The hold a file records, or null. Absent (an older file) is "not holding" — the pipeline is not made broken by a
+// field it never had — and a damaged one reads the same way instead of failing every surface that asks what the flow
+// is waiting for. `since` defaults to the last write, which is the closest thing an old file has to "when it started".
+function parseHold(raw: unknown): FlowHold | null {
+  const record = asRecord(raw)
+  if (!record) return null
+  const reason = text(record.reason)
+  if (!reason) return null
+  const since = text(record.since)
+  const detail = text(record.detail)
+  return { reason, since: since || isoNow(), ...(detail ? { detail } : {}) }
 }
 
 // A missing `pending` is "nothing in flight", which is what a flow written before the claim
@@ -1819,6 +1849,9 @@ function withDelta(
     // Every settled decision ends the dispatch in flight: the claim exists only for the window
     // between the paste and this write.
     pending: null,
+    // A decision that changes anything moved the flow, so no hold survives it: the reason the engine was waiting is
+    // gone the moment it acted (block 64). Holds are written by the step that records one, not by this function.
+    hold: null,
     // The reason a flow was parked is part of the state, not only of the log: `flow status` reads
     // it, and the log is bounded, so the reason must survive the entry being pushed out.
     orphan_reason: decision.kind === 'orphan' ? (decision.notes ?? null) : state.orphan_reason,
@@ -1956,8 +1989,10 @@ export function applyOperatorTransition(state: FlowState, init: FlowOperatorTran
     ...init.patch,
     state: init.to,
     // A human decision outranks a dispatch in flight: a paused or stopped flow must not carry a
-    // claim that would escalate it later, and this call pasted nothing.
+    // claim that would escalate it later, and this call pasted nothing. It also outranks a hold: the operator moved the
+    // flow, so whatever the engine was waiting for is no longer the reason it is standing (block 64).
     pending: null,
+    hold: null,
     log: appendLog(state, { at, event: init.event, detail: init.detail ?? init.to }),
     updated_at: at,
   }

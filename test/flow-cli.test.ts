@@ -358,6 +358,24 @@ describe('flow status', () => {
     expect(failure?.cli_err).toContain('flow not started')
   })
 
+  it('prints the hold that explains a standing flow, and carries it in --json', async () => {
+    const { state } = seedFlow()
+    saveFlow({ ...state, hold: { reason: 'tree_dirty', since: '2026-01-01T00:12:00.000Z' } })
+
+    const { out } = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(out).toContain('hold      tree_dirty since 2026-01-01T00:12:00.000Z')
+
+    const { out: json } = await runCli(['flow', 'status', '--run', 'run-c1', '--json'])
+    expect(JSON.parse(json).hold).toEqual({ reason: 'tree_dirty', since: '2026-01-01T00:12:00.000Z' })
+
+    // A moving flow holds nothing, so the line is absent and the payload says so: a surface can draw "no reason" instead
+    // of inventing one (block 64).
+    saveFlow({ ...state, hold: null })
+    const moving = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(moving.out).not.toContain('hold      ')
+    expect(JSON.parse((await runCli(['flow', 'status', '--run', 'run-c1', '--json'])).out).hold).toBeNull()
+  })
+
   it('says no flow for a run whose file records none, instead of reading it as closed', async () => {
     // The phantom `flow-a` grew on 03.11: `state: "done"`, no start, no head, an empty journal. The panel drew
     // "flow: closed" for a run that never had a pipeline; status must answer the same thing it answers for a run
@@ -431,14 +449,21 @@ describe('flow tick', () => {
     expect(payload.decision.reason).toBe('dev_pane_unknown')
   })
 
-  it('a real tick against unreadable panes neither sends nor rewrites the flow', async () => {
+  it('records why it stands against unreadable panes, then leaves the flow alone', async () => {
     const { path } = seedFlow()
-    const before = readFileSync(path, 'utf-8')
+    const before = JSON.parse(readFileSync(path, 'utf-8'))
 
     const { out } = await runCli(['flow', 'tick', '--run', 'run-c1'])
 
     expect(out).toContain('dev_pane_unknown')
-    expect(readFileSync(path, 'utf-8')).toBe(before)
+    // The first hold is written, and it is the only thing that changes: `updated_at` still says when the flow last
+    // moved, because a hold is not a move (block 64).
+    const held = JSON.parse(readFileSync(path, 'utf-8'))
+    expect(held.hold).toMatchObject({ reason: 'dev_pane_unknown' })
+    expect(held.updated_at).toBe(before.updated_at)
+    // A second pass has nothing new to say and does not touch the file.
+    await runCli(['flow', 'tick', '--run', 'run-c1'])
+    expect(readFileSync(path, 'utf-8')).toBe(JSON.stringify(held, null, 2))
     // The panes are read (that is how the tick learns they are unreadable); nothing is typed into
     // them, which is what "neither sends" means here.
     expect(execFileSync.mock.calls.some(call => call[0] === 'tmux' && (call[1] as string[]).includes('send-keys'))).toBe(false)

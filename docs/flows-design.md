@@ -117,9 +117,11 @@ passenger re-reads the state inside the lock, sees a claim it did not make, and 
 **Off switch.** `flow_tick_ms = 0` disables the autonomous tick and leaves `flow tick` working — a machine that runs
 its own cron should set it, or every dashboard visit would also tick.
 
-**Cheap when nothing changed.** A hold that repeats itself is journalled once (the same event and detail dedupe), and
-a hold that changes nothing does not rewrite the state file; the badge and `flow status` read `updated_at` to say
-when the last real move happened.
+**Cheap when nothing changed, but never silent.** A hold is written into the state (`hold: { reason, since }`) and journalled
+once with that reason; a repeat of the same reason writes nothing at all — no file write, no journal line. So a flow that
+stands still can say why (`flow status` prints `hold tree_dirty since …`, `flow status --json` carries the field), while a
+tick every two seconds still costs nothing. A hold does not move `updated_at`: the badge and `flow status` read that stamp
+to say when the last real move happened, and a hold that changed nothing must not make the flow look fresh.
 
 **A browser is not a requirement.** The SSE hub only ticks while somebody is watching, and the TUI does not tick
 at all; a flow on a machine nobody watches needs the cron path (`flow tick --all`, or `*/1 * * * *`) or an open
