@@ -1297,7 +1297,8 @@
 
   async function openPlanDialog(runId) {
     if (!runId) return
-    // The id is the memory; the element is never kept.
+    // The id is the memory; the element is never kept. A line raised for another run is not this run's news.
+    clearPlanError()
     planController.open(runId)
     insights.runId = runId
     const run = runs.find(entry => entry.id === runId)
@@ -1319,6 +1320,8 @@
   // `aria-pressed` follow the flow's state, so "Pause" never lies about a flow that is already parked.
   // Ask the freshest snapshot which state the plan is in, and draw the button from it.
   function syncPlanPlayPause() {
+    // A line raised for a run that is no longer the open one is not news: drop it as soon as the snapshot shows the move.
+    planErrorLine.bind(insights.runId)
     if (!insights.runId) return
     const run = runs.find(entry => entry.id === insights.runId)
     if (!run || !run.flow) return
@@ -1332,6 +1335,18 @@
     el.planPlayPause.setAttribute('aria-label', paused ? t('web.planResumeLabel') : t('web.planPauseLabel'))
   }
 
+  // A refusal is a code (`not_pausable`, `already_paused`, …), and a code is not a sentence: `plan-error.js` owns the translation, the
+  // six-second life and the run it belongs to, so the behaviour can be driven in a real DOM with fake timers (block 59).
+  const planErrorLine = window.planErrorLine.createPlanErrorLine(document, { t: t })
+
+  function clearPlanError() {
+    planErrorLine.clear()
+  }
+
+  function showPlanError(code, runId) {
+    planErrorLine.show(code, runId)
+  }
+
   async function togglePlanPlayPause() {
     const runId = insights.runId
     if (!runId) return
@@ -1339,17 +1354,17 @@
     el.planPlayPause.disabled = true
     try {
       const payload = await api('POST', `/api/flow/${paused ? 'resume' : 'pause'}`, { run_id: runId })
+      clearPlanError()
       insights.flowState = payload && payload.flow ? payload.flow.state : insights.flowState
       renderPlanPlayPause(insights.flowState === 'paused')
       // The card's chip and glyph come from the next snapshot; ask for one now so the click is not invisible until the poll.
       await refreshState()
     } catch (err) {
+      // The answer belongs to the run the click was made for. If the operator has moved on to another plan in the meantime, saying
+      // anything here would be a story about the wrong plan.
+      if (insights.runId !== runId) return
       const message = err instanceof Error ? err.message : String(err)
-      // One line under the dialog's actions: the route answers `not_pausable` for a finished plan, and the operator needs the words.
-      if (el.planError) {
-        el.planError.textContent = message
-        el.planError.hidden = false
-      }
+      showPlanError(String(message || 'unknown'), runId)
     } finally {
       el.planPlayPause.disabled = false
     }

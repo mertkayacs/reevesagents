@@ -16,6 +16,7 @@ const required = new Set([
   'dist/web/app.js',
   'dist/web/insights-core.js',
   'dist/web/plan-controller.js',
+  'dist/web/plan-error.js',
   'dist/web/app.css',
   'dist/web/xterm.js',
   'dist/web/xterm.css',

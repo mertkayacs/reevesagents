@@ -65,6 +65,7 @@ const STATIC_ROUTES: Record<string, { file: string; type: string }> = {
   '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
   '/insights-core.js': { file: 'insights-core.js', type: 'text/javascript; charset=utf-8' },
   '/plan-controller.js': { file: 'plan-controller.js', type: 'text/javascript; charset=utf-8' },
+  '/plan-error.js': { file: 'plan-error.js', type: 'text/javascript; charset=utf-8' },
   '/xterm.css': { file: 'xterm.css', type: 'text/css; charset=utf-8' },
   '/xterm.js': { file: 'xterm.js', type: 'text/javascript; charset=utf-8' },
   '/addon-fit.js': { file: 'addon-fit.js', type: 'text/javascript; charset=utf-8' },

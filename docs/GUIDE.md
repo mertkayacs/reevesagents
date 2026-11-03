@@ -342,6 +342,10 @@ While a flow is `paused` **or `stopped`**, `flow plan set` also reaches the two 
 same case taken further — `flow stop` closes the flow as `done`, so no ticker will ever finish the round it was holding, and the row is
 the operator's. With a live round on a running or paused flow the refusal stands: the engine is still waiting for that verdict.
 
+If you press **Pause** on a plan that is already finished, the dialog says so in words ("the plan is finished — there is nothing left to
+pause") rather than showing the route's code; the line names the run it belongs to, goes away after a few seconds on its own, and is gone
+the moment you open another run's plan.
+
 `--reason` is required: the journal is the only place the claim "the engine lost this round" survives, and an entry without a why cannot be
 told from a bug.
 
