@@ -10,6 +10,8 @@ import {
   sweepAgentsThrottled,
   sweepOrphanSessions,
   resetSweepThrottle,
+  type OrphanSweepOptions,
+  type OrphanSweepSkip,
 } from '../src/core/reaper.js'
 import type { TmuxSessionInfo } from '../src/core/tmux.js'
 
@@ -196,21 +198,50 @@ describe('orphan session sweep', () => {
     return { name, attached: false, group: '', groupList: [], createdSec: 0, ...overrides }
   }
 
-  function runSweep(sessions: TmuxSessionInfo[], extra: { sessionAttached?: (_name: string) => boolean; now?: () => number } = {}): { killed: string[]; calls: string[] } {
+  // A registry that owns a run the server does not carry: it makes the registry
+  // non-empty (so the foreign-registry guard stays out of the way) without sparing
+  // any session the test is about.
+  function ownSomeRun(): void {
+    writeRun(makeRun('owned'))
+  }
+
+  function runSweep(
+    sessions: TmuxSessionInfo[],
+    extra: Partial<OrphanSweepOptions> = {},
+  ): { killed: string[]; calls: string[]; skipped?: OrphanSweepSkip } {
     const calls: string[] = []
-    const { killed } = sweepOrphanSessions({
+    const { killed, skipped } = sweepOrphanSessions({
       listSessions: () => sessions,
       killSession: name => calls.push(name),
       sessionAttached: () => false,
       ...extra,
     })
-    return { killed, calls }
+    return { killed, calls, skipped }
   }
 
   it('kills a run session no live record owns', () => {
+    ownSomeRun()
     const { killed, calls } = runSweep([session('reeves-crashed-a1b2c3d4')])
     expect(killed).toEqual(['reeves-crashed-a1b2c3d4'])
     expect(calls).toEqual(['reeves-crashed-a1b2c3d4'])
+  })
+
+  it('refuses to sweep when this registry owns no runs but the server carries a fleet', () => {
+    // The shape of a Web UI started with REEVES_REGISTRY pointing at a temp dir, or of
+    // a gate script: every live run of the real registry looks like an orphan here.
+    const { killed, calls, skipped } = runSweep([
+      session('reeves-live-a1b2c3d4'),
+      session('reevesweb_11111111'),
+    ])
+    expect(killed).toEqual([])
+    expect(calls).toEqual([])
+    expect(skipped).toBe('foreign-registry')
+  })
+
+  it('still sweeps when the registry is empty and the server carries no reeves sessions', () => {
+    const { killed, skipped } = runSweep([session('other-session'), session('reeves')])
+    expect(killed).toEqual([])
+    expect(skipped).toBeUndefined()
   })
 
   it('spares a run session with a live record', () => {
@@ -229,6 +260,7 @@ describe('orphan session sweep', () => {
   })
 
   it('spares sessions a human is attached to', () => {
+    ownSomeRun()
     const { killed } = runSweep([session('reeves-watched-a1b2c3d4', { attached: true })])
     expect(killed).toEqual([])
   })
@@ -261,6 +293,7 @@ describe('orphan session sweep', () => {
   })
 
   it('spares sessions younger than the orphan grace period (a run still starting)', () => {
+    ownSomeRun()
     const nowMs = 1_000_000_000_000
     const justBorn = Math.floor(nowMs / 1000) - 5
     const { killed } = runSweep(
@@ -272,6 +305,7 @@ describe('orphan session sweep', () => {
 
   it('re-probes attached state right before killing', () => {
     // Enumeration said unattached, but a human attached before the kill landed.
+    ownSomeRun()
     const { killed, calls } = runSweep([session('reeves-grabbed-a1b2c3d4')], { sessionAttached: () => true })
     expect(killed).toEqual([])
     expect(calls).toEqual([])
