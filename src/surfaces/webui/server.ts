@@ -12,11 +12,11 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './guards.js'
 import { buildWebState, listWebProviders } from './state.js'
-import { shouldTick, tickAllFlows } from '../../core/flow-ticker.js'
 import { planExists, planItemView, planProgress, readPlan } from '../../core/plan.js'
 import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
 import { pauseFlow, resumeFlow } from '../../core/flow-control.js'
 import { flowPath, readFlow } from '../../core/flow-store.js'
+import { readTickStatus, systemdTimerState, tickAgeSeconds } from '../../core/tick-status.js'
 import {
   NotificationError, appendNotification, markNotificationsRead, notificationSummary, readNotifications,
 } from '../../core/notifications.js'
@@ -196,16 +196,59 @@ interface SseHub {
   close: () => void
 }
 
+// The driver's state as the panel shows it: the receipt the last real pass left, plus — when the machine has one —
+// the systemd timer's own answer. `active`/`next_in_s` are optional on purpose: macOS, a container, or a cron-driven
+// machine has no timer, and none of them should see an error or a log line for it (block 68).
+export interface WebTick {
+  driver: string
+  at: string
+  age_s: number
+  advanced: number
+  held: number
+  skipped: number
+  active?: boolean
+  next_in_s?: number
+}
+
+// A frame is built every 1.5 s and `systemctl --user show` is a D-Bus round trip: one probe per minute is enough to
+// notice a timer that was installed, stopped or restarted, and it keeps the dashboard's own cost flat.
+const SYSTEMD_PROBE_MS = 60_000
+let timerProbe: { at: number, state: { active: boolean, next_in_s?: number } | null } | null = null
+
+function timerStateCached(now: number): { active: boolean, next_in_s?: number } | null {
+  if (timerProbe && now - timerProbe.at < SYSTEMD_PROBE_MS) return timerProbe.state
+  const state = systemdTimerState({ now })
+  timerProbe = { at: now, state }
+  return state
+}
+
+export function flowTickPayload(now: number = Date.now()): WebTick | null {
+  // `null` is the honest answer for a machine whose flows are ticked by hand: no driver has ever recorded a pass, and
+  // inventing one would be the same class of lie as the removed setting.
+  const status = readTickStatus()
+  if (!status) return null
+  const payload: WebTick = {
+    driver: status.driver,
+    at: status.at,
+    age_s: tickAgeSeconds(status, now),
+    advanced: status.advanced,
+    held: status.held,
+    skipped: status.skipped,
+  }
+  const timer = timerStateCached(now)
+  if (timer) {
+    payload.active = timer.active
+    if (timer.next_in_s !== undefined) payload.next_in_s = timer.next_in_s
+  }
+  return payload
+}
+
 // Pushes the run/terminal state to connected browsers. The poller starts when the
 // first client connects and stops when the last disconnects: connection-scoped, not
 // a daemon. fs.watch is avoided because recursive watch is unreliable across platforms.
 function createSseHub(): SseHub {
   const clients = new Set<ServerResponse>()
   let timer: ReturnType<typeof setInterval> | null = null
-  let flowTimer: ReturnType<typeof setInterval> | null = null
-  // When the last flow pass ran, so the snapshot path obeys the same `flow_tick_ms` as the timer: `0` must mean
-  // "no autonomous tick at all", not "no timer but every frame ticks".
-  let lastFlowTick = 0
   let last = ''
 
   const snapshot = (): string => {
@@ -214,22 +257,17 @@ function createSseHub(): SseHub {
     sweepAgentsThrottled()
     sweepOrphanSessionsThrottled()
     autoCleanupRuns()
-    // The autonomous tick, one step per flow per pass. It runs on the same clock as the sweep because a dashboard
-    // that is open is the most likely place for it to be needed; `flow tick --all` is the cron equivalent, and the
-    // claim protocol keeps the two from pasting the same prompt twice. A failing flow never stops the sweep.
-    const tickMs = loadConfig().global.flow_tick_ms
-    if (shouldTick({ state: 'idle' }, lastFlowTick || null, tickMs)) {
-      lastFlowTick = Date.now()
-      try {
-        tickAllFlows()
-      } catch { /* one broken flow must not take the dashboard down */ }
-    }
+    // No flow tick here, and none below in `start()`: the flow driver is exactly one external scheduler, and a
+    // dashboard that advanced flows itself was a second driver — it died with the browser tab, it raced the timer's
+    // dispatch, and every surface then described a setting instead of the driver (block 68). The frame reports the
+    // driver's own receipt and nothing more.
     // The journal summary rides along with the state frame: a badge that needs a second request would be a badge
     // that lags the screen it belongs to.
     // `agent_pulse_ms` travels into the state build, not only into the journal summary: the plan badge pulses on the same
     // clock, and a call without it made every card fall back to fifteen minutes (block 27, MINOR).
     return JSON.stringify({
       ...buildWebState({ agent_pulse_ms: loadConfig().global.agent_pulse_ms }),
+      tick: flowTickPayload(),
       notifications: withPulse(notificationSummary()),
     })
   }
@@ -247,28 +285,9 @@ function createSseHub(): SseHub {
     last = snapshot()
     timer = setInterval(tick, POLL_MS)
     timer.unref()
-    // A slower, independent cadence for the flows: `flow_tick_ms` (default a minute, `0` disables it). Separate
-    // from the screen poll so a slow tick cannot make the dashboard feel slow.
-    const tickMs = loadConfig().global.flow_tick_ms
-    if (tickMs > 0 && !flowTimer) {
-      flowTimer = setInterval(() => {
-        // Re-read the setting on every beat: `flow_tick_ms = 0` may be set while a dashboard is already open, and
-        // an interval created before that must stop advancing flows too — otherwise the off switch only works for
-        // clients that connect after it.
-        const current = loadConfig().global.flow_tick_ms
-        if (current <= 0) return
-        if (!shouldTick({ state: 'idle' }, lastFlowTick || null, current)) return
-        lastFlowTick = Date.now()
-        try {
-          tickAllFlows()
-        } catch { /* see above */ }
-      }, tickMs)
-      flowTimer.unref()
-    }
   }
   const stop = (): void => {
     if (timer) { clearInterval(timer); timer = null }
-    if (flowTimer) { clearInterval(flowTimer); flowTimer = null }
   }
 
   return {
@@ -541,6 +560,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     autoCleanupRuns()
     sendJson(res, 200, {
       ...buildWebState({ agent_pulse_ms: loadConfig().global.agent_pulse_ms }),
+      tick: flowTickPayload(),
       providers: listWebProviders(),
       language: webLanguagePayload(),
       web_theme: loadConfig().global.web_theme,

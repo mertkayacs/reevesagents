@@ -130,9 +130,6 @@ export interface GlobalConfig {
   // How often the Web UI may re-render an agent card's pulse, in ms; `0` disables the pulse (§7 of the
   // notification design). A UI concern, but a shared setting, so the Windows app reads the same number.
   agent_pulse_ms: number
-  // How often a surface may advance flows on its own, in ms; `0` disables the autonomous tick (the manual
-  // `flow tick` keeps working). A surface-side concern, a shared setting.
-  flow_tick_ms: number
   review_min_seconds: number
   review_evidence_retries: number
   dispatch_confirm_seconds: number

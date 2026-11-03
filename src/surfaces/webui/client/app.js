@@ -316,6 +316,7 @@
     planEmpty: document.getElementById('plan-empty'),
     planDetail: document.getElementById('plan-detail'),
     planWaiting: document.getElementById('plan-waiting'),
+    planTicks: document.getElementById('plan-ticks'),
     planProgressFill: document.getElementById('plan-progress-fill'),
     planProgressText: document.getElementById('plan-progress-text'),
     planProgressBar: document.querySelector('#plan-panel .plan-progress-bar'),
@@ -367,6 +368,8 @@
     readSeq: 0,
     latestSeq: 0,
     notifications: null,
+    // The driver's receipt from the last snapshot (`/api/state.tick`): who advances flows and when it last did.
+    tick: null,
   }
   // When the client first saw each notification summary, so a reload mid-pulse keeps the remainder.
   const pulseSeenAt = new Map()
@@ -431,6 +434,10 @@
     // A snapshot can change the flow's state under an open dialog (another tab pressed Pause, a ticker escalated it). Without this the
     // button kept its old label and a second click answered `already_paused` — a stale button is a bug the operator has to interpret
     // (block 51).
+    if (data.tick !== undefined) {
+      insights.tick = data.tick
+      renderPlanTicks()
+    }
     syncPlanPlayPause()
     if (typeof data.version === 'string' && data.version) appVersion = data.version
     if (data.language) applyLanguage(data.language)
@@ -1305,6 +1312,7 @@
     el.planDialogTitle.textContent = t('web.planTitle', { run: run ? run.name : runId })
     insights.flowState = run && run.flow ? run.flow.status : null
     renderPlanPlayPause(insights.flowState === 'paused')
+    renderPlanTicks()
     el.planDialog.showModal()
     await loadPlan(runId)
     renderPlan()
@@ -1333,6 +1341,25 @@
     el.planPlayPause.textContent = paused ? t('web.planResume') : t('web.planPause')
     el.planPlayPause.setAttribute('aria-pressed', String(paused))
     el.planPlayPause.setAttribute('aria-label', paused ? t('web.planResumeLabel') : t('web.planPauseLabel'))
+  }
+
+  // Who advances the flows, in one line. The panel never drives them — the external ticker does — so this only reports
+  // the driver's own receipt, and says so plainly when no pass has been recorded (block 68). A timer that systemd
+  // reports as not active takes the attention tone: a driver that stopped is the reason a flow sits still.
+  function renderPlanTicks() {
+    if (!el.planTicks) return
+    const tick = insights.tick
+    el.planTicks.hidden = false
+    if (!tick) {
+      el.planTicks.dataset.tone = 'attention'
+      el.planTicks.textContent = t('web.ticksNone')
+      return
+    }
+    el.planTicks.dataset.tone = tick.active === false ? 'attention' : 'neutral'
+    const head = t('web.ticksNow', { driver: tick.driver, age: tick.age_s })
+    el.planTicks.textContent = typeof tick.next_in_s === 'number'
+      ? `${head} · ${t('web.ticksNext', { next: tick.next_in_s })}`
+      : head
   }
 
   // A refusal is a code (`not_pausable`, `already_paused`, …), and a code is not a sentence: `plan-error.js` owns the translation, the

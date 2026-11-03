@@ -12,6 +12,8 @@ import { FlowStateError } from './flow.js'
 import { flowPath, listFlowFiles, readFlow } from './flow-store.js'
 import { readPlan } from './plan.js'
 import { redactSecrets } from './redact.js'
+import { tickStateText } from './tick-status.js'
+import type { TickStatus } from './tick-status.js'
 import { shortHomePath } from '../utils/paths.js'
 
 // Run ids are what a flow is keyed by, and a flow of an archived run must still resolve, so this
@@ -268,8 +270,9 @@ export function planProgressOf(runId: string, root?: string): { done: number, to
 // nobody reads.
 export interface FlowSectionOptions {
   now?: number
-  // `flow_tick_ms` from the config; 0 means the autonomous tick is off.
-  tickMs?: number
+  // The driver's record, as `readTickStatus()` returns it. The panel never advances a flow itself, so the only truth
+  // it can print is the last real pass (block 68); `null` says plainly that no pass has been recorded.
+  tick?: TickStatus | null
   plan?: PlanAttention | null
   active_plan_item?: string | null
   queue_depth?: number
@@ -295,15 +298,9 @@ export function flowSectionLines(state: FlowState, options: FlowSectionOptions =
   if (badge.attention === 'review_timeout') lines.push('attention review timed out')
   else if (badge.attention === 'escalated') lines.push('attention rounds spent — approve or deny in Approvals')
   else if (badge.attention === 'plan_waiting') lines.push('attention waiting for you')
-  // Where the next move comes from: the autonomous tick, or a manual `flow tick`.
-  if ((options.tickMs ?? 0) > 0) {
-    const since = Date.parse(state.updated_at)
-    const age = Number.isNaN(since) ? 0 : Math.max(0, now - since)
-    const nextIn = Math.max(0, Math.ceil(((options.tickMs ?? 0) - age) / 1000))
-    lines.push(`tick     auto every ${Math.round((options.tickMs ?? 0) / 1000)}s · next in ${nextIn}s`)
-  } else {
-    lines.push('tick     off (flow_tick_ms 0) — run `flow tick`')
-  }
+  // Where the next move comes from: the external driver, reported by its own last pass — never by a setting the
+  // panel does not own.
+  lines.push(`tick     ${tickStateText(options.tick ?? null, now)}`)
   return lines.map(line => (line.length > 78 ? `${line.slice(0, 77)}…` : line))
 }
 

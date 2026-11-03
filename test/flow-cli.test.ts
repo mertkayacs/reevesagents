@@ -378,6 +378,25 @@ describe('flow status', () => {
     expect(JSON.parse((await runCli(['flow', 'status', '--run', 'run-c1', '--json'])).out).hold).toBeNull()
   })
 
+  it('prints the driver from its receipt, and says none recorded without one (block 68)', async () => {
+    seedFlow()
+
+    // Nothing has ever ticked this machine: the line says so, and never mentions the removed setting.
+    const none = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(none.out).toContain('tick      none recorded — `flow tick --all` or install reeves-flow-tick.timer')
+    expect(none.out).not.toContain('flow_tick_ms')
+
+    writeFileSync(join(tmpDir, 'tick-status.json'), JSON.stringify({
+      at: new Date(Date.now() - 5000).toISOString(), mode: 'all', driver: 'cron:reeves-flow-tick',
+      pid: 4242, advanced: 1, held: 0, skipped: 0,
+    }), 'utf-8')
+
+    const driven = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(driven.out).toContain('tick      last ')
+    expect(driven.out).toContain('driver cron:reeves-flow-tick')
+    expect(driven.out).not.toContain('flow_tick_ms')
+  })
+
   it('says no flow for a run whose file records none, instead of reading it as closed', async () => {
     // The phantom `flow-a` grew on 03.11: `state: "done"`, no start, no head, an empty journal. The panel drew
     // "flow: closed" for a run that never had a pipeline; status must answer the same thing it answers for a run

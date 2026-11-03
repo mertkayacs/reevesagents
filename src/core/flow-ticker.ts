@@ -1,9 +1,11 @@
 // The autonomous tick: who advances a flow when nobody types `flow tick`.
 //
 // The engine stays a pure function — `stepFlow` knows nothing about timers — and this module is the smallest
-// possible surface-side driver: one step per flow per pass, for the flows that can actually move. Both the Web UI
-// server loop and the `flow tick --all` CLI path call it, so a dashboard and a cron job advance flows the same way,
-// and the existing claim/op_id protocol is what keeps them from pasting the same prompt twice.
+// possible driver-side entry point: one step per flow per pass, for the flows that can actually move. There is
+// exactly one caller on purpose, an external scheduler running `flow tick --all` (`reeves-flow-tick.timer`, cron):
+// a second, surface-side timer used to live in the Web UI, which meant the automatic run of work died with the
+// browser tab while a systemd timer kept ticking, and the two could race a dispatch (block 68). Every pass leaves a
+// receipt (`tick-status.json`) instead, so a surface reports the driver instead of guessing at a setting.
 //
 // Two rules from the block's brief, both encoded here:
 //
@@ -16,6 +18,7 @@ import { listFlowFiles, readFlow } from './flow-store.js'
 import type { FlowPorts, FlowStepResult } from './flow-runner.js'
 import { stepFlow } from './flow-runner.js'
 import type { FlowStatus } from './flow.js'
+import { writeTickStatus } from './tick-status.js'
 
 // The states a tick may touch. `idle`, `fixing` and `reviewing` are the moving ones; everything else is either a
 // human decision (`paused`, `orphaned`, `escalated`) or the end (`done`).
@@ -75,14 +78,18 @@ export function tickAllFlows(options: TickAllOptions = {}): TickAllResult {
     if (step.status === 'applied' || step.status === 'unconfirmed') result.advanced.push(entry)
     else result.held.push(entry)
   }
+  // The receipt of a real pass, so `flow status` and the panel can name the driver from a fact. `--dry-run` writes
+  // nothing: it asks what a pass would do, and a receipt for work that never happened is the lie this file exists to
+  // end (block 68). A state directory that cannot be written does not fail the pass that just moved the flows.
+  if (options.dryRun !== true) {
+    writeTickStatus('all', {
+      advanced: result.advanced.length,
+      held: result.held.length,
+      skipped: result.skipped.length,
+    }, {
+      ...(options.root === undefined ? {} : { root: options.root }),
+      ...(options.at === undefined ? {} : { at: options.at }),
+    })
+  }
   return result
-}
-
-// Does this flow deserve a tick in the next pass? Used by a surface that keeps its own per-flow schedule; the
-// brief's rule is "not more often than `flow_tick_ms`", and a flow that is parked or closed never qualifies.
-export function shouldTick(state: { state: FlowStatus }, lastTickAt: number | null, tickMs: number, now = Date.now()): boolean {
-  if (tickMs <= 0) return false
-  if (!TICKABLE.includes(state.state)) return false
-  if (lastTickAt === null) return true
-  return now - lastTickAt >= tickMs
 }

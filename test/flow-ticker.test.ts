@@ -1,10 +1,11 @@
 // The autonomous tick: a plan walked from start to finish by the ticker, and the blockers that stop it.
 //
-// This is the block's central test. Nothing here calls `stepFlow` by hand — `tickAllFlows` is exactly what the Web
-// UI loop and `flow tick --all` call, so a green run means the product moves a plan on its own.
+// This is the block's central test. Nothing here calls `stepFlow` by hand — `tickAllFlows` is what the external
+// driver (`reeves-flow-tick.timer`, cron) runs as `flow tick --all`, so a green run means the product moves a plan on
+// its own. Every pass also leaves the receipt the surfaces report (block 68).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -12,7 +13,8 @@ import { createFlowState } from '../src/core/flow.js'
 import { flowPath, readFlow, saveFlow } from '../src/core/flow-store.js'
 import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import type { Plan } from '../src/core/plan.js'
-import { shouldTick, tickAllFlows } from '../src/core/flow-ticker.js'
+import { tickAllFlows } from '../src/core/flow-ticker.js'
+import { readTickStatus, tickStatusPath, writeTickStatus } from '../src/core/tick-status.js'
 import { planAttentionOf } from '../src/core/flow-view.js'
 import { readNotifications } from '../src/core/notifications.js'
 import { readFlowBadge } from '../src/core/flow-view.js'
@@ -218,16 +220,6 @@ describe('the ticker is idempotent and switchable', () => {
     expect(second.advanced).toEqual([])
   })
 
-  it('is off when flow_tick_ms is 0, while a manual tick still works', () => {
-    expect(shouldTick({ state: 'idle' }, null, 0)).toBe(false)
-    expect(shouldTick({ state: 'idle' }, null, 60_000)).toBe(true)
-    expect(shouldTick({ state: 'idle' }, NOW, 60_000, NOW + 30_000)).toBe(false)
-    expect(shouldTick({ state: 'idle' }, NOW, 60_000, NOW + 61_000)).toBe(true)
-    // A parked or closed flow is never ticked, whatever the interval says.
-    expect(shouldTick({ state: 'paused' }, null, 60_000)).toBe(false)
-    expect(shouldTick({ state: 'done' }, null, 60_000)).toBe(false)
-  })
-
   it('skips parked and closed flows instead of resurrecting them', () => {
     const plan = planWith(['P1.1'])
     seed(plan)
@@ -256,5 +248,54 @@ describe('the tick does not starve the sweep', () => {
     const result = tickAllFlows({ now: NOW, at: AT, ports: ports(), } as never)
     expect(Date.now() - started).toBeLessThan(5000)
     expect(result.skipped).toEqual([])
+  })
+})
+
+describe('every real pass leaves the driver a receipt (block 68)', () => {
+  it('writes tick-status.json for a pass, with the counts it returned', () => {
+    seed(planWith(['P1.1']), { inWork: 'P1.1' })
+
+    const result = tickAllFlows({ now: NOW, at: AT, ports: ports() } as never)
+
+    const status = readTickStatus()
+    expect(status).toMatchObject({
+      at: AT,
+      mode: 'all',
+      driver: 'external',
+      pid: process.pid,
+      advanced: result.advanced.length,
+      held: result.held.length,
+      skipped: result.skipped.length,
+    })
+  })
+
+  it('names the scheduler that ran it, through REEVES_TICK_DRIVER', () => {
+    seed(planWith(['P1.1']), { inWork: 'P1.1' })
+    const saved = process.env.REEVES_TICK_DRIVER
+    process.env.REEVES_TICK_DRIVER = 'systemd:reeves-flow-tick.timer'
+    try {
+      tickAllFlows({ now: NOW, at: AT, ports: ports() } as never)
+    } finally {
+      if (saved === undefined) delete process.env.REEVES_TICK_DRIVER
+      else process.env.REEVES_TICK_DRIVER = saved
+    }
+    expect(readTickStatus()?.driver).toBe('systemd:reeves-flow-tick.timer')
+  })
+
+  it('writes nothing for a --dry-run: a question is not a pass', () => {
+    seed(planWith(['P1.1']), { inWork: 'P1.1' })
+
+    tickAllFlows({ dryRun: true, now: NOW, at: AT, ports: ports() } as never)
+
+    expect(readTickStatus()).toBeNull()
+    expect(existsSync(tickStatusPath())).toBe(false)
+  })
+
+  it('reads a damaged receipt as no receipt, rather than an invented one', () => {
+    writeFileSync(tickStatusPath(), '{"at": ', 'utf-8')
+    expect(readTickStatus()).toBeNull()
+    // And what it writes is what it reads back: the round trip the panel and `flow status` rely on.
+    writeTickStatus('run', { advanced: 1, held: 0, skipped: 0 }, { at: AT })
+    expect(readTickStatus()).toMatchObject({ at: AT, mode: 'run', advanced: 1, held: 0, skipped: 0 })
   })
 })

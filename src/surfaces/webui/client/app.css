@@ -2321,6 +2321,19 @@ button { letter-spacing: 0; }
   color: var(--text, #ece7dc);
 }
 
+.plan-ticks {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* A driver that is not there — no receipt at all, or a timer systemd reports as inactive — is the reason a flow sits
+   still, so the line says it in the attention colour instead of blending into the dialog's chrome. */
+.plan-ticks[data-tone='attention'] {
+  color: var(--danger, #f87171);
+}
+
 .plan-progress {
   display: flex;
   align-items: center;

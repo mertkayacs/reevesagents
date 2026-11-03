@@ -15,7 +15,7 @@ import type { RunRecord } from '../../../../core/types.js'
 
 import { flowSectionLines, planAttentionOf } from '../../../../core/flow-view.js'
 import { readFlow } from '../../../../core/flow-store.js'
-import { loadConfig } from '../../../../core/config.js'
+import { readTickStatus } from '../../../../core/tick-status.js'
 
 const REFRESH_INTERVAL_MS = 5000
 
@@ -65,7 +65,7 @@ export function Run() {
       try {
         const state = readFlow(runId)
         setFlowLines(flowSectionLines(state, {
-          tickMs: loadConfig().global.flow_tick_ms,
+          tick: readTickStatus(),
           plan: planAttentionOf(runId),
           active_plan_item: state.active_plan_item,
           queue_depth: state.specs.filter(spec => !state.dispatched_specs.includes(spec.id)).length,

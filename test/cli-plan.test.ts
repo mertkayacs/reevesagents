@@ -139,20 +139,25 @@ describe('flow start', () => {
     })
   })
 
-  it('tells the truth about who advances the flow', async () => {
+  it('names the driver from the receipt the last pass left (block 68)', async () => {
+    // The CLI no longer asks a setting who advances flows: the external ticker writes its own receipt, and this is it.
+    writeFileSync(join(tmpDir, 'tick-status.json'), JSON.stringify({
+      at: new Date(Date.now() - 5000).toISOString(), mode: 'all', driver: 'systemd:reeves-flow-tick.timer',
+      pid: 4242, advanced: 0, held: 1, skipped: 0,
+    }), 'utf-8')
     const result = await runCli(['flow', 'start', '--run', 'run-s', '--dev', 'dev-s', '--review', 'rev-s'])
     const out = result.out + result.err
-    // The default is the autonomous tick: an open dashboard advances the flow every `flow_tick_ms`.
-    expect(out).toContain('an open Web UI dashboard advances it every 60s')
-    expect(out).not.toContain('nothing ticks a flow')
+    expect(out).toContain('tick last ')
+    expect(out).toContain('driver systemd:reeves-flow-tick.timer')
+    expect(out).not.toContain('flow_tick_ms')
+    expect(out).not.toContain('an open Web UI dashboard advances it')
   })
 
-  it('says the tick is off when the setting is 0', async () => {
-    await (await import('../src/core/config.js')).setConfigValues({ flow_tick_ms: 0 })
+  it('says plainly when no pass has ever been recorded', async () => {
     const result = await runCli(['flow', 'start', '--run', 'run-s', '--dev', 'dev-s', '--review', 'rev-s'])
     const out = result.out + result.err
-    expect(out).toContain('the autonomous tick is off (flow_tick_ms 0)')
-    expect(out).toContain('`flow tick --run <id>` moves it')
+    expect(out).toContain('tick none recorded — `flow tick --all` or install reeves-flow-tick.timer')
+    expect(out).toContain('`flow tick --run <id>` moves one now')
   })
 })
 

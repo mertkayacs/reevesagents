@@ -19,7 +19,7 @@ import { addFlowSpecs, dropFlowSpec, pauseFlow, releaseRound, resumeFlow, stopFl
 import type { BlockSpec } from '../../core/spec.js'
 import type { NotesCounts } from '../../core/flow-notes.js'
 import { listNotesHeads, readNotesRound } from '../../core/flow-notes.js'
-import { loadConfig } from '../../core/config.js'
+import { readTickStatus, tickStateText, writeTickStatus } from '../../core/tick-status.js'
 import { planExists, readPlan } from '../../core/plan.js'
 import { redactSecrets } from '../../core/redact.js'
 import { shortHomePath } from '../../utils/paths.js'
@@ -99,14 +99,10 @@ function printStatus(state: FlowState, path: string): void {
   if (state.hold) console.log(`hold      ${state.hold.reason} since ${state.hold.since}`)
   const waiting = planWaitingLine(state)
   if (waiting) console.log(`waiting   ${waiting}`)
-  const tickMs = loadConfig().global.flow_tick_ms
-  if (tickMs > 0) {
-    const since = Date.now() - Date.parse(state.updated_at)
-    const nextIn = Math.max(0, Math.ceil((tickMs - since) / 1000))
-    console.log(`tick      last ${Number.isFinite(since) ? Math.max(0, Math.round(since / 1000)) : '?'}s ago · next in ${nextIn}s (flow_tick_ms ${tickMs})`)
-  } else {
-    console.log('tick      autonomous tick is off (flow_tick_ms 0): run `flow tick` yourself')
-  }
+  // Who drives this flow, from the driver's own receipt. The panel used to advance flows on its own and this line
+  // described a setting instead; the driver is the external ticker now, and a line that named a setting lied to the
+  // operator for as long as the timer kept running (block 68).
+  console.log(`tick      ${tickStateText(readTickStatus())}`)
   console.log(`head      ${head}`)
   console.log(`verdict   ${verdict}  (baseline ${state.claim.verdict_count} in the reviewer pane)`)
   if (state.pending) {
@@ -176,16 +172,11 @@ function countsSuffix(counts: NotesCounts | null): string {
 }
 
 // The one line the operator acts on: which item needs a brief, which is blocked, and by whom.
-// What the operator should expect to happen without them. This used to say "nothing ticks a flow on its own",
-// which stopped being true when the Web UI started advancing flows (§2.3): the hint has to match the setting the
-// process would use, or it teaches the wrong thing at the exact moment somebody is watching.
+// Who advances the flow, and how a human moves it now. The driver is the external ticker, so the hint reports the
+// driver's own last pass (block 68) — the old text described a setting that could say "off" while `reeves-flow-tick.timer`
+// ran every minute, which is exactly the lie this block removed.
 function tickHint(): string {
-  const tickMs = loadConfig().global.flow_tick_ms
-  if (tickMs <= 0) {
-    return '`flow tick --run <id>` moves it; the autonomous tick is off (flow_tick_ms 0)'
-  }
-  const every = tickMs % 1000 === 0 ? `${tickMs / 1000}s` : `${tickMs}ms`
-  return `an open Web UI dashboard advances it every ${every} (flow_tick_ms); \`flow tick --run <id>\` or \`flow tick --all\` moves it now`
+  return `tick ${tickStateText(readTickStatus())} · \`flow tick --run <id>\` moves one now`
 }
 
 function planWaitingLine(state: FlowState): string | null {
@@ -339,6 +330,12 @@ export function registerFlow(program: Command): void {
         const runId = resolveFlowRunId(opts.run)
         const dryRun = opts.dryRun === true
         const result = stepFlow(runId, { dryRun })
+        // The receipt of a real pass, the same file `flow tick --all` writes: one flow that moved is still a pass, and
+        // `flow status` must not report a hand-typed tick as "no driver recorded". `--dry-run` writes nothing.
+        if (!dryRun) {
+          const moved = result.status === 'applied' || result.status === 'unconfirmed'
+          writeTickStatus('run', { advanced: moved ? 1 : 0, held: moved ? 0 : 1, skipped: 0 })
+        }
         if (opts.json) {
           console.log(JSON.stringify(tickPayload(result, dryRun), null, 2))
         } else {

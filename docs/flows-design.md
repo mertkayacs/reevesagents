@@ -97,25 +97,33 @@ re-read immediately before the paste, not only at the start of the tick.
 ### 2.3 Where the step runs
 
 The engine is a pure function (`flowTick`) wrapped by `stepFlow`, and **nothing in `src/core` starts a timer**.
-The tick is a surface concern; the surfaces and their state:
+There is exactly one driver, and it is external to the product (block 68):
 
 | Tick site | Reference | State |
 | --- | --- | --- |
-| Web UI SSE hub — a dedicated timer | `src/surfaces/webui/server.ts` (`createSseHub`, `start()`) | **shipped**: `tickAllFlows()` every `flow_tick_ms` (default 60 s), on its own interval so a slow tick cannot make the screen feel slow |
-| Web UI SSE hub — the state frame | same file, `snapshot()` | **shipped**: one pass per frame, so an open dashboard also advances what can be advanced |
-| Web UI `GET /api/state` | same file, the route handler | **no tick**: it sweeps agents and builds the payload; a plain API poll must not paste into a pane |
-| CLI | `reevesagents flow tick --run <id>` / `flow tick --all` | **shipped**: the cron and headless path; `--all` walks every live flow once and exits |
+| External scheduler | `reeves-flow-tick.timer` (or a cron entry) running `node dist/cli.js flow tick --all`; it names itself through `REEVES_TICK_DRIVER` (`systemd:reeves-flow-tick.timer`, `cron:…`) | **the driver**: one pass per interval, the only thing that advances a flow |
+| CLI | `reevesagents flow tick --run <id>` / `flow tick --all` | **shipped**: the same pass a schedule runs, and the only path that sends |
+| Web UI SSE hub and `GET /api/state` | `src/surfaces/webui/server.ts` | **never ticks**: the frame and the route report the driver's receipt (`tick`) and nothing else |
+| TUI flow section | `flowSectionLines` (`src/core/flow-view.ts`) | **never ticks**: it renders the same receipt |
 
-`tickAllFlows()` (`src/core/flow-ticker.ts`) is the single entry point for all of them: one step per flow, skipping
-`paused`/`orphaned`/`escalated`/`done`, and a failing flow never stops the pass. Because the CLI and the dashboard
-call the same function, a cron tick and a browser tick cannot disagree about what a flow does.
+`tickAllFlows()` (`src/core/flow-ticker.ts`) is the single entry point for the external pass: one step per flow, skipping
+`paused`/`orphaned`/`escalated`/`done`, and a failing flow never stops the pass.
+
+**The receipt.** Every *real* pass — `flow tick --run <id>` or `flow tick --all`, never `--dry-run` — writes
+`~/.reeves/tick-status.json`: `{ at, mode: "run"|"all", driver, pid, advanced, held, skipped }`. That file is the
+only thing a surface reports about the driver: `flow status` and the TUI print
+`tick last <N>s ago · driver <driver>`, `/api/state` carries the same fields as `tick` (plus `active`/`next_in_s`
+when the machine's own `systemctl --user show reeves-flow-tick.timer` answers), and a machine that has never recorded a
+pass says so instead of guessing. `--dry-run` writes nothing: a question is not a pass.
 
 **Two tickers cannot double-paste.** The claim (`pending` + `op_id`, §2.4) is what makes that true: the second
 passenger re-reads the state inside the lock, sees a claim it did not make, and holds. The test
-`test/flow-ticker.test.ts` exercises exactly that.
+`test/flow-ticker.test.ts` exercises exactly that. A second *driver* is nonetheless forbidden by design: the Web UI
+used to keep its own timer, which died with the browser tab and raced the systemd timer over the same claim.
 
-**Off switch.** `flow_tick_ms = 0` disables the autonomous tick and leaves `flow tick` working — a machine that runs
-its own cron should set it, or every dashboard visit would also tick.
+**No setting.** `flow_tick_ms` was removed in block 68 — it described a driver that no longer exists, and it said
+"off" on machines where the timer ran every minute. A config that still carries the key loads fine and is told once,
+on stderr: `flow_tick_ms is ignored: the flow driver is the external ticker (reeves-flow-tick.timer / cron)`.
 
 **Cheap when nothing changed, but never silent.** A hold is written into the state (`hold: { reason, since }`) and journalled
 once with that reason; a repeat of the same reason writes nothing at all — no file write, no journal line. So a flow that
@@ -123,10 +131,9 @@ stands still can say why (`flow status` prints `hold tree_dirty since …`, `flo
 tick every two seconds still costs nothing. A hold does not move `updated_at`: the badge and `flow status` read that stamp
 to say when the last real move happened, and a hold that changed nothing must not make the flow look fresh.
 
-**A browser is not a requirement.** The SSE hub only ticks while somebody is watching, and the TUI does not tick
-at all; a flow on a machine nobody watches needs the cron path (`flow tick --all`, or `*/1 * * * *`) or an open
-dashboard. `flow status` says which one is in effect: the `tick` line shows the interval when the autonomous tick is
-on and says it is off when `flow_tick_ms` is `0`. A background worker is a separate, later decision.
+**A browser is not a requirement — and not a driver.** A dashboard shows the flows and the driver's receipt; it never
+advances one. A flow on a machine nobody watches needs the external pass: `reeves-flow-tick.timer`, a cron entry, or a
+`flow tick --all` by hand. A background worker inside the product is a separate, later decision.
 
 ### 2.4 Dispatch protocol — two phases, never a lock across a send
 
@@ -1047,7 +1054,7 @@ so two concurrent resolves move the flow once), and only when the flow is still 
 | MCP `flow_step` | **shipped** (block 07) — one explicit step per call, same claim protocol as `flow tick`, answers `{changed:false, reason}` on a hold |
 | MCP `flow_control` | **shipped** (block 07) — `pause` / `resume` / `stop` (needs `confirm`) / `add_spec` / `drop_spec` (needs `confirm`; only a block that was never dispatched), answers the status payload |
 | CLI `flow add-spec` / `drop-spec` / `pause` / `resume` / `stop` / `logs` | **shipped** (block 07; `drop-spec` block 65) |
-| TUI Flow section on the run page (§4.2) | **shipped** (block 17) — `flowSectionLines()` (`src/core/flow-view.ts`) renders state and round budget, the item in flight, queue depth, the waiting item, the attention line and the next tick; every line is capped at 78 columns |
+| TUI Flow section on the run page (§4.2) | **shipped** (block 17) — `flowSectionLines()` (`src/core/flow-view.ts`) renders state and round budget, the item in flight, queue depth, the waiting item, the attention line and the driver's receipt (`tick last 12s ago · driver …`); every line is capped at 78 columns |
 | `flow-escalated` approval pickup (§4.5) | **shipped** (block 17) — the tick raises one `flow_escalation` approval per episode, approve resumes the flow and re-queues the item, deny closes it with `close_reason`; the decision is only applied on the transition out of `pending` and only to the episode it belongs to |
 | `paused` / `orphaned` + the transition table | **shipped** (block 07) — `FLOW_TRANSITIONS` gates every operator and engine transition; `paused` is inert (a tick observes nothing and sends nothing), `orphaned` is written once with its reason, and the only automatic deletion is the cascade in `deleteRunHistory` |
 | Journal (`flow logs`) | **shipped** (block 07) — the bounded `log` array (`FLOW_LOG_LIMIT` = 50) is the journal: event, time, head, short reason, never a prompt body |
@@ -1112,7 +1119,7 @@ behaviour:
 | Risk | Where it bites | Mitigation |
 | --- | --- | --- |
 | Touching `src/core/types.ts` | `packages/reevesagents-win/test/catalog-drift.test.ts:43` fails until `sync:shared` runs and the copy is committed | Keep **all** flow types in `src/core/flow.ts`; add nothing to `types.ts` |
-| New config key | `test/config-set.test.ts:22`–`:27` pins the exact `CONFIG_FIELDS` order | If `flow_tick_ms` / `flow_max_rounds` are added, extend `DEFAULT_GLOBAL` (`config.ts:12`), `mergeDefaults` (`:45`, merge block `:54`–`:64`) and that test in the same commit |
+| New config key | `test/config-set.test.ts:22`–`:27` pins the exact `CONFIG_FIELDS` order | Extend `DEFAULT_GLOBAL` (`config.ts:12`), `mergeDefaults` (`:45`, merge block `:54`–`:64`) and that test in the same commit. The flow tick has no key at all: its driver is external (block 68) |
 | `peek_interval_ms` is decorative | No screen reads it; screens hardcode 5000 (`RunAgents.tsx:21`, `AgentOutput.tsx:20`) | Do not advertise "the flow tick follows `peek_interval_ms`". Either wire it as a separate chore or add a dedicated key |
 | **Writing into a busy pane** | `sendText`/`sendKey` have no guard (`runtime.ts:598`, `:621`) | `sendWhenIdle` in core (§2.2), fail-closed for providers without a verified marker; a unit test asserts zero sends against a busy pane and a refusal for `unknown` |
 | **A bypassable round budget** | With `rounds` reset per HEAD, a normal cycle never reaches `max_rounds` and `escalated` is unreachable | Cumulative `rounds_total` + `reviews_this_head` (§3.1); escalation tested by the engine tests, not by hand |
@@ -1256,7 +1263,7 @@ each is recorded here because the same design said so and the build had drifted 
 | --- | --- | --- |
 | MAJOR `src/core/flow-runner.ts:134` — two `flow tick` processes can paste the same prompt twice: the decision was saved only *after* the send finished, and nothing was written before it | Real, and it is exactly §2.4 | `pending`/`op_id` claim in the flow file, written under `withRunsLock` before the paste; `stepFlow` is now claim → act → settle, the act holds no lock, the settle applies only its own `op_id`. A tick that finds an unexpired claim holds (`dispatch_pending`); one past `PENDING_TTL_SEC` escalates (`dispatch_unresolved`) instead of re-sending |
 | MAJOR `src/surfaces/cli/flow.ts:98` — no supported way to create a flow: the CLI had only `status`/`tick` and the MCP only read-and-queue, so both required a file nobody could write | Real, and §4.1/§4.3 already planned it | `flow start` (CLI) and `flow_start` (MCP) share `src/core/flow-start.ts`: the run and both agents are resolved inside the run, the repo must carry a HEAD, one flow per run, `--replace` only for a closed one, `--spec` queues the first blocks |
-| MINOR `docs/GUIDE.md:135` — the guide told the operator to keep the TUI/Web UI open to keep a flow running, but those surfaces only render the badge | Real; §2.3 had it as a plan and the guide read it as shipped | the guide then said nothing ticks a flow except `flow tick`, §2.3 marked both dashboard tick sites **not shipped**, and `docs/mcp.md` stopped promising a TUI/Web tick — **superseded by block 15**: §2.3 now ships the Web UI tick (hub timer + state frame) and `flow tick --all`, and the guide describes them |
+| MINOR `docs/GUIDE.md:135` — the guide told the operator to keep the TUI/Web UI open to keep a flow running, but those surfaces only render the badge | Real; §2.3 had it as a plan and the guide read it as shipped | the guide then said nothing ticks a flow except `flow tick`, §2.3 marked both dashboard tick sites **not shipped**, and `docs/mcp.md` stopped promising a TUI/Web tick — **superseded by block 15**: §2.3 then shipped the Web UI tick (hub timer + state frame) and `flow tick --all` — **and superseded again by block 68**: the Web UI ticks nothing, the only driver is the external timer, and the surfaces report `tick-status.json` |
 
 Two things the review did not name are also corrected here, because they were the same kind of drift:
 `docs/mcp.md` described the flow tools as read-and-queue only (there are three now, one of which

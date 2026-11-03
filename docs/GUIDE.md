@@ -184,11 +184,12 @@ human is highlighted with the same warning colour as a stale run.
   transitions, dispatches, verdicts, refusals and escalations, newest last. It never
   holds a prompt body. An entry that consumed a review round points at it — `→ notes/<head>-r2.md ·
   2 MAJOR, 1 MINOR` — so the journal says where the findings are without carrying them.
-- **A flow is advanced by whatever is running:** an open Web UI dashboard ticks every live flow on its own
-  cadence (`flow_tick_ms`, default 60 s — see "The plan drives the flow by itself" below), and
-  `reevesagents flow tick --all` does one pass for a cron job or a headless machine. The TUI only renders the
-  badge and ticks nothing, and `GET /api/state` does not tick either. Set `flow_tick_ms` to `0` to switch the
-  autonomous tick off and keep the manual `flow tick` / `flow tick --all` path.
+- **A flow is advanced by one external driver:** `reeves-flow-tick.timer` (or a cron entry) running
+  `reevesagents flow tick --all` every minute. That pass is the only thing that advances a flow — an open
+  Web UI dashboard and the TUI only report what the driver last did, and `GET /api/state` neither ticks nor
+  sends. `flow status` says `tick last <N>s ago · driver systemd:reeves-flow-tick.timer`, or
+  `tick none recorded` when nothing has ever ticked the machine. There is no `flow_tick_ms` setting any more:
+  the driver is the schedule, not a config key.
 - Two ticks at the same time are safe: the first writes the dispatch it is about to
   send into the flow file, and the second finds that claim and sends nothing. If a
   tick dies mid-send, the claim is escalated to a human after two minutes instead of
@@ -278,11 +279,12 @@ the parser still accepts the older `ВЕРДИКТ:` spelling so files and panes
 
 ### The plan drives the flow by itself
 
-Once a plan is imported and a brief is attached to an item, nobody has to type `flow tick`: an open dashboard
-(Web UI) advances every live flow on its own, one step at a time, every `flow_tick_ms` (default 60 s), and
-`reevesagents flow tick --all` does the same thing once for a cron job or a headless machine. Both call the same
-function, and the claim protocol makes two of them harmless: if a cron tick and a dashboard tick meet, one of them
-sees the other's claim and does nothing instead of pasting the prompt twice.
+Once a plan is imported and a brief is attached to an item, nobody has to type `flow tick`: the external driver —
+`reeves-flow-tick.timer` (or a cron entry) running `reevesagents flow tick --all` — passes over every live flow on its
+own interval and advances it one step at a time. Nothing inside the product drives a flow: the Web UI dashboard and the
+TUI only render the driver's receipt (`tick last 12s ago · driver systemd:reeves-flow-tick.timer`), and the claim
+protocol makes a hand-typed `flow tick --run <id>` meet a scheduled pass harmlessly — one of them sees the other's
+claim and does nothing instead of pasting the prompt twice.
 
 A fresh flow starts by itself: an imported plan with a ready item is dispatched on the **first** tick, not after
 somebody else's ACCEPT. The head check still wins when the head has moved — a new commit is reviewed before the plan
@@ -309,8 +311,9 @@ What happens without you is one of three things, and only the first is "progress
 
 The plan is **done** when every item is `done` or `skipped` — that is the only automatic close.
 
-To turn the autonomous tick off, set `flow_tick_ms` to `0`: `flow tick` keeps working, and a machine with its own
-cron usually wants that.
+There is no switch to turn off: the driver is the schedule. `systemctl --user disable --now reeves-flow-tick.timer`
+(or removing the cron entry) is what stops automatic runs, and `flow status` then shows the last pass going stale
+(`tick last 900s ago · driver …`) or `tick none recorded` once its file is gone.
 
 ### Three things a flow assumes about your repository
 
@@ -409,12 +412,13 @@ not used it yet" is visible instead of being guessed.
 
 The claim protocol makes two tickers safe, but they still race for the same flow: one takes the claim, the other answers
 `locked` or `dispatch_pending`, and a manual run sees a stuck round instead of progress. When you tick by hand — or drive a
-flow from a test harness — there must be exactly one driver:
+flow from a test harness — there is still exactly one driver to worry about, and it is the external one:
 
-- set `flow_tick_ms: 0` so the dashboard stops advancing flows on its own, **or** close the dashboard while you tick by
-  hand; `flow tick --all` in a cron job counts as a ticker too;
+- stop the schedule while you tick by hand (`systemctl --user stop reeves-flow-tick.timer`, or remove the cron entry),
+  then start it again — a dashboard cannot interfere, because no surface inside the product ticks;
 - one `flow tick --run <id>` at a time per flow: the second one is not an error, it simply decides nothing;
-- after such a run put `flow_tick_ms` back — a machine that never ticks looks like a broken flow.
+- after such a run put the schedule back — a machine that never ticks looks like a broken flow, and `flow status`
+  shows it (`tick last 900s ago · driver …`).
 
 ### When a claim is answered by something other than its sender
 
