@@ -609,6 +609,20 @@ describe('the repeated Enter', () => {
     expect(driver.count('send-keys')).toBe(1)   // no second Enter
   })
 
+  it('does not press again when the box no longer holds our text', async () => {
+    // The repeat is decided on the composer: a box that now holds somebody else's draft is not ours to submit, whatever the pane
+    // looks like (block 76).
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const theirs = ['› починить сборку на стенде', '  ← for agents · ? for shortcuts'].join('\n')
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, theirs]
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST }))
+      .toMatchObject({ sent: false, reason: 'unconfirmed' })
+    const enters = driver.calls.filter(call => call.args[0] === 'send-keys' && call.args[3] === 'Enter')
+    expect(enters).toHaveLength(1)
+  })
+
   it('does not press again when the pane reads unknown, even with our text in the box', async () => {
     // Copy mode is the shape that keeps our text *and* cannot take a key: the badge makes the pane `unknown`, and `unknown`
     // never receives a keystroke (block 75).
@@ -619,7 +633,9 @@ describe('the repeated Enter', () => {
 
     expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST }))
       .toMatchObject({ sent: false, reason: 'unconfirmed' })
-    expect(driver.count('send-keys')).toBe(1)
+    // The cancel is a `send-keys -X` of its own; what matters is that no Enter was pressed into a pane tmux would eat it in.
+    const enters = driver.calls.filter(call => call.args[0] === 'send-keys' && call.args[3] === 'Enter')
+    expect(enters).toHaveLength(1)
   })
 })
 
@@ -780,5 +796,41 @@ describe('the prompt leaves as one line (block 75)', () => {
   it('handles CR as well, and leaves a single-line prompt untouched', () => {
     expect(flattenPrompt('a\r\nb\rc')).toBe('a b c')
     expect(flattenPrompt('one line')).toBe('one line')
+  })
+})
+
+describe('copy mode is recovered, not unknown (block 76)', () => {
+  it('cancels copy mode on the observation path and re-reads the frame', async () => {
+    // The live dispatch of 2026-11-03 sat in a dev's composer because the pane was in copy mode: tmux eats Enter there, so nothing
+    // submitted, and the observation reported `unknown` for eleven minutes. One `cancel` returns the pane to normal.
+    const { paneBusy } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_COPY_MODE, CODEX_IDLE]
+
+    expect(paneBusy('agent-1', { driver })).toBe('idle')
+    const cancels = driver.calls.filter(call => call.args[0] === 'send-keys' && call.args.includes('-X'))
+    expect(cancels).toHaveLength(1)
+    expect(cancels[0]!.args[4]).toBe('cancel')
+  })
+
+  it('stays unknown when the cancel does not take', async () => {
+    // A pane that keeps its badge after the cancel is still scrolling instead of typing, and it shows no turn: nothing may be
+    // typed into it, and `unknown` is what the gate refuses on.
+    const { paneBusy } = await seed()
+    const driver = new PaneDriver()
+    const stuck = ['[12/345]', '› Ask Codex to do anything', '  ← for agents · ? for shortcuts'].join('\n')
+    driver.captures = [stuck]
+
+    expect(paneBusy('agent-1', { driver })).toBe('unknown')
+  })
+
+  it('reads the busy hint of a copy-mode frame after the cancel all the same', async () => {
+    // The badge is tmux's state, not the provider's: a frame that also shows a running turn is busy once the pane is back in
+    // normal mode, and busy refuses a paste either way.
+    const { paneBusy } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_COPY_MODE]
+
+    expect(paneBusy('agent-1', { driver })).toBe('busy')
   })
 })

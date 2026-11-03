@@ -871,11 +871,17 @@ the turn.
   multi-line bracketed paste arrives as one block and a provider's first Enter closes it instead of submitting. The templates
   (`renderReviewPrompt`, `renderFixPrompt`) stay multi-line — they are what the journal and the tests read.
 - **A swallowed Enter is retried, up to three.** After the paste and `pasteSettleMs` the engine presses Enter, polls for the
-  turn (`waitForBusy`) and, while the pane still reads free and the box still holds exactly our prompt, presses again — three
-  Enters per send at most. Before every repeat the pane is read again: `busy` is a turn already running (the key would
-  interrupt it), copy mode scrolls instead of typing, and a box that no longer holds our text is not ours to submit. A pane the
-  detector cannot classify (`unknown`) does not stop the repeat when the composer itself reads our prompt: that is what a long,
-  wrapped prompt looks like, and it is exactly the case this loop exists for.
+  turn (`waitForBusy`) and, while the fresh frame shows no busy marker and the box still holds exactly our prompt, presses again
+  — three Enters per send at most, never a second paste. The decision is taken where the ownership of the text is known: a
+  `busy` marker is a turn already running (the key would interrupt it), a box holding somebody else's text is not ours to
+  submit, and a copy-mode pane that survives its cancel cannot be submitted at all — but `idle` is *not* required, because a pane
+  whose composer holds our prompt and shows no turn is precisely the case this loop exists for (block 76, replacing block 75's
+  `idle` rule).
+- **Copy mode is recovered, not unknown.** A pane in tmux's copy mode scrolls instead of typing and tmux eats the Enter, so a
+  prompt in it never submits; on 2026-11-03 a dispatch sat that way from 18:27 to 19:38 while the observation reported `unknown`.
+  The observation path (`paneBusy` → `inspectAgentPane`) asks tmux itself (`#{pane_in_mode}`), cancels the mode once, re-reads
+  the frame and classifies it again; `unknown` remains only for a pane that is still in the mode afterwards. `sendWhenIdle`
+  shares that path instead of carrying its own copy of the cancel.
 - **The repeat is on the record.** `sendWhenIdle` reports `enter_retries`, and the runner journals one `submit_retry enter <n>`
   line per repeat with the head the prompt was for. Three Enters without a turn fall through to the existing
   `dispatch_unconfirmed` escalation — no new mechanism.

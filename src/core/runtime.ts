@@ -693,6 +693,32 @@ interface PaneReading {
   text: string
 }
 
+// Copy mode: the pane scrolls instead of typing and tmux eats the Enter, so the prompt sits in the box and never submits — which is
+// how a live dispatch sat in a dev's composer from 18:27 to 19:38 while the observation reported `unknown` (block 76). It is a
+// recoverable state, not an unreadable one: one `cancel` returns the pane to normal, and the same Enter then submits.
+export const COPY_MODE_CANCEL_MS = 300
+
+// Is the pane in tmux's own mode (copy mode today)? The badge the capture carries is a rendering, and `capture-pane` does not
+// include tmux's overlays, so on a live pane the question is put to tmux itself — the same `pane_in_mode` an operator checks.
+function paneInTmuxMode(agent: AgentRecord, driver: RuntimeDriver): boolean {
+  try {
+    const answer = String(driver.tmux(['display-message', '-p', '-t', agent.tmux_pane_id, '#{pane_in_mode}']))
+    return answer.trim() === '1'
+  } catch {
+    return false
+  }
+}
+
+function cancelCopyMode(agent: AgentRecord, driver: RuntimeDriver): boolean {
+  try {
+    driver.tmux(['send-keys', '-t', agent.tmux_pane_id, '-X', 'cancel'])
+  } catch {
+    return false
+  }
+  waitBlocking(driver, COPY_MODE_CANCEL_MS)
+  return true
+}
+
 function inspectAgentPane(agent: AgentRecord, paneText: string, driver: RuntimeDriver): PaneReading {
   const settle = (inspection: PaneInspection, settledText: string): PaneReading => {
     if (agent.tmux_pane_id) {
@@ -702,6 +728,13 @@ function inspectAgentPane(agent: AgentRecord, paneText: string, driver: RuntimeD
     return { inspection, text: settledText }
   }
   const first = inspectPane(paneText, agent.provider, { now: Date.now() })
+  // A pane in copy mode is left in it before anything is concluded about it — the badge is tmux's state, not the provider's, so it
+  // is read before the busy hint: `unknown` stays only if the cancel did not take.
+  if ((paneInCopyMode(paneText) || paneInTmuxMode(agent, driver)) && cancelCopyMode(agent, driver)) {
+    const reread = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+    const after = inspectPane(reread, agent.provider, { now: Date.now() })
+    return settle(after, reread)
+  }
   if (first.reason !== 'placeholder_pending') return settle(first, paneText)
   // The confirmation: the same frame, a second later. A redraw between the two is exactly the transition that must not be
   // read as free.
@@ -813,16 +846,6 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // Copy mode eats Enter as a scroll, and the paste lands nowhere usable: cancel it first, then probe
   // again. A pane that is still in copy mode after the cancel is not ready, so nothing is typed.
   let paneText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
-  if (paneInCopyMode(paneText)) {
-    try {
-      driver.tmux(['send-keys', '-t', agent.tmux_pane_id, '-X', 'cancel'])
-    } catch {
-      return { sent: false, reason: 'stale_pane' }
-    }
-    waitBlocking(driver, timings.pasteSettleMs)
-    paneText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
-    if (paneInCopyMode(paneText)) return { sent: false, reason: 'target_not_ready' }
-  }
 
   // A configurable window, not a fixed nap: a cold provider can spend most of a minute before its first
   // turn shows a busy marker, and the flow calls that a failed dispatch. It is also the window in which a collapsed
@@ -920,11 +943,16 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   const pastedOutcome = (at: number): SendOutcome => ({ ...retried('unconfirmed_paste'), pastedAt: at } as SendOutcome)
   for (let enter = 1; enter <= MAX_SUBMIT_ENTERS; enter += 1) {
     if (enter > 1) {
-      after = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
-      // A repeat needs the pane to read **positively idle** on a fresh look: `busy` is a turn already running (the key would
-      // interrupt it) and `unknown` is a pane we cannot see — a modal, a copy mode, a half-drawn frame — and neither takes a key,
-      // whatever the composer seems to hold (block 75).
-      if (inspectPane(after, agent.provider).state !== 'idle') return retried('unconfirmed')
+      // The repeat is decided where the ownership of the text is known: a fresh frame with no busy marker, and a box that still
+      // holds our prompt. `idle` is deliberately *not* required — a pane whose composer holds our text and shows no turn is the
+      // case this loop exists for, and demanding `idle` made it a dead end (block 76, replacing block 75's rule). Copy mode is
+      // left first, because tmux eats Enter there.
+      const reading = inspectAgentPane(agent, capturePaneRaw(driver, agent, BUSY_SCAN_LINES), driver)
+      after = reading.text
+      if (reading.inspection.state === 'busy') return retried('unconfirmed')
+      // A pane that is still in copy mode after the cancel cannot be submitted at all: tmux eats the key, so pressing it would only
+      // burn the retry budget.
+      if (paneInCopyMode(after) || paneInTmuxMode(agent, driver)) return retried('unconfirmed')
       if (!composerHoldsOurs(composerText(after, agent.provider) ?? '', text, ownership)) {
         return retried('unconfirmed')
       }
@@ -946,8 +974,9 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
     if (!stillOurs && countWorkLines(after) > countWorkLines(beforeEnter)) {
       return sentOutcome()
     }
-    // A pane that is not idle cannot take a keystroke, and a box that no longer holds our text is not ours to submit.
-    if (inspectPane(after, agent.provider).state !== 'idle' || !stillOurs) {
+    // A running turn cannot take a keystroke, and a box that no longer holds our text is not ours to submit. Anything else — a
+    // pane the detector cannot classify, a draft, a modal — is judged by the composer, which is the fact that matters here.
+    if (inspectPane(after, agent.provider).state === 'busy' || !stillOurs) {
       return retried('unconfirmed')
     }
     // Still idle, still ours: the Enter was swallowed. Count the repeat and try once more, up to the cap.
