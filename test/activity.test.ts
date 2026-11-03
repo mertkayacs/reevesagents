@@ -367,6 +367,31 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(statusLine, 'codex', { now: 10_000 })).toMatchObject({ state: 'busy', reason: 'busy_hint' })
   })
 
+  it('does not hold a pane whose report quotes the status line exactly (block 74, review round 1)', () => {
+    // Exactly the line codex draws, inside the bottom rows — and the report continues under it. The status row is the one that
+    // sits straight above the box; this one has the report between itself and the box.
+    const exactQuote = [
+      'MAJOR src/core/activity.ts:57 — the shape also matches a quotation',
+      '◦ Working (8s • esc to interrupt)',
+      'MINOR docs/flows-design.md:88 — worth a sentence',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(exactQuote, 'codex', { now: 10_000 }))
+      .toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+
+    // The same quotation inside a fenced block of the report: the fence is transcript as well.
+    const fenced = [
+      '◦ Working (8s • esc to interrupt)',
+      '```',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(fenced, 'codex', { now: 10_000 }).state).toBe('idle')
+  })
+
   it('reads a real turn as busy whatever the body says', () => {
     const quoting = [
       '  ◦ Working (8s • esc to interrupt)',

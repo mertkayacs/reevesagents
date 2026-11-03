@@ -177,7 +177,7 @@ const DIALOG_LINE = /^\s*[▌▐╭╮╰╯│┌┐└┘├┤]/
 // **At the left margin only.** A brief pasted into the box may be Markdown and may carry its own `- item` bullets and diff
 // rows; those are indented to the box's text column like every other continuation row, and a regex that allowed leading
 // whitespace stopped the walk inside the composer and left an idle pane `unknown` (block 73, review round 2).
-const TRANSCRIPT_LINE = /^(?:[•◦●⏺·]\s|[│├┃]|VERDICT:|(?:MAJOR|MINOR|NIT)\b|[-+]\s)/
+const TRANSCRIPT_LINE = /^(?:[•◦●⏺·]\s|[│├┃]|VERDICT:|(?:MAJOR|MINOR|NIT)\b|[-+]\s|>|```)/
 
 // The column a composer's continuation rows are drawn at: the marker row is `marker + space + text`, so the box's own text
 // starts two columns in, and every continuation row — including Markdown bullets and diff rows of a pasted brief — is
@@ -209,6 +209,24 @@ function composerGlyph(lines: string[], raw: string[], signals: ProviderSignals,
     // Without this, plain prose between a stale `›` and a composer that drew no glyph walked the whole way up and called the
     // pane idle (block 73, review round 1, second pass).
     if (indentOf(raw[index] ?? '') < COMPOSER_TEXT_COLUMN) return false
+  }
+  return false
+}
+
+// Is there transcript between this status row and the composer row? A turn's status line sits straight above the box; a line of
+// the agent's own report that happens to look like it — a quotation of `◦ Working (… • esc to interrupt)` — has the rest of the
+// report between itself and the box.
+function separatedFromComposer(
+  lines: string[],
+  raw: string[],
+  statusRow: number,
+  composer: { index: number } | null,
+): boolean {
+  if (composer === null) return false
+  const from = Math.min(statusRow, composer.index)
+  const to = Math.max(statusRow, composer.index)
+  for (let index = from + 1; index < to; index += 1) {
+    if (TRANSCRIPT_LINE.test(raw[index] ?? '') || DIALOG_LINE.test(lines[index] ?? '')) return true
   }
   return false
 }
@@ -386,7 +404,11 @@ export function inspectPane(
   // three-row fragment has no status block to speak of; what it shows is read the conservative way.
   const shape = lines.length > BUSY_TAIL_LINES ? BUSY_SHAPE[provider] : null
   const statusIndex = shape ? statusRows.findIndex(statusLine => shape.test(statusLine)) : 0
-  if (statusIndex >= 0) {
+  // The status row belongs to this composer only when no transcript sits between the two: a report that quotes the working
+  // line — exactly, in the bottom rows — has the rest of the report under it, and that is what separates the two (block 74,
+  // review round 1). A wrapped status line keeps its second half in between, which is neither transcript nor a dialog.
+  const quoted = statusIndex >= 0 && separatedFromComposer(lines, rawRenderedLines(paneText), statusStart + statusIndex, composer)
+  if (statusIndex >= 0 && !quoted) {
     const fromStatus = statusRows.slice(statusIndex)
     const statusText = fromStatus.join(' ')
     if (signals.busy.some(marker => marker.test(fromStatus[0]!) || marker.test(statusText))) {
