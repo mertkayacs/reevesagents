@@ -468,6 +468,10 @@ describe('the stream does not rebuild the sidebar for the clock (block 71)', () 
     const apply = handler.indexOf('applyState(data)')
 
     expect(handler).toContain('const key = ticks.frameKey(data)')
+    // The clock is measured before the line is drawn: the line is computed locally, so it needs the correction first.
+    const clock = handler.indexOf('noteServerClock(data)')
+    expect(clock).toBeGreaterThan(-1)
+    expect(clock).toBeLessThan(tickLine)
     expect(tickLine).toBeGreaterThan(-1)
     expect(bail).toBeGreaterThan(tickLine)
     expect(apply).toBeGreaterThan(bail)
@@ -478,7 +482,11 @@ describe('the stream does not rebuild the sidebar for the clock (block 71)', () 
     expect(js).toContain("document.addEventListener('visibilitychange'")
     // The line is drawn from marks with this browser's clock, corrected by the server's.
     expect(js).toContain('ticks.lineText(insights.tick, Date.now() + clockOffset, t)')
-    expect(js).toContain('clockOffset = data.now - Date.now()')
+    // The offset comes from `ticks.clockOffset` and is refreshed by every payload that carries `now` — the snapshot and
+    // every frame that is actually sent (block 71, review round 1).
+    expect(js).toContain('const offset = ticks.clockOffset(data, Date.now())')
+    const server = readFileSync(join(process.cwd(), 'src/surfaces/webui/server.ts'), 'utf8')
+    expect(server).toContain('JSON.stringify({ ...state, now: Date.now() })')
   })
 
   it('ships the module that computes it, and keeps countdowns out of both sides', () => {
@@ -486,8 +494,8 @@ describe('the stream does not rebuild the sidebar for the clock (block 71)', () 
     expect(html.indexOf('tick-line.js')).toBeLessThan(html.indexOf('src="app.js"'))
     expect(js).not.toContain('age_s')
     expect(js).not.toContain('next_in_s')
-    const server = readFileSync(join(process.cwd(), 'src/surfaces/webui/server.ts'), 'utf8')
-    expect(server).not.toContain('age_s')
-    expect(server).not.toContain('next_in_s')
+    const serverSource = readFileSync(join(process.cwd(), 'src/surfaces/webui/server.ts'), 'utf8')
+    expect(serverSource).not.toContain('age_s')
+    expect(serverSource).not.toContain('next_in_s')
   })
 })

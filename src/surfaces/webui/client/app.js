@@ -424,9 +424,16 @@
   // (re)connection, which is when a browser tab that slept needs it most.
   let clockOffset = 0
 
+  // Any payload that carries the server clock — the snapshot, or a frame that was actually sent — corrects this browser's
+  // clock for the line it computes locally.
+  function noteServerClock(data) {
+    const offset = ticks.clockOffset(data, Date.now())
+    if (offset !== null) clockOffset = offset
+  }
+
   async function refreshState() {
     const data = await api('GET', '/api/state')
-    if (typeof data.now === 'number' && Number.isFinite(data.now)) clockOffset = data.now - Date.now()
+    noteServerClock(data)
     applyState(data)
   }
 
@@ -491,8 +498,10 @@
     events.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
+        // The clock first: the line about to be drawn is computed from this browser's clock, corrected by the server's.
+        noteServerClock(data)
         const key = ticks.frameKey(data)
-        // The driver line first: a new receipt, a new deadline or a changed `active` is news even when nothing else moved.
+        // The driver line next: a new receipt, a new deadline or a changed `active` is news even when nothing else moved.
         if (data.tick !== undefined) {
           insights.tick = data.tick
           renderPlanTicks()
@@ -1382,6 +1391,7 @@
     lineText: (tick, _now, translate) => (tick ? translate('web.ticksNow', { driver: tick.driver, age: 0 }) : translate('web.ticksNone')),
     tone: (tick) => (!tick || tick.active === false ? 'attention' : 'neutral'),
     frameKey: (data) => JSON.stringify([data.runs, data.history, data.approvals, data.notifications]),
+    clockOffset: () => null,
   }
   function renderPlanTicks() {
     if (!el.planTicks) return

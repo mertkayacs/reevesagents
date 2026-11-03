@@ -380,6 +380,9 @@ describe('the stream carries no value that ticks on its own (block 71)', () => {
       const frames = await collectFrames(`${handle.url}/api/events`, 3_600)
       expect(frames).toHaveLength(1)
       expect(framePayload(frames[0]!)).toHaveProperty('tick.at', RECEIPT.at)
+      // The frame carries the server clock — added when it is written, never part of the comparison — so the panel can
+      // correct its own clock on every frame it receives (block 71, review round 1).
+      expect(typeof (framePayload(frames[0]!) as { now?: number }).now).toBe('number')
     } finally {
       await handle.close()
     }

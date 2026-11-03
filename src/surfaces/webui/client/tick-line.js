@@ -39,6 +39,15 @@
     return head + ' · ' + t('web.ticksNext', { next: next })
   }
 
+  // The offset between the server's clock and this browser's, from a payload that carries `now`. Every frame the panel
+  // receives carries it (added when the frame is written, never part of the comparison), so the correction is refreshed
+  // on each one — a tab whose clock drifted mid-session is corrected by the next frame, not only by the next reconnect.
+  // Null when the payload has no clock to give.
+  function clockOffset(data, localNow) {
+    if (!data || typeof data.now !== 'number' || !Number.isFinite(data.now)) return null
+    return data.now - localNow
+  }
+
   // The tone the line carries: a paused or failed driver is the reason a flow sits still.
   function tone(tick) {
     if (!tick) return 'attention'
@@ -64,5 +73,6 @@
     lineText: lineText,
     tone: tone,
     frameKey: frameKey,
+    clockOffset: clockOffset,
   }
 })(typeof window !== 'undefined' ? window : globalThis)

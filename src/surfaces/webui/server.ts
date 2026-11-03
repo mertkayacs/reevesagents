@@ -257,7 +257,10 @@ function createSseHub(): SseHub {
   let timer: ReturnType<typeof setInterval> | null = null
   let last = ''
 
-  const snapshot = (): string => {
+  // The state a frame carries, and its comparison key. The key is the payload without the clock: `now` is added when a
+  // frame is actually written, because the panel needs the server's clock to correct its own and a clock inside the
+  // compared payload would make every poll a "change" (block 71).
+  const snapshot = (): { state: Record<string, unknown>, key: string } => {
     // Web-only users get the same zombie/orphan reaping and stale cleanup the TUI
     // tick performs; both sweeps are throttled internally, so this stays cheap.
     sweepAgentsThrottled()
@@ -271,24 +274,29 @@ function createSseHub(): SseHub {
     // that lags the screen it belongs to.
     // `agent_pulse_ms` travels into the state build, not only into the journal summary: the plan badge pulses on the same
     // clock, and a call without it made every card fall back to fifteen minutes (block 27, MINOR).
-    return JSON.stringify({
+    const state = {
       ...buildWebState({ agent_pulse_ms: loadConfig().global.agent_pulse_ms }),
       tick: flowTickPayload(),
       notifications: withPulse(notificationSummary()),
-    })
+    }
+    return { state, key: JSON.stringify(state) }
   }
+  // The frame as it goes on the wire: the compared state plus the server clock at that moment. Every frame the client
+  // receives therefore carries `now`, which is what keeps its locally computed countdown honest (block 71).
+  const frame = (state: Record<string, unknown>): string => JSON.stringify({ ...state, now: Date.now() })
   const write = (res: ServerResponse, payload: string): void => {
     try { res.write(`data: ${payload}\n\n`) } catch { /* client gone; close handler will drop it */ }
   }
   const tick = (): void => {
-    const payload = snapshot()
-    if (payload === last) return
-    last = payload
+    const { state, key } = snapshot()
+    if (key === last) return
+    last = key
+    const payload = frame(state)
     for (const res of clients) write(res, payload)
   }
   const start = (): void => {
     if (timer) return
-    last = snapshot()
+    last = snapshot().key
     timer = setInterval(tick, POLL_MS)
     timer.unref()
   }
@@ -304,7 +312,7 @@ function createSseHub(): SseHub {
         'connection': 'keep-alive',
         'x-content-type-options': 'nosniff',
       })
-      write(res, snapshot())
+      write(res, frame(snapshot().state))
       clients.add(res)
       start()
       res.on('close', () => {

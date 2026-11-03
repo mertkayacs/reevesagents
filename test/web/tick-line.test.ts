@@ -23,6 +23,7 @@ interface TickPayload {
 }
 
 interface TickLine {
+  clockOffset: (_data: Record<string, unknown> | null, _localNow: number) => number | null
   ageSeconds: (_tick: TickPayload | null, _now: number) => number
   nextInSeconds: (_tick: TickPayload | null, _now: number) => number | null
   lineText: (_tick: TickPayload | null, _now: number, _t: (_key: string, _values?: Record<string, unknown>) => string) => string
@@ -90,6 +91,16 @@ describe('the driver line is computed from marks, not from a countdown', () => {
     expect(tickLine.lineText(payload, NOW, en)).toContain('last 12s ago')
     expect(tickLine.lineText(payload, NOW + 60_000, en)).toContain('last 72s ago')
     expect(tickLine.lineText(payload, NOW + 60_000, en)).toContain('waiting for a tick')
+  })
+
+  it('measures the server clock from any payload that carries `now`', () => {
+    // Every frame that is actually sent carries `now`, so the correction is refreshed on each one and not only when the
+    // page loads or reconnects (block 71, review round 1).
+    expect(tickLine.clockOffset({ now: NOW + 2_000 }, NOW)).toBe(2_000)
+    expect(tickLine.clockOffset({ now: NOW - 1_500 }, NOW)).toBe(-1_500)
+    // No clock to give (an older server, or a payload that deliberately has none): the previous offset stands.
+    expect(tickLine.clockOffset({ tick: tick() }, NOW)).toBeNull()
+    expect(tickLine.clockOffset(null, NOW)).toBeNull()
   })
 
   it('takes the attention tone for a missing or stopped driver', () => {
