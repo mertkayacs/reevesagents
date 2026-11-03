@@ -170,6 +170,46 @@ describe('a flow that stands still says why (block 64)', () => {
     expect(after.log.filter(entry => entry.event === 'hold')).toHaveLength(1)
     expect(after.updated_at).toBe(seeded.updated_at)
   })
+
+  it('journals detailed holds once, then records a changed reason as a new hold', () => {
+    const seeded = seed(makeState({
+      state: 'reviewing',
+      review_started_at: NOW - 60_000,
+      claim: { head: 'bbb222', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    }))
+    const plan = {
+      items: [{
+        id: 'P1.2', title: 'Waiting item', status: 'needs_brief' as const, rounds: 0,
+        spec: null, spec_path: null, head: null, notes_ref: null, missing: false,
+      }],
+      max_rounds_per_item: 3,
+      max_total_rounds: 12,
+    }
+
+    const first = step(makePorts({ peek: () => verdictCapture(1, 'ACCEPT') }), { plan })
+    expect(first.decision.reason).toBe('plan_incomplete')
+    expect(first.status).toBe('applied')
+    const held = readFlow('run-1', { root })
+    expect(held.hold).toMatchObject({ reason: 'plan_incomplete' })
+    expect(held.hold?.detail).toContain('needs a brief for P1.2')
+    expect(held.log.filter(entry => entry.event === 'hold')).toHaveLength(1)
+    expect(held.log.some(entry => entry.event === 'plan_incomplete' && entry.detail === held.hold?.detail)).toBe(true)
+    const firstLog = readFileSync(flowFile(), 'utf-8')
+
+    const repeated = step(makePorts({ peek: () => verdictCapture(1, 'ACCEPT') }), { plan })
+    expect(repeated.status).toBe('skipped')
+    expect(readFileSync(flowFile(), 'utf-8')).toBe(firstLog)
+
+    const changed = step(makePorts(), { head: undefined })
+    expect(changed.decision.reason).toBe('head_unknown')
+    const afterChange = readFlow('run-1', { root })
+    expect(afterChange.hold).toEqual({ reason: 'head_unknown', since: AT })
+    expect(afterChange.log.filter(entry => entry.event === 'hold').map(entry => entry.detail)).toEqual([
+      'plan_incomplete', 'head_unknown',
+    ])
+    expect(afterChange.log.filter(entry => entry.event === 'plan_incomplete')).toHaveLength(1)
+    expect(afterChange.updated_at).toBe(seeded.updated_at)
+  })
 })
 
 describe('stepFlow', () => {

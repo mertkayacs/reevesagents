@@ -793,17 +793,21 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       // The reason and the moment it started live in the state; the journal takes one `hold` line per reason and stays
       // silent on a repeat, which is what keeps a 2 s tick from turning the log into noise.
       const nextHold = holdOfDecision(state, decision, at)
-      const journalled = state.log.at(-1)?.detail === (decision.log_detail ?? decision.reason)
-      if (sameHold(state.hold, nextHold) && journalled) {
+      // A detailed hold's explanation is its latest log line, so find the most recent hold entry independently.
+      // A hold whose reason or detail changed is new even when its reason matches an older hold entry.
+      const lastHold = [...state.log].reverse().find(entry => entry.event === 'hold')
+      const journalled = lastHold?.detail === decision.reason
+      const repeated = sameHold(state.hold, nextHold)
+      if (repeated && journalled) {
         return { state, decision, dispatch: null, settled: null }
       }
       // A detailed hold (the plan is waiting for a brief) keeps the journal line it always had; a silent one gets the
       // one line that names it. `updated_at` is deliberately carried over: a hold is not a move, and the badge and the
       // `tick` line in `flow status` read that stamp to say when the last real move happened.
-      const noted = decision.log_detail && !journalled ? applyDecisionToState(state, decision, at) : state
-      const log = journalled || decision.log_detail
-        ? noted.log
-        : appendLog(noted, { at, event: 'hold', detail: decision.reason })
+      const noted = decision.log_detail && !repeated ? applyDecisionToState(state, decision, at) : state
+      const log = !repeated || !journalled
+        ? appendLog(noted, { at, event: 'hold', detail: decision.reason })
+        : noted.log
       const held: FlowState = { ...noted, hold: nextHold, log, updated_at: state.updated_at }
       return {
         state,
