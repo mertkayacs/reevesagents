@@ -121,7 +121,11 @@ const READY_HINTS: Partial<Record<Provider, readonly RegExp[]>> = {
 
 // Lines that are chrome rather than the composer: the provider's model line, its footer, a rule, a status glyph. A pane
 // whose composer is missing usually shows one of these where the composer belongs.
-const CHROME_LINE = /^(?:☤|─{5,}|[◦●•·]\s|←\s*for agents|(?:GPT-|Claude|DeepSeek|Hermes|Kimi|GLM)\b.*·)/i
+//
+// Status glyphs (`◦`, `•`, `●`, `·`) are *not* here: a pasted brief may be Markdown and open a line with a bullet, and
+// treating that as chrome stopped the composer walk in the middle of the box (block 73, review round 2). At the left margin
+// such a row is transcript (`TRANSCRIPT_LINE`) and is handled with the margin it needs.
+const CHROME_LINE = /^(?:☤|─{5,}|←\s*for agents|(?:GPT-|Claude|DeepSeek|Hermes|Kimi|GLM)\b.*·)/i
 
 function isChrome(line: string): boolean {
   return CHROME_LINE.test(line)
@@ -147,10 +151,19 @@ function composerRow(lines: string[]): { line: string, index: number } | null {
 const DIALOG_LINE = /^\s*[▌▐╭╮╰╯│┌┐└┘├┤]/
 
 // A finished turn's output rather than the box's own text: the answer bullets both CLIs print (`•`, `◦`, `●`, `⏺`, `·`), a
-// tool ledger row (`│`, `├`), a diff line at the left margin, and the vocabulary a review turn ends with (`VERDICT:`, a
-// `MAJOR:`/`MINOR:`/`NIT` finding). A marker above one of those introduces an earlier turn, not this composer: the walk stops
-// there (block 73, review round 1, second pass).
-const TRANSCRIPT_LINE = /^\s*(?:[•◦●⏺·]\s|[│├┃]|VERDICT:|(?:MAJOR|MINOR|NIT)\b|[-+]\s)/
+// tool ledger row (`│`, `├`), a diff line, and the vocabulary a review turn ends with (`VERDICT:`, a `MAJOR:`/`MINOR:`/`NIT`
+// finding). A marker above one of those introduces an earlier turn, not this composer: the walk stops there (block 73, review
+// round 1, second pass).
+//
+// **At the left margin only.** A brief pasted into the box may be Markdown and may carry its own `- item` bullets and diff
+// rows; those are indented to the box's text column like every other continuation row, and a regex that allowed leading
+// whitespace stopped the walk inside the composer and left an idle pane `unknown` (block 73, review round 2).
+const TRANSCRIPT_LINE = /^(?:[•◦●⏺·]\s|[│├┃]|VERDICT:|(?:MAJOR|MINOR|NIT)\b|[-+]\s)/
+
+// The column a composer's continuation rows are drawn at: the marker row is `marker + space + text`, so the box's own text
+// starts two columns in, and every continuation row — including Markdown bullets and diff rows of a pasted brief — is
+// indented at least that far. A finished turn's output starts further left.
+const COMPOSER_TEXT_COLUMN = 2
 
 
 // Is the marker that introduces this composer block on screen? The block is the rows between the marker and the composer row:
@@ -168,14 +181,21 @@ function composerGlyph(lines: string[], raw: string[], signals: ProviderSignals,
   if (marked(row)) return true
   for (let index = row - 1; index >= 0 && row - index <= COMPOSER_BLOCK_MAX; index -= 1) {
     const line = lines[index]!
-    if (isChrome(line) || DIALOG_LINE.test(line) || TRANSCRIPT_LINE.test(line)) return false
+    // Transcript is matched against the untrimmed row: "at the left margin" is the whole point of the test, and the trimmed
+    // view has already thrown the margin away.
+    if (isChrome(line) || DIALOG_LINE.test(line) || TRANSCRIPT_LINE.test(raw[index] ?? '')) return false
     if (marked(index)) return true
-    // A row at the left margin is a finished turn's output that carries no marker of its own — the box draws its own
-    // continuation rows indented. Without this, plain prose between a stale `›` and a composer that drew no glyph walked the
-    // whole way up and called the pane idle (block 73, review round 1, second pass).
-    if (!/^\s/.test(raw[index] ?? '')) return false
+    // A row further left than the box's own text column is a finished turn's output that carries no marker of its own — the
+    // box draws every continuation row (its pasted Markdown bullets included) at the column of its first line of text.
+    // Without this, plain prose between a stale `›` and a composer that drew no glyph walked the whole way up and called the
+    // pane idle (block 73, review round 1, second pass).
+    if (indentOf(raw[index] ?? '') < COMPOSER_TEXT_COLUMN) return false
   }
   return false
+}
+
+function indentOf(rawLine: string): number {
+  return rawLine.length - rawLine.replace(/^\s+/, '').length
 }
 
 // What the composer draws when it is empty, with the provider's marker removed if it is there.

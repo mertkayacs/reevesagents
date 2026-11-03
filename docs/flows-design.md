@@ -105,9 +105,11 @@ frame's structure, with the asymmetry stated in its rules:
 - the glyph, but only where the composer is: on the composer row, or introducing the block of rows that runs down to it and
   holds nothing but the box's own text (a one-line draft, or a thirty-line brief that was pasted and not sent) → `idle`. The
   walk stops at the first row that is not the box's own: a chrome row, a dialog's frame, or a line of a finished turn's output
-  (an answer bullet, a tool ledger row, a diff line, a `VERDICT:`/`MAJOR:`/`MINOR:` line). A marker above any of those belongs
-  to an earlier turn — reading it as the composer let a paste land on a pane whose input box a modal had replaced, and on a
-  pane whose composer simply drew no glyph (that pane now falls through to the placeholder path and stays `unknown` until a
+  *at the left margin* (an answer bullet, a tool ledger row, a diff line, a `VERDICT:`/`MAJOR:`/`MINOR:` line). The box draws
+  its own continuation rows at its text column, so a brief pasted into it may carry Markdown bullets and diff rows of its own
+  without stopping the walk — only rows left of that column are transcript. A marker above transcript belongs to an earlier
+  turn: reading it as the composer let a paste land on a pane whose input box a modal had replaced, and on a pane whose
+  composer simply drew no glyph (that pane now falls through to the placeholder path and stays `unknown` until a
   second capture confirms the frame);
 - the exact placeholder *where the composer belongs*, with the provider's footer below it, no busy marker anywhere, and the
   same frame captured twice at least a second apart → `idle`;

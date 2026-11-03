@@ -275,6 +275,34 @@ describe('the glyph counts only where the composer is (block 73, review round 1)
     expect(inspectPane(bulleted, 'codex', { now: 10_000 }).state).toBe('unknown')
   })
 
+  it('walks through the Markdown bullets and diff rows of a pasted brief (block 73, review round 2)', () => {
+    // A brief pasted into the box is prose with its own structure: `- item` bullets and diff rows, all indented to the box's
+    // text column. None of them is transcript, and the marker above them is this composer's.
+    const brief = [
+      '› разберись с парсером, вот план:',
+      '  - прочитать src/core/plan.ts',
+      '  - починить границы строк',
+      '  + добавить тест',
+      '  • проверить на стенде',
+      '  и прогнать гейты',
+      'GPT-6-Luna high · ~/repo',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(brief, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+  })
+
+  it('still stops at the same bullet once it is a finished turn\'s output', () => {
+    // The same words at the left margin are the answer above the composer, not the box.
+    const transcript = [
+      '› разберись с парсером',
+      '- прочитал src/core/plan.ts',
+      'Ask Codex to do anything',
+      'GPT-6-Luna high · ~/repo',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(transcript, 'codex', { now: 10_000 }).state).toBe('unknown')
+  })
+
   it('keeps a bare prompt and a placeholder composer working', () => {
     expect(inspectPane('› \n  ← for agents · ? for shortcuts', 'codex', { now: 10_000 }))
       .toMatchObject({ state: 'idle', reason: 'composer_glyph' })
