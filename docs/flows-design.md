@@ -113,8 +113,10 @@ There is exactly one driver, and it is external to the product (block 68):
 `~/.reeves/tick-status.json`: `{ at, mode: "run"|"all", driver, pid, advanced, held, skipped }`. That file is the
 only thing a surface reports about the driver: `flow status` and the TUI print
 `tick last <N>s ago · driver <driver>`, `/api/state` carries the same fields as `tick` (plus `active`/`next_in_s`
-when the machine's own `systemctl --user show reeves-flow-tick.timer` answers), and a machine that has never recorded a
-pass says so instead of guessing. `--dry-run` writes nothing: a question is not a pass.
+when the machine's own `systemctl --user show reeves-flow-tick.timer` answers — `next_in_s` is parsed out of whatever
+shape systemd prints, a formatted date, microseconds, or the monotonic elapse a `OnBootSec` timer reports; an empty
+elapse simply yields no countdown), and a machine that has never recorded a pass says so instead of guessing.
+`--dry-run` writes nothing: a question is not a pass.
 
 **Two tickers cannot double-paste.** The claim (`pending` + `op_id`, §2.4) is what makes that true: the second
 passenger re-reads the state inside the lock, sees a claim it did not make, and holds. The test

@@ -17,7 +17,7 @@ import { writeAgent, writeRun } from '../src/core/runs.js'
 
 // The probe for the systemd timer goes through `execFileSync`: answering with nothing keeps every test on this host
 // identical to a machine without systemd, which is the case the optional fields exist for.
-const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []) => {
+const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []): string => {
   if (file === 'git' && args.includes('rev-parse')) return 'aaa111\n'
   if (file === 'git' && args.includes('status')) return ''
   return ''
@@ -121,6 +121,13 @@ beforeEach(() => {
     run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, head: 'a'.repeat(40),
     max_rounds: 2, max_total_rounds: 5,
   }))
+  // Every test starts on a machine whose systemd says nothing: the probe's answer is a per-test decision, and a test
+  // that leaves a timer behind must not decide for the next one.
+  execFileSync.mockImplementation((file: string, args: string[] = []) => {
+    if (file === 'git' && args.includes('rev-parse')) return 'aaa111\n'
+    if (file === 'git' && args.includes('status')) return ''
+    return ''
+  })
 })
 
 afterEach(() => {
@@ -226,6 +233,34 @@ describe('the panel shows the driver, not a setting', () => {
       expect(framePayload(await stream.firstFrame).tick).toBeNull()
     } finally {
       stream.close()
+      await handle.close()
+    }
+  })
+
+  it('carries the seconds until the next run, read from systemd\'s own timestamp', async () => {
+    // `systemctl show` prints a timestamp property as human text; the payload must still get a countdown out of it.
+    // A far-future date keeps the assertion stable, and `active: true` proves the probe answered at all.
+    execFileSync.mockImplementation((file: string, args: string[] = []) => {
+      if (file === 'git' && args.includes('rev-parse')) return 'aaa111\n'
+      if (file === 'git' && args.includes('status')) return ''
+      if (file === 'systemctl') return 'NextElapseUSecRealtime=Tue 2099-01-01 00:00:00 UTC\nActiveState=active\n'
+      return ''
+    })
+    writeFileSync(join(root, 'tick-status.json'), JSON.stringify({
+      at: new Date().toISOString(), mode: 'all', driver: 'external', pid: 1, advanced: 0, held: 0, skipped: 0,
+    }), 'utf-8')
+
+    vi.resetModules()
+    const { startWebServer } = await import('../src/surfaces/webui/server.js')
+    const handle = await startWebServer({ port: 0 })
+    try {
+      const state = JSON.parse((await httpGet(`${handle.url}/api/state`)).text) as {
+        tick: { active?: boolean, next_in_s?: number }
+      }
+      expect(state.tick.active).toBe(true)
+      expect(typeof state.tick.next_in_s).toBe('number')
+      expect(state.tick.next_in_s).toBeGreaterThan(0)
+    } finally {
       await handle.close()
     }
   })

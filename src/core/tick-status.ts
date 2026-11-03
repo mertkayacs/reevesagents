@@ -134,8 +134,10 @@ export interface TimerState {
 
 export interface TimerStateOptions {
   now?: number
-  // Test seam for the probe; the default shells out to `systemctl --user`.
+  // Test seams: the probe itself, and the monotonic clock (seconds since boot) a monotonic timer's elapse is measured
+  // against.
   run?: (_command: string, _args: string[]) => string
+  monotonicNow?: () => number | null
 }
 
 function systemctlRun(command: string, args: string[]): string {
@@ -147,6 +149,80 @@ function systemctlRun(command: string, args: string[]): string {
   }))
 }
 
+// `systemctl show` prints a *timestamp* property as human text — `Tue 2026-11-03 13:16:47 CET` — unless a machine
+// format was asked for, so `Number(...)` on it is NaN and `next_in_s` disappeared (block 68, round 1). Both shapes are
+// accepted: microseconds since the epoch (the `...USec` machine form), and the formatted date.
+export function parseSystemdTimestamp(raw: string): number | null {
+  const text = raw.trim()
+  if (!text || text === 'n/a') return null
+  // The property is named `...USecRealtime`, so a bare number is microseconds since the epoch.
+  if (/^\d+$/.test(text)) {
+    const micros = Number(text)
+    return Number.isFinite(micros) ? micros / 1000 : null
+  }
+  // `Tue 2026-11-03 13:16:47 CET`, optionally with a fraction. The weekday is decoration; the zone is the host's own
+  // (systemd prints local time), and UTC/GMT or an explicit offset are the cases where local time would be wrong.
+  const match = /^(?:[A-Za-z]{3,9},?\s+)?(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?\s*([A-Za-z]{1,5}|[+-]\d{2}:?\d{2})?$/.exec(text)
+  if (!match) return null
+  const [, year, month, day, hour, minute, second, fraction, zone] = match
+  const millis = fraction ? Number(fraction.padEnd(3, '0').slice(0, 3)) : 0
+  const parts = [Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second), millis] as const
+  let stamp: number
+  if (zone !== undefined && /^(?:utc|gmt|ut|z)$/i.test(zone)) {
+    stamp = Date.UTC(...parts)
+  } else {
+    const offset = zone === undefined ? null : /^([+-])(\d{2}):?(\d{2})$/.exec(zone)
+    if (offset) {
+      const minutes = (Number(offset[2]) * 60 + Number(offset[3])) * (offset[1] === '-' ? -1 : 1)
+      stamp = Date.UTC(...parts) - minutes * 60_000
+    } else {
+      stamp = new Date(...parts).getTime()
+    }
+  }
+  return Number.isNaN(stamp) ? null : stamp
+}
+
+// Unit -> seconds. systemd prints a span as `3d 22h 10min 44.544443s`, and spells the units out when they are long.
+const TIMESPAN_UNITS: Record<string, number> = {
+  month: 2_629_800, months: 2_629_800, mo: 2_629_800,
+  week: 604_800, weeks: 604_800, w: 604_800, wk: 604_800,
+  day: 86_400, days: 86_400, d: 86_400,
+  hour: 3_600, hours: 3_600, hr: 3_600, h: 3_600,
+  minute: 60, minutes: 60, min: 60,
+  second: 1, seconds: 1, sec: 1, s: 1,
+  ms: 0.001, msec: 0.001,
+  us: 0.000001, usec: 0.000001, 'µs': 0.000001,
+}
+
+// `3d 22h 10min 44.544443s` — how systemd prints a *monotonic* elapse: a duration since boot, not a date. A timer
+// scheduled with `OnBootSec`/`OnUnitActiveSec` (this machine's) has no realtime elapse at all, and this is the only
+// field that answers, so it has to be measured against the monotonic clock.
+export function parseSystemdTimespan(raw: string): number | null {
+  const text = raw.trim()
+  if (!text || text === 'n/a' || text === 'infinity') return null
+  let total = 0
+  for (const token of text.split(/\s+/)) {
+    const match = /^(\d+(?:\.\d+)?)([a-zµ]+)$/i.exec(token)
+    if (!match) return null
+    const scale = TIMESPAN_UNITS[match[2]!.toLowerCase()]
+    if (scale === undefined) return null
+    total += Number(match[1]) * scale
+  }
+  return total
+}
+
+// Seconds since boot: the clock a monotonic elapse is measured on. `/proc/uptime` is the source the CLI can read
+// without privileges; anything without it (macOS, a container without /proc) simply answers no `next`.
+export function monotonicSeconds(): number | null {
+  try {
+    const first = readFileSync('/proc/uptime', 'utf-8').trim().split(/\s+/)[0]
+    const seconds = Number(first)
+    return Number.isFinite(seconds) ? seconds : null
+  } catch {
+    return null
+  }
+}
+
 // Does the systemd user timer exist, and when is its next run? Optional by design: macOS, a container, or a machine
 // that uses cron has no answer, and none of them should see an error for that — the caller simply gets no fields.
 export function systemdTimerState(options: TimerStateOptions = {}): TimerState | null {
@@ -154,7 +230,8 @@ export function systemdTimerState(options: TimerStateOptions = {}): TimerState |
   let text: string
   try {
     text = (options.run ?? systemctlRun)('systemctl', [
-      '--user', 'show', 'reeves-flow-tick.timer', '-p', 'ActiveState', '-p', 'NextElapseUSecRealtime',
+      '--user', 'show', 'reeves-flow-tick.timer',
+      '-p', 'ActiveState', '-p', 'NextElapseUSecRealtime', '-p', 'NextElapseUSecMonotonic',
     ])
   } catch {
     return null
@@ -168,8 +245,17 @@ export function systemdTimerState(options: TimerStateOptions = {}): TimerState |
   const activeState = fields.get('ActiveState')
   if (!activeState) return null
   const state: TimerState = { active: activeState === 'active' }
-  // Microseconds since the epoch; 0 means systemd has no next elapse to report.
-  const usec = Number(fields.get('NextElapseUSecRealtime') ?? '0')
-  if (Number.isFinite(usec) && usec > 0) state.next_in_s = Math.max(0, Math.round((usec / 1000 - now) / 1000))
+  // The next elapse arrives in one of three shapes (microseconds, a formatted date, or a monotonic duration); whatever
+  // it is, the panel is given seconds until the next pass, never a number that came out of parsing prose as NaN.
+  const realtime = parseSystemdTimestamp(fields.get('NextElapseUSecRealtime') ?? '')
+  if (realtime !== null) {
+    state.next_in_s = Math.max(0, Math.round((realtime - now) / 1000))
+    return state
+  }
+  const elapse = parseSystemdTimespan(fields.get('NextElapseUSecMonotonic') ?? '')
+  if (elapse !== null) {
+    const current = (options.monotonicNow ?? monotonicSeconds)()
+    if (current !== null) state.next_in_s = Math.max(0, Math.round(elapse - current))
+  }
   return state
 }
