@@ -889,6 +889,24 @@ the turn.
   never typed; comparing with whitespace removed is what keeps a wrapped prompt reading as ours (the pre-Enter check called one
   `pane_changed` for exactly that reason).
 
+### 3.6e The engine never reviews its own mark commit (block 77)
+
+A live `flow-a` run of 2026-11-03 marked A2 (`chore(flow): mark A2 done in the plan`, `39a9ffa`), re-anchored onto it, and then asked
+a reviewer to read that very commit — `review rejected as unsubstantiated`, `fix_dispatched 39a9ffa` — spending a round on its own
+bookkeeping. The commit was left dangling: `2fc1488` marked the same item on the same parent.
+
+- **The mark commit is bookkeeping, not work.** `headIsDocsOnly` asks git for the files of the one commit the flow is on; when they
+  are all plan or brief paths, `fixDispatch` refuses (`fix_refused docs_commit`) and no round is spent. The head that is re-anchored
+  onto is then the baseline, not a subject.
+- **A verdict read on the engine's own mark is not an answer.** `headIsMarkCommit` (docs-only *and* the mark subject) drops a pane
+  verdict read on that commit, puts the verdict counter back where the re-anchor left it and journals
+  `docs_commit_verdict_ignored <sha>` once — so an ACCEPT or a CHANGES_REQUESTED about a checkbox tick cannot close an item on a head
+  nobody reviewed. A human's documentation commit is still work: its verdict is honoured, only a fix against it is refused.
+- **The mark is idempotent by head.** `markPlanItems` reads the item ids already named by `chore(flow): mark … done in the plan`
+  subjects reachable from HEAD and skips them, so the branch cannot grow a second mark for the same item on the same parent.
+- **The item closes on the dev's commit.** The plan row records `head` = the dev's commit; the mark commit is what the baseline
+  moves to afterwards, and nothing is ever asked of a reviewer about it.
+
 ### 3.6 Starting the plan from `idle` (block 19)
 
 `planNext` used to be reached **only** from `planAcceptDecision`, and `tickIdle` returned `head_unchanged` on its first

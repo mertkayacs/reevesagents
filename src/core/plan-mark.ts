@@ -136,8 +136,16 @@ export function markPlanItems(options: MarkPlanOptions): MarkPlanOutcome {
   }
 
   const lines = raw.split('\n')
+  // The branch is the record of what was already marked: a mark commit for this item that is reachable from HEAD means the tick
+  // exists, and a second one would be a duplicate on the same parent (block 77: the live run left `39a9ffa` dangling beside
+  // `2fc1488`, both marking A2 on `d001a0d`).
+  const alreadyMarked = existingMarkIds(options.repo)
   const marked: { id: string, line: number }[] = []
   for (const id of options.ids) {
+    if (alreadyMarked.has(id)) {
+      outcome.already.push(id)
+      continue
+    }
     const item = options.plan.items.find(entry => entry.id === id)
     const line = item?.line ?? null
     if (line === null || line < 1 || line > lines.length) {
@@ -190,6 +198,22 @@ export function markPlanItems(options: MarkPlanOptions): MarkPlanOutcome {
       failures: [...outcome.failures, ...marked.map(entry => ({ id: entry.id, reason: `git commit failed: ${reason}` }))],
     }
   }
+}
+
+// The item ids the branch has already committed a tick for, read off the mark commit subjects reachable from HEAD.
+function existingMarkIds(repo: string): Set<string> {
+  const ids = new Set<string>()
+  try {
+    const log = git(repo, ['log', '--format=%s']).trim()
+    for (const subject of log.split('\n')) {
+      const match = subject.match(/^chore\(flow\): mark (.+) done in the plan$/)
+      if (!match) continue
+      for (const id of match[1]!.split(',')) ids.add(id.trim())
+    }
+  } catch {
+    // A history this process cannot read is not evidence that nothing was marked; the mark proceeds as it always did.
+  }
+  return ids
 }
 
 // Which done items still have an unticked line? The retry path after a deferred mark, and the honest way to ask: the

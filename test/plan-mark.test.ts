@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
 import type { FlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { stagingPath } from '../src/core/flow-notes.js'
 import { attachSpec, createPlan, importInto, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import type { Plan } from '../src/core/plan.js'
 import { applyPlanMarks, markPlanItems } from '../src/core/plan-mark.js'
@@ -108,6 +109,9 @@ beforeEach(() => {
   git('config', 'user.email', 't@t')
   git('config', 'user.name', 't')
   writeFileSync(join(repo, DOC_PATH), DOC, 'utf-8')
+  // A flow reviews a repository with code in it: a base commit that touched only the plan would itself be a bookkeeping commit,
+  // and the engine would (rightly) refuse to treat its head as reviewable work (block 77).
+  writeFileSync(join(repo, 'app.ts'), 'export const version = 1\n', 'utf-8')
   git('add', '-A')
   git('commit', '-qm', 'base')
   writeRun({
@@ -471,5 +475,137 @@ describe('a deferred mark that can no longer be written is reported (block 72, r
 
     expect(outcome.marked).toEqual([])
     expect(outcome.failures[0]).toEqual({ id: 'P1.1', reason: 'the document no longer lists this item' })
+  })
+})
+
+// Block 77, the live `flow-a` run of 03.11: the engine marked A2 (`chore(flow): mark A2 done in the plan`, 39a9ffa), re-anchored,
+// and then asked a reviewer to read that very commit — `fix_dispatched 39a9ffa` — spending a round on its own bookkeeping. The
+// commit was left dangling: `2fc1488` marked the same item on the same parent.
+describe('the engine never reviews its own mark commit (block 77)', () => {
+  const ports = (verdict: 'ACCEPT' | 'CHANGES_REQUESTED', captureTimes = 1) => ({
+    paneBusy: () => 'idle' as const,
+    // One verdict line per round: how a pane answer reaches a tick.
+    peek: () => Array.from({ length: captureTimes }, () => `round\nVERDICT: ${verdict}\nMAJOR src/app.ts:1 — x\n> `).join('\n'),
+    send: () => ({ sent: true as const }),
+  })
+
+  function markFor(id: string): string {
+    const plan = planWith(['P1.1', 'P1.2'])
+    const item = plan.items.find(entry => entry.id === id)!
+    seed({ ...plan, items: plan.items.map(entry => (entry.id === id ? { ...entry, status: 'done' as const, head: git('rev-parse', 'HEAD') } : entry)) }, reviewingState())
+    const outcome = applyPlanMarks('run-1', { repo, tree_clean: true, at: AT })
+    expect(outcome.marked.map(entry => entry.id)).toEqual([item.id])
+    return outcome.sha!
+  }
+
+  it('re-anchors on the mark commit and asks for no review of it', () => {
+    const mark = markFor('P1.1')
+
+    const ticked = stepFlow('run-1', {
+      now: NOW + 60_000, at: AT, head: mark, tree_clean: true, plan: undefined,
+      ports: ports('ACCEPT'), docs_only_since_claim: true, evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(ticked.decision.reason).toBe('head_reanchored')
+    expect(readFlow('run-1').claim.head).toBe(mark)
+    // Nothing was pasted at a reviewer, and no fix was dispatched against the tick.
+    expect(readFlow('run-1').log.some(entry => entry.event === 'review_requested')).toBe(false)
+    expect(readFlow('run-1').log.some(entry => entry.event === 'fix_dispatched')).toBe(false)
+  })
+
+  it('ignores a pane verdict read on the mark commit, and says so once', () => {
+    const mark = markFor('P1.1')
+    seed(planWith(['P1.1', 'P1.2']), reviewingState({ claim: { head: mark, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } }))
+
+    const ticked = stepFlow('run-1', {
+      now: NOW + 60_000, at: AT, head: mark, tree_clean: true, plan: undefined,
+      ports: ports('ACCEPT'), evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // The answer is about a checkbox, not about the work: the item is not closed on it.
+    expect(ticked.observations.verdict).toBeNull()
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).not.toBe('done')
+    const ignored = readFlow('run-1').log.filter(entry => entry.event === 'docs_commit_verdict_ignored')
+    expect(ignored).toHaveLength(1)
+    expect(ignored[0]!.detail).toBe(mark.slice(0, 7))
+
+    // A second tick does not write the line again.
+    stepFlow('run-1', {
+      now: NOW + 120_000, at: AT, head: mark, tree_clean: true, plan: undefined,
+      ports: ports('ACCEPT'), evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'docs_commit_verdict_ignored')).toHaveLength(1)
+  })
+
+  it('refuses a fix on a docs-only commit without spending a round', () => {
+    // The live run's own shape: the reviewer really did read the mark commit and wrote a notes file about it, and the engine
+    // answered with `fix_dispatched 39a9ffa`. A fix against a checkbox tick is a phantom round (block 77, item 4).
+    const mark = markFor('P1.1')
+    const before = readFlow('run-1')
+    seed(planWith(['P1.1', 'P1.2']), {
+      ...before,
+      state: 'reviewing',
+      review_started_at: NOW - 180_000,
+      claim: { head: mark, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+    const staging = stagingPath('run-1', mark, 1, root)
+    mkdirSync(dirname(staging), { recursive: true })
+    writeFileSync(staging, 'MAJOR: this commit only marks A2 complete\nVERDICT: CHANGES_REQUESTED\n', 'utf-8')
+
+    const ticked = stepFlow('run-1', {
+      now: NOW + 60_000, at: AT, head: mark, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    const after = readFlow('run-1')
+    expect(ticked.decision.kind).toBe('none')
+    expect(after.rounds).toBe(before.rounds)
+    expect(after.state).not.toBe('fixing')
+    expect(after.log.some(entry => entry.event === 'fix_dispatched')).toBe(false)
+    expect(after.log.some(entry => entry.event === 'fix_refused' && entry.detail === 'docs_commit')).toBe(true)
+    expect(ticked.send).toBeUndefined()
+  })
+
+  it('creates no second mark for an item the branch has already marked', () => {
+    const mark = markFor('P1.1')
+    const commitsBefore = Number(git('rev-list', '--count', 'HEAD'))
+
+    seed(planWith(['P1.1', 'P1.2']), reviewingState())
+    const again = applyPlanMarks('run-1', { repo, tree_clean: true, at: AT, ids: ['P1.1'] })
+
+    expect(again.marked).toEqual([])
+    expect(again.already).toContain('P1.1')
+    expect(Number(git('rev-list', '--count', 'HEAD'))).toBe(commitsBefore)
+    expect(git('rev-parse', 'HEAD')).toBe(mark)
+  })
+
+  it('closes the plan on the dev’s commit, not on the tick that recorded it', () => {
+    // The whole incident in one tick: work → ACCEPT → mark → re-anchor → no phantom round, and the item's commit is the dev's.
+    const work = git('rev-parse', 'HEAD')
+    const plan = planWith(['P1.1', 'P1.2'])
+    seed({ ...plan, items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'in_work' as const } : item)) }, reviewingState({
+      claim: { head: work, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1' },
+    }))
+
+    const accepted = stepFlow('run-1', {
+      now: NOW + 60_000, at: AT, head: work, tree_clean: true, plan: undefined,
+      ports: ports('ACCEPT'), evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(accepted.decision.reason).not.toBe('review_requested')
+    const marked = readPlan('run-1').items.find(item => item.id === 'P1.1')!
+    expect(marked.status).toBe('done')
+    // The item is closed on the commit the dev wrote: the mark commit is bookkeeping, not the item's head.
+    expect(marked.head).toBe(work)
+    const tickSha = readFlow('run-1').log.filter(entry => entry.event === 'plan_item_marked').at(-1)?.detail
+    expect(tickSha?.split(' ').at(-1)).not.toBe(work)   // a mark commit was made…
+
+    // …and the next tick moves the baseline onto it without asking for a review of it.
+    const next = stepFlow('run-1', {
+      now: NOW + 120_000, at: AT, head: git('rev-parse', 'HEAD'), tree_clean: true, plan: undefined,
+      ports: ports('ACCEPT'), docs_only_since_claim: true, evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(next.decision.reason).toBe('head_reanchored')
+    expect(readFlow('run-1').log.some(entry => entry.event === 'review_requested' && entry.detail.includes(git('rev-parse', 'HEAD').slice(0, 7)))).toBe(false)
   })
 })

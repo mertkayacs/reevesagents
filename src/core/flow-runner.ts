@@ -27,6 +27,7 @@ import {
   FLOW_LOG_LIMIT,
   MAX_ENTER_RETRIES,
   appendLog,
+  appendLogEntries,
   applyDecisionToState,
   applyUnconfirmedDispatch,
   escalateOnDirtyComposer,
@@ -158,6 +159,41 @@ export function docsOnlySince(state: FlowState, head: string): boolean | null {
   return changed.every(path => docs.some(prefix => path === prefix || path.startsWith(prefix)))
 }
 
+// Does this single commit touch only the plan and its briefs? The range check above answers "is everything since the claim
+// documentation"; this answers the same question for one commit — the engine's own `chore(flow): mark …` tick, which must never be
+// the subject of a review or a fix (block 77). `null` is "cannot tell", which the caller treats as work.
+// Is this commit the engine's own mark (`chore(flow): mark … done in the plan`) that touches nothing but the plan and its
+// briefs? A verdict read on it is not an answer about the work — the reviewer was shown a checkbox tick — while a human's
+// documentation commit is still work whose verdict must be honoured (block 77).
+export function headIsMarkCommit(state: FlowState, head: string): boolean {
+  if (headIsDocsOnly(state, head) !== true) return false
+  try {
+    const subject = String(execFileSync('git', ['-C', state.repo, 'log', '-1', '--format=%s', head], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })).trim()
+    return subject.startsWith('chore(flow): mark ')
+  } catch {
+    return false
+  }
+}
+
+export function headIsDocsOnly(state: FlowState, head: string): boolean | null {
+  if (!head || !isCommitId(head)) return null
+  try {
+    const listing = String(execFileSync('git', ['-C', state.repo, 'show', '--pretty=format:', '--name-only', head], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }))
+    const changed = listing.split('\n').map(line => line.trim()).filter(Boolean)
+    if (changed.length === 0) return false
+    const docs = documentationPaths(state)
+    return changed.every(path => docs.some(prefix => path === prefix || path.startsWith(prefix)))
+  } catch {
+    return null
+  }
+}
+
 export function isGitTreeClean(repo: string): boolean {
   if (!repo) return false
   try {
@@ -175,6 +211,10 @@ export function isGitTreeClean(repo: string): boolean {
 export interface ObserveFlowOptions {
   // Caller-known: a test or a probe can state whether the commits since the claim touched only documents.
   docs_only_since_claim?: boolean
+  // Caller-known: does the commit the flow is on touch only the plan and its briefs? A test states it instead of shelling out.
+  head_docs_only?: boolean
+  // Caller-known: is that commit the engine's own mark commit?
+  head_mark_commit?: boolean
   ports?: FlowPorts
   // Caller-known facts win: a probe or a re-check can pass them instead of shelling out to git.
   head?: string
@@ -691,6 +731,17 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     plan: options.plan === null ? undefined : (options.plan ?? readPlanView(state) ?? undefined),
     plan_conflicts: readPlanConflicts(state),
     docs_only_since_claim: options.docs_only_since_claim ?? docsOnlySince(state, head) ?? false,
+    head_docs_only: options.head_docs_only ?? headIsDocsOnly(state, head) ?? false,
+    head_mark_commit: options.head_mark_commit ?? headIsMarkCommit(state, head),
+  }
+  // A pane verdict read on the engine's own mark commit is not an answer about the work: the reviewer was shown a checkbox tick.
+  // Drop it and put the counter back where the re-anchor left it, so the verdict cannot close an item on a head nobody reviewed
+  // (block 77).
+  if (observations.head_mark_commit === true && observations.verdict_source !== 'file' && observations.verdict !== null) {
+    observations.verdict = null
+    observations.verdict_notes = undefined
+    observations.verdict_count = state.claim.verdict_count
+    observations.docs_verdict_ignored = head
   }
   // The evidence is measured on the finished observation: it needs the notes text and the capture, so it
   // cannot be built before them. A caller that has already measured it (the flow's own tests) passes it.
@@ -830,6 +881,22 @@ function publishRoundNotes(
   }
 }
 
+// The journal is where an operator sees that a verdict was thrown away: a pane answer read on a `chore(flow): mark …` commit is
+// not an answer about the work (block 77). One line per commit, so a ticker cannot fill the log with it.
+function journalDocsVerdictIgnored(runId: string, sha: string, at: string, options: StepFlowOptions): void {
+  const detail = sha.slice(0, 7)
+  try {
+    withRunsLock(() => {
+      const current = readFlow(runId, { root: options.root })
+      if (current.log.some(entry => entry.event === 'docs_commit_verdict_ignored' && entry.detail === detail)) return
+      const log = appendLogEntries(current.log, { at, event: 'docs_commit_verdict_ignored', detail })
+      saveFlow({ ...current, log }, { root: options.root })
+    })
+  } catch {
+    // The journal is a record, not a gate: a failure here must not stop the tick.
+  }
+}
+
 // A closed flow has no next round: keep the newest round as the evidence a human reads and drop the
 // rest. Runs on the tick that closes the flow and again on every later tick (cheap and idempotent).
 function pruneClosedNotes(state: FlowState, options: StepFlowOptions): void {
@@ -910,6 +977,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   const before = readFlow(runId, { root: options.root })
   const observations = isParked(before) ? unobservedFlow(now) : observeFlow(before, options)
   if (!isParked(before)) {
+    if (observations.docs_verdict_ignored !== undefined) journalDocsVerdictIgnored(runId, observations.docs_verdict_ignored, at, options)
     writeRoundCapture(before, observations, options)
     pruneClosedNotes(before, options)
   }

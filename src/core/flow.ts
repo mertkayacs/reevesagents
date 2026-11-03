@@ -367,6 +367,13 @@ export interface FlowObservations {
   // The round number of the notes file that answered — the file's own, which is not necessarily the round this tick
   // would compute: the reader finds a head's newest file, and a counter that moved must not hide it (block 69).
   notes_round?: number
+  // The commit the flow is on touches only the plan and its briefs — the engine's own bookkeeping, a `chore(flow): mark …`
+  // commit. A fix is never dispatched against it (block 77).
+  head_docs_only?: boolean
+  // That commit is the engine's own mark: a pane verdict read on it is not an answer about the work (block 77).
+  head_mark_commit?: boolean
+  // A pane verdict was read on such a commit and dropped: it is not an answer about the work. The runner journals it once.
+  docs_verdict_ignored?: string
   // Why a pane reads as `unknown`, in the detector's own words (`composer_not_found`, `footer_absent`, `copy_mode`, …).
   // A hold that lasts long enough is journalled with this, so the operator sees what was looked for and not found
   // instead of a bare `review_pane_unknown` (block 73).
@@ -417,6 +424,9 @@ export type FlowReason =
   | 'head_unknown'
   | 'head_unchanged'
   | 'head_reanchored'
+  // A fix was refused because the commit it would answer touches only the plan and its briefs: the engine's own bookkeeping is
+  // not work to fix (block 77).
+  | 'fix_refused'
   | 'no_new_head'
   | 'tree_dirty'
   | 'dev_busy'
@@ -956,6 +966,23 @@ function withNotes(decision: FlowDecision, observations: FlowObservations): Flow
 }
 
 function fixDispatch(state: FlowState, observations: FlowObservations): FlowDecision {
+  // A fix on a bookkeeping commit is a phantom: the reviewer's finding may be right, but the commit it names only ticks a
+  // checkbox, and dispatching dev work against it spends a round on nothing (block 77, the live `fix_dispatched 39a9ffa`).
+  if (observations.head_docs_only === true) {
+    return {
+      kind: 'none',
+      reason: 'fix_refused',
+      next_state: state.state,
+      next_rounds: state.rounds,
+      next_review_started_at: state.review_started_at,
+      // The answer is consumed: it was about a checkbox tick, and it is not actionable against the work. Clearing it is also what
+      // makes this refusal reach the disk — a decision that changes nothing is journalled as a hold, and the operator asked for a
+      // `fix_refused docs_commit` line (block 77).
+      next_claim: { ...state.claim, verdict: null },
+      log_event: 'fix_refused',
+      log_detail: 'docs_commit',
+    }
+  }
   const notes = observations.verdict_notes ?? ''
   const rounds = state.rounds + 1
   return {
