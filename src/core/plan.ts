@@ -446,7 +446,7 @@ export function importInto(plan: Plan | null, options: ImportOptions): ImportRes
         at,
         item_id: parsed.id,
         kind: 'unticked',
-        detail: `line ${parsed.line}: the document unticks ${parsed.id}, but the mirror closed it on an ACCEPT`,
+        detail: `line ${parsed.line}: the document unticks ${parsed.id}, but the mirror closed it ${closureWord(previous)}`,
       })
     } else if (!firstImport && parsed.checked && previous.status !== 'done') {
       recordConflict(conflicts, recorded, {
@@ -485,6 +485,17 @@ function capConflicts(conflicts: PlanConflict[]): PlanConflict[] {
 
 // A conflict is recorded once per (item, kind): a re-import of the same disagreement must not fill the
 // bounded list with copies of itself. Returns whether it was new.
+// How the mirror closed an item, for a conflict's one line: a close by the document at a first import must not be reported as
+// a review the engine never ran (block 78, review round 1).
+function closureWord(item: PlanItem): string {
+  switch (item.closed_by) {
+    case 'accept': return 'on an ACCEPT'
+    case 'ticked_by_hand': return "from the document's own tick at the first import"
+    case 'operator': return 'by hand (`plan set`)'
+    default: return 'and the record does not say how'
+  }
+}
+
 function recordConflict(conflicts: PlanConflict[], recorded: PlanConflict[], candidate: PlanConflict): boolean {
   const already = conflicts.some(entry => entry.item_id === candidate.item_id && entry.kind === candidate.kind)
   if (already) return false

@@ -801,16 +801,39 @@ describe('the first import honours the document (block 78)', () => {
     expect(second.plan.items.filter(item => item.status === 'done')).toHaveLength(3)
   })
 
-  it('keeps an unticks conflict for an item an ACCEPT closed', () => {
+  it('keeps an unticked conflict for an item an ACCEPT closed', () => {
     // The rule after the first import is unchanged: the mirror's `done` is evidence, and the document may not take it back.
+    // The item is closed by an ACCEPT here — not by the document's tick — so the conflict names the review that actually ran.
+    const first = importNew(MOSTLY_DONE.replace('- [x] **A1**', '- [ ] **A1**'))
+    expect(first.plan.items.find(item => item.id === 'A1')!.status).toBe('pending')
+    const closed = closeItemOnAccept(first.plan, {
+      id: 'A1', head: 'abc1234', rounds: 1, notes_ref: null, now: NOW + 30_000, at: AT,
+    })
+    // A re-import only runs when the document changed, so the unticked line arrives with a new row beside it.
+    const second = importInto(closed, {
+      run_id: 'run-1', source_path: 'docs/implementation-plan.md',
+      text: `${MOSTLY_DONE.replace('- [x] **A1**', '- [ ] **A1**')}\n- [ ] **C1** — sixth\n`, now: NOW + 60_000, at: AT,
+    })
+
+    const item = second.plan.items.find(entry => entry.id === 'A1')!
+    expect(item.status).toBe('done')
+    expect(item.closed_by).toBe('accept')
+    const conflict = second.conflicts.find(entry => entry.kind === 'unticked' && entry.item_id === 'A1')
+    expect(conflict?.detail).toContain('closed it on an ACCEPT')
+  })
+
+  it('names the document, not an ACCEPT, when the document closed the item', () => {
+    // The other origin, from the same rule: A1 arrived ticked, so its close is the document's, and the detail says so instead
+    // of crediting a review nobody ran.
     const first = importNew(MOSTLY_DONE)
-    const unticked = MOSTLY_DONE.replace('- [x] **A1**', '- [ ] **A1**')
+    const unticked = `${MOSTLY_DONE.replace('- [x] **A1**', '- [ ] **A1**')}\n- [ ] **C1** — sixth\n`
     const second = importInto(first.plan, {
       run_id: 'run-1', source_path: 'docs/implementation-plan.md', text: unticked, now: NOW + 60_000, at: AT,
     })
 
-    expect(second.plan.items.find(item => item.id === 'A1')!.status).toBe('done')
-    expect(second.conflicts.map(conflict => `${conflict.kind}:${conflict.item_id}`)).toContain('unticked:A1')
+    const conflict = second.conflicts.find(entry => entry.kind === 'unticked' && entry.item_id === 'A1')
+    expect(conflict?.detail).toContain("from the document's own tick at the first import")
+    expect(conflict?.detail).not.toContain('ACCEPT')
   })
 
   it('reports a hand tick after the first import as a conflict, not a close', () => {
