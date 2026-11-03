@@ -21,7 +21,7 @@ import { stateRoot } from './state-path.js'
 import { rmSync } from 'node:fs'
 import { displayPath } from '../utils/paths.js'
 import type { FlowState } from './flow.js'
-import { FLOW_SCHEMA_VERSION, FlowStateError, parseFlowState } from './flow.js'
+import { FLOW_SCHEMA_VERSION, FlowStateError, flowWasStarted, parseFlowState } from './flow.js'
 
 // A run id becomes a file name, so it is validated instead of trusted: `../x` from a CLI argument
 // must not be able to write outside the flows directory.
@@ -63,8 +63,9 @@ export function flowPath(runId: string, root = stateRoot()): string {
   return join(flowsDir(root), `${runId}.json`)
 }
 
-// Every flow file on disk, sorted by run id. A caller that cannot read one gets its path back
-// instead of an exception, so a single damaged file never breaks a listing.
+// Every flow file on disk that records a flow, sorted by run id. A caller that cannot read one gets its path back
+// instead of an exception, so a single damaged file never breaks a listing — but a file that parses and records no
+// flow is not a flow: listing it would let a surface name a run whose pipeline never existed (block 63, MAJOR).
 export function listFlowFiles(root = stateRoot()): { run_id: string, path: string }[] {
   let entries: string[]
   try {
@@ -78,6 +79,7 @@ export function listFlowFiles(root = stateRoot()): { run_id: string, path: strin
     .filter(runId => FLOW_ID_PATTERN.test(runId))
     .sort()
     .map(runId => ({ run_id: runId, path: flowPath(runId, root) }))
+    .filter(file => recordsAFlow(file.path))
 }
 
 export function readFlow(runId: string, options: FlowStoreOptions = {}): FlowState {
@@ -86,12 +88,22 @@ export function readFlow(runId: string, options: FlowStoreOptions = {}): FlowSta
 }
 
 // Does this run already have a flow? A damaged file counts as "there is one": whoever decides to
-// create a flow must not overwrite state a human may still need to read.
+// create a flow must not overwrite state a human may still need to read. A file that parses but records no flow is
+// the exception — it is the phantom an older build left behind, so `flow start` may take that run and replace it.
 export function flowExists(runId: string, options: FlowStoreOptions = {}): boolean {
+  let path: string
   try {
-    return existsSync(flowPath(runId, options.root))
+    path = flowPath(runId, options.root)
   } catch {
-    return false
+    return false   // not a flow id at all: nothing can exist under it
+  }
+  try {
+    if (!existsSync(path)) return false
+    return flowWasStarted(loadFlowFile(path))
+  } catch {
+    // Unreadable — damaged JSON, another schema, or a file that belongs to a different run: it counts as "there is
+    // one", because whoever creates a flow must not overwrite state a human may still need to read.
+    return true
   }
 }
 
@@ -112,7 +124,9 @@ export function deleteFlowFileForRun(runId: string, root = stateRoot()): boolean
   }
 }
 
-export function readFlowFile(path: string, runId = ''): FlowState {
+// The file, parsed, without deciding what a caller should see: `readFlowFile` turns a phantom into "no flow", while a
+// listing only needs to know whether the bytes record one.
+function loadFlowFile(path: string): FlowState {
   let raw: string
   try {
     raw = readFileSync(path, 'utf-8')
@@ -130,15 +144,35 @@ export function readFlowFile(path: string, runId = ''): FlowState {
     // a human, so hiding it behind "no flow" would be a lie.
     throw new FlowStateError(`flow state is not valid JSON: ${displayPath(path)}`)
   }
-  let state: FlowState
   try {
-    state = parseFlowState(parsed)
+    return parseFlowState(parsed)
   } catch (err) {
     if (err instanceof FlowStateError) throw new FlowStateError(`${err.message}: ${displayPath(path)}`)
     throw err
   }
+}
+
+// Does this file record a flow? False only when the bytes parse into a state that was never started — the phantom an
+// older build could leave behind — so a damaged file stays listed (a surface names the damage) while a phantom
+// disappears from every listing and from the tick, which walks this one.
+function recordsAFlow(path: string): boolean {
+  try {
+    return flowWasStarted(loadFlowFile(path))
+  } catch {
+    return true
+  }
+}
+
+export function readFlowFile(path: string, runId = ''): FlowState {
+  const state = loadFlowFile(path)
   if (runId && state.run_id !== runId) {
     throw new FlowStateError(`flow state at ${displayPath(path)} belongs to run ${state.run_id}, not ${runId}`)
+  }
+  // A file that parses but carries no start records no flow: it is what an older build could leave behind, and a
+  // reader that showed it would draw a closed pipeline that never ran (block 63, MAJOR). "No flow" is the honest
+  // answer and the same one a missing file gets, so `flow status` and the badge need no special case of their own.
+  if (!flowWasStarted(state)) {
+    throw new FlowStateError(`no flow state at ${displayPath(path)} (the file records no flow: it was never started)`)
   }
   return state
 }

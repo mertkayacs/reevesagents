@@ -518,6 +518,14 @@ export function createFlowState(init: FlowInit): FlowState {
   }
 }
 
+// Was this state ever created by `flow start`? The marker is `started_at`, and `parseFlowState` derives it for files
+// written before the field existed, so an empty marker means the bytes record no flow at all: a phantom a reader must
+// not draw as a closed pipeline, and a writer must not extend (block 63). Both halves of that rule live outside this
+// module — `saveFlow` refuses it, `readFlow` reports "no flow" — because the engine itself never sees one.
+export function flowWasStarted(state: FlowState): boolean {
+  return state.started_at.trim() !== ''
+}
+
 // Read a stored flow. Every failure is explicit: a damaged file is reported with its reason, and
 // a version this build does not understand is refused instead of being normalised into defaults
 // — a reset would silently drop a pipeline that is mid-round.

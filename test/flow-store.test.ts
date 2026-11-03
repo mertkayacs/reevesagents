@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
-import { flowPath, listFlowFiles, readFlow, saveFlow } from '../src/core/flow-store.js'
+import { flowExists, flowPath, listFlowFiles, readFlow, saveFlow } from '../src/core/flow-store.js'
 
 // The store owns the two things a pipeline cannot afford to lose: the document and its history.
 // A save is atomic (temp + rename, no direct-write fallback) and a load never silently resets.
@@ -84,23 +84,41 @@ describe('flow store', () => {
     expect(() => saveFlow({ ...read, updated_at: '2026-01-02T00:00:00.000Z' }, { root })).not.toThrow()
   })
 
-  it('reads a file with neither a head nor a start marker as a flow nobody started', () => {
+  it('reads a file that records no flow as no flow, and keeps it out of the listing', () => {
     const path = flowPath('run-1', root)
     mkdirSync(join(root, 'flows'), { recursive: true })
-    // What an older build could leave behind: an empty state that a status reader would draw as a closed flow.
+    // What an older build could leave behind: a state that parses, says `done`, and records no start. A reader that
+    // believed it would put a closed flow on the board of a run that never had one (block 63, MAJOR).
     writeFileSync(path, JSON.stringify({
       ...makeState('run-1'),
       state: 'done',
-      started_at: undefined,
+      started_at: '',
       claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
       log: [],
     }), 'utf-8')
 
-    // Reading it stays explicit rather than pretending nothing is there, but the state carries no start, so it
-    // cannot be written again and no later save can turn it into a pipeline.
-    const read = readFlow('run-1', { root })
-    expect(read.started_at).toBe('')
-    expect(() => saveFlow({ ...read, close_reason: 'touched' }, { root })).toThrow(/flow has not been started/)
+    // "No flow" is the honest answer, and the same one a missing file gets — so a surface needs no special case.
+    expect(() => readFlow('run-1', { root })).toThrow(/no flow state at .*records no flow/)
+    // Nothing walks it (the tick lists what is here) and nothing reports the run as having a flow...
+    expect(listFlowFiles(root)).toEqual([])
+    expect(flowExists('run-1', { root })).toBe(false)
+    // ...but the bytes themselves still cannot become a persisted flow.
+    expect(() => saveFlow({
+      ...makeState('run-1'),
+      started_at: '',
+      claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    }, { root })).toThrow(/flow has not been started/)
+  })
+
+  it('still lists a damaged file, so a surface can name what it cannot read', () => {
+    mkdirSync(join(root, 'flows'), { recursive: true })
+    writeFileSync(flowPath('run-bad', root), '{"schema_version":1,', 'utf-8')
+    writeFileSync(flowPath('run-ok', root), JSON.stringify(makeState('run-ok')), 'utf-8')
+
+    // The filter above must not swallow the files a human still has to repair: only a file that parses and records
+    // no flow disappears.
+    expect(listFlowFiles(root).map(file => file.run_id)).toEqual(['run-bad', 'run-ok'])
+    expect(flowExists('run-bad', { root })).toBe(true)
   })
 
   it('leaves the previous document intact when the swap fails', () => {

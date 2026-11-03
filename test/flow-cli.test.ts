@@ -191,6 +191,31 @@ describe('flow start', () => {
     expect(state.specs[0]!.source_path).toBe(spec)
   })
 
+  it('takes a run whose file records no flow, instead of refusing over a phantom', async () => {
+    seedRun()
+    // The phantom a run with no flow grew on a live board (block 63): it must not become a reason the operator cannot
+    // start the flow they actually want.
+    mkdirSync(join(tmpDir, 'flows'), { recursive: true })
+    writeFileSync(join(tmpDir, 'flows', 'run-c1.json'), JSON.stringify({
+      ...createFlowState({
+        run_id: 'run-c1', repo: '/repo', roles: { dev: 'run-c1-dev', review: 'run-c1-rev' },
+        head: 'aaa111', at: '2026-01-01T00:00:00.000Z',
+      }),
+      state: 'done',
+      started_at: '',
+      claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      log: [],
+    }), 'utf-8')
+
+    const { out } = await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review'])
+
+    expect(out).toContain('head      bbb222')
+    const state = readFlow('run-c1')
+    expect(state.state).toBe('idle')
+    expect(state.claim.head).toBe('bbb222')
+    expect(state.started_at).not.toBe('')
+  })
+
   it('refuses a flow on a run that is already running one', async () => {
     seedRun()
     await runCli(['flow', 'start', '--run', 'run-c1', '--dev', 'dev', '--review', 'review'])
@@ -331,6 +356,33 @@ describe('flow status', () => {
     expect(failure?.message).toMatch(/process\.exit\(1\)/)
     expect(failure?.cli_err).toContain('no flow for run ghost')
     expect(failure?.cli_err).toContain('flow not started')
+  })
+
+  it('says no flow for a run whose file records none, instead of reading it as closed', async () => {
+    // The phantom `flow-a` grew on 03.11: `state: "done"`, no start, no head, an empty journal. The panel drew
+    // "flow: closed" for a run that never had a pipeline; status must answer the same thing it answers for a run
+    // with no file at all (block 63, MAJOR).
+    mkdirSync(join(tmpDir, 'flows'), { recursive: true })
+    writeFileSync(join(tmpDir, 'flows', 'run-c1.json'), JSON.stringify({
+      ...createFlowState({
+        run_id: 'run-c1', repo: '/repo', roles: { dev: 'dev-1', review: 'rev-1' },
+        head: 'aaa111', at: '2026-01-01T00:00:00.000Z',
+      }),
+      state: 'done',
+      started_at: '',
+      claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      log: [],
+    }), 'utf-8')
+
+    const failure = await runCli(['flow', 'status', '--run', 'run-c1']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+
+    expect(failure?.message).toMatch(/process\.exit\(1\)/)
+    expect(failure?.cli_err).toContain('no flow for run run-c1')
+    expect(failure?.cli_err).toContain('flow not started')
+    expect(failure?.cli_err).not.toContain('state     done')
   })
 
   it('prints a home-shortened path for a damaged file, not the absolute one', async () => {

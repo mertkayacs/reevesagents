@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import type { FlowState } from '../src/core/flow.js'
 import { createFlowState } from '../src/core/flow.js'
-import { saveFlow } from '../src/core/flow-store.js'
-import { flowStatusPayload, resolveFlowRunId } from '../src/core/flow-view.js'
+import { flowPath, saveFlow } from '../src/core/flow-store.js'
+import { flowStatusPayload, readFlowBadge, resolveFlowRunId } from '../src/core/flow-view.js'
 
 // The published payload: one shape for `flow status --json` and for the MCP `flow_status` tool, so
 // a host CLI and a terminal cannot be told different things about the same flow.
@@ -45,6 +45,24 @@ function seed(runId: string, overrides: Partial<FlowState> = {}): FlowState {
   saveFlow(state, { root })
   return state
 }
+
+describe('a flow file that records no flow', () => {
+  it('gives the run no badge, and status answers "flow not started" instead of a closed flow', () => {
+    // The phantom an older build could leave behind: it parses, it says `done`, and it records no start. Before the
+    // read path refused it, the board drew "flow: closed" on a run whose pipeline never existed (block 63, MAJOR).
+    mkdirSync(join(root, 'flows'), { recursive: true })
+    writeFileSync(flowPath('run-1', root), JSON.stringify({
+      ...makeState('run-1'),
+      state: 'done',
+      started_at: '',
+      claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      log: [],
+    }), 'utf-8')
+
+    expect(readFlowBadge('run-1', Date.parse('2026-01-02T00:00:00.000Z'), root)).toBeNull()
+    expect(() => resolveFlowRunId('run-1', root)).toThrow(/no flow for run run-1 \(flow not started/)
+  })
+})
 
 describe('resolveFlowRunId', () => {
   it('resolves an exact id and a unique prefix', () => {
