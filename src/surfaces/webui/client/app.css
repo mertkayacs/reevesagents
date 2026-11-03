@@ -507,6 +507,10 @@ button { letter-spacing: 0; }
 
 .run-head {
   display: flex;
+  /* The card decides how tight its own header is: the sidebar width is not the viewport width, so a media query cannot ask
+     this question. The container is this row, whose width comes from the card — putting it on `.run-head-body` made that
+     flex item content-free and collapsed it to 8px (block 70). */
+  container-type: inline-size;
   /* The actions sit in the top-right corner: `align-items: flex-start` on the row and `align-self: start` on the group, so a
      taller head body never centres them against it. */
   align-items: flex-start;
@@ -516,15 +520,16 @@ button { letter-spacing: 0; }
   padding: 0 var(--s-1);
 }
 
-/* Two rows, two columns: the name and the counters on top, the flow chip and its plan icon underneath. A flat column put the
-   chip and the icon on separate lines and pushed the header taller than the card could afford. */
+/* Two rows, three columns. Row 1: the name (which yields last) and the counters (which yield first — they keep their
+   text in `title`). Row 2: the flow chip, the play/pause glyph and the plan icon, in that order and on one line. The
+   glyph had no cell of its own in the old two-column grid, so it fell to a third row under the chip (block 70). */
 .run-head-body {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   grid-auto-rows: min-content;
   row-gap: 4px;
-  column-gap: 8px;
+  column-gap: 4px;
   align-items: center;
 }
 
@@ -551,10 +556,15 @@ button { letter-spacing: 0; }
   white-space: nowrap;
 }
 
+/* The counters cannot push the chip out of its row: `max-width` caps the auto track they size, `min-width: 0` lets it
+   shrink to nothing, and the full text stays in `title`. Without the cap the counters claimed 161px of a 225px header and
+   the flow chip was clipped to 56px (block 70). */
 .run-meta {
-  grid-column: 2;
+  grid-column: 2 / -1;
   grid-row: 1;
   justify-self: end;
+  min-width: 0;
+  max-width: 7ch;
   overflow: hidden;
   color: var(--muted);
   font-size: var(--fs-xs);
@@ -594,9 +604,11 @@ button { letter-spacing: 0; }
    "needs attention" — because colour alone is not information. The pulse marks news, not a state:
    the server sets `is-pulsing` only while the flow file is fresh, so it expires on its own. */
 .flow-plan-state {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
   display: inline-flex;
   align-items: center;
-  margin-left: 2px;
   color: var(--muted);
 }
 
@@ -628,20 +640,22 @@ button { letter-spacing: 0; }
 }
 
 .flow-badge--paused {
-  border-color: var(--border-faint);
-  color: var(--muted);
-  background: transparent;
+  /* "Paused" is a state a human chose, not the absence of one: the amber border and a dashed rule say "standing" even
+     when the label is glanced at, while the text keeps the muted tone (block 70). */
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+  border-style: dashed;
+  color: color-mix(in srgb, var(--warn) 75%, var(--text));
+  background: color-mix(in srgb, var(--warn) 6%, transparent);
 }
 
 .flow-plan-btn {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 2;
   justify-self: start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  margin-left: var(--s-1);
   padding: 0 4px;
   border: 1px solid var(--border-faint);
   border-radius: var(--r-1);
@@ -666,17 +680,32 @@ button { letter-spacing: 0; }
   50% { opacity: 0.55; }
 }
 
+/* A narrow card drops what it can afford to lose, in this order: the counters (their text is in `title`), then one step of
+   the chip's own size. The name, the full label, the glyph and the icon keep their line — measured on this panel at a
+   280px sidebar (head 225px, body 157px) and at 360px (head 305px, body 245px) (block 70). */
+@container (max-width: 262px) {
+  .run-meta {
+    display: none;
+  }
+}
+
+@container (max-width: 232px) {
+  .run-flow {
+    padding: 0 2px;
+    font-size: 10px;
+  }
+}
+
 /* A reader who asked for less motion gets the colour and the words, never the breathing. */
 @media (prefers-reduced-motion: reduce) {
   .flow-plan-btn {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 2;
   justify-self: start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  margin-left: var(--s-1);
   padding: 0 4px;
   border: 1px solid var(--border-faint);
   border-radius: var(--r-1);
@@ -1227,6 +1256,8 @@ button { letter-spacing: 0; }
   white-space: nowrap;
 }
 
+/* The tail is the card's own line: it starts at the card's edge, not under the avatar. The 38px inset pushed the longest
+   tail (a queued agent: status + hint + stop) into a wrap with room to spare (block 70). */
 .card-tail {
   min-width: 0;
   width: 100%;
@@ -1235,7 +1266,6 @@ button { letter-spacing: 0; }
   align-items: center;
   justify-content: flex-start;
   gap: var(--s-2);
-  padding-left: calc(38px + var(--s-3));
 }
 
 .dot {
@@ -2252,10 +2282,6 @@ button { letter-spacing: 0; }
     min-width: 44px;
     max-width: 64px;
     padding-inline: var(--s-1);
-  }
-
-  .card-tail {
-    padding-left: calc(34px + var(--s-2));
   }
 
   .stage-status {

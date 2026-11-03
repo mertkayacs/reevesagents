@@ -279,15 +279,16 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(js).toContain('syncPlanPlayPause()')
   })
 
-  it('lays the head out as a 2×2 grid, with icon actions in the corner', () => {
-    // Row 1: name and counters. Row 2: the flow chip and its plan icon. The chip and the icon share that row — that is the
-    // whole point of the change, and a flat column put them on separate lines.
+  it('lays the head out as two rows of three columns, with icon actions in the corner', () => {
+    // Row 1: name and counters. Row 2: the flow chip, the play/pause glyph and the plan icon, in that order and on one
+    // line — the glyph used to fall to a third row because the two-column grid had no cell left for it (block 70).
     expect(css).toMatch(/\.run-head-body \{[^}]*display: grid/)
-    expect(css).toMatch(/\.run-head-body \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/)
+    expect(css).toMatch(/\.run-head-body \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto auto/)
     expect(css).toMatch(/\.run-name \{[^}]*grid-row: 1/)
     expect(css).toMatch(/\.run-meta \{[^}]*grid-row: 1/)
-    expect(css).toMatch(/\.run-flow \{[^}]*grid-row: 2/)
-    expect(css).toMatch(/\.flow-plan-btn \{[^}]*grid-row: 2/)
+    expect(css).toMatch(/\.run-flow \{[^}]*grid-column: 1;[^}]*grid-row: 2/)
+    expect(css).toMatch(/\.flow-plan-state \{[^}]*grid-column: 2;[^}]*grid-row: 2/)
+    expect(css).toMatch(/\.flow-plan-btn \{[^}]*grid-column: 3;[^}]*grid-row: 2/)
 
     // Actions are 24×24 icons whose meaning lives in aria-label/title, not in a text node.
     expect(css).toMatch(/\.run-action,\s*\.run-stop,\s*\.run-delete \{[^}]*width: 24px/)
@@ -297,6 +298,45 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(css).toContain('.run-delete:focus-visible')
     // Narrow cards drop the counters, never the chip.
     expect(css).toMatch(/@media \(max-width: 520px\)[\s\S]*\.run-meta \{\s*display: none;/)
+  })
+
+  it('keeps the chip readable: the counters yield first, and a paused flow is not a neutral chip', () => {
+    // The counters used to own an auto column at their full 161px and squeezed the flow chip to 56px, where the label read
+    // «поток: н…». They are capped and allowed to shrink to nothing (their text lives in `title`), so the chip keeps its
+    // room and the name keeps the rest (block 70).
+    expect(css).toMatch(/\.run-meta \{[^}]*min-width: 0/)
+    expect(css).toMatch(/\.run-meta \{[^}]*max-width: 7ch/)
+    expect(css).toMatch(/\.run-meta \{[^}]*text-overflow: ellipsis/)
+    // The card — not the viewport — decides how tight its header is: a media query cannot ask the sidebar's width, so the
+    // head is a size container, and on a narrow card the counters go first and the chip drops one type step.
+    expect(css).toMatch(/\.run-head \{[^}]*container-type: inline-size/)
+    expect(css).toMatch(/@container \(max-width: 262px\)[\s\S]*?\.run-meta \{\s*display: none;/)
+    expect(css).toMatch(/@container \(max-width: 232px\)[\s\S]*?\.run-flow \{[^}]*font-size: 10px/)
+    // The chip still truncates rather than overflowing — but only after everything that may yield has yielded.
+    expect(css).toMatch(/\.run-flow \{[^}]*min-width: 0/)
+    expect(css).toMatch(/\.run-flow \{[^}]*text-overflow: ellipsis/)
+    // "Paused" reads as standing still from the border as well as the words: amber, and dashed, unlike the neutral chip.
+    expect(css).toMatch(/\.flow-badge--paused \{[^}]*border-color: color-mix\(in srgb, var\(--warn\)/)
+    expect(css).toMatch(/\.flow-badge--paused \{[^}]*border-style: dashed/)
+  })
+
+  it('lets the card tail start at the card edge instead of under the avatar', () => {
+    // The 38px inset (and its 34px twin on narrow cards) pushed the longest tail — a queued agent: status + hint + stop —
+    // into a wrap with room to spare (block 70). Both declarations are gone; the rest of the rule stays.
+    expect(css).toMatch(/\.card-tail \{[^}]*display: flex/)
+    expect(css).toMatch(/\.card-tail \{[^}]*flex-wrap: wrap/)
+    expect(css).not.toMatch(/\.card-tail \{[^}]*padding-left/)
+  })
+
+  it('puts the play/pause glyph between the chip and the plan icon', () => {
+    const head = js.slice(js.indexOf("headBody.className = 'run-head-body'"), js.indexOf('head.appendChild(headBody)'))
+    // The order is the layout: chip, then the state glyph, then the control that opens the plan.
+    const chip = head.indexOf('headBody.appendChild(flow)')
+    const glyph = head.indexOf('headBody.appendChild(planState)')
+    const icon = head.indexOf('headBody.appendChild(planBtn)')
+    expect(chip).toBeGreaterThan(-1)
+    expect(glyph).toBeGreaterThan(chip)
+    expect(icon).toBeGreaterThan(glyph)
   })
 
   it('gives every action button an accessible name instead of a text node', () => {
@@ -313,11 +353,12 @@ describe('insights dialog (Plan + Logs) and the card pulse', () => {
     expect(head).not.toContain('.textContent = t(')
   })
 
-  it('keeps the plan icon in the head body, under the chip', () => {
+  it('keeps the plan icon in the head body, beside the chip', () => {
     // Placement is structure; the icon's own attributes and the "no plan, no button" rule are behaviour and live in
     // `plan-dialog.test.ts`, where the controller builds a real element.
     const head = js.slice(js.indexOf("headBody.className = 'run-head-body'"), js.indexOf('head.appendChild(headBody)'))
     expect(head).toContain('headBody.appendChild(flow)')
+    expect(head).toContain('headBody.appendChild(planState)')
     expect(head).toContain('headBody.appendChild(planBtn)')
     // The chip is still a span: the icon is the only control in that row.
     expect(head).toContain("const flow = document.createElement('span')")

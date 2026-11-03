@@ -1090,11 +1090,10 @@
         // opens the plan dialog. The controller builds it, so the rules live where a test can drive them.
         const planBtn = planController.createIcon({ ...run.flow, run_id: run.id }, { ariaLabel: t('web.planOpenLabel') })
         if (planBtn) {
-          planBtn.addEventListener('click', () => { void openPlanDialog(run.id) })
-          headBody.appendChild(planBtn)
-
-          // Whether the plan is running or paused, next to the icon that opens it. A glyph, not a button: pausing belongs to the
-          // dialog (one obvious control, with a label), and the card only has to say which state it is in.
+          // Whether the plan is running or paused, between the chip and the icon that opens it. A glyph, not a button:
+          // pausing belongs to the dialog (one obvious control, with a label), and the card only has to say which state it
+          // is in. It is appended *before* the icon so the row reads chip · state · icon — in the old two-column grid this
+          // span had no cell of its own and fell to a third row (block 70).
           const planState = document.createElement('span')
           const paused = run.flow.status === 'paused'
           planState.className = `flow-plan-state${paused ? ' is-paused' : ''}`
@@ -1107,6 +1106,9 @@
             : '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">'
               + '<path d="M5.5 3.2l7 4.8-7 4.8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/></svg>'
           headBody.appendChild(planState)
+
+          planBtn.addEventListener('click', () => { void openPlanDialog(run.id) })
+          headBody.appendChild(planBtn)
         }
       }
       head.appendChild(headBody)
