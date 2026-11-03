@@ -110,6 +110,24 @@ describe('flow store', () => {
     }, { root })).toThrow(/flow has not been started/)
   })
 
+  it('refuses a file that carries a start marker but no commit to be bound to', () => {
+    // The other half of the same class: a journal line saying the flow started, and no head. `parseFlowState` recovers
+    // the marker from that entry, so a check that only looked at `started_at` would hand this file back as a pipeline —
+    // and a flow bound to no commit cannot be driven (block 63/64, the finding replayed in round 2).
+    mkdirSync(join(root, 'flows'), { recursive: true })
+    writeFileSync(flowPath('run-1', root), JSON.stringify({
+      ...makeState('run-1'),
+      state: 'done',
+      started_at: '',
+      claim: { head: '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      log: [{ at: '2025-12-31T23:00:00.000Z', event: 'flow_started', detail: 'aaa111 1 queued' }],
+    }), 'utf-8')
+
+    expect(() => readFlow('run-1', { root })).toThrow(/no flow state at .*records no flow/)
+    expect(listFlowFiles(root)).toEqual([])
+    expect(flowExists('run-1', { root })).toBe(false)
+  })
+
   it('still lists a damaged file, so a surface can name what it cannot read', () => {
     mkdirSync(join(root, 'flows'), { recursive: true })
     writeFileSync(flowPath('run-bad', root), '{"schema_version":1,', 'utf-8')

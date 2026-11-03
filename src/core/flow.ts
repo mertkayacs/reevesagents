@@ -534,12 +534,13 @@ export function createFlowState(init: FlowInit): FlowState {
   }
 }
 
-// Was this state ever created by `flow start`? The marker is `started_at`, and `parseFlowState` derives it for files
-// written before the field existed, so an empty marker means the bytes record no flow at all: a phantom a reader must
-// not draw as a closed pipeline, and a writer must not extend (block 63). Both halves of that rule live outside this
-// module — `saveFlow` refuses it, `readFlow` reports "no flow" — because the engine itself never sees one.
+// Was this state ever created by `flow start`? Two facts say yes and both are needed: the start marker, and the commit the
+// flow was bound to. `parseFlowState` derives the marker for files written before the field existed, so an empty one
+// means the bytes record no flow at all; a marker without a head means the same thing for a different reason — a flow
+// that was bound to nothing cannot be driven, and a reader must not draw it as a closed pipeline (block 63/64). Both
+// halves of that rule live outside this module — `saveFlow` refuses such a state, `readFlow` reports "no flow".
 export function flowWasStarted(state: FlowState): boolean {
-  return state.started_at.trim() !== ''
+  return state.started_at.trim() !== '' && state.claim.head.trim() !== ''
 }
 
 // Read a stored flow. Every failure is explicit: a damaged file is reported with its reason, and
