@@ -633,10 +633,29 @@ describe('a paste recorded outside the process', () => {
     // Without the record it is somebody else's text.
     expect(sendWhenIdle('agent-1', prompt, { driver, timings })).toEqual({ sent: false, reason: 'composer_dirty' })
 
-    // With it — the same pane, the same marker — one Enter, and no second paste.
+    // With it — the same pane, the same marker, a stamp inside the window — one Enter, and no second paste.
     driver.captures = [ours, ours, CODEX_BUSY]
-    expect(sendWhenIdle('agent-1', prompt, { driver, timings, pasted: { at: Date.now() - 60_000 } })).toEqual({ sent: true })
+    expect(sendWhenIdle('agent-1', prompt, { driver, timings, pasted: { at: Date.now() - 5_000 } })).toEqual({ sent: true })
     expect(driver.pasted()).toEqual([])
     expect(driver.count('send-keys')).toBe(1)
+  })
+
+  it('still refuses the marker when the persisted stamp is older than the window', async () => {
+    // The record supplies a timestamp, it does not lift the freshness limit: a marker nobody pasted recently could be
+    // somebody else's text, and submitting it would answer a prompt this flow never sent (block 69, review round 3).
+    const { sendWhenIdle } = await seed({ tmux_pane_id: '%8' })
+    const driver = new PaneDriver()
+    driver.panes.add('%8')
+    const prompt = 'x'.repeat(1510)
+    driver.captures = [
+      ['› [Pasted Content 1022 chars]', '  ← for agents · ? for shortcuts'].join('\n'),
+      ['› [Pasted Content 1022 chars]', '  ← for agents · ? for shortcuts'].join('\n'),
+    ]
+    const timings = { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 30_000, confirmPollMs: 1000 }
+
+    expect(sendWhenIdle('agent-1', prompt, { driver, timings, pasted: { at: Date.now() - 120_000 } }))
+      .toEqual({ sent: false, reason: 'composer_dirty' })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(0)
   })
 })

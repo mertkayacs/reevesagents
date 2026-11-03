@@ -475,8 +475,9 @@ allowed to press while the composer still holds its text. `flow status` says so 
 
 1. **If it says `dispatch_retry_enter attempt N/3`** the prompt is still in the composer and no round was started: the
    engine presses Enter on the next tick by itself (nothing is pasted again, and it recognises the prompt across
-   processes — each tick is its own process, so the flow records the paste in its state). After the third attempt the
-   flow escalates with `review_dispatch_unconfirmed` — press Enter once in that pane, then `flow resume`.
+   processes — each tick is its own process, so the flow records the paste in its state, with the freshness window still
+   enforced). After the third attempt the flow escalates with `review_dispatch_unconfirmed` — press Enter once in that
+   pane, then `flow resume`.
 2. **If the composer is empty** the dispatch simply confirmed late or the provider swallowed the submit: the round has
    already started, the clock is running, and the answer arrives on a later tick. `flow status` shows
    `review: waiting` with the deadline.

@@ -769,10 +769,10 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   const inProcess = lastPasteAtByPane.get(agent.tmux_pane_id) ?? null
   const recorded = options.pasted?.at ?? null
   const ownership: ComposerOwnership = {
-    // The newest evidence wins: this process's own paste, or the record the caller kept for it.
+    // The newest stamp wins: this process's own paste, or the record the caller kept for it. The window below applies to
+    // both — a record that is older than `confirmMs` is not evidence any more (block 69, review round 3).
     pastedAt: inProcess !== null && recorded !== null ? Math.max(inProcess, recorded) : (inProcess ?? recorded),
     windowMs: confirmMs,
-    recordedPaste: options.pasted !== undefined && options.pasted !== null,
   }
   const alreadyOurs = composer !== '' && composerHoldsOurs(composer, text, ownership)
   if (!alreadyOurs && detectPaneReady(paneText, agent.provider) === 'not_ready') {
@@ -896,16 +896,14 @@ function normalizeComposer(value: string): string {
 const PASTED_MARKER = /^\[Pasted (?:Content|text) \d+ (?:chars|lines)\]/i
 
 export interface ComposerOwnership {
-  // When this process last pasted into the pane, and how long such a paste counts as ours. A marker older than the
-  // window could be somebody else's, so the window is what makes the marker evidence rather than a guess.
+  // When this process last pasted into the pane — or, for a new process, the stamp the caller persisted (the flow's own
+  // `dispatch_paste`) — and how long such a paste counts as ours. A marker older than the window could be somebody
+  // else's, so the window is what makes the marker evidence rather than a guess: it bounds the in-process stamp and the
+  // recorded one alike (block 69, review round 3). The record only supplies a timestamp the dying process could not
+  // carry; it does not widen the window.
   pastedAt?: number | null
   now?: number
   windowMs?: number
-  // The caller holds a record *outside this process* of the paste it made into this pane (the flow's own state, written
-  // by the tick that pasted). Every scheduled `flow tick` is a new process — the map below dies with the one that pasted
-  // — so without this evidence the next tick cannot recognise its own collapsed marker and refuses as `composer_dirty`
-  // (block 69, review round 2). The record is per dispatch (agent + head), so it is narrower than the window, not wider.
-  recordedPaste?: boolean
 }
 
 function withinPasteWindow(options: ComposerOwnership): boolean {
@@ -922,16 +920,16 @@ function withinPasteWindow(options: ComposerOwnership): boolean {
 // into `[Pasted Content 1020 chars]`. Both are our paste and nobody else's, so a visible prefix of what we typed (with
 // a floor, so a bare `› ` cannot match) and the paste placeholder both count.
 //
-// The placeholder is a *collapsed* paste, so it no longer carries the text and cannot be compared: it counts while a
-// paste of ours is recent (`windowMs`) — or while the caller still holds its own record of that paste, which is what a
-// new process has instead of the in-process map (`recordedPaste`). Both are evidence about *this* pane and *this*
-// dispatch; a marker nobody can account for stays somebody else's text (block 69).
+// The placeholder is a *collapsed* paste, so it no longer carries the text and cannot be compared: it counts only while
+// a paste of ours into that pane is inside the freshness window (`windowMs`), whoever supplied the stamp — this process's
+// map, or the record a caller persisted. A marker nobody can account for, or one older than the window, stays somebody
+// else's text (block 69).
 export function composerHoldsOurs(composer: string, text: string, ownership: ComposerOwnership = {}): boolean {
   const seen = normalizeComposer(composer)
   const want = normalizeComposer(text)
   if (seen === '' || want === '') return false
   if (seen === want) return true
-  if (PASTED_MARKER.test(seen) && (ownership.recordedPaste === true || withinPasteWindow(ownership))) return true
+  if (PASTED_MARKER.test(seen) && withinPasteWindow(ownership)) return true
   const visible = seen.replace(/[\u2026.]+$/, '').trimEnd()
   return visible.length >= 32 && want.startsWith(visible)
 }
