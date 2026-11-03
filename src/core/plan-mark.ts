@@ -17,7 +17,7 @@ import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, relative, isAbsolute } from 'node:path'
 import type { Plan } from './plan.js'
-import { planExists, readPlan } from './plan.js'
+import { parsePlanDocument, planExists, readPlan } from './plan.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import { withRunsLock } from './runs.js'
 import { appendLogEntries } from './flow.js'
@@ -128,6 +128,15 @@ export function markPlanItems(options: MarkPlanOptions): MarkPlanOutcome {
   }
   const target = document.path
   const raw = document.text
+  // The document has to *parse* before a line in it is ticked: a checkbox written into a file whose format the plan reader
+  // no longer understands would be committed as if the plan were fine, and the next import would have nothing to read
+  // (block 72, review round 1).
+  try {
+    parsePlanDocument(raw)
+  } catch (err) {
+    const reason = `the plan document does not parse: ${err instanceof Error ? err.message : String(err)}`
+    return { ...outcome, failures: options.ids.map(id => ({ id, reason })) }
+  }
 
   const lines = raw.split('\n')
   const marked: { id: string, line: number }[] = []
@@ -203,7 +212,10 @@ export interface PlanMarksOptions {
   repo: string
   // What the caller saw of the tree.
   tree_clean: boolean
-  // The items the caller just closed. Absent: every done item whose line is still unticked (the retry path).
+  // The item this tick closed in the mirror. It is always part of the pass — together with every done item whose line is
+  // still unticked — and it is the id a document that cannot be read is reported against.
+  closed?: string | null
+  // Explicit ids, when the caller knows exactly what it closed (the manual `plan set --status done`).
   ids?: string[]
   // `close` reports a deferred mark in the journal (one line, at the moment the close happened); `reconcile` stays quiet
   // about a dirty tree — that tick already says `tree_dirty`.
@@ -212,7 +224,10 @@ export interface PlanMarksOptions {
 }
 
 // Mark, commit and journal for one run. Returns the outcome so a command can report it.
+// One pass per tick, and therefore one commit: the item this tick closed and every done item an earlier tick had to defer
+// go into the same call (block 72, review round 1). Two calls would mean two commits for one tick's worth of marking.
 export function applyPlanMarks(runId: string, options: PlanMarksOptions): MarkPlanOutcome {
+  const attempt = options.attempt ?? 'close'
   let plan: Plan
   try {
     if (!planExists(runId, { root: options.root })) return emptyMarkOutcome()
@@ -220,8 +235,28 @@ export function applyPlanMarks(runId: string, options: PlanMarksOptions): MarkPl
   } catch {
     return emptyMarkOutcome()
   }
+  // What the caller already knows it closed, plus whatever the document still owes. The requested ids are kept even when
+  // the document cannot be read: a close that could not be written is reported by name, not silently dropped.
+  const requested = options.ids ?? (options.closed ? [options.closed] : [])
   const document = probeDocument(options.repo, plan.source_path)
-  const ids = options.ids ?? (document.ok ? pendingPlanMarks(plan, document.text) : [])
+  let pending: string[] = []
+  if (document.ok) {
+    // The document has to parse before any of it is written: a checkbox committed into a file the plan reader cannot read
+    // is worse than no mark at all (block 72, review round 1). One fact, one line — the same text on every tick, so the
+    // journal does not repeat it.
+    try {
+      parsePlanDocument(document.text)
+    } catch (err) {
+      const outcome: MarkPlanOutcome = {
+        ...emptyMarkOutcome(),
+        failures: [{ id: '', reason: `the plan document does not parse: ${err instanceof Error ? err.message : String(err)}` }],
+      }
+      journalPlanMarks(runId, outcome, { root: options.root, at: options.at, attempt })
+      return outcome
+    }
+    pending = pendingPlanMarks(plan, document.text)
+  }
+  const ids = [...new Set([...requested, ...pending])]
   if (ids.length === 0) return emptyMarkOutcome()
 
   const outcome = markPlanItems({
@@ -231,7 +266,7 @@ export function applyPlanMarks(runId: string, options: PlanMarksOptions): MarkPl
     plan,
     tree_clean: options.tree_clean,
   })
-  journalPlanMarks(runId, outcome, { root: options.root, at: options.at, attempt: options.attempt ?? 'close' })
+  journalPlanMarks(runId, outcome, { root: options.root, at: options.at, attempt })
   return outcome
 }
 
@@ -247,7 +282,10 @@ export function journalPlanMarks(
   const lines: { event: string, detail: string }[] = []
   if (outcome.deferred && attempt === 'close') lines.push({ event: 'plan_mark_deferred', detail: 'tree_dirty' })
   for (const entry of outcome.marked) lines.push({ event: 'plan_item_marked', detail: `${entry.id} ${outcome.sha ?? ''}`.trim() })
-  for (const failure of outcome.failures) lines.push({ event: 'plan_mark_failed', detail: `${failure.id}: ${failure.reason}` })
+  // A document-wide refusal (no file, no parse) has no id to name.
+  for (const failure of outcome.failures) {
+    lines.push({ event: 'plan_mark_failed', detail: failure.id ? `${failure.id}: ${failure.reason}` : failure.reason })
+  }
   if (lines.length === 0) return
   if (outcome.marked.length === 0 && attempt === 'reconcile' && outcome.failures.length === 0) return
 
@@ -260,7 +298,12 @@ export function journalPlanMarks(
   try {
     withRunsLock(() => {
       const current = readFlow(runId, { root: options.root })
-      const log = lines.reduce((entries, line) => appendLogEntries(entries, { at, event: line.event, detail: line.detail }), current.log)
+      // A failure that is the same as the one already recorded is not news: a document that stays broken must not write a
+      // line on every tick (the close names it once, the reconciliation retries silently).
+      const lastFailure = [...current.log].reverse().find(entry => entry.event === 'plan_mark_failed')
+      const fresh = lines.filter(line => !(line.event === 'plan_mark_failed' && lastFailure?.detail === line.detail))
+      if (fresh.length === 0) return
+      const log = fresh.reduce((entries, line) => appendLogEntries(entries, { at, event: line.event, detail: line.detail }), current.log)
       saveFlow({ ...current, log }, { root: options.root })
     })
   } catch {

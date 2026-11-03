@@ -43,6 +43,11 @@ function git(...args: string[]): string {
   return String(execFileSync('git', ['-C', repo, ...args], { encoding: 'utf-8' })).trim()
 }
 
+// The repository's first commit, for items closed before the head the fixture works on.
+function baseCommit(): string {
+  return String(execFileSync('git', ['-C', repo, 'rev-list', '--max-parents=0', 'HEAD'], { encoding: 'utf-8' })).trim()
+}
+
 function document(): string {
   return readFileSync(join(repo, DOC_PATH), 'utf-8')
 }
@@ -266,5 +271,97 @@ describe('the mark is best effort, and retried when it could not be written (blo
     expect(outcome.marked).toEqual([])
     expect(outcome.failures[0]!.reason).toContain('not this item')
     expect(document()).toContain('- [ ] **P9.9**')
+  })
+})
+
+describe('one tick, one mark commit (block 72, review round 1)', () => {
+  it('combines the item this tick closed with whatever an earlier tick deferred', () => {
+    // P1.1 was closed by an earlier tick whose mark could not be written; P1.2 is closed now. One pass, one commit — not
+    // two `chore(flow: mark …)` commits for one tick's worth of marking.
+    // A work commit between the two, so the item closed earlier sits on an older head (the double-close guard's case is two
+    // items closed on the *same* head, which is not what this test is about).
+    mkdirSync(join(repo, 'src'), { recursive: true })
+    writeFileSync(join(repo, 'src/work.txt'), 'work', 'utf-8')
+    git('add', '-A')
+    git('commit', '-qm', 'feat: earlier work')
+    const head = git('rev-parse', 'HEAD')
+    const plan = planWith(['P1.1', 'P1.2'])
+    const deferred: Plan = {
+      ...plan,
+      items: plan.items.map(item => {
+        // Closed on an older commit: an item closed on the *same* head would be the double-close guard's case, not this one.
+        if (item.id === 'P1.1') return { ...item, status: 'done' as const, head: baseCommit() }
+        // The item this tick is about to close must be in flight, or the plan refuses the close.
+        if (item.id === 'P1.2') return { ...item, status: 'reviewing' as const }
+        return item
+      }),
+    }
+    seed(deferred, reviewingState({
+      active_plan_item: 'P1.2',
+      claim: { head, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.2' },
+    }))
+
+    const before = readPlan('run-1').items.filter(item => item.status === 'done').length
+    const commitsBefore = Number(git('rev-list', '--count', 'HEAD'))
+    tick()
+    const commitsAfter = Number(git('rev-list', '--count', 'HEAD'))
+
+    expect(before).toBe(1)
+    expect(readPlan('run-1').items.filter(item => item.status === 'done')).toHaveLength(2)
+    expect(commitsAfter - commitsBefore).toBe(1)
+    const message = git('log', '-1', '--format=%s')
+    expect(message).toBe('chore(flow): mark P1.2, P1.1 done in the plan')
+    expect(document()).toContain('- [x] **P1.1**')
+    expect(document()).toContain('- [x] **P1.2**')
+    // Both journal lines carry the same commit, because both marks were one pass.
+    const sha = git('rev-parse', 'HEAD')
+    const marked = readFlow('run-1').log.filter(entry => entry.event === 'plan_item_marked')
+    expect(marked.map(entry => entry.detail)).toEqual([`P1.2 ${sha}`, `P1.1 ${sha}`])
+  })
+})
+
+describe('a document that does not parse is never written (block 72, review round 1)', () => {
+  it('refuses to tick a line of a plan the reader can no longer parse', () => {
+    // A hand edit that breaks the format: no plan items at all, so the reader refuses the document. Committed first, so the
+    // flow is bound to the head it actually reads.
+    writeFileSync(join(repo, DOC_PATH), '# plan\n\nthis is no longer a list of items\n', 'utf-8')
+    git('add', '-A')
+    git('commit', '-qm', 'docs: break the plan')
+    const plan = planWith(['P1.1', 'P1.2'])
+    seed({ ...plan, items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'reviewing' as const } : item)) }, reviewingState())
+    const broken = document()
+    const commitsBefore = Number(git('rev-list', '--count', 'HEAD'))
+
+    const result = tick()
+
+    // The close happened in the mirror; the document was left exactly as it was, and nothing was committed.
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')!.status).toBe('done')
+    expect(document()).toBe(broken)
+    expect(Number(git('rev-list', '--count', 'HEAD'))).toBe(commitsBefore)
+    const failure = readFlow('run-1').log.find(entry => entry.event === 'plan_mark_failed')
+    // A document-wide refusal names the document, not an item: nothing in it was read as a plan.
+    expect(failure?.detail).toContain('does not parse')
+    expect(result.status).toBe('applied')
+  })
+
+  it('writes it once the document parses again, and says the failure only once', () => {
+    writeFileSync(join(repo, DOC_PATH), 'not a plan\n', 'utf-8')
+    git('add', '-A')
+    git('commit', '-qm', 'docs: break the plan')
+    const plan = planWith(['P1.1', 'P1.2'])
+    seed({ ...plan, items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'reviewing' as const } : item)) }, reviewingState())
+    tick()
+    const failures = () => readFlow('run-1').log.filter(entry => entry.event === 'plan_mark_failed')
+    expect(failures()).toHaveLength(1)
+
+    // A second tick over the same broken document is not news: no second line, no commit.
+    tick({ now: NOW + 5_000 })
+    expect(failures()).toHaveLength(1)
+
+    // The document is fixed (by hand), the mark is retried on the next tick.
+    writeFileSync(join(repo, DOC_PATH), DOC, 'utf-8')
+    const outcome = applyPlanMarks('run-1', { repo, tree_clean: true, attempt: 'reconcile', at: AT })
+    expect(outcome.marked.map(entry => entry.id)).toContain('P1.1')
+    expect(document()).toContain('- [x] **P1.1**')
   })
 })

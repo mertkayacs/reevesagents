@@ -276,9 +276,13 @@ ticks its line in the document (block 72).
 **The write-back** (`src/core/plan-mark.ts`). When an item reaches `done` — by an ACCEPT or by an explicit
 `flow plan set --status done --yes --note` — the engine rewrites exactly that line, `- [ ] **<ID>**` → `- [x] **<ID>**`,
 byte for byte otherwise: no re-formatting, no re-assembly of the document, and a line that belongs to another id is refused
-rather than ticked. Then it commits, because an uncommitted tick would leave the tree dirty and stop the very dispatch it
-was recording: one `chore(flow): mark <ID>[, <ID>] done in the plan` commit per pass, `git add -- <the plan document>` and
-nothing else — the only place the engine writes to the repository, and the only files it commits.
+rather than ticked. The document is parsed before a single byte of it is written: a file the plan reader cannot read is
+`plan_mark_failed` and left untouched, because a checkbox committed into a plan nobody can parse is worse than no mark.
+
+Then it commits, because an uncommitted tick would leave the tree dirty and stop the very dispatch it was recording. One
+tick is **one pass and one commit**: the item this tick closed and every done item an earlier tick had to defer go in
+together, so a tick can never leave two `chore(flow): mark …` commits behind. `git add -- <the plan document>` and nothing
+else — the only place the engine writes to the repository, and the only file it commits.
 
 That commit is docs-only by construction, so the existing path takes it: `docs_only_since_claim` → `reanchor` moves the
 claim onto the mark commit, asks for no review and spends no round. It also closes the `unticked` conflict: a document the
