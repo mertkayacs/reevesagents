@@ -39,6 +39,21 @@ export const BUSY_SCAN_LINES = 40
 // the transition that must not be read as "free".
 export const CONFIRM_MIN_GAP_MS = 1_000
 
+// How far above the status tail the status block reaches. Codex prints `◦ Working (… • esc to interrupt)` above the box and
+// may wrap it onto a second row; hermes carries `enter прервать` on the box row itself and on the status bar under it. Four
+// rows at the bottom is the block; nothing else in the frame is read for busy (block 74), because everything above it is the
+// agent's own prose — a report quoting `esc to interrupt` held a free `flow-finish` pane for six minutes.
+export const BUSY_STATUS_MARGIN = 1
+
+// The shape of those status rows, per provider: codex leads with its working glyph at the left margin, hermes puts the
+// interruption word on its status bar (or on the box row it takes over while a turn runs). A hint that is not on a row of
+// this shape is a sentence the agent printed — its own report quoting the hint, a diff quoting it, a log — and a pane free
+// of a turn is not busy because of it (block 74).
+const BUSY_SHAPE: Partial<Record<Provider, RegExp>> = {
+  codex: /^[◦●•·]\s/,
+  hermes: /^\s*(?:☤|❯|─{2,})/,
+}
+
 interface ProviderSignals {
   // Verified on a live pane: the hint a provider prints while a turn runs.
   busy: readonly RegExp[]
@@ -331,10 +346,10 @@ export interface PaneInspection {
   sample: PaneSample
 }
 
-// One look at the pane. The priorities are the contract (block 73):
-//   1. a busy marker **anywhere** in the captured frame → busy;
+// One look at the pane. The priorities are the contract (blocks 73 and 74):
+//   1. a busy marker **on the status rows around the composer** → busy;
 //   2. copy mode, no composer, an incomplete frame → unknown;
-//   3. the old glyph → idle (a long paste pushes the marked line above the tail window, block 44);
+//   3. the old glyph, where the composer is → idle (a long paste pushes the marked line above the tail window, block 44);
 //   4. the exact placeholder where the composer belongs, under the provider's own footer, with no busy marker → idle, but
 //      only when the previous sample is the same frame at least `CONFIRM_MIN_GAP_MS` old;
 //   5. anything else → unknown. Unknown never turns into idle with time.
@@ -351,18 +366,33 @@ export function inspectPane(
   const sample: PaneSample = { at: now, fingerprint: paneFingerprint(lines) }
   if (lines.length === 0) return { state: 'unknown', reason: 'empty_capture', sample }
 
-  // 1. Busy first, and anywhere in the frame: while a turn runs both providers still draw an input box, so an idle-looking
-  //    row is present in both states and only the busy hint separates them. The joined form is scanned too, because a
-  //    narrow pane wraps the status line and `esc to` / `interrupt)` on two rows is the same hint.
-  const joined = whole.replace(/\s*\n\s*/g, ' ')
-  if (signals.busy.some(marker => marker.test(whole) || marker.test(joined))) {
-    return { state: 'busy', reason: 'busy_hint', sample }
+  // 1. Busy first, but only where the provider prints it — its status rows around the composer. The body of a pane is prose:
+  //    an agent may quote `◦ Working (… • esc to interrupt)` or `enter прервать` in a report, a diff or a log, and that must
+  //    not hold the flow. On 2026-11-03 the live `flow-finish` flow read `dev_pane: busy` on a free pane for six minutes
+  //    because two such lines sat in the last forty rows (block 74). The status rows are joined as well, because a narrow
+  //    pane wraps the hint onto a second row.
+  const composer = composerRow(lines)
+  // The status block: the bottom rows where the provider draws its status, not the whole frame. A fixed window rather than an
+  // offset from the composer row, because a narrow pane wraps its status bar onto a second row and the row under the box is
+  // then neither chrome nor box text.
+  const statusStart = Math.max(0, lines.length - (BUSY_TAIL_LINES + BUSY_STATUS_MARGIN))
+  const statusRows = lines.slice(statusStart)
+  // The hint counts only on a row of the shape the provider draws it on, and only from that row downwards — which is also how
+  // a wrapped status line is read: `◦ Working (3s • esc to` over `interrupt)` is one hint, split by the pane's width. A
+  // three-row fragment has no status block to speak of; what it shows is read the conservative way.
+  const shape = lines.length > BUSY_TAIL_LINES ? BUSY_SHAPE[provider] : null
+  const statusIndex = shape ? statusRows.findIndex(statusLine => shape.test(statusLine)) : 0
+  if (statusIndex >= 0) {
+    const fromStatus = statusRows.slice(statusIndex)
+    const statusText = fromStatus.join(' ')
+    if (signals.busy.some(marker => marker.test(fromStatus[0]!) || marker.test(statusText))) {
+      return { state: 'busy', reason: 'busy_hint', sample }
+    }
   }
 
   // 2. Structure. A pane in copy mode scrolls instead of typing, and a frame with neither a composer nor a footer is not a
   //    finished screen — a modal, a login prompt or a half-drawn redraw all look like that.
   if (paneInCopyMode(whole)) return { state: 'unknown', reason: 'copy_mode', sample }
-  const composer = composerRow(lines)
   if (composer === null) return { state: 'unknown', reason: 'composer_not_found', sample }
   const row = composer.line
 

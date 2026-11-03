@@ -7,6 +7,7 @@ import { PENDING_TTL_SEC, applyDecisionToState, createFlowState, flowTick } from
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { durablePath, panePath, publishNotes, stagingPath } from '../src/core/flow-notes.js'
 import type { FlowPorts, FlowStepResult, NotesRead, StepFlowOptions } from '../src/core/flow-runner.js'
+import { detectPaneBusy } from '../src/core/activity.js'
 import { PANE_UNKNOWN_HOLD_MS, observeFlow, stepFlow } from '../src/core/flow-runner.js'
 
 // The effect layer: observation reads, and the claim -> act -> settle dispatch. Nothing here sends
@@ -1097,5 +1098,43 @@ describe('a pane that stays unreadable is explained (block 73)', () => {
     expect(recovered.decision.reason).toBe('flow_done')
     expect(seeing.send).not.toHaveBeenCalled()
     expect(readFlow('run-1').log.filter(entry => entry.event === 'request_review')).toHaveLength(0)
+  })
+})
+
+describe('the tick asks for the review instead of holding dev_busy (block 74)', () => {
+  // The incident: the developer's pane is at its prompt, and its own report quotes `◦ Working (8s • esc to interrupt)` in the
+  // body. Block 73's whole-frame scan read that as a running turn and held `dev_busy`; the review was never requested.
+  const QUOTING_PANE = [
+    '  ◦ Working (8s • esc to interrupt)',
+    '  — quoted from the earlier run, twice: esc to interrupt',
+    '› Ask Codex to do anything',
+    '  GPT-6-Luna high · ~/projects/flow-finish',
+    '  ← for agents · ? for shortcuts',
+  ].join('\n')
+
+  it('requests the review on a free pane whose body quotes the hint', () => {
+    seed(makeState({ state: 'idle' }))
+    const ports = makePorts({ paneBusy: () => detectPaneBusy(QUOTING_PANE, 'codex') })
+
+    const stepped = step(ports, { head: 'bbb222' })
+
+    // The tick went through and pasted the brief: the review was requested, not held.
+    expect(stepped.decision.reason).toBe('review_requested')
+    expect(readFlow('run-1').log.some(entry => entry.event === 'hold' && entry.detail === 'dev_busy')).toBe(false)
+    expect(ports.send).toHaveBeenCalled()
+  })
+
+  it('still holds dev_busy on a pane that is really running', () => {
+    seed(makeState({ state: 'idle' }))
+    const running = [
+      '  ◦ Working (8s • esc to interrupt)',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    const ports = makePorts({ paneBusy: () => detectPaneBusy(running, 'codex') })
+
+    expect(step(ports, { head: 'bbb222' }).decision.reason).toBe('dev_busy')
+    expect(ports.send).not.toHaveBeenCalled()
   })
 })

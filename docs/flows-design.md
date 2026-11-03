@@ -99,8 +99,11 @@ pane drew the placeholder and the footer but no `›` in front of the placeholde
 `review_pane_unknown` for ten minutes while the reviewer sat idle. `inspectPane` (`src/core/activity.ts`) therefore reads the
 frame's structure, with the asymmetry stated in its rules:
 
-- a busy marker **anywhere in the captured frame** (the whole 40-row capture, and the frame joined into one line so a
-  wrapped status line still matches) → `busy`;
+- a busy marker **on the status rows only** — the bottom four rows of the frame, and from the first row of the provider's
+  status shape downwards (codex leads with its working glyph, hermes puts the interruption word on its status bar or on the
+  box row it takes over while a turn runs), joined so a wrapped status line still matches → `busy`. The body of a pane is
+  prose: an agent may quote `◦ Working (… • esc to interrupt)` or `enter прервать` in a report, a diff or a log, and on
+  2026-11-03 exactly that held a free `flow-finish` pane `busy` for six minutes;
 - copy mode, no composer row, or a frame without the provider's own footer under it → `unknown`;
 - the glyph, but only where the composer is: on the composer row, or introducing the block of rows that runs down to it and
   holds nothing but the box's own text (a one-line draft, or a thirty-line brief that was pasted and not sent) → `idle`. The

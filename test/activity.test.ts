@@ -58,13 +58,21 @@ describe('detectPaneBusy', () => {
     }
   })
 
-  it('counts a busy hint anywhere in the captured frame, and the capture window keeps old ones out', () => {
-    // Block 73 changed this rule on purpose: busy is looked for in the whole captured frame, not only the last three rows,
-    // because a *missed* busy marker means pasting into a running turn — the expensive mistake. What keeps a hint from an
-    // earlier turn from blocking for ever is the capture window: the caller reads `BUSY_SCAN_LINES` rows and nothing above
-    // them is ever matched.
-    const pane = [CODEX_BUSY, 'VERDICT: ACCEPT', 'MAJOR nothing', 'idle', '› '].join('\n')
-    expect(detectPaneBusy(pane, 'codex')).toBe('busy')
+  it('reads a busy hint only on the status rows, never in the body of a report (block 74)', () => {
+    // The live `flow-finish` pane: a free composer, and the agent's own report quoting the hint above it. The whole-frame scan
+    // of block 73 held that flow for six minutes.
+    const quoted = [
+      'report: the pane printed `◦ Working (8s • esc to interrupt)` and then went idle',
+      'MAJOR src/a.ts:1 — nothing to see',
+      'MINOR docs/b.md:2 — and `esc to interrupt` quoted again',
+      '› ',
+      'GPT-6-Luna high · ~/projects/flow-finish',
+      '← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(detectPaneBusy(quoted, 'codex')).toBe('idle')
+  })
+
+  it('keeps the capture window as what excludes ancient hints', () => {
     const stale = [CODEX_BUSY, ...Array.from({ length: 45 }, (_, index) => `row ${index}`), '› '].join('\n')
     const captured = paneTail(stale, BUSY_SCAN_LINES).join('\n')
     expect(captured).not.toContain('esc to interrupt')
@@ -141,11 +149,12 @@ describe('a composer without the glyph (block 73)', () => {
     expect(first).toMatchObject({ state: 'busy', reason: 'busy_hint' })
     // Even with a confirming second look: busy outranks idle, always.
     expect(inspectPane(busy, 'codex', { now: 12_000, previous: first.sample })).toMatchObject({ state: 'busy' })
-    // The hint counts far above the tail as well, and through a wrapped status line.
-    const far = [busy, ...Array.from({ length: 9 }, (_, index) => `  row ${index}`)].join('\n')
-    expect(inspectPane(far, 'codex', { now: 10_000 }).state).toBe('busy')
+    // A narrow pane wraps the status line onto two rows: still busy.
     expect(inspectPane('  ◦ Working (3s • esc to\n  interrupt)\n  Ask Codex to do anything', 'codex', { now: 10_000 }).state)
       .toBe('busy')
+    // Nine rows above the composer is the body, not the status line: busy no longer follows the hint up there (block 74).
+    const far = [busy, ...Array.from({ length: 9 }, (_, index) => `  row ${index}`)].join('\n')
+    expect(inspectPane(far, 'codex', { now: 10_000 }).state).not.toBe('busy')
   })
 
   it('never reads these frames as idle', () => {
@@ -306,5 +315,77 @@ describe('the glyph counts only where the composer is (block 73, review round 1)
   it('keeps a bare prompt and a placeholder composer working', () => {
     expect(inspectPane('› \n  ← for agents · ? for shortcuts', 'codex', { now: 10_000 }))
       .toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+  })
+})
+
+// Block 74's incident, verbatim in shape: hermes, a free status bar, and the agent's own report in the body quoting both
+// hints the detector knows (`◦ Working (8s • esc to interrupt)` and `enter прервать`).
+const HERMES_QUOTING_BODY = [
+  '  Итог: панель цитирует `◦ Working (8s • esc to interrupt)` и `enter прервать` в собственном отчёте.',
+  '  ────────────────────────────────────────────────────────────',
+  '❯ ',
+  '──────────────────────────────────────────────────────────────────────────',
+  ' ☤ deepseek-v4.1-flash · 282K/1M · ✓ 6m · ~/projects/flow-finish',
+].join('\n')
+
+describe('busy is read off the status rows only (block 74)', () => {
+  it('does not hold a free hermes pane whose report quotes both hints', () => {
+    expect(inspectPane(HERMES_QUOTING_BODY, 'hermes', { now: 10_000 }))
+      .toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+  })
+
+  it('does not hold a free codex pane whose report quotes the working line', () => {
+    const frame = [
+      '◦ Working (8s • esc to interrupt)',
+      '— quoted from the earlier run, twice: esc to interrupt',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(frame, 'codex', { now: 10_000 }).state).toBe('idle')
+  })
+
+  it('reads a real turn as busy whatever the body says', () => {
+    const quoting = [
+      '  ◦ Working (8s • esc to interrupt)',
+      '  Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/repo',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(quoting, 'codex', { now: 10_000 })).toMatchObject({ state: 'busy', reason: 'busy_hint' })
+  })
+
+  it('reads a narrow pane whose status bar wraps onto two rows', () => {
+    const narrow = [
+      '❯ ',
+      '──────────────────────────',
+      ' ☤ deepseek-v4.1-flash · 282K/1M',
+      '   · enter прервать · tab в очередь',
+    ].join('\n')
+    expect(inspectPane(narrow, 'hermes', { now: 10_000 }).state).toBe('busy')
+  })
+
+  it('leaves the hint in scrollback alone when the status rows are free', () => {
+    const scrollback = [
+      '  ◦ Working (8s • esc to interrupt)',
+      '  done — 3 files changed',
+      '  ────────────────────────────────────────',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/repo',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(scrollback, 'codex', { now: 10_000 }).state).toBe('idle')
+  })
+
+  it('still refuses an empty frame and a modal', () => {
+    expect(detectPaneBusy('', 'codex')).toBe('unknown')
+    const modal = ['▌ Select an environment', '  1. staging', '  2. production', '← for agents · ? for shortcuts'].join('\n')
+    expect(inspectPane(modal, 'codex', { now: 10_000 }).state).toBe('unknown')
+  })
+
+  it('does not hold a pane whose hint is exactly on the status rows of a finished turn', () => {
+    // The other side of the asymmetry: hermes prints `enter прервать` on the very row it prints the box on, so a hint there
+    // is a turn running — not a quote.
+    expect(inspectPane(HERMES_BUSY, 'hermes', { now: 10_000 })).toMatchObject({ state: 'busy' })
   })
 })
