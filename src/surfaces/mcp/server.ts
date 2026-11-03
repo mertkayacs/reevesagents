@@ -11,8 +11,8 @@
 // together.
 //
 // The flow tools are deliberate and explicit: `flow_start` attaches a pipeline to a run,
-// `flow_status` describes it, `flow_add_spec` queues a block, `flow_control` pauses, resumes, stops
-// or queues, and `flow_step` runs **one** engine step when the host asks for it. Nothing here starts
+// `flow_status` describes it, `flow_add_spec` queues a block, `flow_control` pauses, resumes, stops, queues
+// or drops a block the engine never sent, and `flow_step` runs **one** engine step when the host asks for it. Nothing here starts
 // a timer or a loop of its own, so the server keeps its "no implicit loops" contract: the flow
 // engine owns the loop, and a step is a call the host makes. `flow_step` sends at most one guarded
 // prompt and shares the CLI's claim protocol, so an MCP step, a cron tick and a manual tick can
@@ -49,7 +49,7 @@ import { resolveFlowRunId, flowQueueSummary, flowStatusPayload } from '../../cor
 import { flowPath, readFlow, saveFlow } from '../../core/flow-store.js'
 import { queueSpecFile } from '../../core/flow-queue.js'
 import { startFlow } from '../../core/flow-start.js'
-import { addFlowSpecs, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
+import { addFlowSpecs, dropFlowSpec, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
 import { stepFlow } from '../../core/flow-runner.js'
 import {
   createPlan, ensurePlanSummary, importInto, mutatePlan, planExists, planItemView, planPath, readPlan,
@@ -881,15 +881,17 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'flow_control',
-    description: 'Drive a flow with one explicit action: `pause` parks it (a paused flow is never ticked and sends nothing), `resume` returns it to the state it was paused from or grants an escalated flow a fresh round budget, `stop` closes it for good and requires `confirm: true`, `add_spec` queues one block file (`file` for a structured JSON spec, `markdown` for an explicit unstructured ingest). Every action answers with the same payload `flow_status` returns; a refused action answers with the reason, never with a fake success.',
+    description: 'Drive a flow with one explicit action: `pause` parks it (a paused flow is never ticked and sends nothing), `resume` returns it to the state it was paused from or grants an escalated flow a fresh round budget, `stop` closes it for good and requires `confirm: true`, `add_spec` queues one block file (`file` for a structured JSON spec, `markdown` for an explicit unstructured ingest), `drop_spec` removes a queued block the engine never sent (`spec_id`, optional `reason`) and also requires `confirm: true`. Every action answers with the same payload `flow_status` returns; a refused action answers with the reason and its code (`not_found`, `already_dispatched`, `dispatch_pending`, `flow_closed`), never with a fake success.',
     inputSchema: {
       type: 'object',
       properties: {
         run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
-        action: { type: 'string', enum: ['pause', 'resume', 'stop', 'add_spec'], description: 'What to do with the flow.' },
+        action: { type: 'string', enum: ['pause', 'resume', 'stop', 'add_spec', 'drop_spec'], description: 'What to do with the flow.' },
         file: { type: 'string', description: 'add_spec: JSON block spec path (requirements and checks are mandatory).' },
         markdown: { type: 'string', description: 'add_spec: file to ingest as an unstructured markdown block. An explicit downgrade.' },
-        confirm: { type: 'boolean', description: 'stop: must be true, because a stopped flow cannot be resumed.' },
+        spec_id: { type: 'string', description: 'drop_spec: the queued block id to remove, as `flow_status` lists it in `queue`.' },
+        reason: { type: 'string', description: 'drop_spec: why it is being dropped; journalled as `spec_dropped <id>: <reason>`.' },
+        confirm: { type: 'boolean', description: 'stop and drop_spec: must be true, because neither can be undone.' },
       },
       required: ['run_id', 'action'],
     },
@@ -929,7 +931,15 @@ const TOOLS: ToolDef[] = [
           flow: flowStatusPayload(added.state, added.path),
         })
       }
-      throw new Error(`unknown action ${JSON.stringify(action)}; expected pause, resume, stop or add_spec`)
+      if (action === 'drop_spec') {
+        // Same confirmation rule as `stop`: the block leaves the queue and nothing brings it back.
+        if (a.confirm !== true) throw new Error('drop_spec removes a queued block; pass confirm: true')
+        const specId = asString(a.spec_id)
+        if (!specId) throw new Error('drop_spec needs a `spec_id` — the id `flow_status` lists in `queue`')
+        const dropped = dropFlowSpec({ run_id: runId, id: specId, reason: asString(a.reason) || undefined })
+        return ok(flowStatusPayload(dropped.state, dropped.path))
+      }
+      throw new Error(`unknown action ${JSON.stringify(action)}; expected pause, resume, stop, add_spec or drop_spec`)
     },
   },
 ]

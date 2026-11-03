@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FlowState } from '../src/core/flow.js'
+import type { BlockSpec } from '../src/core/spec.js'
 import { PENDING_TTL_SEC, createFlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
@@ -126,6 +127,10 @@ function seedFlow(overrides: Partial<FlowState> = {}, runId = RUN): FlowState {
   }
   saveFlow(state, { root: registry })
   return state
+}
+
+function block(id: string, title: string): BlockSpec {
+  return { id, title, goal: 'g', requirements: ['r'], checks: ['c'], report: [] }
 }
 
 describe('flow_step', () => {
@@ -282,6 +287,36 @@ describe('flow_control', () => {
 
     const body = payload(call('flow_control', { run_id: RUN, action: 'add_spec', markdown: md }))
     expect(body.queued[0].unstructured).toBe(true)
+  })
+
+  it('drops a block the engine never sent, and refuses the ones it did', () => {
+    seedRun()
+    const state = seedFlow()
+    saveFlow({
+      ...state,
+      specs: [block('block_07', 'First'), block('block_08', 'Second')],
+    }, { root: registry })
+
+    // The confirmation is the same gate as `stop`: a dropped block leaves the queue for good.
+    const unconfirmed = call('flow_control', { run_id: RUN, action: 'drop_spec', spec_id: 'block_07' })
+    expect(unconfirmed.isError).toBe(true)
+    expect(payload(unconfirmed).error).toContain('confirm: true')
+
+    const body = payload(call('flow_control', {
+      run_id: RUN, action: 'drop_spec', spec_id: 'block_07', reason: 'done by hand', confirm: true,
+    }))
+    // The answer is the `flow_status` payload, so a host needs no second call to see the new queue.
+    expect(body.queue.map((entry: { id: string }) => entry.id)).toEqual(['block_08'])
+    expect(body.last_decision).toMatchObject({ event: 'spec_dropped', detail: 'block_07: done by hand' })
+
+    const unknown = call('flow_control', { run_id: RUN, action: 'drop_spec', spec_id: 'block_99', confirm: true })
+    expect(unknown.isError).toBe(true)
+    expect(payload(unknown).error).toContain('not_found')
+
+    saveFlow({ ...state, specs: [block('block_07', 'First')], dispatched_specs: ['block_07'] }, { root: registry })
+    const sent = call('flow_control', { run_id: RUN, action: 'drop_spec', spec_id: 'block_07', confirm: true })
+    expect(sent.isError).toBe(true)
+    expect(payload(sent).error).toContain('already_dispatched')
   })
 
   it('answers an unknown action with an error, never with ok: true', () => {

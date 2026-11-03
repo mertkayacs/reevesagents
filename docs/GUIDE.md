@@ -159,6 +159,14 @@ human is highlighted with the same warning colour as a stale run.
   without them is refused. `--markdown <file…>` queues a brief as an *unstructured*
   block on purpose: the CLI warns, and `flow status` shows it, because the reviewer has
   no acceptance criteria to check.
+- `reevesagents flow drop-spec --run <run> --id <spec> --yes` — drop a block the flow has
+  not sent yet, for example when the work was already done outside the engine. `flow status`
+  prints the waiting ids (`queue 2 pending · block_63, block_64`), and that id is what `--id`
+  takes; `--reason <text>` is journalled with it. A block the flow already dispatched cannot be
+  dropped — the send is a fact, not a queue entry — and the command refuses without `--yes`.
+  With an imported plan the plan owns the queue (the tick dispatches plan items), so retire an item
+  with `flow plan set --item <id> --status skipped` instead; `drop-spec` only edits the hand-queued
+  blocks that `flow status` lists.
 - `reevesagents flow pause --run <run>` / `reevesagents flow resume --run <run>` —
   park the flow and put it back. A paused flow is never ticked and never sends, and it
   keeps no half-finished dispatch. `resume` returns it to the state it was paused from;

@@ -805,6 +805,7 @@ reevesagents flow start  --run <id> --dev <agent> --review <agent>              
 reevesagents flow status --run <id> [--json]                        # shipped
 reevesagents flow tick   --run <id> [--json] [--dry-run]            # shipped
 reevesagents flow add-spec --run <id> [--file <spec.json…>] [--markdown <file…>] [--json]  # shipped
+reevesagents flow drop-spec --run <id> --id <spec-id> [--reason <text>] [--yes] [--json]  # shipped (block 65)
 reevesagents flow pause  --run <id> [--json]                        # shipped
 reevesagents flow resume --run <id> [--json]                        # shipped
 reevesagents flow stop   --run <id> [--yes] [--json]                # shipped
@@ -825,10 +826,12 @@ reevesagents notifications read [--seq N]                            # shipped
 agent that belongs to another run, refuses a second flow on a run with an active one, and replaces a
 closed one only with `--replace`. It writes the file and sends nothing.
 
-`add-spec`, `pause`, `resume`, `stop` and `logs` are the operator's controls (block 07), and all of
+`add-spec`, `drop-spec`, `pause`, `resume`, `stop` and `logs` are the operator's controls (block 07), and all of
 them live in `src/core/flow-control.ts` so the CLI and the MCP cannot drift: `add-spec` validates
 every file before it takes the lock (one bad path queues nothing), `--markdown` is the explicit
-unstructured downgrade and prints a warning, `pause` parks the flow and drops an unsettled claim,
+unstructured downgrade and prints a warning, `drop-spec` removes a queued block the engine never sent
+(needs `--yes`; a dispatched block cannot be dropped, because the record of that send is what keeps it
+honest), `pause` parks the flow and drops an unsettled claim,
 `resume` returns it to the state it was paused from (an escalated flow gets a fresh budget, logged),
 `stop` needs `--yes` and closes the flow as `done` with a reason, and `logs` prints the bounded
 journal tail. None of them sends into a pane.
@@ -915,7 +918,7 @@ changes a written contract, so the change is deliberate and recorded:
 | `flow_start` | attach a flow to an existing run (`run_id`, `dev`, `review`, `repo`, `review_prompt`) | **shipped**; validates like the CLI; refuses a second flow on the same run (D6) |
 | `flow_add_spec` | queue a block spec file | **shipped**; same validator as §3.2, takes a JSON or markdown path |
 | `flow_step` | one engine step (the `flow tick` equivalent) | **shipped** (block 07); shares the claim protocol, so an MCP step and a cron tick cannot paste twice |
-| `flow_control` | `action: pause \| resume \| stop \| add_spec` | **shipped** (block 07); one tool, four intents, so the surface does not grow four near-identical entries. `stop` needs `confirm: true` |
+| `flow_control` | `action: pause \| resume \| stop \| add_spec \| drop_spec` | **shipped** (block 07, `drop_spec` block 65); one tool, five intents, so the surface does not grow five near-identical entries. `stop` needs `confirm: true`, and only a block the engine never dispatched can be dropped — `drop_spec` takes `spec_id`, an optional `reason`, and `confirm: true`, and refuses a dispatched block with `already_dispatched` |
 
 - Guardrails, because a host holding these tools can spend money: `flow_step` answers
   `{changed: false, events: []}` when nothing happened, so an agent polling it in a loop is cheap
@@ -1042,8 +1045,8 @@ so two concurrent resolves move the flow once), and only when the flow is still 
 | Web run-card badge + attention | **shipped** (`src/surfaces/webui/state.ts` `WebRun.flow`, `client/app.js`, `client/app.css`) |
 | MCP `flow_status`, `flow_add_spec`, `flow_start` | **shipped** (`src/surfaces/mcp/server.ts`); no tool here ticks a flow on its own |
 | MCP `flow_step` | **shipped** (block 07) — one explicit step per call, same claim protocol as `flow tick`, answers `{changed:false, reason}` on a hold |
-| MCP `flow_control` | **shipped** (block 07) — `pause` / `resume` / `stop` (needs `confirm`) / `add_spec`, answers the status payload |
-| CLI `flow add-spec` / `pause` / `resume` / `stop` / `logs` | **shipped** (block 07) |
+| MCP `flow_control` | **shipped** (block 07) — `pause` / `resume` / `stop` (needs `confirm`) / `add_spec` / `drop_spec` (needs `confirm`; only a block that was never dispatched), answers the status payload |
+| CLI `flow add-spec` / `drop-spec` / `pause` / `resume` / `stop` / `logs` | **shipped** (block 07; `drop-spec` block 65) |
 | TUI Flow section on the run page (§4.2) | **shipped** (block 17) — `flowSectionLines()` (`src/core/flow-view.ts`) renders state and round budget, the item in flight, queue depth, the waiting item, the attention line and the next tick; every line is capped at 78 columns |
 | `flow-escalated` approval pickup (§4.5) | **shipped** (block 17) — the tick raises one `flow_escalation` approval per episode, approve resumes the flow and re-queues the item, deny closes it with `close_reason`; the decision is only applied on the transition out of `pending` and only to the episode it belongs to |
 | `paused` / `orphaned` + the transition table | **shipped** (block 07) — `FLOW_TRANSITIONS` gates every operator and engine transition; `paused` is inert (a tick observes nothing and sends nothing), `orphaned` is written once with its reason, and the only automatic deletion is the cascade in `deleteRunHistory` |

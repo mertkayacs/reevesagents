@@ -85,7 +85,7 @@ own CLI only if you explicitly want that worker to spawn more agents.
   next item, and one item with `item_id`.
 - `flow_plan_import`: import or re-import that document into a flow; `dry_run` parses and reports.
 - `flow_step`: run one engine step (the `flow tick` equivalent) — the only flow tool that can send.
-- `flow_control`: pause, resume, stop or queue a block, with an explicit `action`.
+- `flow_control`: pause, resume, stop, queue a block, or drop one the engine never sent, with an explicit `action`.
 
 The provider catalog is also available as the `reevesagents://providers` MCP
 resource. The guide is available as `reevesagents://guide`.
@@ -195,9 +195,9 @@ flow before the paste; the second reads that claim, answers
 `{changed: false, reason: "dispatch_pending"}` and sends nothing. The same claim is
 what makes an MCP step, a cron `flow tick` and a manual tick mutually exclusive.
 
-### `flow_control { run_id, action, file?, markdown?, confirm? }`
+### `flow_control { run_id, action, file?, markdown?, spec_id?, reason?, confirm? }`
 
-One tool, four explicit actions — no implicit anything:
+One tool, five explicit actions — no implicit anything:
 
 - `pause` parks the flow. A paused flow is never ticked: no git call, no pane capture,
   no send. It also drops an unsettled dispatch claim, so a later resume cannot inherit
@@ -211,10 +211,16 @@ One tool, four explicit actions — no implicit anything:
 - `add_spec` queues one block file per call: `file` for a structured JSON spec
   (`requirements`/`checks` are mandatory), `markdown` for an explicit unstructured
   ingest with the same containment rules as `flow_add_spec`.
+- `drop_spec` removes a queued block the engine has not sent yet (`spec_id`, optional
+  `reason`) and requires `confirm: true`. It exists for the block whose work was done
+  outside the engine: left in the queue, the next tick would paste the same brief to a
+  dev who is already done with it. A dispatched block cannot be dropped — that send is a
+  fact — and the refusal names its code (`not_found`, `already_dispatched`,
+  `dispatch_pending`, `flow_closed`).
 
 Every accepted action answers with the `flow_status` payload; a refused one answers the
 reason (`cannot resume a flow in state done (…)`, `stop closes the flow for good; pass
-confirm: true`, …). A `pause`/`stop` that arrives while a prompt is being typed waits for
+confirm: true`, …). A `pause`/`stop`/`drop_spec` that arrives while a prompt is being typed waits for
 that dispatch to settle and then applies; if it cannot within 15 seconds it answers
 "a dispatch is in flight — try again in a moment" and changes nothing.
 

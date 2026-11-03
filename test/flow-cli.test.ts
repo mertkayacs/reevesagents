@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentRecord, RunRecord } from '../src/core/types.js'
+import type { FlowState } from '../src/core/flow.js'
 import { createFlowState } from '../src/core/flow.js'
+import type { BlockSpec } from '../src/core/spec.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { publishNotes } from '../src/core/flow-notes.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
@@ -543,6 +545,105 @@ describe('flow add-spec', () => {
       (error: Error & { cli_err?: string }) => error,
     )
     expect(failure?.cli_err).toContain('at least one --file or --markdown')
+  })
+})
+
+describe('flow drop-spec', () => {
+  function block(id: string, title: string): BlockSpec {
+    return { id, title, goal: 'g', requirements: ['r'], checks: ['c'], report: [] }
+  }
+
+  function seedQueue(...specs: BlockSpec[]): FlowState {
+    const { state } = seedFlow()
+    const queued = { ...state, specs }
+    saveFlow(queued, { root: tmpDir })
+    return queued
+  }
+
+  it('drops a waiting block and prints it with the new queue depth', async () => {
+    seedQueue(block('block_07', 'Lifecycle'), block('block_08', 'Surfaces'))
+
+    const { out } = await runCli(['flow', 'drop-spec', '--run', 'run-c1', '--id', 'block_07', '--yes'])
+
+    expect(out).toContain('dropped   block_07  Lifecycle')
+    expect(out).toContain('queue     1 pending')
+    const after = readFlow('run-c1')
+    expect(after.specs.map(spec => spec.id)).toEqual(['block_08'])
+    expect(after.log.at(-1)).toMatchObject({ event: 'spec_dropped', detail: 'block_07' })
+  })
+
+  it('journals the reason and prints the state as JSON', async () => {
+    seedQueue(block('block_07', 'Lifecycle'), block('block_08', 'Surfaces'))
+
+    const { out } = await runCli([
+      'flow', 'drop-spec', '--run', 'run-c1', '--id', 'block_07', '--reason', 'done by hand', '--yes', '--json',
+    ])
+    const payload = JSON.parse(out)
+
+    expect(payload.dropped).toEqual({ id: 'block_07', title: 'Lifecycle' })
+    expect(payload.state.queue.map((entry: { id: string }) => entry.id)).toEqual(['block_08'])
+    expect(readFlow('run-c1').log.at(-1)?.detail).toBe('block_07: done by hand')
+  })
+
+  it('refuses without --yes and drops nothing', async () => {
+    seedQueue(block('block_07', 'Lifecycle'))
+
+    const failure = await runCli(['flow', 'drop-spec', '--run', 'run-c1', '--id', 'block_07']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+
+    expect(failure?.cli_err).toContain('without --yes')
+    expect(readFlow('run-c1').specs.map(spec => spec.id)).toEqual(['block_07'])
+  })
+
+  it('fails with the refusal code when the block is not queued', async () => {
+    seedQueue(block('block_07', 'Lifecycle'))
+
+    const failure = await runCli(['flow', 'drop-spec', '--run', 'run-c1', '--id', 'block_99', '--yes']).then(
+      () => null,
+      (error: Error & { cli_err?: string }) => error,
+    )
+
+    expect(failure?.cli_err).toContain('not_found: no block block_99')
+    expect(readFlow('run-c1').specs.map(spec => spec.id)).toEqual(['block_07'])
+  })
+})
+
+describe('the queue line in flow status', () => {
+  function block(id: string): BlockSpec {
+    return { id, title: `Block ${id}`, goal: 'g', requirements: ['r'], checks: ['c'], report: [] }
+  }
+
+  it('names the waiting blocks, up to three, and --json carries the whole list', async () => {
+    // The ids are what `flow drop-spec --id` needs: a depth alone cannot be acted on (block 65).
+    const { state } = seedFlow()
+    saveFlow({
+      ...state,
+      specs: [block('block_63'), block('block_64'), block('block_65')],
+      dispatched_specs: ['block_62'],
+    }, { root: tmpDir })
+
+    const { out } = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(out).toContain('queue     3 pending, 1 dispatched · block_63, block_64, block_65')
+
+    const { out: json } = await runCli(['flow', 'status', '--run', 'run-c1', '--json'])
+    expect(JSON.parse(json).queue.map((entry: { id: string }) => entry.id))
+      .toEqual(['block_63', 'block_64', 'block_65'])
+  })
+
+  it('stops at three ids and marks the rest with an ellipsis', async () => {
+    const { state } = seedFlow()
+    saveFlow({
+      ...state,
+      specs: [block('block_63'), block('block_64'), block('block_65'), block('block_66')],
+    }, { root: tmpDir })
+
+    const { out } = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(out).toContain('queue     4 pending, 0 dispatched · block_63, block_64, block_65…')
+
+    const { out: json } = await runCli(['flow', 'status', '--run', 'run-c1', '--json'])
+    expect(JSON.parse(json).queue).toHaveLength(4)
   })
 })
 

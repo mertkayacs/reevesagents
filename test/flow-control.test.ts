@@ -13,7 +13,9 @@ import {
   createFlowState,
 } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
-import { addFlowSpecs, pauseFlow, releaseRound, resumeFlow, stopFlow } from '../src/core/flow-control.js'
+import { addFlowSpecs, dropFlowSpec, pauseFlow, releaseRound, resumeFlow, stopFlow } from '../src/core/flow-control.js'
+import type { FlowRefusalError } from '../src/core/flow-control.js'
+import type { BlockSpec } from '../src/core/spec.js'
 import { processInstanceOf } from '../src/core/flow-dispatch-gate.js'
 
 import type { FlowPorts } from '../src/core/flow-runner.js'
@@ -562,6 +564,114 @@ describe('add-spec after the flow started', () => {
 
     seed(makeState({ state: 'orphaned', orphan_reason: 'the run is gone' }))
     expect(() => addFlowSpecs({ run_id: 'run-1', files: [file] })).toThrow(/orphaned/)
+  })
+})
+
+describe('drop-spec: the queue is the operator to edit, not the engine (block 65)', () => {
+  function block(id: string, title: string): BlockSpec {
+    return { id, title, goal: 'g', requirements: ['r'], checks: ['c'], report: [] }
+  }
+
+  // The refusal a call raises, so a test asserts the code rather than a sentence: the code is the contract.
+  function refusal(fn: () => unknown): FlowRefusalError {
+    try {
+      fn()
+    } catch (err) {
+      return err as FlowRefusalError
+    }
+    throw new Error('expected a refusal')
+  }
+
+  it('drops a waiting block, journals it once, and the next tick sends the following one', () => {
+    seedLiveRun()
+    seed(makeState({ state: 'idle', specs: [block('block_07', 'First'), block('block_08', 'Second')] }))
+    const ports = makePorts()
+
+    const dropped = dropFlowSpec(
+      { run_id: 'run-1', id: 'block_07', reason: 'the work was already committed by hand' },
+      { at: AT },
+    )
+
+    expect(dropped.spec.id).toBe('block_07')
+    expect(dropped.spec.title).toBe('First')
+    const afterDrop = readFlow('run-1', { root })
+    expect(afterDrop.specs.map(spec => spec.id)).toEqual(['block_08'])
+    expect(afterDrop.log.at(-1)).toMatchObject({
+      event: 'spec_dropped',
+      detail: 'block_07: the work was already committed by hand',
+    })
+    // Dropping is bookkeeping: the dev's pane is untouched.
+    expect(ports.send).not.toHaveBeenCalled()
+
+    // The tick must never name the dropped block again — it dispatches the one still waiting.
+    const result = step(ports, { head: 'aaa111' })
+
+    expect(result.decision.kind).toBe('dispatch_spec')
+    expect(result.decision.spec_id).toBe('block_08')
+    expect(ports.send).toHaveBeenCalledTimes(1)
+    const sent = String(ports.send.mock.calls[0]![1])
+    expect(sent).toContain('block_08')
+    expect(sent).not.toContain('block_07')
+    const after = readFlow('run-1', { root })
+    expect(after.dispatched_specs).toEqual(['block_08'])
+    expect(after.specs.map(spec => spec.id)).toEqual(['block_08'])
+  })
+
+  it('journals the id alone when no reason was given', () => {
+    seed(makeState({ state: 'idle', specs: [block('block_07', 'First')] }))
+
+    dropFlowSpec({ run_id: 'run-1', id: 'block_07' }, { at: AT })
+
+    expect(readFlow('run-1', { root }).log.at(-1)).toMatchObject({ event: 'spec_dropped', detail: 'block_07' })
+  })
+
+  it('refuses a block that was already sent, and never touches dispatched_specs', () => {
+    seed(makeState({ state: 'idle', specs: [block('block_07', 'First')], dispatched_specs: ['block_07'] }))
+    const before = readFileSync(flowFile(), 'utf-8')
+
+    const err = refusal(() => dropFlowSpec({ run_id: 'run-1', id: 'block_07' }))
+
+    expect(err.code).toBe('already_dispatched')
+    expect(err.message).toContain('already_dispatched')
+    // The record that the brief may be in the dev's pane is the one thing this command must not rewrite.
+    expect(readFileSync(flowFile(), 'utf-8')).toBe(before)
+    expect(readFlow('run-1', { root }).dispatched_specs).toEqual(['block_07'])
+  })
+
+  it('refuses while a dispatch is in flight, because the tick may be pasting right now', () => {
+    seed(makeState({
+      state: 'idle',
+      specs: [block('block_07', 'First')],
+      pending: { op_id: 'op-1', kind: 'dispatch_spec', target: 'dev', head: 'aaa111', spec_id: 'block_07', at: NOW },
+    }))
+    const before = readFileSync(flowFile(), 'utf-8')
+
+    const err = refusal(() => dropFlowSpec({ run_id: 'run-1', id: 'block_07' }))
+
+    expect(err.code).toBe('dispatch_pending')
+    expect(readFileSync(flowFile(), 'utf-8')).toBe(before)
+  })
+
+  it('answers not_found for an unknown id, and names the blocks that are waiting', () => {
+    seed(makeState({ state: 'idle', specs: [block('block_07', 'First')] }))
+
+    const err = refusal(() => dropFlowSpec({ run_id: 'run-1', id: 'block_99' }))
+
+    expect(err.code).toBe('not_found')
+    expect(err.message).toContain('block_99')
+    expect(err.message).toContain('waiting: block_07')
+    expect(readFlow('run-1', { root }).specs.map(spec => spec.id)).toEqual(['block_07'])
+  })
+
+  it('answers flow_closed on a closed flow, whatever the block is', () => {
+    seed(makeState({
+      state: 'done', close_reason: 'stopped by the operator',
+      specs: [block('block_07', 'First')], dispatched_specs: [],
+    }))
+
+    expect(refusal(() => dropFlowSpec({ run_id: 'run-1', id: 'block_07' })).code).toBe('flow_closed')
+    expect(refusal(() => dropFlowSpec({ run_id: 'run-1', id: 'block_99' })).code).toBe('flow_closed')
+    expect(readFlow('run-1', { root }).specs.map(spec => spec.id)).toEqual(['block_07'])
   })
 })
 

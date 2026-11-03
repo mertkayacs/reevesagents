@@ -1,5 +1,5 @@
-// Flow control: the operator's hands on a flow — pause, resume, stop, and queueing a block after
-// the flow already started.
+// Flow control: the operator's hands on a flow — pause, resume, stop, dropping a block the engine never sent,
+// and queueing a block after the flow already started.
 //
 // Every command here is one short runs-lock section: read the flow, validate the transition against
 // the engine's table (`FLOW_TRANSITIONS`, §3.4), write it back atomically. Nothing sends: a control
@@ -39,6 +39,21 @@ export interface FlowControlOptions extends FlowStoreOptions {
 export interface FlowControlResult {
   state: FlowState
   path: string
+}
+
+// Why a queue edit was refused. A code, not a sentence: the CLI's exit, the MCP's error and a test all have to
+// tell "there is no such block" from "that block was already sent" without parsing prose. The message repeats
+// the code in front so the printed line is still the diagnosis.
+export type FlowRefusalCode = 'not_found' | 'already_dispatched' | 'dispatch_pending' | 'flow_closed'
+
+export class FlowRefusalError extends FlowStateError {
+  readonly code: FlowRefusalCode
+
+  constructor(code: FlowRefusalCode, message: string) {
+    super(`${code}: ${message}`)
+    this.name = 'FlowRefusalError'
+    this.code = code
+  }
 }
 
 // One short critical section for a transition. `fn` runs inside the lock and reads the flow as it is
@@ -302,6 +317,68 @@ export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions =
     }),
     queued,
   }
+}
+
+export interface DropSpecInput {
+  run_id: string
+  // The id of the queued block to remove. It must name a block the engine has not sent.
+  id: string
+  // Why it is being dropped. Optional; journalled after the id when given.
+  reason?: string
+}
+
+export interface DropSpecResult extends FlowControlResult {
+  // The block that was removed, so a surface can print its id and title.
+  spec: BlockSpec
+}
+
+// Drop a block the engine has not sent yet. The case it exists for: a block was queued and the work was done by
+// hand before the engine dispatched it, so leaving it in the queue means the next tick sends a brief for work
+// that is already finished (block 65, the live `c762729e`).
+//
+// Only a human decides this — nothing here guesses from a title or from HEAD — and only for a block the engine
+// never sent: `dispatched_specs` records that a brief may be in the dev's pane, so that list is never touched and
+// a dispatched block cannot be dropped at all. A pending claim refuses the edit outright: the tick that wrote it
+// may be pasting right now, which is why this shares the dispatch gate with `pause` and `stop`.
+//
+// It edits `specs` only. When the flow has an imported plan, the plan is the source of dispatch (§5), so a
+// plan-owned brief is still picked from the plan on the next tick; retiring an item is a plan command's job.
+export function dropFlowSpec(input: DropSpecInput, options: FlowControlOptions = {}): DropSpecResult {
+  const at = options.at ?? new Date().toISOString()
+  const id = input.id.trim()
+  const reason = input.reason?.trim()
+  // The removed record is read inside the lock and handed back through this holder: a block another call dropped a
+  // moment ago must answer `not_found`, so the answer can never come from the argument.
+  const removed: { spec: BlockSpec | null } = { spec: null }
+  const result = transition(input.run_id, options, (state) => {
+    if (state.state === 'done') {
+      throw new FlowRefusalError('flow_closed', `flow for run ${state.run_id} is closed (${state.close_reason ?? 'done'}); its queue cannot be changed`)
+    }
+    if (state.dispatched_specs.includes(id)) {
+      throw new FlowRefusalError('already_dispatched', `block ${id} was already sent to the dev; a dispatched block cannot be dropped`)
+    }
+    const queued = state.specs.find(spec => spec.id === id)
+    if (!id || !queued) {
+      const waiting = state.specs.filter(spec => !state.dispatched_specs.includes(spec.id)).map(spec => spec.id)
+      throw new FlowRefusalError('not_found', `no block ${id || '(none)'} queued on flow for run ${state.run_id}${waiting.length > 0 ? `; waiting: ${waiting.join(', ')}` : '; its queue is empty'}`)
+    }
+    if (state.pending) {
+      throw new FlowRefusalError('dispatch_pending', `a ${state.pending.kind} dispatch to ${state.pending.target} is in flight; nothing was dropped — try again in a moment`)
+    }
+    removed.spec = queued
+    return {
+      ...state,
+      specs: state.specs.filter(spec => spec.id !== id),
+      log: [
+        ...state.log,
+        // The id, plus the reason when a human gave one: never a brief body (§11.3).
+        { at, event: 'spec_dropped', detail: reason ? `${id}: ${reason}` : id },
+      ].slice(-FLOW_LOG_LIMIT),
+      updated_at: at,
+    }
+  })
+  // `transition` rethrows whatever its section threw, so a returned result means the block was found and removed.
+  return { ...result, spec: removed.spec! }
 }
 
 // The head a fresh spell starts from: the current one only when the movement since the claim is *known* to be documentation. `false`

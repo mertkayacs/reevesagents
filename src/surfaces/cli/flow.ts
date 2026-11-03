@@ -15,7 +15,8 @@ import type { FlowStepResult } from '../../core/flow-runner.js'
 import { stepFlow } from '../../core/flow-runner.js'
 import { tickAllFlows } from '../../core/flow-ticker.js'
 import { startFlow } from '../../core/flow-start.js'
-import { addFlowSpecs, pauseFlow, releaseRound, resumeFlow, stopFlow } from '../../core/flow-control.js'
+import { addFlowSpecs, dropFlowSpec, pauseFlow, releaseRound, resumeFlow, stopFlow } from '../../core/flow-control.js'
+import type { BlockSpec } from '../../core/spec.js'
 import type { NotesCounts } from '../../core/flow-notes.js'
 import { listNotesHeads, readNotesRound } from '../../core/flow-notes.js'
 import { loadConfig } from '../../core/config.js'
@@ -27,8 +28,22 @@ import { requireDestructiveConfirmation } from './helpers.js'
 
 // The payload and the id resolution are shared with the MCP tools, so a host CLI and
 // `flow status --json` cannot show different things: both come from core/flow-view.ts.
+function pendingSpecs(state: FlowState): BlockSpec[] {
+  return state.specs.filter(spec => !state.dispatched_specs.includes(spec.id))
+}
+
 function pendingCount(state: FlowState): number {
-  return state.specs.filter(spec => !state.dispatched_specs.includes(spec.id)).length
+  return pendingSpecs(state).length
+}
+
+// The queue line names the blocks that are waiting, not only how many: an id is exactly what `flow drop-spec --id`
+// needs, and before this line existed the operator could read the depth but not one name (block 65). Three ids are
+// enough to recognise the head of the queue; the full list stays in `--json` (`queue`), which is the published shape.
+function queueLine(state: FlowState): string {
+  const pending = pendingSpecs(state)
+  const ids = pending.slice(0, 3).map(spec => spec.id)
+  const more = pending.length > ids.length ? '…' : ''
+  return `${pending.length} pending, ${state.dispatched_specs.length} dispatched${ids.length > 0 ? ` · ${ids.join(', ')}${more}` : ''}`
 }
 
 function tickPayload(result: FlowStepResult, dryRun: boolean) {
@@ -113,7 +128,7 @@ function printStatus(state: FlowState, path: string): void {
     ? 'not waiting'
     : `started ${new Date(state.review_started_at).toISOString()}, timeout ${state.review_timeout_sec}s`
   console.log(`review    ${review}`)
-  console.log(`queue     ${pendingCount(state)} pending, ${state.dispatched_specs.length} dispatched`)
+  console.log(`queue     ${queueLine(state)}`)
   console.log(`repo      ${shortHomePath(state.repo)}`)
   console.log(`updated   ${state.updated_at}`)
   console.log(`last      ${last ? `${last.event} ${redactSecrets(last.detail)}` : '(no events)'}`)
@@ -369,6 +384,36 @@ export function registerFlow(program: Command): void {
         }
         console.log(`queue     ${pendingCount(added.state)} pending`)
         console.log(`file      ${shortHomePath(added.path)}`)
+      } catch (err) {
+        fail(err)
+      }
+    })
+
+  flow
+    .command('drop-spec')
+    .description('drop a block the flow never sent: it leaves the queue and is never dispatched (needs --yes)')
+    .requiredOption('--run <id>', 'run id (a unique prefix is accepted)')
+    .requiredOption('--id <spec-id>', 'the block to drop, as `flow status` prints it')
+    .option('--reason <text>', 'why: journalled as `spec_dropped <id>: <reason>`')
+    .option('--yes', 'confirm: a dropped block leaves the queue for good')
+    .option('--json', 'output JSON')
+    .action((opts: { run: string, id: string, reason?: string, yes?: boolean, json?: boolean }) => {
+      try {
+        // The same gate as `stop`: it edits the dev's future work, and a mistyped id would otherwise take a block
+        // out of the queue silently.
+        requireDestructiveConfirmation(opts, 'drop a block from the flow')
+        const runId = resolveFlowRunId(opts.run)
+        const dropped = dropFlowSpec({ run_id: runId, id: opts.id, reason: opts.reason })
+        if (opts.json) {
+          console.log(JSON.stringify({
+            run_id: runId,
+            dropped: { id: dropped.spec.id, title: redactSecrets(dropped.spec.title) },
+            state: flowStatusPayload(dropped.state, dropped.path),
+          }, null, 2))
+          return
+        }
+        console.log(`dropped   ${dropped.spec.id}  ${redactSecrets(dropped.spec.title)}`)
+        console.log(`queue     ${pendingCount(dropped.state)} pending`)
       } catch (err) {
         fail(err)
       }
