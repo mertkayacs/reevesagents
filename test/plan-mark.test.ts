@@ -269,7 +269,7 @@ describe('the mark is best effort, and retried when it could not be written (blo
     const outcome = markPlanItems({ repo, source_path: DOC_PATH, ids: ['P1.1'], plan, tree_clean: true })
 
     expect(outcome.marked).toEqual([])
-    expect(outcome.failures[0]!.reason).toContain('not this item')
+    expect(outcome.failures[0]!.reason).toContain('belongs to P9.9, not to P1.1')
     expect(document()).toContain('- [ ] **P9.9**')
   })
 })
@@ -363,5 +363,46 @@ describe('a document that does not parse is never written (block 72, review roun
     const outcome = applyPlanMarks('run-1', { repo, tree_clean: true, attempt: 'reconcile', at: AT })
     expect(outcome.marked.map(entry => entry.id)).toContain('P1.1')
     expect(document()).toContain('- [x] **P1.1**')
+  })
+})
+
+describe('a plain row is identified by its text (block 72, review round 2)', () => {
+  it('refuses a row whose wording changed, because its id is derived from that text', () => {
+    // An id-less plan: the id is `auto:<hash of the title>`, so rewording the line makes it a different task — and the
+    // stored line number still points at it. Ticking it would claim the new task was done.
+    const plain = ['# plan', '', '- [ ] Write the intro', ''].join('\n')
+    const created = createPlan({ run_id: 'run-1', source_path: DOC_PATH, text: plain, now: NOW, at: AT })
+    const item = created.plan.items[0]!
+    expect(item.id.startsWith('auto:')).toBe(true)
+    writeFileSync(join(repo, DOC_PATH), plain, 'utf-8')
+    git('add', '-A')
+    git('commit', '-qm', 'docs: a plain plan')
+    seed({ ...created.plan, items: [{ ...item, status: 'done' as const }] }, reviewingState({ active_plan_item: null }))
+
+    // Same line, different task: the wording decides the id.
+    writeFileSync(join(repo, DOC_PATH), plain.replace('Write the intro', 'Write the outro'), 'utf-8')
+
+    const outcome = markPlanItems({ repo, source_path: DOC_PATH, ids: [item.id], plan: readPlan('run-1'), tree_clean: true })
+
+    expect(outcome.marked).toEqual([])
+    expect(outcome.failures[0]!.reason).toContain('belongs to auto:')
+    expect(outcome.failures[0]!.reason).toContain(`not to ${item.id}`)
+    expect(document()).toContain('- [ ] Write the outro')
+  })
+
+  it('ticks the plain row it names, and nothing else', () => {
+    const plain = ['# plan', '', '- [ ] Write the intro', '- [ ] and the outro', ''].join('\n')
+    const created = createPlan({ run_id: 'run-1', source_path: DOC_PATH, text: plain, now: NOW, at: AT })
+    const item = created.plan.items[0]!
+    writeFileSync(join(repo, DOC_PATH), plain, 'utf-8')
+    git('add', '-A')
+    git('commit', '-qm', 'docs: a plain plan')
+    seed({ ...created.plan, items: [{ ...item, status: 'done' as const }] }, reviewingState({ active_plan_item: null }))
+
+    const outcome = markPlanItems({ repo, source_path: DOC_PATH, ids: [item.id], plan: readPlan('run-1'), tree_clean: true })
+
+    expect(outcome.marked).toEqual([{ id: item.id, line: 3 }])
+    expect(document()).toContain('- [x] Write the intro')
+    expect(document()).toContain('- [ ] and the outro')
   })
 })

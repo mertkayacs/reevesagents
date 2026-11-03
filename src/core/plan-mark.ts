@@ -16,7 +16,7 @@
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, relative, isAbsolute } from 'node:path'
-import type { Plan } from './plan.js'
+import type { ParsedItem, Plan, PlanDocument } from './plan.js'
 import { parsePlanDocument, planExists, readPlan } from './plan.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import { withRunsLock } from './runs.js'
@@ -24,10 +24,6 @@ import { appendLogEntries } from './flow.js'
 import { emitNotification } from './notifications.js'
 import { displayPath } from '../utils/paths.js'
 
-// The same two shapes the parser accepts (`plan.ts`): `- [ ] **ID** — text` and `- [ ] text`. Nothing else is a plan item,
-// so nothing else is touched.
-const ITEM_LINE = /^- \[( |x|X)\](\s+)(.*)$/
-const EXPLICIT_ID = /^\*\*([^*]+)\*\*/
 // The commit this engine makes for its own marks, and only for them.
 export const PLAN_MARK_MESSAGE = 'chore(flow): mark'
 
@@ -59,14 +55,13 @@ export function emptyMarkOutcome(): MarkPlanOutcome {
   return { marked: [], already: [], deferred: false, failures: [], sha: null }
 }
 
-// Is this the unchecked, id-bearing line of `id`? The id check is what keeps a stale line number (a document edited
-// between the import and the close) from ticking somebody else's item.
-function lineMatchesId(line: string, id: string): { ok: boolean, checked: boolean } | null {
-  const match = ITEM_LINE.exec(line)
-  if (!match) return null
-  const explicit = EXPLICIT_ID.exec(match[3]!.trim())
-  if (explicit && explicit[1]!.trim() !== id) return null
-  return { ok: true, checked: match[1] !== ' ' }
+// The parsed row a stored line number points at, when that row still belongs to the item. The parser is the authority on
+// identity: it reads the bold id of an id-bearing line and derives `auto:<hash>` from the text of a plain one, so a line
+// whose wording changed is a *different* item — and a stale line number must never tick it (block 72, review round 2).
+function rowFor(parsed: PlanDocument, line: number | null, id: string): ParsedItem | null {
+  if (line === null || line < 1) return null
+  const row = parsed.items.find(item => item.line === line)
+  return row && row.id === id ? row : null
 }
 
 // Tick one line, changing exactly the one character: the checkbox. Everything else — indentation, the bold id, the em
@@ -130,9 +125,11 @@ export function markPlanItems(options: MarkPlanOptions): MarkPlanOutcome {
   const raw = document.text
   // The document has to *parse* before a line in it is ticked: a checkbox written into a file whose format the plan reader
   // no longer understands would be committed as if the plan were fine, and the next import would have nothing to read
-  // (block 72, review round 1).
+  // (block 72, review round 1). The parse is also what names the row: an id-less line's id is derived from its text, so a
+  // row that was reworded is a different item and is refused (review round 2).
+  let parsed: PlanDocument
   try {
-    parsePlanDocument(raw)
+    parsed = parsePlanDocument(raw)
   } catch (err) {
     const reason = `the plan document does not parse: ${err instanceof Error ? err.message : String(err)}`
     return { ...outcome, failures: options.ids.map(id => ({ id, reason })) }
@@ -147,17 +144,22 @@ export function markPlanItems(options: MarkPlanOptions): MarkPlanOutcome {
       outcome.failures.push({ id, reason: 'no line in the document for this item' })
       continue
     }
-    const text = lines[line - 1]!
-    const match = lineMatchesId(text, id)
-    if (!match) {
-      outcome.failures.push({ id, reason: `line ${line} is not this item's unchecked line` })
+    const row = rowFor(parsed, line, id)
+    if (!row) {
+      const actual = parsed.items.find(entry => entry.line === line)
+      outcome.failures.push({
+        id,
+        reason: actual
+          ? `line ${line} belongs to ${actual.id}, not to ${id}`
+          : `line ${line} is not a plan item any more`,
+      })
       continue
     }
-    if (match.checked) {
+    if (row.checked) {
       outcome.already.push(id)
       continue
     }
-    lines[line - 1] = tickLine(text)
+    lines[line - 1] = tickLine(lines[line - 1]!)
     marked.push({ id, line })
   }
   if (marked.length === 0) return { ...outcome, marked, failures: outcome.failures }
@@ -192,15 +194,12 @@ export function markPlanItems(options: MarkPlanOptions): MarkPlanOutcome {
 
 // Which done items still have an unticked line? The retry path after a deferred mark, and the honest way to ask: the
 // mirror says done, the document says not — that difference is the work left to do here.
-export function pendingPlanMarks(plan: Plan, documentText: string): string[] {
-  const lines = documentText.split('\n')
+export function pendingPlanMarks(plan: Plan, parsed: PlanDocument): string[] {
   const pending: string[] = []
   for (const item of plan.items) {
     if (item.status !== 'done') continue
-    const line = item.line ?? null
-    if (line === null || line < 1 || line > lines.length) continue
-    const match = lineMatchesId(lines[line - 1]!, item.id)
-    if (match && !match.checked) pending.push(item.id)
+    const row = rowFor(parsed, item.line, item.id)
+    if (row && !row.checked) pending.push(item.id)
   }
   return pending
 }
@@ -244,8 +243,9 @@ export function applyPlanMarks(runId: string, options: PlanMarksOptions): MarkPl
     // The document has to parse before any of it is written: a checkbox committed into a file the plan reader cannot read
     // is worse than no mark at all (block 72, review round 1). One fact, one line — the same text on every tick, so the
     // journal does not repeat it.
+    let parsed: PlanDocument
     try {
-      parsePlanDocument(document.text)
+      parsed = parsePlanDocument(document.text)
     } catch (err) {
       const outcome: MarkPlanOutcome = {
         ...emptyMarkOutcome(),
@@ -254,7 +254,7 @@ export function applyPlanMarks(runId: string, options: PlanMarksOptions): MarkPl
       journalPlanMarks(runId, outcome, { root: options.root, at: options.at, attempt })
       return outcome
     }
-    pending = pendingPlanMarks(plan, document.text)
+    pending = pendingPlanMarks(plan, parsed)
   }
   const ids = [...new Set([...requested, ...pending])]
   if (ids.length === 0) return emptyMarkOutcome()

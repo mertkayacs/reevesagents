@@ -277,7 +277,10 @@ ticks its line in the document (block 72).
 `flow plan set --status done --yes --note` — the engine rewrites exactly that line, `- [ ] **<ID>**` → `- [x] **<ID>**`,
 byte for byte otherwise: no re-formatting, no re-assembly of the document, and a line that belongs to another id is refused
 rather than ticked. The document is parsed before a single byte of it is written: a file the plan reader cannot read is
-`plan_mark_failed` and left untouched, because a checkbox committed into a plan nobody can parse is worse than no mark.
+`plan_mark_failed` and left untouched, because a checkbox committed into a plan nobody can parse is worse than no mark. The
+parse also decides *which* item a line belongs to: an id-bearing row is matched by its bold id, a plain row by the id
+derived from its text (`deriveId`), so a line whose wording changed is a different task and is refused (`line N belongs to
+<id>, not to <id>`) rather than ticked on the strength of a stored line number.
 
 Then it commits, because an uncommitted tick would leave the tree dirty and stop the very dispatch it was recording. One
 tick is **one pass and one commit**: the item this tick closed and every done item an earlier tick had to defer go in
