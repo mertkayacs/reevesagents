@@ -700,20 +700,33 @@ describe('releasing a round the engine lost (block 56)', () => {
     expect(entry.detail).toContain('A1: the commit was never reviewed')
   })
 
+  it('refuses without a reason, and says what to pass', () => {
+    seedPaused('A1', false)
+    expect(() => releaseRound('run-1')).toThrow(/a release needs a reason/)
+    // Nothing was written: a refused release leaves the round exactly where it was.
+    expect(readFlow('run-1').active_plan_item).toBe('A1')
+    expect(readFlow('run-1').log.some(entry => entry.event === 'round_released')).toBe(false)
+  })
+
+  it('refuses a blank reason too', () => {
+    seedPaused('A1', false)
+    expect(() => releaseRound('run-1', { reason: '   ' })).toThrow(/a release needs a reason/)
+  })
+
   it('refuses while a review was actually requested', () => {
     seedPaused('A1', true)
-    expect(() => releaseRound('run-1')).toThrow(/live round on A1 \(a review was requested\)/)
+    expect(() => releaseRound('run-1', { reason: 'x' })).toThrow(/live round on A1 \(a review was requested\)/)
     expect(readFlow('run-1').active_plan_item).toBe('A1')
   })
 
   it('refuses on a flow that is not parked', () => {
     const state = makeState()
     saveFlow({ ...state, state: 'idle', active_plan_item: 'A1' })
-    expect(() => releaseRound('run-1')).toThrow(/is idle; pause it first/)
+    expect(() => releaseRound('run-1', { reason: 'x' })).toThrow(/is idle; pause it first/)
   })
 
   it('refuses when nothing is in flight', () => {
     seedPaused(null, false)
-    expect(() => releaseRound('run-1')).toThrow(/no plan item in flight/)
+    expect(() => releaseRound('run-1', { reason: 'x' })).toThrow(/no plan item in flight/)
   })
 })

@@ -950,11 +950,13 @@ intervene" and the pause changes nothing.
 
 Two things follow, and they are the whole of §4.4's operator escape:
 
-- **A parked flow hands the row to the human.** `flow plan set` passes `intervention: { paused, round_live }`; when the flow is `paused` and
-  `round_live` is false, `in_work`/`reviewing` may become `queued`, `pending`, `blocked_owner`, `done` or `skipped`. With a live round the
-  refusal stands whatever the state — closing an item without the review it waits for is the one shortcut the engine must not allow.
+- **A parked flow hands the row to the human.** `flow plan set` passes `intervention: { paused, round_live }`; `paused` is true for the two
+  states that are the operator's — `paused` itself and `done` (what `flow stop` closes into: no ticker will ever run that round, so the row
+  cannot usefully be "in flight"). When it is set and `round_live` is false, `in_work`/`reviewing` may become `queued`, `pending`,
+  `blocked_owner`, `done` or `skipped`. With a live round the refusal stands — closing an item without the review it waits for is the one
+  shortcut the engine must not allow.
 - **`flow release-round`** frees a round that is gone: the flow must be `paused`, an item must be in flight, and `review_started_at` and
-  `pending` must both be empty. It puts the row back in `queued` (the plan mutation happens first, so a failure there leaves the round held
+  `pending` must both be empty, and it **requires a reason**. It puts the row back in `queued` (the plan mutation happens first, so a failure there leaves the round held
   rather than the row orphaned), clears the flow's hold, and journals `round_released <item>: <reason>`. The next tick dispatches the item
   again.
 

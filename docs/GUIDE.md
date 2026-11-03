@@ -327,7 +327,7 @@ The way out is three commands, in this order:
 ```bash
 flow pause --run <id>                                   # a human is intervening
 flow plan --run <id>                                    # shows the row: in_work, and the round it believes in
-flow release-round --run <id> --reason "the commit was never reviewed"
+flow release-round --run <id> --reason "the commit was never reviewed"   # --reason is required
 flow resume --run <id>
 flow tick --run <id>                                    # dispatches the item again
 ```
@@ -337,9 +337,13 @@ requested** (`review_started_at` and `pending` both empty). It puts the row back
 to the journal, so the release is visible after the fact. On a live round it refuses — closing an item without the review it is waiting for
 is the one thing a human must not do.
 
-While a flow is `paused` (or `stopped`), `flow plan set` also reaches the two statuses the engine normally owns: `in_work` and
-`reviewing` may be put back in the queue, parked for the owner, closed or skipped. That is what pausing is for. With a live round the
-refusal stands even on a paused flow.
+While a flow is `paused` **or `stopped`**, `flow plan set` also reaches the two statuses the engine normally owns: `in_work` and
+`reviewing` may be put back in the queue, parked for the owner, closed or skipped. That is what pausing is for, and a `stopped` flow is the
+same case taken further — `flow stop` closes the flow as `done`, so no ticker will ever finish the round it was holding, and the row is
+the operator's. With a live round on a running or paused flow the refusal stands: the engine is still waiting for that verdict.
+
+`--reason` is required: the journal is the only place the claim "the engine lost this round" survives, and an entry without a why cannot be
+told from a bug.
 
 ### Pausing the plan and picking it up again
 

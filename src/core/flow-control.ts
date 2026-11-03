@@ -144,6 +144,10 @@ export function resumeFlow(runId: string, options: FlowControlOptions = {}): Flo
 // unable to touch the row because the engine still says "a round is in flight". Releasing it is an operator decision, journalled, and it
 // hands the row back to the pipeline: the next tick dispatches it again.
 export function releaseRound(runId: string, options: FlowControlOptions & { reason?: string } = {}): { state: FlowState, path: string, item: string } {
+  // A release is an operator's claim that the engine lost a round, and the journal is the only place that claim survives. Without a reason
+  // the entry says what happened but not why, and nobody can tell it from a bug later (block 58).
+  const reason = options.reason?.trim()
+  if (!reason) throw new FlowStateError('a release needs a reason: pass --reason "<why the round was lost>"')
   // Read and decide before taking any lock: the plan mutation below takes the runs lock itself, and two nested acquisitions would time out.
   const before = readFlow(runId, { root: options.root })
   const item = before.active_plan_item
@@ -190,7 +194,7 @@ export function releaseRound(runId: string, options: FlowControlOptions & { reas
       log: [...state.log, {
         at,
         event: 'round_released',
-        detail: `${item}${options.reason ? `: ${options.reason}` : ''}`,
+        detail: `${item}: ${reason}`,
       }].slice(-FLOW_LOG_LIMIT),
     }
   })

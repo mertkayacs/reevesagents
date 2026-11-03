@@ -375,10 +375,12 @@ export function registerPlanCommands(flow: Command): void {
       const json = jsonOption(cmd, opts)
       try {
         const runId = resolveFlowRunId(runOption(cmd))
-        // A paused flow is the operator's; `stopped` closes it as `done`, so the row is nobody's to move by then.
+        // A paused flow is the operator's, and so is a stopped one: `stopped` closes the flow as `done`, which means no tick will ever run
+        // its round, so the row cannot be "in flight" in any useful sense. GUIDE promises both, and before this the second half was not
+        // true (block 58). A live round still refuses, because a closed flow is the only case where `round_live` is forced false.
         const parkedFlow = readFlow(runId)
-        const flowIsParked = () => parkedFlow.state === 'paused'
-        const flowHasLiveRound = () => roundIsLive(parkedFlow)
+        const flowIsParked = () => parkedFlow.state === 'paused' || parkedFlow.state === 'done'
+        const flowHasLiveRound = () => parkedFlow.state !== 'done' && roundIsLive(parkedFlow)
         const input: SetStatusInput = {
           id: opts.item,
           status: opts.status as PlanStatus,

@@ -416,7 +416,7 @@ export function registerFlow(program: Command): void {
     .command('release-round')
     .description('free a round the engine lost: the item is in flight, but no review was requested and nothing is pending')
     .option('--run <id>', 'run id (a unique prefix is accepted)')
-    .option('--reason <text>', 'why: appended to the journal as `round_released <item>: <reason>`')
+    .requiredOption('--reason <text>', 'why the round was lost: journaled as `round_released <item>: <reason>`')
     .option('--json', 'output JSON')
     .action((opts: { run?: string, reason?: string, json?: boolean }) => {
       try {

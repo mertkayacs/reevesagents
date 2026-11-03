@@ -724,6 +724,18 @@ describe('a paused flow hands a busy row to the human (block 56)', () => {
     })).toThrow(/the engine owns reviewing while a round is in flight/)
   })
 
+  it('treats a stopped flow as the operator\'s too, because nothing will ever run the round', () => {
+    // `flow stop` closes the flow as `done`: GUIDE promises the pause *and* the stop, and a closed flow has no ticker to finish a round.
+    const { plan, id } = busyPlan()
+    const reviewing = { ...plan, items: plan.items.map(item => ({ ...item, status: 'reviewing' as const })) }
+
+    const moved = setItemStatus(reviewing, {
+      id, status: 'skipped', yes: true, note: 'the flow was stopped before the review', now: NOW, at: AT,
+      intervention: { paused: true, round_live: false },
+    })
+    expect(moved.plan.items[0]!.status).toBe('skipped')
+  })
+
   it('still refuses while the flow is running', () => {
     const { plan, id } = busyPlan()
     const inWork = { ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) }
