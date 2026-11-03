@@ -330,6 +330,7 @@ describe('flow status', () => {
     )
     expect(failure?.message).toMatch(/process\.exit\(1\)/)
     expect(failure?.cli_err).toContain('no flow for run ghost')
+    expect(failure?.cli_err).toContain('flow not started')
   })
 
   it('prints a home-shortened path for a damaged file, not the absolute one', async () => {

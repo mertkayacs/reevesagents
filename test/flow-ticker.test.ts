@@ -4,12 +4,12 @@
 // UI loop and `flow tick --all` call, so a green run means the product moves a plan on its own.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
-import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { flowPath, readFlow, saveFlow } from '../src/core/flow-store.js'
 import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import type { Plan } from '../src/core/plan.js'
 import { shouldTick, tickAllFlows } from '../src/core/flow-ticker.js'
@@ -136,6 +136,14 @@ function seed(plan: Plan, options: { inWork?: string } = {}): void {
 }
 
 describe('a plan walks itself', () => {
+  it('does not create a flow file or badge for a run that never started one', () => {
+    const result = tickAllFlows({ root })
+
+    expect(result).toEqual({ advanced: [], held: [], skipped: [] })
+    expect(existsSync(flowPath('run-1', root))).toBe(false)
+    expect(readFlowBadge('run-1', NOW, root)).toBeNull()
+  })
+
   it('takes three items from start to finish without a single manual tick', () => {
     // Each pass is one `tickAllFlows`, exactly what the Web UI loop runs: ask for the review, consume the answer,
     // dispatch the next item. The dev "commits" between items by moving the mocked HEAD, and the reviewer answers

@@ -28,8 +28,8 @@ export function resolveFlowRunId(input: string, root?: string): string {
   if (matches.length > 1) throw new FlowStateError(`ambiguous run id: ${matches.map(file => file.run_id).join(', ')}`)
   const known = files.slice(0, 5).map(file => file.run_id).join(', ')
   throw new FlowStateError(known
-    ? `no flow for run ${wanted} (flows exist for: ${known}${files.length > 5 ? ', ...' : ''})`
-    : `no flow for run ${wanted} (no flows exist yet)`)
+    ? `no flow for run ${wanted} (flow not started; flows exist for: ${known}${files.length > 5 ? ', ...' : ''})`
+    : `no flow for run ${wanted} (flow not started; no flows exist yet)`)
 }
 
 export interface FlowStatusPayload {

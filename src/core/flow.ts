@@ -1242,15 +1242,22 @@ function settleFromNotes(state: FlowState, observations: FlowObservations): Flow
   if (refusedBefore) return null
   const answered: FlowState = {
     ...state,
-    active_plan_item: planItem,
+    // Keep the plan's in-flight item binding as well as the claim's `spec_id`. They usually
+    // agree, but older and recovered states can carry only one of the two (block 63, MAJOR 1).
+    active_plan_item: state.active_plan_item,
     // The round the reviewer answered: its head, its verdict, and a clock so the budgets behave as they would have.
     claim: {
+      ...state.claim,
       head,
       verdict: observations.verdict,
       verdict_count: observations.verdict_count,
       verdict_applied: false,
       // The answer closes the item whose brief was sent, which is the one the plan item above names.
-      spec_id: planItem,
+      spec_id: state.claim.spec_id ?? planItem,
+      // The brief of the round survives the reconstruction: a `CHANGES_REQUESTED` recovered from a late note asks for a fix, and the review
+      // that follows it must name the same file. Rebuilding the claim without this dropped the path for an off-plan spec, whose only record
+      // of the brief *is* the claim (block 63, MAJOR 1).
+      ...(state.claim.brief_path ? { brief_path: state.claim.brief_path } : {}),
     },
     state: state.state === 'paused' || state.state === 'orphaned' || state.state === 'done' ? state.state : 'reviewing',
     review_started_at: state.review_started_at ?? observations.now,

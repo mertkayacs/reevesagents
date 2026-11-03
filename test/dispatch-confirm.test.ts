@@ -1813,3 +1813,49 @@ describe('an off-plan spec carries its brief into the review (block 62)', () => 
     expect(prompt!).not.toContain('plan item')
   })
 })
+
+describe('a late note keeps the brief of the round it answers (block 63)', () => {
+  it('carries the brief into the review that follows a recovered CHANGES_REQUESTED', () => {
+    // The off-plan case: `claim.brief_path` is the only record of which file the round was about. Recovery rebuilds the claim from what it
+    // can see, and it rebuilt it without the path — so the fix round's review arrived with no brief (block 63, MAJOR 1).
+    //
+    // `settleFromNotes` is the path that answers a round from a published note: the flow has left `reviewing` (or the head moved on) and no
+    // dispatch is pending, so nothing else will read the file.
+    const head = 'e'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state,
+      state: 'idle',
+      claim: { head, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null, brief_path: 'briefs/off-plan.md' },
+    })
+    const notes = join(root, 'flows', 'run-1', notesRef(head, 1))
+    mkdirSync(dirname(notes), { recursive: true })
+    writeFileSync(notes, 'MAJOR faq.html:1 — add content\nVERDICT: CHANGES_REQUESTED\n')
+
+    const sent: string[] = []
+    stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // The verdict came out of the file, and the claim that carries the fix round still knows the brief.
+    expect(readFlow('run-1').log.some(entry => entry.event === 'settled_by_observation')).toBe(true)
+    expect(readFlow('run-1').claim.brief_path).toBe('briefs/off-plan.md')
+
+    // The dev commits; the next review must name the same file.
+    const reviewed: string[] = []
+    stepFlow('run-1', {
+      now: NOW + 60_000, at: AT, head: 'd'.repeat(40), tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { reviewed.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    const prompt = reviewed.find(text => text.includes('VERDICT:'))
+    expect(prompt).toBeDefined()
+    expect(prompt!).toContain("This round's brief is briefs/off-plan.md")
+    expect(prompt!).toContain('Judge the work as CONFORMANCE TO that brief')
+  })
+})

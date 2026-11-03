@@ -144,6 +144,12 @@ export function readFlowFile(path: string, runId = ''): FlowState {
 }
 
 export function saveFlow(state: FlowState, options: FlowStoreOptions = {}): string {
+  // A flow is born only through `flow start`, which binds it to a Git HEAD and records the
+  // `flow_started` journal entry. Never materialise a default/empty state as a closed flow: that
+  // file is indistinguishable from a flow that ran and finished to status consumers.
+  if (state.state === 'done' && !state.claim.head.trim() && state.log.length === 0) {
+    throw new FlowStateError('flow has not been started; state was not saved')
+  }
   const path = flowPath(state.run_id, options.root)
   mkdirSync(dirname(path), { recursive: true })
   const tmpPath = `${path}.tmp`

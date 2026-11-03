@@ -39,6 +39,14 @@ describe('flow store', () => {
     expect(readFlow('run-1', { root })).toEqual(state)
   })
 
+  it('refuses to persist a default state for a flow that was never started', () => {
+    const state = makeState('run-1', '2026-01-01T00:00:00.000Z')
+    const emptyClosed = { ...state, state: 'done' as const, claim: { ...state.claim, head: '' }, log: [] }
+
+    expect(() => saveFlow(emptyClosed, { root })).toThrow(/flow has not been started/)
+    expect(existsSync(flowPath('run-1', root))).toBe(false)
+  })
+
   it('leaves the previous document intact when the swap fails', () => {
     const path = saveFlow(makeState('run-1', '2026-01-01T00:00:00.000Z'), { root })
     const before = readFlow('run-1', { root })
