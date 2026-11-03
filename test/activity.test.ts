@@ -5,7 +5,9 @@
 // positive signal, and anything else on screen (a login prompt, an error, a modal) is 'unknown'.
 
 import { describe, expect, it } from 'vitest'
-import { BUSY_TAIL_LINES, detectPaneBusy, gatedProviders, paneTail, providerHasBusyDetector } from '../src/core/activity.js'
+import {
+  BUSY_SCAN_LINES, detectPaneBusy, gatedProviders, inspectPane, paneTail, providerHasBusyDetector,
+} from '../src/core/activity.js'
 
 // Hermes, mid-turn: the input box switches to "redirect this turn" and the status line carries
 // the interrupt hint.
@@ -56,11 +58,17 @@ describe('detectPaneBusy', () => {
     }
   })
 
-  it('ignores a busy hint that only survives in scrollback', () => {
-    // The real failure this rule fixes: a 12-line window kept an idle agent "busy" forever.
+  it('counts a busy hint anywhere in the captured frame, and the capture window keeps old ones out', () => {
+    // Block 73 changed this rule on purpose: busy is looked for in the whole captured frame, not only the last three rows,
+    // because a *missed* busy marker means pasting into a running turn — the expensive mistake. What keeps a hint from an
+    // earlier turn from blocking for ever is the capture window: the caller reads `BUSY_SCAN_LINES` rows and nothing above
+    // them is ever matched.
     const pane = [CODEX_BUSY, 'VERDICT: ACCEPT', 'MAJOR nothing', 'idle', '› '].join('\n')
-    expect(detectPaneBusy(pane, 'codex')).toBe('idle')
-    expect(paneTail(pane, BUSY_TAIL_LINES)).toEqual(['MAJOR nothing', 'idle', '›'])
+    expect(detectPaneBusy(pane, 'codex')).toBe('busy')
+    const stale = [CODEX_BUSY, ...Array.from({ length: 45 }, (_, index) => `row ${index}`), '› '].join('\n')
+    const captured = paneTail(stale, BUSY_SCAN_LINES).join('\n')
+    expect(captured).not.toContain('esc to interrupt')
+    expect(detectPaneBusy(captured, 'codex')).toBe('idle')
   })
 
   it('is unknown, not idle, when the provider has no verified signals', () => {
@@ -88,5 +96,90 @@ describe('detectPaneBusy', () => {
     const pane = ['one', 'two', 'three', 'four'].map(line => `  ${line}  `).join('\n')
     expect(paneTail(pane)).toEqual(['two', 'three', 'four'])
     expect(paneTail(pane, 0)).toHaveLength(4)
+  })
+})
+
+// The incident of 2026-11-03 (block 73): a live codex pane with the placeholder and the footer drawn but **no** `›` in
+// front of the placeholder. The frame was complete; only the glyph was missing, and the engine held on
+// `review_pane_unknown` for ten minutes while the reviewer sat idle.
+const CODEX_NO_GLYPH = [
+  '  Ask Codex to do anything',
+  '  GPT-6-Luna high · ~/projects/flow-finish',
+  '  ← for agents · ? for shortcuts',
+].join('\n')
+
+describe('a composer without the glyph (block 73)', () => {
+  it('reads the incident pane as idle once a second capture agrees', () => {
+    const first = inspectPane(CODEX_NO_GLYPH, 'codex', { now: 10_000 })
+    // One look is not an answer: the fallback needs the same frame twice, a second apart.
+    expect(first).toMatchObject({ state: 'unknown', reason: 'placeholder_pending' })
+    // A single-sample caller (the pure detector) never turns that into idle.
+    expect(detectPaneBusy(CODEX_NO_GLYPH, 'codex')).toBe('unknown')
+
+    const second = inspectPane(CODEX_NO_GLYPH, 'codex', { now: 11_200, previous: first.sample })
+    expect(second).toMatchObject({ state: 'idle', reason: 'composer_placeholder' })
+  })
+
+  it('refuses the same pane when the frame changed between the two captures', () => {
+    const first = inspectPane(CODEX_NO_GLYPH, 'codex', { now: 10_000 })
+    const redrawn = CODEX_NO_GLYPH.replace('~/projects/flow-finish', '~/projects/other')
+    expect(inspectPane(redrawn, 'codex', { now: 11_200, previous: first.sample }))
+      .toMatchObject({ state: 'unknown', reason: 'placeholder_pending' })
+    // And two looks closer together than a second are not a confirmation either.
+    expect(inspectPane(CODEX_NO_GLYPH, 'codex', { now: 10_500, previous: first.sample }))
+      .toMatchObject({ state: 'unknown', reason: 'placeholder_pending' })
+  })
+
+  it('keeps busy above the fallback: a placeholder with an interrupt hint is busy, not free', () => {
+    const busy = [
+      '  ◦ Working (8s • esc to interrupt)',
+      '  Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    const first = inspectPane(busy, 'codex', { now: 10_000 })
+    expect(first).toMatchObject({ state: 'busy', reason: 'busy_hint' })
+    // Even with a confirming second look: busy outranks idle, always.
+    expect(inspectPane(busy, 'codex', { now: 12_000, previous: first.sample })).toMatchObject({ state: 'busy' })
+    // The hint counts far above the tail as well, and through a wrapped status line.
+    const far = [busy, ...Array.from({ length: 9 }, (_, index) => `  row ${index}`)].join('\n')
+    expect(inspectPane(far, 'codex', { now: 10_000 }).state).toBe('busy')
+    expect(inspectPane('  ◦ Working (3s • esc to\n  interrupt)\n  Ask Codex to do anything', 'codex', { now: 10_000 }).state)
+      .toBe('busy')
+  })
+
+  it('never reads these frames as idle', () => {
+    const first = inspectPane(CODEX_NO_GLYPH, 'codex', { now: 10_000 })
+    // Each frame is one of the shapes that must never be read as free. The *reason* is the detector's own diagnosis — a
+    // frame can be refused for more than one of them — so the assertion is the state plus a reason to print in the journal.
+    const cases: string[] = [
+      // A pane scrolled into its own history: verdict lines and no composer.
+      'MAJOR src/a.ts:1 — x\nVERDICT: CHANGES_REQUESTED\nMINOR docs/b.md:2 — y',
+      // A modal over the composer: the row where the composer belongs is the dialog.
+      '  ▌ Select an environment\n    1. staging\n    2. production\n  ← for agents · ? for shortcuts',
+      // A partial redraw: the placeholder is there, the footer is not.
+      '  Ask Codex to do anything',
+      // A pane holding somebody's draft: text is not a placeholder, so the fallback does not apply.
+      '  please refactor the parser\n  ← for agents · ? for shortcuts',
+      // Copy mode: the badge is the only marker tmux leaves.
+      '[12/345]  Ask Codex to do anything\n  ← for agents · ? for shortcuts',
+    ]
+    for (const frame of cases) {
+      const inspection = inspectPane(frame, 'codex', { now: 11_000, previous: first.sample })
+      expect(inspection.state, frame).toBe('unknown')
+      expect(inspection.reason, frame).not.toBe('')
+    }
+    // The two structural refusals that have exactly one cause keep their exact code — they are what the journal prints.
+    expect(inspectPane('  Ask Codex to do anything', 'codex', { now: 11_000, previous: first.sample }).reason)
+      .toBe('footer_absent')
+    expect(inspectPane('  please refactor the parser\n  ← for agents · ? for shortcuts', 'codex', { now: 11_000 }).reason)
+      .toBe('placeholder_absent')
+    expect(inspectPane('[12/345]  Ask Codex to do anything\n  ← for agents · ? for shortcuts', 'codex', { now: 11_000 }).reason)
+      .toBe('copy_mode')
+  })
+
+  it('still reads the glyph itself, wherever it sits', () => {
+    const glyph = ['  › ', '  GPT-6-Luna high · ~/repo', '  ← for agents · ? for shortcuts'].join('\n')
+    expect(inspectPane(glyph, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
   })
 })

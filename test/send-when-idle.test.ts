@@ -10,11 +10,13 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentRecord, Provider, RunRecord } from '../src/core/types.js'
 import type { RuntimeDriver } from '../src/core/runtime.js'
-import { composerHoldsOurs } from '../src/core/runtime.js'
+import { composerHoldsOurs, resetPaneObservations } from '../src/core/runtime.js'
 
 let tmpDir: string
 
 beforeEach(() => {
+  // Each case seeds its own pane: an observation from the previous one must not arrive as `recent_busy`.
+  resetPaneObservations()
   tmpDir = mkdtempSync(join(tmpdir(), 'reeves-send-idle-'))
   process.env.REEVES_REGISTRY = tmpDir
   process.env.REEVES_CONFIG = join(tmpDir, 'config.json')
@@ -522,7 +524,10 @@ describe('readiness and the composer', () => {
       driver: cold, timings: { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 90_000, confirmPollMs: 1000 },
     })).toEqual({ sent: true })
 
-    // The same pane with a 20-second window: unconfirmed, and no blind repeat.
+    // The same pane with a 20-second window: unconfirmed, and no blind repeat. The pane's busy sighting from the send above
+    // belongs to that send; a fresh attempt starts with a clean observation record (block 73's recent-busy gate would
+    // otherwise refuse this one for a reason this test is not about).
+    resetPaneObservations()
     const short = new PaneDriver()
     short.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_IDLE]
     let shortLooks = 0
@@ -655,6 +660,60 @@ describe('a paste recorded outside the process', () => {
 
     expect(sendWhenIdle('agent-1', prompt, { driver, timings, pasted: { at: Date.now() - 120_000 } }))
       .toEqual({ sent: false, reason: 'composer_dirty' })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(0)
+  })
+})
+
+// The incident of 2026-11-03 (block 73): a codex composer with the placeholder and the footer drawn but no `›`. The pane was
+// idle, and the engine refused to type into it for ten minutes.
+const CODEX_NO_GLYPH = [
+  '  Ask Codex to do anything',
+  '  GPT-6-Luna high · ~/projects/flow-finish',
+  '  ← for agents · ? for shortcuts',
+].join('\n')
+
+describe('a composer without the glyph (block 73)', () => {
+  it('pastes into it, because the frame is complete and confirmed twice', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    // gate (pending) → confirmation → the pane now holds our paste (still without a glyph) → the turn starts. A real pane
+    // echoes what it was given; the placeholder is only there while the composer is empty.
+    const ours = ['  hello', '  ← for agents · ? for shortcuts'].join('\n')
+    driver.captures = [CODEX_NO_GLYPH, CODEX_NO_GLYPH, ours, CODEX_BUSY]
+    const timings = { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 5_000, confirmPollMs: 1000 }
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, timings })).toEqual({ sent: true })
+    expect(driver.pasted()).toEqual(['hello'])
+    expect(driver.count('send-keys')).toBe(1)
+    // The confirmation waited a second between the two captures: that is what a fallback costs.
+    expect(driver.delays.some(ms => ms >= 1_000)).toBe(true)
+  })
+
+  it('sends nothing when the second capture shows the turn had started', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const busy = ['  ◦ Working (2s • esc to interrupt)', ...CODEX_NO_GLYPH.split('\n')].join('\n')
+    driver.captures = [CODEX_NO_GLYPH, busy]
+    const timings = { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 5_000, confirmPollMs: 1000 }
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, timings })).toEqual({ sent: false, reason: 'busy' })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(0)
+  })
+
+  it('refuses a pane that was busy inside the confirm window, however free this frame looks', async () => {
+    // A transition is not an idle pane: the busiest thing the detector saw a moment ago still counts (block 73).
+    const { paneBusy, sendWhenIdle } = await seed()
+    const busyDriver = new PaneDriver()
+    busyDriver.captures = [CODEX_BUSY]
+    expect(paneBusy('agent-1', { driver: busyDriver })).toBe('busy')
+
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_IDLE]
+    const timings = { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 60_000, confirmPollMs: 1000 }
+
+    expect(sendWhenIdle('agent-1', 'hello', { driver, timings })).toEqual({ sent: false, reason: 'recent_busy' })
     expect(driver.pasted()).toEqual([])
     expect(driver.count('send-keys')).toBe(0)
   })

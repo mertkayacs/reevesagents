@@ -21,9 +21,10 @@ import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { PaneBusyState } from './activity.js'
-import type { EvidencePolicy, FlowDecision, FlowHold, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
+import type { EvidencePolicy, FlowDecision, FlowHold, FlowLogEntry, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
 import { DEFAULT_EVIDENCE_POLICY } from './flow.js'
 import {
+  FLOW_LOG_LIMIT,
   MAX_ENTER_RETRIES,
   appendLog,
   applyDecisionToState,
@@ -51,7 +52,7 @@ import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js
 import type { PlanTickView } from './flow-plan.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
-import { paneBusy, peekAgentRaw, sendWhenIdle } from './runtime.js'
+import { paneBusy, paneDiagnosis, peekAgentRaw, sendWhenIdle } from './runtime.js'
 import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
 import type { FlowVerdict } from './verdict.js'
@@ -72,12 +73,16 @@ export interface FlowPorts {
   // Raw capture: the verdict scan cannot match text that redaction replaced.
   peek: (_agentId: string, _lines: number) => string
   send: (_agentId: string, _text: string, _options?: DispatchSendOptions) => SendOutcome
+  // Why a pane was last read as it was ('composer_not_found', 'footer_absent', …). Optional: a test that only cares about
+  // the state can leave it out, and the hold then reports the state alone (block 73).
+  paneDiagnosis?: (_agentId: string) => string | null
 }
 
 export const defaultFlowPorts: FlowPorts = {
   paneBusy: agentId => paneBusy(agentId),
   peek: (agentId, lines) => peekAgentRaw(agentId, lines),
   send: (agentId, text, options) => sendWhenIdle(agentId, text, { pasted: options?.pasted ?? null }),
+  paneDiagnosis: agentId => paneDiagnosis(agentId),
 }
 
 export function readGitHead(repo: string): string {
@@ -635,6 +640,12 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     tree_clean: treeClean,
     dev_pane: devPane,
     review_pane: reviewPane,
+    // A pane the detector could not classify says why, in its own words: the hold is explained rather than merely named
+    // (block 73).
+    pane_diagnostics: {
+      dev: devPane === 'unknown' ? (ports.paneDiagnosis?.(state.roles.dev) ?? null) : null,
+      review: reviewPane === 'unknown' ? (ports.paneDiagnosis?.(state.roles.review) ?? null) : null,
+    },
     verdict: fromFile ? (notes.verdict ?? null) : scan.last,
     verdict_count: scan.count,
     verdict_notes: fromFile ? notes.text : scan.notes,
@@ -811,6 +822,36 @@ function pruneClosedNotes(state: FlowState, options: StepFlowOptions): void {
   }
 }
 
+// How long a pane may stay unclassifiable before the journal explains it. A tick that cannot read a pane holds at once —
+// that is the safe answer — but a hold that lasts minutes is a question an operator will ask, and the detector's own words
+// are the answer (block 73).
+export const PANE_UNKNOWN_HOLD_MS = 120_000
+
+// The one line that explains a pane which has been `unknown` for too long: which pane, and what the detector looked for and
+// did not find. Written once per pane and reason — the hold line already says the state.
+function paneStateUnknownNote(
+  state: FlowState,
+  decision: FlowDecision,
+  observations: FlowObservations,
+  at: string,
+): FlowLogEntry | null {
+  const pane = decision.reason === 'dev_pane_unknown' ? 'dev'
+    : decision.reason === 'review_pane_unknown' ? 'review'
+      : null
+  if (!pane) return null
+  const reason = observations.pane_diagnostics?.[pane]
+  if (!reason) return null
+  // `since` is when this hold started: the state's own record when the reason matches, this tick otherwise.
+  const since = state.hold !== null && state.hold.reason === decision.reason
+    ? Date.parse(state.hold.since)
+    : Date.parse(at)
+  const now = Date.parse(at)
+  if (!Number.isFinite(since) || !Number.isFinite(now) || now - since < PANE_UNKNOWN_HOLD_MS) return null
+  const detail = `${pane}: ${reason}`
+  if (state.log.some(entry => entry.event === 'pane_state_unknown' && entry.detail === detail)) return null
+  return { at, event: 'pane_state_unknown', detail }
+}
+
 // The hold a decision leaves behind: the engine's reason, the moment this hold started, and the human sentence when the
 // engine has one. `since` moves only when the reason (or its detail) changed, so `flow status` says how long the flow
 // has been standing instead of when the ticker last looked at it.
@@ -870,16 +911,19 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       const lastHold = [...state.log].reverse().find(entry => entry.event === 'hold')
       const journalled = lastHold?.detail === decision.reason
       const repeated = sameHold(state.hold, nextHold)
-      if (repeated && journalled) {
+      // A pane that has been unreadable for minutes gets one line of its own, even while the hold itself repeats silently.
+      const paneNote = paneStateUnknownNote(state, decision, observations, at)
+      if (repeated && journalled && !paneNote) {
         return { state, decision, dispatch: null, settled: null }
       }
       // A detailed hold (the plan is waiting for a brief) keeps the journal line it always had; a silent one gets the
       // one line that names it. `updated_at` is deliberately carried over: a hold is not a move, and the badge and the
       // `tick` line in `flow status` read that stamp to say when the last real move happened.
       const noted = decision.log_detail && !repeated ? applyDecisionToState(state, decision, at) : state
-      const log = !repeated || !journalled
+      const withHold = !repeated || !journalled
         ? appendLog(noted, { at, event: 'hold', detail: decision.reason })
         : noted.log
+      const log = paneNote === null ? withHold : [...withHold, paneNote].slice(-FLOW_LOG_LIMIT)
       const held: FlowState = { ...noted, hold: nextHold, log, updated_at: state.updated_at }
       return {
         state,

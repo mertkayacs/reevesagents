@@ -94,6 +94,24 @@ as `DETECTORS` in `src/core/attention.ts:190`); anything else needs an explicit 
 (`flow start --assume-idle`) and the flow records that it runs unguarded. The pane tail is
 re-read immediately before the paste, not only at the start of the tick.
 
+**What "free" is read from (block 73).** The glyph is one way to a composer, not the only one. On 2026-11-03 a live codex
+pane drew the placeholder and the footer but no `›` in front of the placeholder, and the engine held on
+`review_pane_unknown` for ten minutes while the reviewer sat idle. `inspectPane` (`src/core/activity.ts`) therefore reads the
+frame's structure, with the asymmetry stated in its rules:
+
+- a busy marker **anywhere in the captured frame** (the whole 40-row capture, and the frame joined into one line so a
+  wrapped status line still matches) → `busy`;
+- copy mode, no composer row, or a frame without the provider's own footer under it → `unknown`;
+- the glyph, wherever it sits → `idle`;
+- the exact placeholder *where the composer belongs*, with the provider's footer below it, no busy marker anywhere, and the
+  same frame captured twice at least a second apart → `idle`;
+- anything else → `unknown`, and `unknown` never becomes `idle` with time.
+
+`paneBusy` performs the confirming second capture itself, and `sendWhenIdle` refuses a pane that was observed `busy` inside
+the confirm window (`recent_busy`): a frame mid-transition is not an idle pane. A hold that lasts two minutes is journalled
+with the detector's own words — `pane_state_unknown: review: footer_absent` — so the operator reads what was looked for and
+not found instead of a bare `review_pane_unknown`.
+
 ### 2.3 Where the step runs
 
 The engine is a pure function (`flowTick`) wrapped by `stepFlow`, and **nothing in `src/core` starts a timer**.

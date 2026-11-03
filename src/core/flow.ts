@@ -367,6 +367,10 @@ export interface FlowObservations {
   // The round number of the notes file that answered — the file's own, which is not necessarily the round this tick
   // would compute: the reader finds a head's newest file, and a counter that moved must not hide it (block 69).
   notes_round?: number
+  // Why a pane reads as `unknown`, in the detector's own words (`composer_not_found`, `footer_absent`, `copy_mode`, …).
+  // A hold that lasts long enough is journalled with this, so the operator sees what was looked for and not found
+  // instead of a bare `review_pane_unknown` (block 73).
+  pane_diagnostics?: { dev: string | null, review: string | null }
 }
 
 // The record of a paste this flow made and has not had confirmed: what a retry tick has instead of the runtime's

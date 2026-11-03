@@ -7,7 +7,7 @@ import { PENDING_TTL_SEC, applyDecisionToState, createFlowState, flowTick } from
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { durablePath, panePath, publishNotes, stagingPath } from '../src/core/flow-notes.js'
 import type { FlowPorts, FlowStepResult, NotesRead, StepFlowOptions } from '../src/core/flow-runner.js'
-import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
+import { PANE_UNKNOWN_HOLD_MS, observeFlow, stepFlow } from '../src/core/flow-runner.js'
 
 // The effect layer: observation reads, and the claim -> act -> settle dispatch. Nothing here sends
 // into a pane the gate did not confirm, an ambiguous paste is never repeated, and a claim left on
@@ -1045,5 +1045,57 @@ describe('the paste record a fresh process needs (block 69, review round 2)', ()
     expect(ports.send.mock.calls[0]![2]).toEqual({ pasted: null })
     // Applied: the record is gone with the dispatch it belonged to.
     expect(readFlow('run-1').dispatch_paste).toBeNull()
+  })
+})
+
+describe('a pane that stays unreadable is explained (block 73)', () => {
+  function reviewing(): FlowState {
+    return makeState({
+      state: 'reviewing',
+      review_started_at: NOW,
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+  }
+
+  it('holds at once, and says why once the hold has lasted two minutes', () => {
+    seed(reviewing())
+    const blind = {
+      ...makePorts({ paneBusy: agentId => (agentId === 'rev-1' ? 'unknown' as const : 'idle' as const) }),
+      paneDiagnosis: () => 'footer_absent',
+    }
+
+    const first = step(blind, { head: 'aaa111' })
+    expect(first.decision.reason).toBe('review_pane_unknown')
+    expect(readFlow('run-1').log.at(-1)).toMatchObject({ event: 'hold', detail: 'review_pane_unknown' })
+    // Nothing explained yet: a hold is not news until it lasts.
+    expect(readFlow('run-1').log.some(entry => entry.event === 'pane_state_unknown')).toBe(false)
+
+    const later = step(blind, { head: 'aaa111', now: NOW + PANE_UNKNOWN_HOLD_MS + 1_000, at: '2026-01-01T00:02:01.000Z' })
+    expect(later.status).toBe('skipped')
+    const explained = readFlow('run-1').log.filter(entry => entry.event === 'pane_state_unknown')
+    expect(explained).toHaveLength(1)
+    expect(explained[0]!.detail).toBe('review: footer_absent')
+
+    // The same line is not written again on the next unreadable tick.
+    step(blind, { head: 'aaa111', now: NOW + PANE_UNKNOWN_HOLD_MS + 61_000, at: '2026-01-01T00:03:01.000Z' })
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'pane_state_unknown')).toHaveLength(1)
+  })
+
+  it('recovers when the pane becomes readable, without asking for the same round again', () => {
+    // The incident: the reviewer pane was idle but read as unknown (the composer had no glyph). Once it is readable the
+    // round carries on — the engine never pastes a second request for the same head.
+    seed(reviewing())
+    const blind = {
+      ...makePorts({ paneBusy: agentId => (agentId === 'rev-1' ? 'unknown' as const : 'idle' as const) }),
+      paneDiagnosis: () => 'composer_not_found',
+    }
+    expect(step(blind, { head: 'aaa111' }).decision.reason).toBe('review_pane_unknown')
+
+    const seeing = makePorts({ peek: () => verdictCapture(1, 'ACCEPT') })
+    const recovered = step(seeing, { head: 'aaa111', now: NOW + 60_000 })
+
+    expect(recovered.decision.reason).toBe('flow_done')
+    expect(seeing.send).not.toHaveBeenCalled()
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'request_review')).toHaveLength(0)
   })
 })

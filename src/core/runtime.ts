@@ -39,7 +39,8 @@ import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { paneInSession, realDriver, sessionInGroup, STALE_WINDOW_ERROR, VIEWER_SESSION_PATTERN, windowInSession, type RuntimeDriver } from './tmux.js'
 import { reapPaneProcess } from './process.js'
 import {
-  BUSY_SCAN_LINES, composerText, countWorkLines, detectPaneBusy, detectPaneReady, paneInCopyMode, type PaneBusyState,
+  BUSY_SCAN_LINES, CONFIRM_MIN_GAP_MS, composerText, countWorkLines, detectPaneReady, inspectPane, paneInCopyMode,
+  type PaneBusyState, type PaneInspection,
 } from './activity.js'
 import { redactSecrets } from './redact.js'
 import { providerDisplayName } from '../utils/display.js'
@@ -651,6 +652,62 @@ export function peekAgentRaw(agentId: string, lines = 10, options: RuntimeOption
   }
 }
 
+// Why a pane was last read the way it was, per pane. The flow journals it when a pane has been `unknown` for long enough
+// to matter, so the operator reads `pane_state_unknown: footer_absent` instead of a bare `review_pane_unknown` (block 73).
+const paneReasonByPane = new Map<string, string>()
+// When each pane was last seen `busy`. A send refuses a pane that was busy inside the confirm window even if this frame
+// looks free: a transition is not an idle pane (block 73).
+const lastBusyAtByPane = new Map<string, number>()
+
+// Tests seed a fresh pane per case; an observation left over from a previous case would refuse the next send as
+// `recent_busy` for no reason. Nothing in the product calls this.
+export function resetPaneObservations(): void {
+  paneReasonByPane.clear()
+  lastBusyAtByPane.clear()
+}
+
+export function paneDiagnosis(agentId: string): string | null {
+  try {
+    const agent = findAgent(agentId)
+    return agent.tmux_pane_id ? paneReasonByPane.get(agent.tmux_pane_id) ?? null : null
+  } catch {
+    return null
+  }
+}
+
+// One look at a pane, with the fallback confirmed: a frame that is only idle in the placeholder sense (no glyph, the
+// placeholder where the composer belongs, the footer under it) is captured a second time, a second later, and only the
+// agreement of the two frames is an answer. Everything else — busy, unknown, the glyph — is decided by that one frame.
+interface PaneReading {
+  inspection: PaneInspection
+  // The frame the verdict was taken from: the fallback re-captures, and a caller that then reads the composer must read
+  // the same frame the verdict describes.
+  text: string
+}
+
+function inspectAgentPane(agent: AgentRecord, paneText: string, driver: RuntimeDriver): PaneReading {
+  const settle = (inspection: PaneInspection, settledText: string): PaneReading => {
+    if (agent.tmux_pane_id) {
+      paneReasonByPane.set(agent.tmux_pane_id, inspection.reason)
+      if (inspection.state === 'busy') lastBusyAtByPane.set(agent.tmux_pane_id, Date.now())
+    }
+    return { inspection, text: settledText }
+  }
+  const first = inspectPane(paneText, agent.provider, { now: Date.now() })
+  if (first.reason !== 'placeholder_pending') return settle(first, paneText)
+  // The confirmation: the same frame, a second later. A redraw between the two is exactly the transition that must not be
+  // read as free.
+  const waited = CONFIRM_MIN_GAP_MS + 100
+  waitBlocking(driver, waited)
+  const settledText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  // The wait above *is* the interval the confirmation is about. A test driver sleeps without moving the wall clock, so the
+  // logical now is the first sample plus the wait; on a real driver the clock has moved at least that far.
+  return settle(inspectPane(settledText, agent.provider, {
+    previous: first.sample,
+    now: Math.max(Date.now(), first.sample.at + waited),
+  }), settledText)
+}
+
 // Is this agent still working? Fail-closed: a pane we cannot observe, an agent with no pane,
 // and a provider without a verified busy marker all answer 'unknown', which every automated
 // write must treat as busy (see core/activity.ts).
@@ -659,8 +716,11 @@ export function paneBusy(agentId: string, options: RuntimeOptions = {}): PaneBus
   try {
     const agent = findAgent(agentId)
     if (agent.headless || !agent.tmux_pane_id) return 'unknown'
-    if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return 'unknown'
-    return detectPaneBusy(capturePaneRaw(driver, agent, BUSY_SCAN_LINES), agent.provider)
+    if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) {
+      paneReasonByPane.set(agent.tmux_pane_id, 'stale_pane')
+      return 'unknown'
+    }
+    return inspectAgentPane(agent, capturePaneRaw(driver, agent, BUSY_SCAN_LINES), driver).inspection.state
   } catch {
     return 'unknown'
   }
@@ -693,6 +753,8 @@ export type SendRefusal =
   | 'target_not_ready'
   // The composer already holds text that is not ours: pasting would stack onto it.
   | 'composer_dirty'
+  // The pane looked free, but it was busy inside the confirm window: a frame mid-transition is not an idle pane (block 73).
+  | 'recent_busy'
 export type SendOutcome =
   | { sent: true }
   // `pastedAt` rides along with `unconfirmed_paste`: it is the moment the pane was last read as holding our prompt, and
@@ -748,9 +810,21 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
     if (paneInCopyMode(paneText)) return { sent: false, reason: 'target_not_ready' }
   }
 
-  const gate = detectPaneBusy(paneText, agent.provider)
+  // A configurable window, not a fixed nap: a cold provider can spend most of a minute before its first
+  // turn shows a busy marker, and the flow calls that a failed dispatch. It is also the window in which a collapsed
+  // paste counts as ours, and the window in which a pane that was busy is still not free to type into.
+  const confirmMs = Math.max(timings.confirmMs ?? timings.submitWaitMs, 0)
+  const pollMs = Math.max(timings.confirmPollMs ?? 1000, 1)
+
+  // The gate, with the placeholder fallback confirmed by a second capture when that is what the frame needs (block 73).
+  const reading = inspectAgentPane(agent, paneText, driver)
+  paneText = reading.text
+  const gate = reading.inspection.state
   if (gate === 'busy') return { sent: false, reason: 'busy' }
   if (gate === 'unknown') return { sent: false, reason: 'unknown' }
+  // It looked free a second ago and was busy before that: the frame is a transition, not an idle pane.
+  const lastBusy = agent.tmux_pane_id ? lastBusyAtByPane.get(agent.tmux_pane_id) ?? 0 : 0
+  if (confirmMs > 0 && lastBusy > 0 && Date.now() - lastBusy <= confirmMs) return { sent: false, reason: 'recent_busy' }
 
   // The input box exists — but is it *initialised*? A provider draws its composer hints only once it is
   // ready; a fresh pane with none of them is `target_not_ready`, and pasting into it loses the prompt
@@ -761,11 +835,6 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // holding our own text has no placeholder to hint with — the pane is ready, it is just waiting for the Enter.
   const composer = composerText(paneText, agent.provider)
   if (composer === null) return { sent: false, reason: 'unknown' }
-  // A configurable window, not a fixed nap: a cold provider can spend most of a minute before its first
-  // turn shows a busy marker, and the flow calls that a failed dispatch. It is also the window in which a collapsed
-  // paste counts as ours, so it is computed before the composer is judged.
-  const confirmMs = Math.max(timings.confirmMs ?? timings.submitWaitMs, 0)
-  const pollMs = Math.max(timings.confirmPollMs ?? 1000, 1)
   const inProcess = lastPasteAtByPane.get(agent.tmux_pane_id) ?? null
   const recorded = options.pasted?.at ?? null
   const ownership: ComposerOwnership = {
@@ -775,7 +844,7 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
     windowMs: confirmMs,
   }
   const alreadyOurs = composer !== '' && composerHoldsOurs(composer, text, ownership)
-  if (!alreadyOurs && detectPaneReady(paneText, agent.provider) === 'not_ready') {
+  if (!alreadyOurs && detectPaneReady(paneText, agent.provider, { state: gate }) === 'not_ready') {
     return { sent: false, reason: 'target_not_ready' }
   }
   if (composer !== '' && !alreadyOurs) return { sent: false, reason: 'composer_dirty' }
@@ -815,7 +884,7 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // (D2). A pane that really moved on (the agent started working, a modal appeared) no longer holds our text, or is
   // no longer ready, and that is a refusal. So the decision is made on the composer, not on the busy probe.
   const beforeEnter = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
-  if (detectPaneBusy(beforeEnter, agent.provider) !== 'idle') {
+  if (inspectPane(beforeEnter, agent.provider).state !== 'idle') {
     // Only the composer decides: the busy probe is what the redraw trips, and it says nothing about whose text is in
     // the box. Our exact text in it means the paste landed and the Enter is the only step missing.
     const holdsOurs = composerHoldsOurs(composerText(beforeEnter, agent.provider) ?? '', text, ownership)
@@ -839,7 +908,7 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // busy marker — or print it later than the window — used to look like a failed dispatch while the agent was already
   // working on it (block 23, D9).
   if (!stillOurs && countWorkLines(after) > countWorkLines(beforeEnter)) return { sent: true }
-  const afterBusy = detectPaneBusy(after, agent.provider)
+  const afterBusy = inspectPane(after, agent.provider).state
   // A pane that is not idle cannot take a keystroke, and a box that no longer holds our text is not ours to submit. The
   // readiness *hint* is deliberately not asked for here: with our text (a collapsed marker included) in the box there is
   // no placeholder left to hint with, and demanding one made a live composer look dead (block 69, the live codex box).

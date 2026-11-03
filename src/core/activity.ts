@@ -11,6 +11,15 @@
 //
 // Why pane text: no provider CLI exposes a machine-readable state, so the only surface true for
 // every provider is what it draws.
+//
+// The asymmetry is deliberate (block 73): a busy marker counts **anywhere in the captured frame**, while an idle verdict
+// needs the composer *in its place*. A stale busy line costs a hold; a missed one costs a turn that our paste interrupted.
+//
+// The glyph is not the only way to a composer. On 2026-11-03 a live codex pane sat with the placeholder and the footer
+// drawn but without the `›` in front of it (a redraw put it back), and the engine held on `review_pane_unknown` for ten
+// minutes. The frame was complete; only the glyph was missing. So a pane is idle when either the glyph is there, or the
+// placeholder sits exactly where the composer belongs, under the provider's own footer, with no busy marker anywhere —
+// confirmed by a second capture a second later (see `inspectPane`).
 
 import stripAnsi from 'strip-ansi'
 import type { Provider } from './types.js'
@@ -26,12 +35,18 @@ export const BUSY_TAIL_LINES = 3
 // footer of every provider fits well inside 40 lines.
 export const BUSY_SCAN_LINES = 40
 
+// The fallback below is only an answer when the same frame has been seen twice: a redraw between two captures is exactly
+// the transition that must not be read as "free".
+export const CONFIRM_MIN_GAP_MS = 1_000
+
 interface ProviderSignals {
   // Verified on a live pane: the hint a provider prints while a turn runs.
   busy: readonly RegExp[]
   // Verified on a live pane: the input box it draws while waiting for input. Multi-line,
   // because the tail is joined into one string before matching.
   idle: readonly RegExp[]
+  // The marker that introduces the composer row, when the provider draws one.
+  marker: RegExp
 }
 
 // Every regex below was read off a real pane of that provider on this machine; none of it is
@@ -45,12 +60,14 @@ const SIGNALS: Partial<Record<Provider, ProviderSignals>> = {
     // Idle input box, drawn as "❯ <text or placeholder>" above the status line.
     // A bare prompt (no text typed yet) trims to "❯", so the marker allows end of line.
     idle: [/^\s*❯(?:\s|$)/m],
+    marker: /^\s*❯\s?/,
   },
   codex: {
     // Status line while a turn runs: "◦ Working (8s • esc to interrupt)".
     busy: [/esc\s+to\s+interrupt/i],
     // Idle input box: "› Ask Codex to do anything" or a bare "› ".
     idle: [/^\s*›(?:\s|$)/m],
+    marker: /^\s*›\s?/,
   },
 }
 
@@ -70,11 +87,17 @@ export function gatedProviders(): Provider[] {
 // `tmux capture-pane` pads the pane to its full height: "last 3 lines" would otherwise mean
 // "3 blank rows".
 export function paneTail(paneText: string, count = BUSY_TAIL_LINES): string[] {
-  const lines = stripAnsi(paneText)
+  const lines = renderedLines(paneText)
+  return count > 0 ? lines.slice(-count) : lines
+}
+
+// What the pane draws, line by line, with the terminal chrome removed and blank rows dropped. One reader for every
+// classifier below, so "the same frame" means the same thing everywhere.
+function renderedLines(paneText: string): string[] {
+  return stripAnsi(paneText)
     .split('\n')
     .map(line => line.replace(/\r/g, '').trim())
     .filter(line => line !== '')
-  return count > 0 ? lines.slice(-count) : lines
 }
 
 // Readiness: is the composer *initialised*, not merely free of a busy marker? A provider draws its
@@ -90,21 +113,33 @@ const READY_HINTS: Partial<Record<Provider, readonly RegExp[]>> = {
   codex: [/Ask Codex to do anything/i, /←\s*for agents/i],
 }
 
-export type PaneReadiness = 'ready' | 'not_ready' | 'unknown'
+// Lines that are chrome rather than the composer: the provider's model line, its footer, a rule, a status glyph. A pane
+// whose composer is missing usually shows one of these where the composer belongs.
+const CHROME_LINE = /^(?:☤|─{5,}|[◦●•·]\s|←\s*for agents|(?:GPT-|Claude|DeepSeek|Hermes|Kimi|GLM)\b.*·)/i
 
-// Combined probe: `ready` requires the idle input box *and* one of the provider's composer hints. A
-// pane that shows the box but none of the hints is `not_ready` — the refusal the flow journals as
-// `target_not_ready` — while a pane with no box at all stays `unknown`, which the older gate already
-// refuses.
-export function detectPaneReady(paneText: string, provider: Provider): PaneReadiness {
-  if (!providerHasBusyDetector(provider)) return 'unknown'
-  const busy = detectPaneBusy(paneText, provider)
-  if (busy === 'busy') return 'unknown'   // callers check busy first; keeping them apart avoids a lie
-  if (busy !== 'idle') return 'unknown'
-  const hints = READY_HINTS[provider]
-  if (!hints || hints.length === 0) return 'ready'
-  const text = paneTail(paneText, BUSY_SCAN_LINES).join('\n')
-  return hints.some(marker => marker.test(text)) ? 'ready' : 'not_ready'
+function isChrome(line: string): boolean {
+  return CHROME_LINE.test(line)
+}
+
+// Where the composer sits: the last non-chrome row in the bottom of the frame, under (at most) a couple of chrome rows.
+// The search is bounded on purpose — a "composer" found in the middle of a log is a sentence that happens to look like a
+// placeholder, and reading it as the input box is how a prompt would be pasted over a working pane.
+const COMPOSER_WINDOW = 4
+
+function composerRow(lines: string[]): { line: string, index: number } | null {
+  const start = Math.max(0, lines.length - COMPOSER_WINDOW)
+  for (let index = lines.length - 1; index >= start; index -= 1) {
+    const line = lines[index]!
+    if (isChrome(line)) continue
+    return { line, index }
+  }
+  return null
+}
+
+// What the composer draws when it is empty, with the provider's marker removed if it is there.
+function composerLineText(line: string, provider: Provider): string {
+  const marker = SIGNALS[provider]?.marker
+  return (marker ? line.replace(marker, '') : line).trim()
 }
 
 // What an *empty* composer draws. Codex prints one fixed line; Hermes prints a rotating hint in the interface language,
@@ -133,12 +168,8 @@ export function isComposerPlaceholder(text: string, provider: Provider): boolean
 // line can be identified at all — the caller must then refuse rather than guess.
 export function composerText(paneText: string, provider: Provider): string | null {
   if (!providerHasBusyDetector(provider)) return null
-  const lines = stripAnsi(paneText)
-    .split('\n')
-    .map(line => line.replace(/\r/g, '').trim())
-    .filter(line => line !== '')
-  const marker = provider === 'hermes' ? /^\s*❯\s?/ : provider === 'codex' ? /^\s*›\s?/ : null
-  if (!marker) return null
+  const lines = renderedLines(paneText)
+  const marker = SIGNALS[provider]!.marker
   // The composer is the block whose first line carries the marker and whose last line sits just above the status line — not "the
   // last marked line in the tail". A long paste occupies many rows between the two; searching a forty-row window found nothing
   // and reported `unknown` while the text was on screen (block 44).
@@ -156,7 +187,16 @@ export function composerText(paneText: string, provider: Provider): string | nul
       break
     }
   }
-  if (start < 0) return null
+  if (start < 0) {
+    // No glyph anywhere: the pane may simply not have drawn it (block 73). The composer is still the row where it belongs,
+    // and reading *that* is what keeps a missing glyph from looking like a missing composer. Text found there is treated
+    // as somebody's draft — the caller refuses to paste over it — and the empty placeholder reads as empty.
+    const composer = composerRow(lines)
+    if (composer === null) return null
+    const text = composerLineText(composer.line, provider)
+    if (isComposerPlaceholder(text, provider)) return ''
+    return text
+  }
   // The block ends at the first line that is chrome, not text: the provider's model line, its footer or a rule. Without this the
   // model line under a one-line composer (`› Ask Codex to do anything` over `GPT-… high · …`) reads as typed text.
   const chrome = /^\s*(?:☤|─{5,}|[◦●•·]\s)|←\s*for agents|^\s*(?:GPT-|Claude|DeepSeek|Hermes|Kimi|GLM)\b.*·/i
@@ -195,21 +235,126 @@ export function paneInCopyMode(paneText: string): boolean {
   return COPY_MODE_PATTERN.test(stripAnsi(paneText))
 }
 
-export function detectPaneBusy(paneText: string, provider: Provider): PaneBusyState {
+// A frame a caller can compare with the next one: the composer, its footer and the rows between them. The whole frame is
+// not used on purpose — a log line scrolling above the composer must not read as "the pane changed".
+function paneFingerprint(lines: string[]): string {
+  return lines.slice(-(BUSY_TAIL_LINES + 2)).join('\n')
+}
+
+export interface PaneSample {
+  // Epoch ms of the capture that produced this fingerprint.
+  at: number
+  fingerprint: string
+}
+
+// Why a pane is not idle, in a code the journal can print: what was looked for and not found (block 73). `busy_hint` and
+// `composer_glyph` / `composer_placeholder` are the positive answers.
+export type PaneReason =
+  | 'busy_hint'
+  | 'composer_glyph'
+  | 'composer_placeholder'
+  | 'no_detector'
+  | 'empty_capture'
+  | 'copy_mode'
+  | 'composer_not_found'
+  | 'footer_absent'
+  | 'placeholder_absent'
+  | 'placeholder_pending'
+  | 'samples_disagree'
+
+export interface PaneInspection {
+  state: PaneBusyState
+  reason: PaneReason
+  // The frame, for a caller that wants to look again a second later and confirm it.
+  sample: PaneSample
+}
+
+// One look at the pane. The priorities are the contract (block 73):
+//   1. a busy marker **anywhere** in the captured frame → busy;
+//   2. copy mode, no composer, an incomplete frame → unknown;
+//   3. the old glyph → idle (a long paste pushes the marked line above the tail window, block 44);
+//   4. the exact placeholder where the composer belongs, under the provider's own footer, with no busy marker → idle, but
+//      only when the previous sample is the same frame at least `CONFIRM_MIN_GAP_MS` old;
+//   5. anything else → unknown. Unknown never turns into idle with time.
+export function inspectPane(
+  paneText: string,
+  provider: Provider,
+  options: { previous?: PaneSample | null, now?: number } = {},
+): PaneInspection {
+  const now = options.now ?? Date.now()
   const signals = SIGNALS[provider]
-  // No verified signals for this provider, or nothing captured: refuse to guess.
-  if (!signals) return 'unknown'
-  const tail = paneTail(paneText)
-  if (tail.length === 0) return 'unknown'
-  const text = tail.join('\n')
-  // Busy first: while a turn runs both providers still draw an input box, so the idle signal is
-  // present in both states and only the busy hint separates them.
-  if (signals.busy.some(marker => marker.test(text))) return 'busy'
-  if (signals.idle.some(marker => marker.test(text))) return 'idle'
-  // The composer can sit above the tail window: a brief pasted but not sent pushes the `❯` line out of the last forty rows, and
-  // the pane then reads as `unknown` while it is perfectly idle and holding our text (block 44, live `ten-dev`). The busy hint is
-  // still looked for only in the tail — an old `esc to interrupt` from an earlier turn must not make an idle pane look busy — so
-  // the whole screen is consulted for the idle marker alone.
+  if (!signals) return { state: 'unknown', reason: 'no_detector', sample: { at: now, fingerprint: '' } }
   const whole = stripAnsi(paneText)
-  return signals.idle.some(marker => marker.test(whole)) ? 'idle' : 'unknown'
+  const lines = renderedLines(paneText)
+  const sample: PaneSample = { at: now, fingerprint: paneFingerprint(lines) }
+  if (lines.length === 0) return { state: 'unknown', reason: 'empty_capture', sample }
+
+  // 1. Busy first, and anywhere in the frame: while a turn runs both providers still draw an input box, so an idle-looking
+  //    row is present in both states and only the busy hint separates them. The joined form is scanned too, because a
+  //    narrow pane wraps the status line and `esc to` / `interrupt)` on two rows is the same hint.
+  const joined = whole.replace(/\s*\n\s*/g, ' ')
+  if (signals.busy.some(marker => marker.test(whole) || marker.test(joined))) {
+    return { state: 'busy', reason: 'busy_hint', sample }
+  }
+
+  // 2. Structure. A pane in copy mode scrolls instead of typing, and a frame with neither a composer nor a footer is not a
+  //    finished screen — a modal, a login prompt or a half-drawn redraw all look like that.
+  if (paneInCopyMode(whole)) return { state: 'unknown', reason: 'copy_mode', sample }
+  const composer = composerRow(lines)
+  if (composer === null) return { state: 'unknown', reason: 'composer_not_found', sample }
+  const row = composer.line
+
+  // 3. The glyph, wherever it is: the composer can sit above the tail window while it holds a long paste (block 44).
+  if (signals.idle.some(marker => marker.test(whole))) return { state: 'idle', reason: 'composer_glyph', sample }
+
+  // 4. The fallback: the placeholder in the composer's place, the provider's own footer **under it**, no busy marker, and the
+  //    same frame seen twice. Every one of those is required — the absence of a busy marker alone proves nothing, and a
+  //    footer looked for anywhere would match the placeholder itself (codex's ask line is one of its own hints).
+  const footer = READY_HINTS[provider]
+  if (!footer || footer.length === 0) return { state: 'unknown', reason: 'footer_absent', sample }
+  const below = lines.slice(composer.index + 1).join('\n')
+  if (!footer.some(marker => marker.test(below))) return { state: 'unknown', reason: 'footer_absent', sample }
+  if (!isComposerPlaceholder(composerLineText(row, provider), provider)) {
+    return { state: 'unknown', reason: 'placeholder_absent', sample }
+  }
+  const previous = options.previous ?? null
+  if (!previous || previous.fingerprint !== sample.fingerprint || sample.at - previous.at < CONFIRM_MIN_GAP_MS) {
+    return { state: 'unknown', reason: 'placeholder_pending', sample }
+  }
+  return { state: 'idle', reason: 'composer_placeholder', sample }
+}
+
+// The plain verdict, for the callers that only need the state. A `placeholder_pending` frame reads as `unknown` here: the
+// confirmation needs a second capture, which is the runtime's job (`paneBusy`) and not something this pure function can
+// invent.
+export function detectPaneBusy(
+  paneText: string,
+  provider: Provider,
+  options: { previous?: PaneSample | null, now?: number } = {},
+): PaneBusyState {
+  return inspectPane(paneText, provider, options).state
+}
+
+export type PaneReadiness = 'ready' | 'not_ready' | 'unknown'
+
+// Combined probe: `ready` requires the idle input box *and* one of the provider's composer hints. A
+// pane that shows the box but none of the hints is `not_ready` — the refusal the flow journals as
+// `target_not_ready` — while a pane with no box at all stays `unknown`, which the older gate already
+// refuses.
+//
+// `state` lets a caller pass the verdict it already paid for (the runtime confirms the fallback with a second capture, and
+// asking again here would throw that confirmation away).
+export function detectPaneReady(
+  paneText: string,
+  provider: Provider,
+  options: { state?: PaneBusyState } = {},
+): PaneReadiness {
+  if (!providerHasBusyDetector(provider)) return 'unknown'
+  const busy = options.state ?? detectPaneBusy(paneText, provider)
+  if (busy === 'busy') return 'unknown'   // callers check busy first; keeping them apart avoids a lie
+  if (busy !== 'idle') return 'unknown'
+  const hints = READY_HINTS[provider]
+  if (!hints || hints.length === 0) return 'ready'
+  const text = paneTail(paneText, BUSY_SCAN_LINES).join('\n')
+  return hints.some(marker => marker.test(text)) ? 'ready' : 'not_ready'
 }
