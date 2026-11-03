@@ -407,38 +407,21 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(prose, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
   })
 
-  it('is not busy when an exact quoted status row sits directly before the composer', () => {
-    // The hardest shape: the quotation is the last row of the report, immediately above the box, so it occupies the status
-    // position itself. It continues the answer instead of opening a block, and that is what the pane is read on.
-    const directly = [
-      'The tests passed and the tree is clean.',
+  it('is busy on a real status row however the pane spaces it (block 74, review round 1)', () => {
+    // No padding, no paragraph break of its own: the status line sits straight above the box, which is exactly how the pane draws
+    // a turn when it does not leave a blank row. A layout condition here turned a working agent into `unknown`. A quotation that
+    // occupies that same position is indistinguishable from the status line, and block 74 decides it the way the risk runs: the
+    // hint wins, the pane is busy.
+    const tight = [
       '◦ Working (8s • esc to interrupt)',
       '› Ask Codex to do anything',
       '  GPT-6-Luna high · ~/projects/flow-finish',
       '  ← for agents · ? for shortcuts',
     ].join('\n')
-    expect(inspectPane(directly, 'codex', { now: 10_000 }).state).not.toBe('busy')
-  })
+    expect(inspectPane(tight, 'codex', { now: 10_000 })).toMatchObject({ state: 'busy', reason: 'busy_hint' })
 
-  it('is not busy when a quoted status row opens a paragraph straight above the composer (block 74, review round 1)', () => {
-    // The paragraph break is real — the report starts a new block — but the pane pads its status line from the box, and this
-    // row runs straight into the box. A layout fact, not a word, is what decides it.
-    const paragraph = [
-      'The suite passed and the tree is clean.',
-      '',
-      '◦ Working (8s • esc to interrupt)',
-      '› Ask Codex to do anything',
-      '  GPT-6-Luna high · ~/projects/flow-finish',
-      '  ← for agents · ? for shortcuts',
-    ].join('\n')
-    const inspection = inspectPane(paragraph, 'codex', { now: 10_000 })
-    expect(inspection.state).not.toBe('busy')
-    expect(inspection).toMatchObject({ state: 'unknown', reason: 'status_ambiguous' })
-
-    // The same block with the padding the pane draws under a real status line is a turn.
+    // Padding does not change the answer either.
     const padded = [
-      'The suite passed and the tree is clean.',
-      '',
       '◦ Working (8s • esc to interrupt)',
       '',
       '› Ask Codex to do anything',
@@ -446,6 +429,28 @@ describe('busy is read off the status rows only (block 74)', () => {
       '  ← for agents · ? for shortcuts',
     ].join('\n')
     expect(inspectPane(padded, 'codex', { now: 10_000 })).toMatchObject({ state: 'busy', reason: 'busy_hint' })
+  })
+
+  it('is still not busy when the report continues around the hint', () => {
+    // What a quotation cannot do is keep the status position: the report is still there, under the row. Prose, a finding line, a
+    // fence or a bullet between the row and the composer means the row belongs to the answer.
+    const prose = [
+      '◦ Working (8s • esc to interrupt)',
+      'The tests passed and the tree is clean, so the pane was idle when the next tick looked at it.',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(prose, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+
+    const finding = [
+      '◦ Working (8s • esc to interrupt)',
+      'MINOR docs/flows-design.md:88 — worth a sentence',
+      '› Ask Codex to do anything',
+      '  GPT-6-Luna high · ~/projects/flow-finish',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(finding, 'codex', { now: 10_000 }).state).toBe('idle')
   })
 
   it('reads a real turn as busy whatever the body says', () => {
