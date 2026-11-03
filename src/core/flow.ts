@@ -246,6 +246,11 @@ export interface FlowState {
   // no round, so the next tick presses Enter again; three such attempts are allowed, then a human is asked (block 69).
   // Optional in the file: a flow written before the field existed has spent none.
   enter_retries: number
+  // The paste this flow made into a pane and has not had confirmed. It exists because a scheduled tick is a *new process*:
+  // the runtime's in-process paste map is empty there, and without a record the next tick cannot recognise its own
+  // collapsed marker (`[Pasted Content N chars]`) and would refuse it as somebody else's text (block 69, review round 2).
+  // Cleared as soon as the dispatch settles or the flow moves on.
+  dispatch_paste: FlowDispatchPaste | null
   // The plan item whose brief the dispatch in flight was rendered from. An ACCEPT closes *this* item, not
   // "the next one in the document": the two differ as soon as a round runs long enough for the plan to change.
   active_plan_item: string | null
@@ -362,6 +367,17 @@ export interface FlowObservations {
   // The round number of the notes file that answered — the file's own, which is not necessarily the round this tick
   // would compute: the reader finds a head's newest file, and a counter that moved must not hide it (block 69).
   notes_round?: number
+}
+
+// The record of a paste this flow made and has not had confirmed: what a retry tick has instead of the runtime's
+// in-process map (block 69, review round 2).
+export interface FlowDispatchPaste {
+  // The role agent whose pane received it. A record is about one dispatch, not about panes in general.
+  agent: string
+  // The commit the prompt was about. A new head means a new dispatch, so an old record must not authorise a new prompt.
+  head: string
+  // Epoch ms of the last moment the pane was read as still holding our prompt; refreshed on every failed attempt.
+  at: number
 }
 
 // What a tick can measure about the review behind a verdict.
@@ -529,6 +545,7 @@ export function createFlowState(init: FlowInit): FlowState {
     pending: null,
     unsubstantiated_attempts: 0,
     enter_retries: 0,
+    dispatch_paste: null,
     answered_round: null,
     verdict_handled_for: null,
     verdict_handled_item: null,
@@ -624,6 +641,7 @@ export function parseFlowState(raw: unknown): FlowState {
     pending: parsePendingDispatch(record.pending),
     unsubstantiated_attempts: count(record.unsubstantiated_attempts),
     enter_retries: count(record.enter_retries),
+    dispatch_paste: parseDispatchPaste(record.dispatch_paste),
     answered_round: typeof record.answered_round === 'string' ? record.answered_round : null,
     verdict_handled_for: typeof record.verdict_handled_for === 'string' ? record.verdict_handled_for : null,
     verdict_handled_item: typeof record.verdict_handled_item === 'string' ? record.verdict_handled_item : null,
@@ -715,6 +733,18 @@ function parsePendingDispatch(raw: unknown): FlowPendingDispatch | null {
       ? { verdict_baseline: Math.floor(record.verdict_baseline) }
       : {}),
   }
+}
+
+// The persisted paste record, or null when there is none. Optional in the file: a state written by a build without it
+// simply has no cross-process evidence, which is the pre-block-69 behaviour.
+function parseDispatchPaste(raw: unknown): FlowDispatchPaste | null {
+  const record = asRecord(raw)
+  if (!record) return null
+  const agent = text(record.agent)
+  const head = text(record.head)
+  const at = typeof record.at === 'number' && Number.isFinite(record.at) ? Math.floor(record.at) : 0
+  if (!agent || !head || at <= 0) return null
+  return { agent, head, at }
 }
 
 // A queued spec was validated when it was added; on read only its identity is enforced, so a file
@@ -1757,12 +1787,22 @@ export const MAX_ENTER_RETRIES = 3
 // The paste is still in the box and the Enter did not start a turn: no round exists, so the decision is NOT applied — the
 // round counter and `review_started_at` stay where they were. The attempt is counted and journalled, the claim is
 // released, and the next tick presses Enter without pasting again (`sendWhenIdle` sees the composer holds our text).
-export function retryEnterDispatch(state: FlowState, reason: string, at = isoNow()): FlowState {
+//
+// The paste itself is written into the state, because the next tick is a different process: the runtime's in-process map
+// does not survive it, and without this record the collapsed marker would look like somebody else's text (block 69,
+// review round 2). `pasted` is what the sender reported — the moment the pane was last read as holding our prompt.
+export function retryEnterDispatch(
+  state: FlowState,
+  reason: string,
+  pasted: { agent: string, head: string, at: number } | null,
+  at = isoNow(),
+): FlowState {
   const attempt = state.enter_retries + 1
   return {
     ...state,
     pending: null,
     enter_retries: attempt,
+    dispatch_paste: pasted === null ? state.dispatch_paste : pasted,
     log: appendLog(state, {
       at,
       event: 'dispatch_retry_enter',
@@ -1788,7 +1828,8 @@ export function escalateUnconfirmedDispatch(state: FlowState, decision: FlowDeci
     log_detail: `review_dispatch_unconfirmed: the prompt is in the ${pane} pane and ${MAX_ENTER_RETRIES} Enters did not submit it — press Enter there`,
   }
   const escalated = applyDecisionToState(state, stuck, at)
-  return { ...escalated, enter_retries: 0 }
+  // Nothing is retried from here: the record that authorised our marker has done its job.
+  return { ...escalated, enter_retries: 0, dispatch_paste: null }
 }
 
 // The run (or one of its role agents) is gone: the flow is parked instead of being ticked against
@@ -1909,8 +1950,10 @@ function withDelta(
     // resetting it would hide a reviewer that never answered.
     review_started_at: options.advance ? decision.next_review_started_at : state.review_started_at,
     // Every settled decision ends the dispatch in flight: the claim exists only for the window
-    // between the paste and this write.
+    // between the paste and this write. The paste record goes with it — a dispatch that settled has nothing left to
+    // recognise on a later tick.
     pending: null,
+    dispatch_paste: null,
     // A decision that changes anything moved the flow, so no hold survives it: the reason the engine was waiting is
     // gone the moment it acted (block 64). Holds are written by the step that records one, not by this function.
     hold: null,

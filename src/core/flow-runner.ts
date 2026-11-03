@@ -57,19 +57,26 @@ import type { FlowVerdict } from './verdict.js'
 
 // Everything the engine must not know about. Injected so a test can describe a pane, a commit and
 // a reviewer without tmux, git or a nine-second paste settle.
+// What the flow knows about a paste it already made and has not had confirmed. It travels with the send because a
+// scheduled tick is a new process: `sendWhenIdle`'s own paste map is empty there, and this record is the evidence that a
+// collapsed `[Pasted Content N chars]` marker is ours (block 69, review round 2).
+export interface DispatchSendOptions {
+  pasted?: { at: number } | null
+}
+
 export interface FlowPorts {
   // Argument names stay in the signature for the reader; the base lint rule reports a name in a
   // type-only position as unused, so they carry the allowed `_` prefix (same as elsewhere here).
   paneBusy: (_agentId: string) => PaneBusyState
   // Raw capture: the verdict scan cannot match text that redaction replaced.
   peek: (_agentId: string, _lines: number) => string
-  send: (_agentId: string, _text: string) => SendOutcome
+  send: (_agentId: string, _text: string, _options?: DispatchSendOptions) => SendOutcome
 }
 
 export const defaultFlowPorts: FlowPorts = {
   paneBusy: agentId => paneBusy(agentId),
   peek: (agentId, lines) => peekAgentRaw(agentId, lines),
-  send: (agentId, text) => sendWhenIdle(agentId, text),
+  send: (agentId, text, options) => sendWhenIdle(agentId, text, { pasted: options?.pasted ?? null }),
 }
 
 export function readGitHead(repo: string): string {
@@ -934,8 +941,14 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     }
 
     // The paste itself, still inside the gate: no state lock is held here, so `sendWhenIdle` can
-    // take the runs lock on its own.
-    const send = ports.send(dispatch.agent, dispatch.message)
+    // take the runs lock on its own. The claimed state carries the record of a paste this flow already made into that
+    // same pane for that same head — the only evidence a fresh process has for its own collapsed marker.
+    const paste = dispatch.state.dispatch_paste
+    const send = ports.send(dispatch.agent, dispatch.message, {
+      pasted: paste !== null && paste.agent === dispatch.agent && paste.head === (phase.decision.head ?? dispatch.state.claim.head)
+        ? { at: paste.at }
+        : null,
+    })
 
     // Phase three — settle, and only for our own claim: a claim that someone else already settled
     // must not be applied twice. Kept inside the gate so a control command waits for the outcome
@@ -970,11 +983,20 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
         // not applied (rounds and `review_started_at` stay put) and the claim is released. The next tick presses Enter
         // only — `sendWhenIdle` sees our text in the box and pastes nothing — up to three times; after that a human is
         // asked, because nothing else can submit it (block 69).
+        // The record the next tick needs: the pane and the head this prompt was for, and the moment the composer was
+        // last read as holding it. `pastedAt` comes from the sender because that is when it looked.
+        const pasted = send.pastedAt === undefined
+          ? null
+          : {
+            agent: dispatch.agent,
+            head: phase.decision.head ?? dispatch.state.claim.head,
+            at: send.pastedAt,
+          }
         if (after.enter_retries >= MAX_ENTER_RETRIES) {
           const escalated = escalateUnconfirmedDispatch(after, phase.decision, at)
           return { state: escalated, status: 'unconfirmed', path: saveFlow(escalated, { root: options.root }) }
         }
-        const retried = retryEnterDispatch(after, send.reason, at)
+        const retried = retryEnterDispatch(after, send.reason, pasted, at)
         return { state: retried, status: 'refused', path: saveFlow(retried, { root: options.root }) }
       }
       if (send.reason === 'unconfirmed') {

@@ -1006,3 +1006,44 @@ describe('a verdict has to name the commit it judges (block 69)', () => {
     expect(statSync(inbox).mode & 0o777).toBe(0o700)
   })
 })
+
+describe('the paste record a fresh process needs (block 69, review round 2)', () => {
+  it('writes the paste into the state and hands it to the next tick\'s send', () => {
+    seed(makeState({
+      state: 'fixing',
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    }))
+    const pastedAt = NOW + 42
+    const first = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed_paste' as const, pastedAt })) })
+
+    step(first, { head: 'bbb222' })
+
+    // The first attempt had nothing to recognise — it pasted into a clean composer.
+    expect(first.send.mock.calls[0]![2]).toEqual({ pasted: null })
+    // The record the retry depends on: agent, head and the moment the composer was last seen holding our prompt.
+    expect(readFlow('run-1').dispatch_paste).toEqual({ agent: 'rev-1', head: 'bbb222', at: pastedAt })
+
+    // The next tick is a new process: it has no in-process paste map, and this record is the only evidence that the
+    // collapsed marker in the pane is ours. It travels with the send, so `sendWhenIdle` presses Enter instead of
+    // refusing the marker as somebody else's text.
+    const second = makePorts({ send: vi.fn(() => ({ sent: true as const })) })
+    step(second, { head: 'bbb222', now: NOW + 60_000, at: '2026-01-01T00:01:00.000Z' })
+
+    expect(second.send.mock.calls[0]![2]).toEqual({ pasted: { at: pastedAt } })
+  })
+
+  it('drops the record once the dispatch settles, and refuses to reuse it for another head', () => {
+    seed(makeState({
+      state: 'fixing',
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      dispatch_paste: { agent: 'rev-1', head: 'ccc333', at: NOW - 1000 },
+    }))
+
+    // A record for another head authorises nothing: this prompt is about bbb222, not ccc333.
+    const ports = makePorts({ send: vi.fn(() => ({ sent: true as const })) })
+    step(ports, { head: 'bbb222' })
+    expect(ports.send.mock.calls[0]![2]).toEqual({ pasted: null })
+    // Applied: the record is gone with the dispatch it belonged to.
+    expect(readFlow('run-1').dispatch_paste).toBeNull()
+  })
+})

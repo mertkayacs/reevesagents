@@ -290,7 +290,10 @@ describe('sendWhenIdle', () => {
 
     // First attempt: a clean composer, so this call pastes, the Enter never starts a turn, and the box keeps our marker.
     driver.captures = [CODEX_IDLE, ours, ours, ours, ours]
-    expect(sendWhenIdle('agent-1', prompt, { driver, timings })).toEqual({ sent: false, reason: 'unconfirmed_paste' })
+    const first = sendWhenIdle('agent-1', prompt, { driver, timings })
+    expect(first).toMatchObject({ sent: false, reason: 'unconfirmed_paste' })
+    // The stamp the caller persists: without it a *new process* (the next scheduled tick) cannot recognise the marker.
+    expect(typeof (first as { pastedAt?: number }).pastedAt).toBe('number')
     expect(driver.pasted()).toEqual([prompt])
 
     // Second attempt: the pane already holds our paste — nothing to type, only the Enter to press.
@@ -581,7 +584,7 @@ describe('the repeated Enter', () => {
     // was submitted and the box still holds the prompt, which is what the flow retries with one Enter (block 69).
     driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_OUR_TEXT]
 
-    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toEqual({ sent: false, reason: 'unconfirmed_paste' })
+    expect(sendWhenIdle('agent-1', 'hello', { driver, ...FAST })).toMatchObject({ sent: false, reason: 'unconfirmed_paste' })
     const keys = driver.calls.filter(call => call.args[0] === 'send-keys').map(call => call.args[3])
     expect(keys).toEqual(['Enter', 'Escape', 'Enter'])
     expect(driver.pasted()).toEqual(['hello'])
@@ -608,5 +611,32 @@ describe('a collapsed paste belongs to us only while it is fresh', () => {
 
   it('still recognises our own text exactly, however old the paste is', () => {
     expect(composerHoldsOurs('hello', 'hello', { pastedAt: 1_000, now: 999_999, windowMs: 1 })).toBe(true)
+  })
+})
+
+// The retry tick is a new process: `lastPasteAtByPane` is empty there, so the record the flow keeps has to be what makes
+// the marker attributable (block 69, review round 2).
+describe('a paste recorded outside the process', () => {
+  it('presses Enter on a collapsed marker a previous process pasted', async () => {
+    // A pane this file never pasted into: its in-process stamp is empty by construction.
+    const { sendWhenIdle } = await seed({ tmux_pane_id: '%7' })
+    const driver = new PaneDriver()
+    driver.panes.add('%7')
+    const prompt = 'x'.repeat(1510)
+    const ours = [
+      '› [Pasted Content 1022 chars]',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    driver.captures = [ours, ours, CODEX_BUSY]
+    const timings = { pasteSettleMs: 0, submitWaitMs: 0, confirmMs: 30_000, confirmPollMs: 1000 }
+
+    // Without the record it is somebody else's text.
+    expect(sendWhenIdle('agent-1', prompt, { driver, timings })).toEqual({ sent: false, reason: 'composer_dirty' })
+
+    // With it — the same pane, the same marker — one Enter, and no second paste.
+    driver.captures = [ours, ours, CODEX_BUSY]
+    expect(sendWhenIdle('agent-1', prompt, { driver, timings, pasted: { at: Date.now() - 60_000 } })).toEqual({ sent: true })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.count('send-keys')).toBe(1)
   })
 })

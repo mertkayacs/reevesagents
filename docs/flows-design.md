@@ -746,7 +746,8 @@ paste that was sitting in the box — the live run of 2026-11-02 did exactly tha
 shapes: the exact text, the paste placeholder, and a visible prefix of at least 32 characters (the floor keeps a bare
 `› ` from matching). The placeholder is a *collapsed* paste — it no longer carries the text, so it counts as ours only
 while a paste of ours into that pane is recent (`dispatch_confirm_seconds`, refreshed whenever the composer is read as
-ours). Without that window a marker somebody else pasted would be submitted as our prompt (block 69).
+ours) or while the caller holds its own record of that paste. Without either a marker somebody else pasted would be
+submitted as our prompt (block 69).
 
 **`pane_changed` is not `unconfirmed`.** The first is the pre-Enter refusal: the pane moved on, the composer did not
 hold our text, and **nothing was submitted** — so no round exists, the decision is not consumed, the claim is released
@@ -791,6 +792,11 @@ send whose text is gone but whose busy hint never came keeps the older rule unch
   `dispatch_retry_enter ... attempt N/3`, the claim is released, and the next tick presses Enter without pasting again
   (the composer still holds our text, so `sendWhenIdle` sends the keystroke only). After the third attempt the flow
   escalates with `review_dispatch_unconfirmed`: the prompt is in the pane and only a human can submit it.
+- **The paste outlives the process.** Every scheduled tick is a new process, so the runtime's in-process paste map is
+  empty by the time the retry runs — a collapsed marker would look like somebody else's text and the tick would refuse
+  as `composer_dirty`. The flow therefore writes `dispatch_paste: { agent, head, at }` into its own state on every
+  `unconfirmed_paste`, `ports.send` carries it back into `sendWhenIdle`, and the marker is attributable again. The
+  record is dropped as soon as the dispatch settles, and it authorises nothing for a different head.
 - **A non-ACCEPT verdict must come from the file.** The pane capture still holds the verdicts of earlier rounds, and
   `claim.verdict_count` is a counter, not a binding: when one more verdict line appeared in the window it was applied to
   whatever head the flow was on. A `CHANGES_REQUESTED` read from the pane is therefore refused (`hold awaiting_verdict`
