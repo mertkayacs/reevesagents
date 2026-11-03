@@ -111,10 +111,20 @@ describe('the document parser', () => {
 })
 
 describe('import', () => {
-  it('creates every item as pending and records the source hash', () => {
+  it('creates a ticked item done and an unticked one pending on the first import (block 78)', () => {
+    // A first import has no history to defend: the document is the only evidence there is. Two lines are ticked in `WITH_IDS`,
+    // and a project that already finished a milestone must not arrive looking untouched (the live 165-item plan with 91 ticks).
     const result = importNew(WITH_IDS)
     expect(result.added).toEqual(['P1.1.1', 'P1.1.2', 'P1.2.1', 'P2.1.1'])
-    expect(result.plan.items.every(item => item.status === 'pending')).toBe(true)
+    const byId = new Map(result.plan.items.map(item => [item.id, item]))
+    expect(byId.get('P1.1.1')!.status).toBe('done')
+    expect(byId.get('P1.1.1')!.closed_by).toBe('ticked_by_hand')
+    expect(byId.get('P1.1.2')!.status).toBe('done')
+    expect(byId.get('P1.2.1')!.status).toBe('pending')
+    expect(byId.get('P1.2.1')!.closed_by).toBeNull()
+    expect(byId.get('P2.1.1')!.status).toBe('pending')
+    // No owner action: nothing waits for a human on an item the document closed.
+    expect(byId.get('P1.1.1')!.owner_action).toBe(false)
     expect(result.plan.imported_at).toBe(AT)
     expect(result.plan.source_hash).toBe(hashDocument(WITH_IDS))
     expect(result.unchanged).toBe(false)
@@ -138,8 +148,9 @@ describe('import', () => {
     const gone = second.plan.items.find(item => item.id === 'P1.1.2')!
     expect(gone.missing_since).toBe('2026-11-02T09:01:00.000Z')
     expect(gone.line).toBeNull()
-    // It is still there, with the status it had.
-    expect(gone.status).toBe('pending')
+    // It is still there, with the status it had — the first import closed it by the document's own tick.
+    expect(gone.status).toBe('done')
+    expect(gone.closed_by).toBe('ticked_by_hand')
   })
 
   it('never demotes a done item: an unticked line becomes a conflict', () => {
@@ -163,9 +174,10 @@ describe('import', () => {
 
   it('logs no conflict for an item the document already ticks on the first import', () => {
     const first = importNew(WITH_IDS)
-    // Two items are ticked in the document, and the mirror has just been created: nothing disagrees yet.
+    // Two items are ticked in the document, and the mirror has just been created: nothing disagrees yet, and the ticks are honoured.
     expect(first.conflicts).toEqual([])
-    expect(first.plan.items.find(item => item.id === 'P1.1.1')!.status).toBe('pending')
+    expect(first.plan.items.find(item => item.id === 'P1.1.1')!.status).toBe('done')
+    expect(first.plan.items.find(item => item.id === 'P1.1.1')!.closed_by).toBe('ticked_by_hand')
   })
 
   it('does not promote a hand-ticked item, and says so', () => {
@@ -744,5 +756,76 @@ describe('a paused flow hands a busy row to the human (block 56)', () => {
       id, status: 'done', yes: true, note: 'x', now: NOW, at: AT,
       intervention: { paused: false, round_live: false },
     })).toThrow(/the engine owns in_work/)
+  })
+})
+
+// Block 78, the live `salon-dashboard` plan of 03.11: 165 items, 91 of them already ticked, imported as 165 pending — a project
+// with a finished milestone looked untouched, and every one of the 165 asked for a brief.
+describe('the first import honours the document (block 78)', () => {
+  // Three ticked, two open, one id-less row that must stay out of it.
+  const MOSTLY_DONE = [
+    '# Plan',
+    '',
+    '- [x] **A1** — first',
+    '- [x] **A2** — second',
+    '- [x] **A3** — third',
+    '- [ ] **B1** — fourth',
+    '- [ ] **B2** — fifth',
+    '',
+  ].join('\n')
+
+  it('closes the ticked items and leaves the open ones pending', () => {
+    const result = importNew(MOSTLY_DONE)
+    const byId = new Map(result.plan.items.map(item => [item.id, item]))
+
+    expect([...byId.values()].filter(item => item.status === 'done').map(item => item.id)).toEqual(['A1', 'A2', 'A3'])
+    expect([...byId.values()].filter(item => item.status === 'pending').map(item => item.id)).toEqual(['B1', 'B2'])
+    // The provenance is on the record: a close by the document is not an ACCEPT.
+    for (const id of ['A1', 'A2', 'A3']) expect(byId.get(id)!.closed_by).toBe('ticked_by_hand')
+    for (const id of ['B1', 'B2']) expect(byId.get(id)!.closed_by).toBeNull()
+    // Nothing waits for a human, and nothing claims a commit.
+    expect([...byId.values()].every(item => item.owner_action === false) || byId.get('B1')!.owner_action === false).toBe(true)
+    expect([...byId.values()].every(item => item.head === null)).toBe(true)
+    expect(result.conflicts).toEqual([])
+  })
+
+  it('does not close anything on the second import, and reports no false conflict', () => {
+    const first = importNew(MOSTLY_DONE)
+    const second = importInto(first.plan, {
+      run_id: 'run-1', source_path: 'docs/implementation-plan.md', text: MOSTLY_DONE, now: NOW + 60_000, at: AT,
+    })
+
+    expect(second.unchanged).toBe(true)
+    expect(second.added).toEqual([])
+    expect(second.conflicts).toEqual([])
+    expect(second.plan.items.filter(item => item.status === 'done')).toHaveLength(3)
+  })
+
+  it('keeps an unticks conflict for an item an ACCEPT closed', () => {
+    // The rule after the first import is unchanged: the mirror's `done` is evidence, and the document may not take it back.
+    const first = importNew(MOSTLY_DONE)
+    const unticked = MOSTLY_DONE.replace('- [x] **A1**', '- [ ] **A1**')
+    const second = importInto(first.plan, {
+      run_id: 'run-1', source_path: 'docs/implementation-plan.md', text: unticked, now: NOW + 60_000, at: AT,
+    })
+
+    expect(second.plan.items.find(item => item.id === 'A1')!.status).toBe('done')
+    expect(second.conflicts.map(conflict => `${conflict.kind}:${conflict.item_id}`)).toContain('unticked:A1')
+  })
+
+  it('reports a hand tick after the first import as a conflict, not a close', () => {
+    const first = importNew(MOSTLY_DONE)
+    const ticked = MOSTLY_DONE.replace('- [ ] **B1**', '- [x] **B1**')
+    const second = importInto(first.plan, {
+      run_id: 'run-1', source_path: 'docs/implementation-plan.md', text: ticked, now: NOW + 60_000, at: AT,
+    })
+
+    expect(second.plan.items.find(item => item.id === 'B1')!.status).toBe('pending')
+    expect(second.conflicts.map(conflict => `${conflict.kind}:${conflict.item_id}`)).toContain('ticked_by_hand:B1')
+  })
+
+  it('refuses a broken document exactly as it did before', () => {
+    // A document that is not a list of items is refused whole: no mirror is written from a guess.
+    expect(() => importNew('# Plan\n\nnothing here is a checklist\n')).toThrow(/no plan items|not a plan/i)
   })
 })

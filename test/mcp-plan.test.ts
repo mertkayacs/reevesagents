@@ -112,8 +112,10 @@ describe('flow_plan', () => {
     call('flow_plan_import', { run_id: RUN, file: join(registry, 'plan.md') })
     const body = payload(call('flow_plan', { run_id: RUN }))
 
-    expect(body.progress).toEqual({ done: 0, total: 2 })
-    expect(body.next).toMatchObject({ id: 'P1.1.1', status: 'pending' })
+    // The document ticks P1.1.1, and a first import honours it (block 78): the plan opens one item done, and the picker points
+    // at the open one.
+    expect(body.progress).toEqual({ done: 1, total: 2 })
+    expect(body.next).toMatchObject({ id: 'P1.1.2', status: 'pending' })
     expect(body.waiting.conflicts).toBe(0)
     // The items carry no brief body: a payload is a transcript, the file is the record.
     expect(JSON.stringify(body)).not.toContain('requirements')
@@ -122,7 +124,7 @@ describe('flow_plan', () => {
   it('reads one item, and says so when the id is unknown', () => {
     call('flow_plan_import', { run_id: RUN, file: join(registry, 'plan.md') })
     const one = payload(call('flow_plan', { run_id: RUN, item_id: 'P1.1.1' }))
-    expect(one.item).toMatchObject({ id: 'P1.1.1', status: 'pending', head: null, rounds: 0 })
+    expect(one.item).toMatchObject({ id: 'P1.1.1', status: 'done', closed_by: 'ticked_by_hand', head: null, rounds: 0 })
 
     const missing = call('flow_plan', { run_id: RUN, item_id: 'NOPE' })
     expect(missing.isError).toBe(true)

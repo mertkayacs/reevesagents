@@ -196,6 +196,10 @@ export function registerPlanCommands(flow: Command): void {
         }
         const parts = [`${result.plan.items.length} items`]
         if (result.added.length > 0) parts.push(`${result.added.length} new`)
+        // A first import honours the document's ticks: say how many items arrived already done, so the count is not a surprise
+        // when `plan` reports a finished milestone out of nowhere (block 78).
+        const ticked = result.plan.items.filter(item => item.closed_by === 'ticked_by_hand').length
+        if (result.added.length > 0 && ticked > 0) parts.push(`${ticked} ticked in the document`)
         if (result.missing.length > 0) parts.push(`${result.missing.length} missing`)
         if (result.conflicts.length > 0) parts.push(`${result.conflicts.length} conflict${result.conflicts.length === 1 ? '' : 's'}`)
         console.log(`${opts.dryRun === true ? 'would import' : 'imported'}  ${sourcePath}: ${parts.join(', ')}`)

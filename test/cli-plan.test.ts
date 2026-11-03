@@ -165,13 +165,15 @@ describe('flow plan', () => {
   it('imports the document and prints the progress a human asked for', async () => {
     const imported = await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
     expect(imported.out).toContain('3 items, 3 new')
+    // The document ticks P1.1.1, and a first import honours it — and says how many it took from the document (block 78).
+    expect(imported.out).toContain('1 ticked in the document')
 
     const { out } = await runCli(['flow', 'plan', '--run', 'run-p'])
-    expect(out).toContain('progress  0/3 done')
-    expect(out).toContain('3 pending')
+    expect(out).toContain('progress  1/3 done')
+    expect(out).toContain('2 pending')
     // An item without a brief is what the picker stops at, and the line says so: it is not dispatched and it is
     // not hidden.
-    expect(out).toContain('next      P1.1.1 — "create the workspace"  needs brief')
+    expect(out).toContain('next      P1.1.2 — "wire lint"  needs brief')
   })
 
   it('reports an unchanged document instead of rewriting it', async () => {

@@ -40,6 +40,10 @@ export const PLAN_LIMITS = {
   title: 500,
 } as const
 
+// Where a `done` came from, so a close by the document is never mistaken for an ACCEPT (block 78): `ticked_by_hand` is a first import
+// that honoured a `- [x]` already in the file, `accept` is a round the engine settled, `operator` is `flow plan set`.
+export type PlanClosedBy = 'ticked_by_hand' | 'accept' | 'operator'
+
 export type PlanStatus =
   | 'pending'
   | 'needs_brief'
@@ -185,6 +189,9 @@ export interface PlanItem {
   line: number | null
   // Why an item waits for a human, when the reason is not the status itself: `rounds_exhausted` today.
   block_reason?: string | null
+  // Where a `done` came from (block 78). Absent on the items written before this field existed, which is why the reader treats a
+  // missing value as `null` rather than refusing the plan.
+  closed_by?: PlanClosedBy | null
 }
 
 export interface Plan {
@@ -401,10 +408,14 @@ export function importInto(plan: Plan | null, options: ImportOptions): ImportRes
     const previous = existing.get(parsed.id)
     if (!previous) {
       added.push(parsed.id)
+      // A first import has no history to defend: the document is the only evidence there is, and a `- [x]` line means the item was
+      // finished before this flow existed. It is created `done` and says so — `closed_by: 'ticked_by_hand'` — so a close by the document
+      // is never read as an ACCEPT (block 78: a 165-item plan with 91 ticks arrived as 165 pending).
+      const ticked = firstImport && parsed.checked
       items.push({
         id: parsed.id,
         title: parsed.title,
-        status: 'pending',
+        status: ticked ? 'done' : 'pending',
         spec: null,
         spec_path: null,
         spec_hash: null,
@@ -412,10 +423,11 @@ export function importInto(plan: Plan | null, options: ImportOptions): ImportRes
         rounds: 0,
         notes_ref: null,
         updated_at: at,
-        owner_action: false,
+        owner_action: ticked ? deriveOwnerAction('done') : false,
         missing_since: null,
         line: parsed.line,
         block_reason: null,
+        closed_by: ticked ? 'ticked_by_hand' : null,
       })
       continue
     }
@@ -600,7 +612,13 @@ export function setItemStatus(plan: Plan, input: SetStatusInput): { plan: Plan, 
         ...plan,
         conflicts,
         items: plan.items.map(entry => (entry.id === item.id
-          ? { ...entry, status: input.status, owner_action: deriveOwnerAction(input.status), updated_at: at }
+          ? {
+            ...entry,
+            status: input.status,
+            owner_action: deriveOwnerAction(input.status),
+            updated_at: at,
+            ...(input.status === 'done' ? { closed_by: 'operator' as const } : {}),
+          }
           : entry)),
       },
     }
@@ -611,7 +629,13 @@ export function setItemStatus(plan: Plan, input: SetStatusInput): { plan: Plan, 
     plan: {
       ...plan,
       items: plan.items.map(entry => (entry.id === item.id
-        ? { ...entry, status: input.status, owner_action: deriveOwnerAction(input.status), updated_at: at }
+        ? {
+          ...entry,
+          status: input.status,
+          owner_action: deriveOwnerAction(input.status),
+          updated_at: at,
+          ...(input.status === 'done' ? { closed_by: 'operator' as const } : {}),
+        }
         : entry)),
     },
   }
@@ -677,6 +701,7 @@ export function closeItemOnAccept(
         rounds: input.rounds,
         notes_ref: input.notes_ref,
         updated_at: at,
+        closed_by: 'accept' as const,
       }
       : item)),
   }
@@ -790,6 +815,8 @@ export interface PlanItemView {
   id: string
   title: string
   status: PlanStatus
+  // Where a `done` came from: a first import that honoured the document's tick, an ACCEPT, or an operator's `plan set`.
+  closed_by: PlanClosedBy | null
   spec: { id: string, title: string, unstructured: boolean } | null
   spec_path: string | null
   spec_hash: string | null
@@ -808,6 +835,7 @@ export function planItemView(item: PlanItem): PlanItemView {
     id: item.id,
     title: item.title,
     status: item.status,
+    closed_by: item.closed_by ?? null,
     spec: item.spec
       ? { id: item.spec.id, title: item.spec.title, unstructured: item.spec.unstructured === true }
       : null,
@@ -927,6 +955,9 @@ function parseItem(record: Record<string, unknown>): PlanItem {
     missing_since: typeof record.missing_since === 'string' ? record.missing_since : null,
     line: typeof record.line === 'number' ? record.line : null,
     block_reason: typeof record.block_reason === 'string' ? record.block_reason : null,
+    closed_by: record.closed_by === 'ticked_by_hand' || record.closed_by === 'accept' || record.closed_by === 'operator'
+      ? record.closed_by
+      : null,
   }
 }
 

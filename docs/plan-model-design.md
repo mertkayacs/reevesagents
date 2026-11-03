@@ -124,7 +124,7 @@ enumerating statuses. `owner_action` is derived on write, never accepted from a 
 | `queued` | brief attached, dispatch expected | `plan attach`, `plan next`, the engine re-queuing after a refused dispatch |
 | `in_work` | a dispatch for it is in flight or the dev is fixing | **engine only** (claim of a dispatch, fix decisions, and the close of an accepted round that arrived before the item was marked `reviewing`) |
 | `reviewing` | a review of its head is running | **engine only** (`request_review`) |
-| `done` | ACCEPT of the closing commit, or a human said so | engine **only** on a substantiated ACCEPT (`closeItemOnAccept`); `plan set --status done --yes [--note <why>]` |
+| `done` | ACCEPT of the closing commit, a human said so, or — on a **first import only** — the document's own `- [x]` | engine **only** on a substantiated ACCEPT (`closeItemOnAccept`); `plan set --status done --yes [--note <why>]`; a first import of a document that already ticks the item (block 78). The record says which: `closed_by` is `accept`, `operator` or `ticked_by_hand`, so a close by the document never reads as a review the engine did not run |
 | `blocked_owner` | the dev or the reviewer reported a decision only the owner can take | the engine, from an escalation carrying `owner_decision`; `plan set` |
 | `skipped` | deliberately not doing it | `plan set --status skipped --yes` |
 
@@ -244,11 +244,11 @@ for the source document. Over the cap the import refuses with the actual number 
 
 | case | what happens | why |
 | --- | --- | --- |
-| new item in the document | appended in document order as `pending`, or `needs_brief` when no brief is attached | the plan may grow; the owner should see it |
+| new item in the document | appended in document order as `pending` (`needs_brief` once a brief is attached); **on a first import a `- [x]` line is created `done` with `closed_by: "ticked_by_hand"`** (block 78) | the plan may grow; a project that already finished a milestone must not arrive looking untouched |
 | item gone from the document | `missing_since = now`, status kept, excluded from `next`, counted as `missing` in `flow plan` | a typo or a restructure must not erase delivered work |
 | `done` item now unchecked in the document | status stays `done`, a `PlanConflict` (`kind: "unticked"`, `line`, `at`) is appended and shown by `flow plan` — the engine's own write-back (§3.5) is what keeps this from happening in the first place | the human may be right, but a re-import does not silently rewrite an ACCEPT — §3.5 |
 | item text edited | `title` updated, id unchanged (id-bearing plans) or a new `auto:` id (id-less plans), `spec` untouched | the brief was attached to an id, not to a sentence |
-| `[x]` in the document, mirror says `pending` | **not** promoted to `done`; on a **re-import** a `PlanConflict` (`kind: "ticked_by_hand"`) is logged. A first import logs nothing: there is no record to disagree with, and the id-bearing real plan opens with 83 ticked items — 83 conflicts would bury the one that matters | a checkbox is not evidence; only ACCEPT is (§2.2) |
+| `[x]` in the document, mirror says `pending` | **not** promoted to `done`; on a **re-import** a `PlanConflict` (`kind: "ticked_by_hand"`) is logged. A first import closes the item instead and records `closed_by: "ticked_by_hand"`, so the close is never mistaken for an ACCEPT: with no mirror there is nothing to disagree with, and the live 165-item plan arrived with 91 ticks (block 78) | a checkbox is not evidence about a round the engine ran; on a first import it is the only evidence there is (§2.2) |
 | `source_hash` unchanged | nothing at all is written, `imported_at` untouched | a re-import must be a no-op on an unchanged file |
 | document format not recognised | refuse with `unsupported_format`, the offending line number and the two accepted shapes | guessing a format is how a plan silently becomes empty |
 
