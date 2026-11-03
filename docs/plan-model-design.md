@@ -292,9 +292,12 @@ claim onto the mark commit, asks for no review and spends no round. It also clos
 engine keeps in step cannot disagree with the mirror about an item the mirror closed.
 
 Guards, because the close outranks the mark: a dirty tree defers the write (`plan_mark_deferred: tree_dirty`, one journal
-line) and the next clean pass writes it; a missing document, an unreadable one, a path outside the project or a git that
-refuses to commit is journalled as `plan_mark_failed <reason>`, the file is put back as it was if the commit failed, and the
-item stays `done` in the mirror. A line that already says `[x]` is reported and never re-written or re-committed. Success is
+line) and the next clean pass writes it; a missing document, an unreadable one, a path outside the project, a document that
+does not parse, a row that now belongs to another id, a row the document no longer lists, or a git that refuses to commit is
+journalled as `plan_mark_failed <id>: <reason>` — the reconciliation reports those mismatches too, so a deferred mark that
+can never be written is a fact on the record rather than a silent gap — the file is put back as it was if the commit failed,
+and the item stays `done` in the mirror. A line that already says `[x]` is reported and never re-written or re-committed, and
+a failure already in the journal is not written again on the next pass. Success is
 `plan_item_marked <ID> <sha>` in the flow's journal, plus one `plan.item_marked` notification so the panel's journal says
 it too.
 

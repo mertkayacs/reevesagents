@@ -406,3 +406,70 @@ describe('a plain row is identified by its text (block 72, review round 2)', () 
     expect(document()).toContain('- [ ] and the outro')
   })
 })
+
+describe('a deferred mark that can no longer be written is reported (block 72, review round 3)', () => {
+  function doneWithoutMark(id: string): Plan {
+    const plan = planWith(['P1.1', 'P1.2'])
+    return {
+      ...plan,
+      items: plan.items.map(item => (item.id === id ? { ...item, status: 'done' as const, head: baseCommit() } : item)),
+    }
+  }
+
+  it('journals the mismatch instead of dropping the item in silence', () => {
+    seed(doneWithoutMark('P1.1'), reviewingState({ active_plan_item: null, claim: { head: git('rev-parse', 'HEAD'), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } }))
+    // The line the mirror recorded now belongs to another item: a plain reword, the way a plan grows a task.
+    writeFileSync(join(repo, DOC_PATH), DOC.replace('- [ ] **P1.1** — first item', '- [ ] **P9.9** — something else'), 'utf-8')
+    git('add', '-A')
+    git('commit', '-qm', 'docs: replace the first row')
+    const before = document()
+    const commitsBefore = Number(git('rev-list', '--count', 'HEAD'))
+
+    const outcome = applyPlanMarks('run-1', { repo, tree_clean: true, attempt: 'reconcile', at: AT })
+
+    expect(outcome.marked).toEqual([])
+    expect(outcome.failures).toEqual([{ id: 'P1.1', reason: 'line 3 belongs to P9.9, not to P1.1' }])
+    // Nothing written, nothing committed — and the operator is told, which is the whole point.
+    expect(document()).toBe(before)
+    expect(Number(git('rev-list', '--count', 'HEAD'))).toBe(commitsBefore)
+    const failure = readFlow('run-1').log.find(entry => entry.event === 'plan_mark_failed')
+    expect(failure?.detail).toBe('P1.1: line 3 belongs to P9.9, not to P1.1')
+
+    // A second pass over the same broken state is not news: no second line.
+    applyPlanMarks('run-1', { repo, tree_clean: true, attempt: 'reconcile', at: AT })
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_mark_failed')).toHaveLength(1)
+  })
+
+  it('reports a plain row as the derived id it now carries', () => {
+    const plain = ['# plan', '', '- [ ] Write the intro', '- [ ] and the outro', ''].join('\n')
+    writeFileSync(join(repo, DOC_PATH), plain, 'utf-8')
+    git('add', '-A')
+    git('commit', '-qm', 'docs: a plain plan')
+    const created = createPlan({ run_id: 'run-1', source_path: DOC_PATH, text: plain, now: NOW, at: AT })
+    const item = created.plan.items[0]!
+    seed({ ...created.plan, items: [{ ...item, status: 'done' as const, head: baseCommit() }] }, reviewingState({ active_plan_item: null }))
+    writeFileSync(join(repo, DOC_PATH), plain.replace('Write the intro', 'Write the outro'), 'utf-8')
+
+    const outcome = applyPlanMarks('run-1', { repo, tree_clean: true, attempt: 'reconcile', at: AT })
+
+    expect(outcome.failures).toHaveLength(1)
+    expect(outcome.failures[0]!.id).toBe(item.id)
+    expect(outcome.failures[0]!.reason).toContain('belongs to auto:')
+    expect(document()).toContain('- [ ] Write the outro')
+    expect(readFlow('run-1').log.some(entry => entry.event === 'plan_mark_failed' && entry.detail.includes('belongs to auto:'))).toBe(true)
+  })
+
+  it('reports a done item the document stopped listing', () => {
+    const plan = doneWithoutMark('P1.1')
+    const dropped: Plan = {
+      ...plan,
+      items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, line: null } : item)),
+    }
+    seed(dropped, reviewingState({ active_plan_item: null }))
+
+    const outcome = applyPlanMarks('run-1', { repo, tree_clean: true, attempt: 'reconcile', at: AT })
+
+    expect(outcome.marked).toEqual([])
+    expect(outcome.failures[0]).toEqual({ id: 'P1.1', reason: 'the document no longer lists this item' })
+  })
+})

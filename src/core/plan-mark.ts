@@ -194,14 +194,36 @@ export function markPlanItems(options: MarkPlanOptions): MarkPlanOutcome {
 
 // Which done items still have an unticked line? The retry path after a deferred mark, and the honest way to ask: the
 // mirror says done, the document says not — that difference is the work left to do here.
-export function pendingPlanMarks(plan: Plan, parsed: PlanDocument): string[] {
-  const pending: string[] = []
+//
+// A done item whose stored line is no longer *its* row is the other answer, and it is not silence: the document moved under
+// the record (a reworded plain row, a line that now belongs to another id, a line that is gone), so the mark cannot be
+// written. Those come back as failures for the caller to journal — a reconciliation that dropped them left the operator
+// with an unticked line and no word about it (block 72, review round 3).
+export interface PendingMarks {
+  pending: string[]
+  failures: { id: string, reason: string }[]
+}
+
+export function pendingPlanMarks(plan: Plan, parsed: PlanDocument): PendingMarks {
+  const result: PendingMarks = { pending: [], failures: [] }
   for (const item of plan.items) {
     if (item.status !== 'done') continue
     const row = rowFor(parsed, item.line, item.id)
-    if (row && !row.checked) pending.push(item.id)
+    if (!row) {
+      const actual = parsed.items.find(entry => entry.line === item.line)
+      result.failures.push({
+        id: item.id,
+        reason: item.line === null
+          ? 'the document no longer lists this item'
+          : actual
+            ? `line ${item.line} belongs to ${actual.id}, not to ${item.id}`
+            : `line ${item.line} is not a plan item any more`,
+      })
+      continue
+    }
+    if (!row.checked) result.pending.push(item.id)
   }
-  return pending
+  return result
 }
 
 export interface PlanMarksOptions {
@@ -238,7 +260,7 @@ export function applyPlanMarks(runId: string, options: PlanMarksOptions): MarkPl
   // the document cannot be read: a close that could not be written is reported by name, not silently dropped.
   const requested = options.ids ?? (options.closed ? [options.closed] : [])
   const document = probeDocument(options.repo, plan.source_path)
-  let pending: string[] = []
+  let pending: PendingMarks = { pending: [], failures: [] }
   if (document.ok) {
     // The document has to parse before any of it is written: a checkbox committed into a file the plan reader cannot read
     // is worse than no mark at all (block 72, review round 1). One fact, one line — the same text on every tick, so the
@@ -256,16 +278,15 @@ export function applyPlanMarks(runId: string, options: PlanMarksOptions): MarkPl
     }
     pending = pendingPlanMarks(plan, parsed)
   }
-  const ids = [...new Set([...requested, ...pending])]
-  if (ids.length === 0) return emptyMarkOutcome()
+  const ids = [...new Set([...requested, ...pending.pending])]
+  if (ids.length === 0 && pending.failures.length === 0) return emptyMarkOutcome()
 
-  const outcome = markPlanItems({
-    repo: options.repo,
-    source_path: plan.source_path,
-    ids,
-    plan,
-    tree_clean: options.tree_clean,
-  })
+  // The pass marks what it can and reports what it cannot: a row that moved, a document that vanished. Silence here is what
+  // left an unticked line with no explanation (block 72, review round 3).
+  const marked = ids.length === 0
+    ? emptyMarkOutcome()
+    : markPlanItems({ repo: options.repo, source_path: plan.source_path, ids, plan, tree_clean: options.tree_clean })
+  const outcome: MarkPlanOutcome = { ...marked, failures: [...marked.failures, ...pending.failures] }
   journalPlanMarks(runId, outcome, { root: options.root, at: options.at, attempt })
   return outcome
 }
@@ -298,10 +319,10 @@ export function journalPlanMarks(
   try {
     withRunsLock(() => {
       const current = readFlow(runId, { root: options.root })
-      // A failure that is the same as the one already recorded is not news: a document that stays broken must not write a
-      // line on every tick (the close names it once, the reconciliation retries silently).
-      const lastFailure = [...current.log].reverse().find(entry => entry.event === 'plan_mark_failed')
-      const fresh = lines.filter(line => !(line.event === 'plan_mark_failed' && lastFailure?.detail === line.detail))
+      // A failure that is already recorded is not news: a document that stays broken (or a row that stays somebody else's)
+      // must not write a line on every tick — the close names it once, the reconciliation retries silently.
+      const recorded = new Set(current.log.filter(entry => entry.event === 'plan_mark_failed').map(entry => entry.detail))
+      const fresh = lines.filter(line => !(line.event === 'plan_mark_failed' && recorded.has(line.detail)))
       if (fresh.length === 0) return
       const log = fresh.reduce((entries, line) => appendLogEntries(entries, { at, event: line.event, detail: line.detail }), current.log)
       saveFlow({ ...current, log }, { root: options.root })
