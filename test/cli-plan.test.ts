@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
-import { saveFlow } from '../src/core/flow-store.js'
+import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { readPlan } from '../src/core/plan.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
@@ -240,6 +240,35 @@ describe('flow plan set and status', () => {
 
     const done = await runCli(['flow', 'plan', 'set', '--run', 'run-p', '--item', 'P1.1.1', '--status', 'done', '--yes', '--note', 'delivered before the flow'])
     expect(done.out).toContain('done')
+  })
+
+  it('ticks the document line when an item is closed by hand (block 72)', async () => {
+    await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
+    const before = readFileSync(join(tmpDir, 'plan.md'), 'utf-8')
+
+    const done = await runCli(['flow', 'plan', 'set', '--run', 'run-p', '--item', 'P1.1.2', '--status', 'done', '--yes', '--note', 'delivered by hand'])
+
+    // The same write-back an ACCEPT does: the one line, the rest of the file untouched.
+    expect(done.out).toContain('marked    P1.1.2')
+    const after = readFileSync(join(tmpDir, 'plan.md'), 'utf-8')
+    expect(after).toContain('- [x] **P1.1.2** — wire lint')
+    expect(after.replace('- [x] **P1.1.2**', '- [ ] **P1.1.2**')).toBe(before)
+    expect(readFlow('run-p').log.some(entry => entry.event === 'plan_item_marked' && entry.detail.startsWith('P1.1.2 '))).toBe(true)
+  })
+
+  it('reports the mark in --json, including the case where the line was already ticked', async () => {
+    await runCli(['flow', 'plan', 'import', '--run', 'run-p', '--file', join(tmpDir, 'plan.md')])
+
+    const once = await runCli(['flow', 'plan', 'set', '--run', 'run-p', '--item', 'P1.2.1', '--status', 'done', '--yes', '--note', 'hand', '--json'])
+    const payload = JSON.parse(once.out) as { document: { marked: string[], sha: string | null } }
+    expect(payload.document.marked).toEqual(['P1.2.1'])
+    expect(payload.document.sha).toBe('aaa111')
+
+    // A line that is already ticked is reported as such and writes nothing.
+    const again = await runCli(['flow', 'plan', 'set', '--run', 'run-p', '--item', 'P1.1.1', '--status', 'done', '--yes', '--note', 'hand', '--json'])
+    const second = JSON.parse(again.out) as { document: { marked: string[], already: string[] } }
+    expect(second.document.marked).toEqual([])
+    expect(second.document.already).toEqual(['P1.1.1'])
   })
 
   it('refuses to close an item while its round is running, and refuses to reopen a closed one', async () => {

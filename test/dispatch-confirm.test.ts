@@ -422,8 +422,10 @@ describe('an ACCEPT collected in idle closes the item (D10)', () => {
     expect(plan.items.find(item => item.id === 'P1.1')!.status).toBe('done')
     expect(plan.items.filter(item => item.status === 'done')).toHaveLength(1)
     expect(sent).toHaveLength(0)
-    // The journal names the close through the decision detail; the item itself is `done` in the mirror.
-    expect(readFlow('run-1').log.at(-1)?.detail).toContain('needs a brief for P1.2')
+    // The journal names the close through the decision detail; the item itself is `done` in the mirror. (The write-back of
+    // the tick into the document may follow it as its own line — this fixture has no document on disk, so it reports
+    // `plan_mark_failed` after the decision, which is why the assertion looks for the entry, not the last one.)
+    expect(readFlow('run-1').log.some(entry => (entry.detail ?? '').includes('needs a brief for P1.2'))).toBe(true)
     expect(plan.items.find(item => item.id === 'P1.1')!.head).toBe(HEAD)
   })
 

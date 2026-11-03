@@ -15,7 +15,8 @@ import type { Command } from 'commander'
 import { listFlowFiles, readFlow } from '../../core/flow-store.js'
 import type { FlowState } from '../../core/flow.js'
 import { appendLog } from '../../core/flow.js'
-import { readGitHead } from '../../core/flow-runner.js'
+import { isGitTreeClean, readGitHead } from '../../core/flow-runner.js'
+import { applyPlanMarks } from '../../core/plan-mark.js'
 import { saveFlow } from '../../core/flow-store.js'
 import { readRun } from '../../core/runs.js'
 import { addFlowSpecs, roundIsLive } from '../../core/flow-control.js'
@@ -405,15 +406,40 @@ export function registerPlanCommands(flow: Command): void {
             return { plan: applied.plan === current ? null : applied.plan, value: applied }
           })
         const item = result.plan.items.find(entry => entry.id === opts.item)!
+        // A manual close is a close like any other: the line in the document is ticked and committed, and the same guards
+        // apply (a dirty tree defers it, a missing document is journalled) — block 72.
+        const marks = dryRun || item.status !== 'done'
+          ? null
+          : applyPlanMarks(runId, {
+            repo: parkedFlow.repo,
+            tree_clean: isGitTreeClean(parkedFlow.repo),
+            ids: [item.id],
+            attempt: 'close',
+          })
         if (json) {
           console.log(JSON.stringify({
             dry_run: opts.dryRun === true,
             item: { id: item.id, status: item.status, previous: result.previous, owner_action: item.owner_action, updated_at: item.updated_at },
+            ...(marks
+              ? {
+                document: {
+                  marked: marks.marked.map(entry => entry.id),
+                  already: marks.already,
+                  deferred: marks.deferred,
+                  failures: marks.failures,
+                  sha: marks.sha,
+                },
+              }
+              : {}),
           }, null, 2))
           return
         }
         const note = opts.note ? `, note: ${opts.note}` : ''
         console.log(`${item.id}  ${result.previous} → ${item.status}  (manual${note})${opts.dryRun === true ? '  [dry run]' : ''}`)
+        if (marks && marks.marked.length > 0) console.log(`marked    ${marks.marked.map(entry => entry.id).join(', ')} in the plan document (${marks.sha?.slice(0, 7)})`)
+        if (marks && marks.already.length > 0) console.log(`marked    ${marks.already.join(', ')} was already ticked`)
+        if (marks && marks.deferred) console.log('marked    deferred: the tree is dirty; the next clean tick writes it')
+        for (const failure of marks?.failures ?? []) console.log(`marked    ${failure.id}: ${failure.reason}`)
       } catch (err) {
         failPlan(err)
       }

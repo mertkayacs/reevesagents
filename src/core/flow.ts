@@ -1610,6 +1610,10 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // freshness check first would hold the tick in `awaiting_verdict` and let the dev's new commit sit
   // unseen until the review timeout escalated the flow.
   if (observations.head !== state.claim.head) {
+    // A commit that only touched the plan or its briefs is not work: the engine's own mark of a closed item is exactly
+    // such a commit, and asking a reviewer to read a checkbox is a round spent on nothing (block 72). Re-anchor on it and
+    // keep the round for work.
+    if (observations.docs_only_since_claim === true) return reanchor(state, observations.head)
     const gate = reviewGate(state, observations)
     if (gate) return gate
     return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now, observations.notes_staging_path)

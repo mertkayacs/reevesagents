@@ -520,6 +520,10 @@ what is left. The design is `docs/plan-model-design.md`; two rules matter when y
   reported as a *conflict* instead.
 - `done` means an ACCEPT of the commit that closed the item, or an explicit `flow plan set … --status done
   --yes --note <why>`. A `[x]` you type yourself is not evidence.
+- the close is written back: the engine ticks that one line (`- [ ]` → `- [x]`, nothing else) and commits it
+  as `chore(flow): mark <ID> done in the plan`. The commit is docs-only, so it asks for no review; a dirty tree
+  defers the tick and the next clean pass writes it, and a document the engine cannot write is journalled
+  (`plan_mark_failed`) without undoing the close.
 
 - `reevesagents flow plan import --run <run> --file docs/implementation-plan.md [--dry-run]` — import or
   re-import the document. The path is resolved against the run's project directory (so it works from any

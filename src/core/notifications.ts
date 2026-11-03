@@ -30,9 +30,10 @@ export const NOTIFICATION_KINDS = [
   'run.created', 'run.stopped', 'run.archived',
   'agent.needs_human', 'agent.failed', 'agent.finished',
   'probe.failed', 'flow.escalated', 'flow.review_timeout',
-  // Two plan kinds: an item closing is the progress the owner asked to see, and a blocked item is the one thing a
-  // plan cannot move by itself. Both are produced by the engine only.
-  'plan.item_done', 'plan.item_blocked', 'plan.item_needs_brief',
+  // The plan kinds: an item closing is the progress the owner asked to see, a blocked item is the one thing a plan cannot
+  // move by itself, and a mark is the engine writing that close back into the document (block 72). All produced by the
+  // engine only.
+  'plan.item_done', 'plan.item_blocked', 'plan.item_needs_brief', 'plan.item_marked',
   'external',
 ] as const
 export type NotificationKind = typeof NOTIFICATION_KINDS[number]
@@ -41,6 +42,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number]
 // "a human is required" state, so they are refused at the HTTP boundary (§2.2).
 export const PRODUCT_ONLY_KINDS: readonly NotificationKind[] = [
   'flow.escalated', 'flow.review_timeout', 'plan.item_done', 'plan.item_blocked', 'plan.item_needs_brief',
+  'plan.item_marked',
 ]
 
 export const DEFAULT_SEVERITY: Record<NotificationKind, NotificationSeverity> = {
@@ -56,6 +58,7 @@ export const DEFAULT_SEVERITY: Record<NotificationKind, NotificationSeverity> = 
   'plan.item_done': 'info',
   'plan.item_blocked': 'warn',
   'plan.item_needs_brief': 'warn',
+  'plan.item_marked': 'info',
   external: 'info',
 }
 

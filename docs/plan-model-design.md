@@ -246,7 +246,7 @@ for the source document. Over the cap the import refuses with the actual number 
 | --- | --- | --- |
 | new item in the document | appended in document order as `pending`, or `needs_brief` when no brief is attached | the plan may grow; the owner should see it |
 | item gone from the document | `missing_since = now`, status kept, excluded from `next`, counted as `missing` in `flow plan` | a typo or a restructure must not erase delivered work |
-| `done` item now unchecked in the document | status stays `done`, a `PlanConflict` (`kind: "unticked"`, `line`, `at`) is appended and shown by `flow plan` | the human may be right, but the engine does not silently rewrite an ACCEPT — §3.5 |
+| `done` item now unchecked in the document | status stays `done`, a `PlanConflict` (`kind: "unticked"`, `line`, `at`) is appended and shown by `flow plan` — the engine's own write-back (§3.5) is what keeps this from happening in the first place | the human may be right, but a re-import does not silently rewrite an ACCEPT — §3.5 |
 | item text edited | `title` updated, id unchanged (id-bearing plans) or a new `auto:` id (id-less plans), `spec` untouched | the brief was attached to an id, not to a sentence |
 | `[x]` in the document, mirror says `pending` | **not** promoted to `done`; on a **re-import** a `PlanConflict` (`kind: "ticked_by_hand"`) is logged. A first import logs nothing: there is no record to disagree with, and the id-bearing real plan opens with 83 ticked items — 83 conflicts would bury the one that matters | a checkbox is not evidence; only ACCEPT is (§2.2) |
 | `source_hash` unchanged | nothing at all is written, `imported_at` untouched | a re-import must be a no-op on an unchanged file |
@@ -269,10 +269,27 @@ into one authority without losing something, so the rule is per field:
   disagrees produces a conflict entry, never a silent rewrite;
 - `pending` / `skipped` — either may set it, the latest human action wins.
 
-Consequence to state plainly: **editing the document is not a way to close work**, and closing work is not a
-way to edit the document. A write-back (ticking the document when the engine reaches `done`) is a separate
-opt-in, deliberately deferred — it touches the working tree, and the engine refuses to dispatch on a dirty
-tree (`tree_dirty`), so a write-back that fires mid-round would block the flow. Open question O1.
+Consequence to state plainly: **editing the document is not a way to close work** — a ticked box is logged as
+`ticked_by_hand` and ignored — and the one direction the engine does write is the other one: closing an item in the mirror
+ticks its line in the document (block 72).
+
+**The write-back** (`src/core/plan-mark.ts`). When an item reaches `done` — by an ACCEPT or by an explicit
+`flow plan set --status done --yes --note` — the engine rewrites exactly that line, `- [ ] **<ID>**` → `- [x] **<ID>**`,
+byte for byte otherwise: no re-formatting, no re-assembly of the document, and a line that belongs to another id is refused
+rather than ticked. Then it commits, because an uncommitted tick would leave the tree dirty and stop the very dispatch it
+was recording: one `chore(flow): mark <ID>[, <ID>] done in the plan` commit per pass, `git add -- <the plan document>` and
+nothing else — the only place the engine writes to the repository, and the only files it commits.
+
+That commit is docs-only by construction, so the existing path takes it: `docs_only_since_claim` → `reanchor` moves the
+claim onto the mark commit, asks for no review and spends no round. It also closes the `unticked` conflict: a document the
+engine keeps in step cannot disagree with the mirror about an item the mirror closed.
+
+Guards, because the close outranks the mark: a dirty tree defers the write (`plan_mark_deferred: tree_dirty`, one journal
+line) and the next clean pass writes it; a missing document, an unreadable one, a path outside the project or a git that
+refuses to commit is journalled as `plan_mark_failed <reason>`, the file is put back as it was if the commit failed, and the
+item stays `done` in the mirror. A line that already says `[x]` is reported and never re-written or re-committed. Success is
+`plan_item_marked <ID> <sha>` in the flow's journal, plus one `plan.item_marked` notification so the panel's journal says
+it too.
 
 ## 4. Plan ↔ brief ↔ commit
 
@@ -467,12 +484,12 @@ meaningless without one. So:
 
 ## Open questions for the owner
 
-- **O1. Write-back into the document?** Ticking `- [x]` in `docs/implementation-plan.md` when an item
-  reaches `done` would keep the repo document honest, but it makes the working tree dirty (which the engine
-  refuses to dispatch on) and it puts the engine in the business of editing prose. Options: never (the
-  mirror is the record), opt-in per flow (`--write-back`, applied on a tick when the tree is clean), or only
-  on `flow plan import --write` (a human runs it). Recommendation: opt-in per flow, block 13 or later, not
-  in 12.
+- **O1. Write-back into the document?** — **settled by block 72**, and not as an option: the engine ticks the
+  line of every item it closes and commits that tick itself (`src/core/plan-mark.ts`, §3.5). The dirty-tree
+  objection is answered by the commit — the mark leaves the tree clean — and the docs-only path already
+  re-anchors over such a commit without asking for a review. The remaining half of the question, editing
+  prose, is deliberately out of scope: only the checkbox changes, one character per closed item, and a line
+  that belongs to another id is refused.
 - **O2. Per-item rounds budget?** `max_rounds` is per flow today. A plan with 20 items needs a budget per
   item (otherwise the first hard item eats the flow's allowance), or the counter must reset per item.
   Recommendation: per item, `PLAN_ITEM_MAX_ROUNDS` default 3, and the flow's `max_rounds` becomes a

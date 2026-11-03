@@ -44,6 +44,7 @@ import {
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { loadConfig } from './config.js'
 import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound, PLAN_LIMITS } from './plan.js'
+import { applyPlanMarks } from './plan-mark.js'
 import { emitNotification } from './notifications.js'
 import { raiseEscalationApproval } from './flow-escalation.js'
 import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js'
@@ -424,6 +425,42 @@ export function readPlanView(state: FlowState): PlanTickView | null {
 // Apply what the decision asked the plan to record. Runs after the flow state is saved, and is idempotent in
 // the parts that matter: closing an item that is already closed and moving a status that is already set are
 // both no-ops.
+// The close in the mirror is written to the document right here: the item is done, so its line is ticked and committed
+// before the tick ends — an uncommitted tick would leave the tree dirty and stop the next dispatch (block 72).
+function markClosedPlanItem(before: FlowState, observations: FlowObservations, decision: FlowDecision, options: StepFlowOptions): void {
+  const closed = decision.next_plan_close?.id
+  if (!closed) return
+  try {
+    applyPlanMarks(before.run_id, {
+      root: options.root,
+      repo: before.repo,
+      tree_clean: observations.tree_clean,
+      ids: [closed],
+      attempt: 'close',
+      at: options.at,
+    })
+  } catch {
+    // Writing the document back is bookkeeping; a failure is journalled by `applyPlanMarks` and never undoes the close.
+  }
+}
+
+// A mark that could not be written (a dirty tree at the close, a document edited since) is retried on the next clean tick:
+// the mirror says done, the document says otherwise, and that difference is the work left here.
+function reconcilePlanMarks(before: FlowState, observations: FlowObservations, options: StepFlowOptions): void {
+  if (!observations.plan || !observations.tree_clean) return
+  try {
+    applyPlanMarks(before.run_id, {
+      root: options.root,
+      repo: before.repo,
+      tree_clean: true,
+      attempt: 'reconcile',
+      at: options.at,
+    })
+  } catch {
+    // Same rule as above: the tick's work is not undone by a document that could not be written.
+  }
+}
+
 function applyPlanDecision(before: FlowState, observations: FlowObservations, decision: FlowDecision): void {
   if (!observations.plan) return
   const activeId = before.active_plan_item
@@ -905,6 +942,9 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     // decision that holds the flow can still move the plan (an accepted verdict closes its item, a spent
     // budget blocks one) — and `decisionChangesState` only looks at the flow's own fields.
     applyPlanDecision(before, observations, phase.decision)
+    // The mirror is updated; the document that lists the work follows it, then anything a previous tick had to defer.
+    markClosedPlanItem(before, observations, phase.decision, options)
+    reconcilePlanMarks(before, observations, options)
     emitFlowAttention(phase.settled?.state ?? before, phase.decision)
     raiseEscalationFor(phase.settled?.state ?? before, phase.decision)
     emitPlanAttention(before, observations, phase.decision)
@@ -1059,7 +1099,11 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   }
   // The settle is where an answer becomes the flow's state: publish its record only when this tick did not
   // reject it. A refused send leaves the round open for a retry, so nothing is recorded yet.
-  if (done.status === 'applied') applyPlanDecision(before, observations, phase.decision)
+  if (done.status === 'applied') {
+    applyPlanDecision(before, observations, phase.decision)
+    markClosedPlanItem(before, observations, phase.decision, options)
+    reconcilePlanMarks(before, observations, options)
+  }
   // Not only `applied`: `composer_dirty` escalates the flow and reports `unconfirmed`, and an escalation the human
   // is never told about is the one failure this journal exists to prevent.
   emitFlowAttention(done.state, phase.decision)
