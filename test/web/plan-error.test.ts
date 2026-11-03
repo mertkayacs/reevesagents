@@ -11,6 +11,16 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LANGUAGE_OPTIONS } from '../../src/i18n/languages.js'
 import { translate } from '../../src/i18n/catalog.js'
+import { en } from '../../src/i18n/locales/en.js'
+import { de } from '../../src/i18n/locales/de.js'
+import { fr } from '../../src/i18n/locales/fr.js'
+import { es } from '../../src/i18n/locales/es.js'
+import { pt } from '../../src/i18n/locales/pt.js'
+import { it as itLocale } from '../../src/i18n/locales/it.js'
+import { tr } from '../../src/i18n/locales/tr.js'
+import { ru } from '../../src/i18n/locales/ru.js'
+import { zhHans } from '../../src/i18n/locales/zh-Hans.js'
+import { ar } from '../../src/i18n/locales/ar.js'
 
 declare const document: any
 
@@ -62,10 +72,15 @@ describe('the plan dialog says what happened, in words (block 59)', () => {
     line.show('not_pausable', 'run-a')
     expect(node().hidden).toBe(false)
     expect(node().textContent).toBe(translations['web.planErrNotPausable'])
-    // The code is still there for diagnosis — just not in the visible text.
+    // The code is still there for diagnosis, in metadata that is not rendered — and not in the tooltip: a `title` shows on hover, and
+    // `not_pausable` on hover is exactly what the operator reported (block 60).
     expect(node().dataset.code).toBe('not_pausable')
-    expect(node().title).toBe('not_pausable')
+    expect(node().hasAttribute('title')).toBe(false)
     expect(node().textContent).not.toContain('not_pausable')
+    // Nor anywhere else a person can read it off the screen.
+    for (const attribute of ['title', 'aria-label', 'aria-description', 'alt']) {
+      expect(node().getAttribute(attribute) ?? '', attribute).not.toContain('not_pausable')
+    }
   })
 
   it('has words for every code the routes answer', () => {
@@ -77,6 +92,7 @@ describe('the plan dialog says what happened, in words (block 59)', () => {
     ] as const) {
       line.show(code, 'run-a')
       expect(node().textContent).toBe(translations[key])
+      expect(node().getAttribute('title') ?? '').not.toContain(code)
       // The visible text never carries the identifier itself, underscores and all.
       expect(node().textContent).not.toContain(code)
     }
@@ -135,18 +151,39 @@ describe('the plan dialog says what happened, in words (block 59)', () => {
   })
 })
 
-describe('every locale can say it (block 59)', () => {
-  it('has the five pause keys in all ten catalogues, none of them empty or a bare code', () => {
-    const keys = ['web.planErrNotPausable', 'web.planErrAlreadyPaused', 'web.planErrNotPaused', 'web.planErrNotFound', 'web.planErrGeneric'] as const
+describe('every locale can say it (blocks 59, 60)', () => {
+  // The catalogues themselves, not `translate()`: `translate` falls back to English for a missing key, so a test that goes through it stays
+  // green while nine languages have no words at all. Each file exports `{ keys, phrases }`; only `keys` matters here.
+  const CATALOGUES: Record<string, { keys: Record<string, string> }> = { de, fr, es, pt, it: itLocale, tr, ru, 'zh-Hans': zhHans, ar }
+  const KEYS = ['web.planErrNotPausable', 'web.planErrAlreadyPaused', 'web.planErrNotPaused', 'web.planErrNotFound', 'web.planErrGeneric']
+
+  function defined(locale: string, catalogue: { keys: Record<string, string> }, key: string): string | undefined {
+    if (locale === 'en') return undefined
+    return catalogue.keys[key]
+  }
+
+  it('has the five pause keys defined in all ten catalogues, none empty and none a bare code', () => {
     expect(LANGUAGE_OPTIONS).toHaveLength(10)
+    const missing: string[] = []
     for (const { code: locale } of LANGUAGE_OPTIONS) {
-      for (const key of keys) {
-        const text = translate(locale, key)
-        expect(text, `${locale} ${key}`).toBeTruthy()
+      for (const key of KEYS) {
+        // English is the source: a key missing there has no fallback at all.
+            const text = locale === 'en' ? (en as unknown as Record<string, string>)[key] : defined(locale, CATALOGUES[locale]!, key)
+        if (!text) { missing.push(`${locale}:${key}`); continue }
         expect(String(text).trim().length, `${locale} ${key}`).toBeGreaterThan(3)
-        // No locale may fall back to showing the service code.
         expect(String(text), `${locale} ${key}`).not.toMatch(/not_pausable|already_paused|not_paused|not_found/)
       }
     }
+    expect(missing).toEqual([])
+  })
+
+  it('would notice a catalogue that lost a key', () => {
+    // The check above, run against a copy with one key removed: it must name exactly that pair. This is what `translate()` could not do.
+    const broken = { ru: { keys: { ...ru.keys, 'web.planErrNotFound': undefined as unknown as string } } }
+    const missing: string[] = []
+    for (const key of KEYS) {
+      if (!defined('ru', broken.ru, key)) missing.push(`ru:${key}`)
+    }
+    expect(missing).toEqual(['ru:web.planErrNotFound'])
   })
 })

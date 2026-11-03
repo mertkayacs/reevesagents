@@ -2,8 +2,8 @@
 // and gone after a few seconds. It lives in its own file so the behaviour can be driven in a real DOM with fake timers — the rest of the
 // client is too big to mount, and "the message never disappears" is exactly the kind of bug a hand-written fake hides (block 59).
 //
-// The rule it encodes: a code is not a sentence. `not_pausable` goes into `data-code` and `title` for whoever has to diagnose it; the
-// operator reads the words in their own language, or a generic fallback they can act on.
+// The rule it encodes: a code is not a sentence, and it is not a tooltip either. The identifier lives in `data-code` — not rendered, not
+// on hover — for whoever has to diagnose it; the operator reads the words in their own language, or a generic fallback they can act on.
 ;(function (window) {
   'use strict'
 
@@ -55,8 +55,9 @@
       code = String(nextCode || 'unknown')
       runId = ownerRunId === undefined ? null : ownerRunId
       node.textContent = t(KEYS[code] || 'web.planErrGeneric')
+      // Diagnostics only: `data-code` is not rendered anywhere and never appears on hover. A `title` is a tooltip, and a tooltip with
+      // `not_pausable` in it is the very thing the operator complained about (block 60). Nothing visible carries the identifier.
       node.dataset.code = code
-      node.title = code
       node.hidden = false
       timer = setTimer(function () { clear() }, ttl)
     }
