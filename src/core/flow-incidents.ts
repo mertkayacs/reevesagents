@@ -222,9 +222,11 @@ function signalsFor(
   // event, not that subsequent hold. Preserve it so one blocker stays one incident across parked sweeps.
   const escalationCause = [...state.log].reverse().find(entry => entry.event === 'escalate')?.detail
   const escalatedReason = state.state === 'escalated'
-    ? (decision?.reason !== 'flow_closed' ? decision?.reason : undefined) ?? escalationCause ?? latestDetail
+    ? (decision?.kind === 'escalate' ? decision.reason : undefined) ?? escalationCause
+      ?? (decision?.reason === 'flow_closed' ? undefined : decision?.reason) ?? latestDetail
     : decision?.reason ?? reason
-  if (escalatedReason.includes('dispatch_unresolved') || latest?.event === 'dispatch_unresolved') {
+  if (escalatedReason.includes('dispatch_unresolved') || escalatedReason.includes('review_dispatch_unconfirmed')
+    || latest?.event === 'dispatch_unresolved') {
     signals.push({ kind: 'dispatch_unconfirmed', severity: 'blocker', spec_id: item, reason: latestDetail || escalatedReason })
   } else if (escalatedReason.includes('review_timeout')) {
     signals.push({ kind: 'review_timeout', severity: 'blocker', spec_id: item, reason: escalatedReason })

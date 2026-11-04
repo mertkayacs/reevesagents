@@ -974,6 +974,10 @@ describe('a dispatch nobody confirmed (block 69)', () => {
     expect(after.enter_retries).toBe(0)
     expect([...after.log].reverse().find(entry => entry.event === 'escalate')!.detail).toContain('3 Enters did not submit it')
     expect(after.log.some(entry => entry.event === 'escalate' && entry.detail.includes('review_dispatch_unconfirmed'))).toBe(true)
+    expect(listFlowIncidents('run-1', { root })).toMatchObject([
+      { kind: 'dispatch_unconfirmed', severity: 'blocker', status: 'open', owner: 'orchestrator' },
+    ])
+    expect(listFlowIncidents('run-1', { root })).toHaveLength(1)
   })
 
   it('writes the retry into the journal, once per attempt', () => {
