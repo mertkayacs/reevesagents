@@ -64,6 +64,18 @@ describe('the plan badge', () => {
     expect(view.label).toContain('paused')
   })
 
+  it('shows queue progress without attention and a clear warning if a queued spec is lost', () => {
+    const queued = state({ specs: [{ id: 'B', title: 'Second', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }] })
+    const progress = at(queued, null)
+    expect(progress).toMatchObject({ tone: 'progress', pulse: false })
+    expect(progress.label).toBe('flow: 1 specs queued')
+
+    const lost = state({ log: [{ at: '2026-11-02T11:00:00.000Z', event: 'spec_queued', detail: 'B' }] })
+    const attention = at(lost, null)
+    expect(attention).toMatchObject({ tone: 'attention', pulse: true })
+    expect(attention.detail).toContain('queued spec B is missing')
+  })
+
   it('says "closed" for a flow that ended without a plan, never "done 3/3"', () => {
     const view = at(state({ state: 'done', close_reason: 'stopped by the operator' }), null)
     expect(view.tone).toBe('neutral')

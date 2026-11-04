@@ -81,6 +81,14 @@ export function flowBadgeView(
       detail: t('flow.badge.plan_progress_detail'),
     }
   }
+  if (badge.queue_depth > 0) {
+    return {
+      label: t('flow.badge.spec_queue_progress', { count: badge.queue_depth }),
+      tone: 'progress',
+      pulse: false,
+      detail: t('flow.badge.spec_queue_progress_detail'),
+    }
+  }
   return { label: flowBadgeText(t, badge), tone: 'neutral', pulse: false, detail: detail }
 }
 
@@ -91,6 +99,7 @@ export function flowAttentionText(t: FlowTranslate, badge: FlowBadge): string | 
     const summary = badge.incident_summary
     return `${base}: ${summary.open} open, ${summary.blockers} blockers · ${summary.owner}`
   }
+  if (badge.attention === 'spec_lost' && badge.attention_detail) return badge.attention_detail
   // The item id is the actionable part: "plan: waiting for a brief" without `P1.7.2` sends the operator to the
   // dialog to find out which one, and the badge is exactly where they look first.
   return badge.plan ? `${base} (${badge.plan.item})` : base

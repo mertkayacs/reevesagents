@@ -332,6 +332,22 @@ export interface DropSpecResult extends FlowControlResult {
   spec: BlockSpec
 }
 
+function mayDropUnconfirmedSpec(state: FlowState, id: string): boolean {
+  if (!state.specs.some(spec => spec.id === id) || state.pending !== null
+    || state.claim.spec_id !== id || state.state !== 'idle' || state.review_started_at !== null) return false
+  let unconfirmed = false
+  for (const entry of [...state.log].reverse()) {
+    if (entry.event === 'dispatch_unconfirmed' && entry.detail.includes(`spec_dispatched ${id}`)) {
+      unconfirmed = true
+      break
+    }
+    if ((entry.event === 'dispatch_spec' || entry.event === 'plan_item_dispatched')
+      && entry.detail.includes(id)) return false
+    if (entry.event === 'request_review' || entry.event === 'dispatch_fix') return false
+  }
+  return unconfirmed
+}
+
 // Drop a block the engine has not sent yet. The case it exists for: a block was queued and the work was done by
 // hand before the engine dispatched it, so leaving it in the queue means the next tick sends a brief for work
 // that is already finished (block 65, the live `c762729e`).
@@ -354,7 +370,8 @@ export function dropFlowSpec(input: DropSpecInput, options: FlowControlOptions =
     if (state.state === 'done') {
       throw new FlowRefusalError('flow_closed', `flow for run ${state.run_id} is closed (${state.close_reason ?? 'done'}); its queue cannot be changed`)
     }
-    if (state.dispatched_specs.includes(id)) {
+    const unconfirmed = mayDropUnconfirmedSpec(state, id)
+    if (state.dispatched_specs.includes(id) && !unconfirmed) {
       throw new FlowRefusalError('already_dispatched', `block ${id} was already sent to the dev; a dispatched block cannot be dropped`)
     }
     const queued = state.specs.find(spec => spec.id === id)
@@ -369,6 +386,7 @@ export function dropFlowSpec(input: DropSpecInput, options: FlowControlOptions =
     return {
       ...state,
       specs: state.specs.filter(spec => spec.id !== id),
+      ...(unconfirmed ? { dispatched_specs: state.dispatched_specs.filter(specId => specId !== id) } : {}),
       log: [
         ...state.log,
         // The id, plus the reason when a human gave one: never a brief body (§11.3).

@@ -65,6 +65,7 @@ describe('durable flow incidents', () => {
     reconcileFlowIncidents(flow, obs(), hold('dispatch_pending'), { root, now: NOW, at: AT })
     reconcileFlowIncidents(flow, obs({ tree_clean: false, dev_pane: 'busy' }), hold('tree_dirty'), { root, now: NOW, at: AT })
     reconcileFlowIncidents(flow, obs({ review_pane: 'busy' }), hold('awaiting_verdict'), { root, now: NOW, at: AT })
+    reconcileFlowIncidents(flow, obs(), hold('spec_pending'), { root, now: NOW, at: AT })
     expect(listFlowIncidents('run-1', { root })).toEqual([])
   })
 

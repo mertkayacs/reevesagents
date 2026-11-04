@@ -38,6 +38,7 @@ import {
   flowTick,
   releaseDispatch,
   retryEnterDispatch,
+  retrySpecDispatch,
 } from './flow.js'
 import { readFlow, saveFlow } from './flow-store.js'
 import {
@@ -1154,6 +1155,20 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
         const next = applyDecisionToState(after, phase.decision, at)
         const path = saveFlow(next, { root: options.root })
         return { state: next, status: 'applied', path }
+      }
+      if (phase.decision.kind === 'dispatch_spec' && phase.decision.spec_id
+        && after.specs.some(spec => spec.id === phase.decision.spec_id)) {
+        const pasted = send.pastedAt === undefined ? null : {
+          agent: dispatch.agent,
+          head: phase.decision.head ?? dispatch.state.claim.head,
+          at: send.pastedAt,
+        }
+        const retry = retrySpecDispatch(after, phase.decision, send.reason, pasted, at)
+        return {
+          state: retry.state,
+          status: retry.escalated ? 'unconfirmed' : 'refused',
+          path: saveFlow(retry.state, { root: options.root }),
+        }
       }
       if (send.reason === 'composer_dirty') {
         // Somebody else's text is sitting in the composer: nothing was pasted, and repeating the paste is

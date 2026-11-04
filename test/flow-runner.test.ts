@@ -12,6 +12,10 @@ import { PANE_UNKNOWN_HOLD_MS, observeFlow, stepFlow } from '../src/core/flow-ru
 import { listRunApprovals } from '../src/core/approvals.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 import { listFlowIncidents } from '../src/core/flow-incidents.js'
+import { flowBadge } from '../src/core/flow-view.js'
+import { flowBadgeView } from '../src/core/flow-label.js'
+import { translate } from '../src/i18n/catalog.js'
+import type { BlockSpec } from '../src/core/spec.js'
 
 // The effect layer: observation reads, and the claim -> act -> settle dispatch. Nothing here sends
 // into a pane the gate did not confirm, an ambiguous paste is never repeated, and a claim left on
@@ -67,6 +71,10 @@ function seedApprovalRun(): void {
     task: 'coordinate', task_status: 'working', task_note: '', tmux_session: 's', tmux_window_id: '@1', tmux_pane_id: '%1',
     rc_enabled: false, permissions: 'ask', inbox: [], last_seen: NOW, started_at: AT, ended_at: null,
   })
+}
+
+function blockSpec(id: string): BlockSpec {
+  return { id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }
 }
 
 function flowFile(): string {
@@ -243,6 +251,60 @@ describe('a flow that stands still says why (block 64)', () => {
 })
 
 describe('stepFlow', () => {
+  it('holds a second queued spec while the first dispatched spec is still in flight', () => {
+    seed(makeState({
+      state: 'idle',
+      specs: [blockSpec('A'), blockSpec('B')],
+      dispatched_specs: ['A'],
+      claim: { ...makeState().claim, spec_id: 'A' },
+      log: [{ at: AT, event: 'dispatch_spec', detail: 'spec_dispatched A' }],
+    }))
+    const ports = makePorts()
+
+    const result = step(ports, { head: 'aaa111' })
+    const badge = flowBadge(readFlow('run-1'), NOW)
+    const view = flowBadgeView((key, values) => translate('en', key, values), badge)
+
+    expect(result.decision.reason).toBe('spec_pending')
+    expect(ports.send).not.toHaveBeenCalled()
+    expect(badge.attention).toBeNull()
+    expect(view.tone).toBe('progress')
+  })
+
+  it('dispatches the next queued spec after the current spec ACCEPT is applied', () => {
+    const state = makeState({
+      state: 'idle',
+      specs: [blockSpec('A'), blockSpec('B')],
+      dispatched_specs: ['A'],
+      claim: { ...makeState().claim, spec_id: 'A', verdict: 'ACCEPT', verdict_count: 1 },
+    })
+    seed(state)
+    const ports = makePorts()
+
+    const result = step(ports, { head: 'aaa111' })
+
+    expect(result.decision.kind).toBe('dispatch_spec')
+    expect(result.decision.spec_id).toBe('B')
+    expect(result.status).toBe('applied')
+    expect(readFlow('run-1').dispatched_specs).toEqual(['A', 'B'])
+  })
+
+  it('keeps a failed queued spec queued and escalates after three dispatch attempts', () => {
+    seed(makeState({ state: 'idle', specs: [blockSpec('B')] }))
+    let result: FlowStepResult | undefined
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const ports = makePorts({ send: vi.fn(() => ({ sent: false as const, reason: 'unconfirmed' as const })) })
+      result = step(ports, { head: 'aaa111', now: NOW + attempt * 1000, at: new Date(NOW + attempt * 1000).toISOString() })
+      const after = readFlow('run-1')
+      expect(after.dispatched_specs).not.toContain('B')
+      expect(after.specs.map(spec => spec.id)).toContain('B')
+    }
+    const after = readFlow('run-1')
+    expect(result?.state.state).toBe('escalated')
+    expect(after.log.filter(entry => entry.event === 'spec_dispatch_retry')).toHaveLength(3)
+    expect([...after.log].reverse().find(entry => entry.event === 'escalate')?.detail).toContain('spec_undelivered B')
+  })
+
   it('sends nothing when a pane is busy or unknown, and records the hold once', () => {
     for (const pane of ['busy', 'unknown'] as const) {
       const seeded = seed()

@@ -638,6 +638,21 @@ describe('drop-spec: the queue is the operator to edit, not the engine (block 65
     expect(readFlow('run-1', { root }).dispatched_specs).toEqual(['block_07'])
   })
 
+  it('drops a queued block whose only dispatch record was unconfirmed', () => {
+    seed(makeState({
+      state: 'idle',
+      specs: [block('block_07', 'First')],
+      dispatched_specs: ['block_07'],
+      claim: { ...makeState().claim, spec_id: 'block_07' },
+      log: [{ at: AT, event: 'dispatch_unconfirmed', detail: 'unconfirmed spec_dispatched block_07' }],
+    }))
+
+    const dropped = dropFlowSpec({ run_id: 'run-1', id: 'block_07' }, { at: AT })
+
+    expect(dropped.spec.id).toBe('block_07')
+    expect(readFlow('run-1', { root })).toMatchObject({ specs: [], dispatched_specs: [] })
+  })
+
   it('refuses while a dispatch is in flight, because the tick may be pasting right now', () => {
     seed(makeState({
       state: 'idle',

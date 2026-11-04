@@ -483,6 +483,8 @@ export type FlowReason =
   | 'agent_question_answered'
   | 'question_unanswered'
   | 'dev_stalled'
+  | 'spec_pending'
+  | 'spec_undelivered'
   | 'dispatch_stall_retry'
 
 export interface FlowDecision {
@@ -1786,6 +1788,14 @@ function activeItemInFlight(state: FlowState, plan: PlanTickView | undefined): b
   return item !== undefined && (item.status === 'in_work' || item.status === 'reviewing')
 }
 
+function dispatchedSpecInFlight(state: FlowState, plan: PlanTickView | undefined): string | null {
+  const id = state.claim.spec_id
+  if (!id || !state.dispatched_specs.includes(id)) return null
+  const item = plan?.items.find(entry => entry.id === id)
+  if (item) return item.status === 'in_work' || item.status === 'reviewing' ? id : null
+  return state.state === 'idle' && state.review_started_at === null ? id : null
+}
+
 function bootstrapDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
   const queued = nextSpec(state)
   const plan = observations.plan
@@ -1807,6 +1817,12 @@ function bootstrapDecision(state: FlowState, observations: FlowObservations): Fl
       { event: 'stale_active_item_cleared', detail: `${staleId} is not in flight` },
     ],
   })
+  const queuedDispatchedId = dispatchedSpecInFlight(state, plan)
+  if (state.review_started_at !== null || queuedDispatchedId !== null) {
+    return dispatch(hold(state, 'spec_pending', queuedDispatchedId
+      ? `${queuedDispatchedId} is still in flight; queued specs are waiting`
+      : 'a review round is still in flight; queued specs are waiting'))
+  }
   if (!observations.tree_clean) return dispatch(hold(state, 'tree_dirty'))
   if (queued) {
     const gate = dispatchGate(state, observations)
@@ -2105,6 +2121,53 @@ export function escalateOnDirtyComposer(state: FlowState, decision: FlowDecision
 // How many Enter-only retries a dispatch gets before a human is asked. Three ticks is about three minutes: enough for a
 // composer that swallowed one Enter, short enough that a flow does not sit on a prompt nobody submitted (block 69).
 export const MAX_ENTER_RETRIES = 3
+export const MAX_SPEC_DISPATCH_RETRIES = 3
+
+function specDispatchRetryCount(state: FlowState, id: string): number {
+  let attempts = 0
+  for (const entry of [...state.log].reverse()) {
+    if (entry.event === 'spec_dispatch_retry' && entry.detail.startsWith(`${id}:`)) attempts += 1
+    if (entry.event === 'spec_queued' && entry.detail.split(', ').includes(id)) break
+    if (entry.event === 'spec_dropped' && entry.detail.startsWith(`${id}:`)) break
+  }
+  return attempts
+}
+
+// A queued spec is not dispatched until the runner confirms the submit. Failed sends stay in the queue, and the
+// journal carries a bounded retry count across process restarts. The third failure escalates visibly without
+// adding the id to dispatched_specs.
+export function retrySpecDispatch(
+  state: FlowState,
+  decision: FlowDecision,
+  reason: string,
+  pasted: { agent: string, head: string, at: number } | null,
+  at = isoNow(),
+): { state: FlowState, escalated: boolean } {
+  const id = decision.spec_id
+  if (!id) return { state: releaseDispatch(state, reason, at), escalated: false }
+  const attempt = specDispatchRetryCount(state, id) + 1
+  const retried: FlowState = {
+    ...state,
+    pending: null,
+    enter_retries: 0,
+    dispatch_paste: pasted ?? state.dispatch_paste,
+    log: appendLog(state, { at, event: 'spec_dispatch_retry', detail: `${id}: attempt ${attempt}/${MAX_SPEC_DISPATCH_RETRIES} · ${reason}` }),
+    updated_at: at,
+  }
+  if (attempt < MAX_SPEC_DISPATCH_RETRIES) return { state: retried, escalated: false }
+
+  const stuck: FlowDecision = {
+    ...decision,
+    kind: 'escalate',
+    reason: 'spec_undelivered',
+    message: undefined,
+    target: undefined,
+    next_state: 'escalated',
+    next_review_started_at: null,
+    log_detail: `spec_undelivered ${id}: three dispatch attempts were not confirmed (${reason})`,
+  }
+  return { state: applyDecisionToState(retried, stuck, at), escalated: true }
+}
 
 // The paste is still in the box and the Enter did not start a turn: no round exists, so the decision is NOT applied — the
 // round counter and `review_started_at` stay where they were. The attempt is counted and journalled, the claim is

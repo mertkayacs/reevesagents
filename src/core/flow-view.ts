@@ -240,7 +240,7 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
 // The badge a run row shows. Derived on every read from the flow document, never stored in a run
 // record: a heuristic written into a lifecycle field outlives the reason that produced it, and the
 // next reader cannot tell "escalated" from "was escalated an hour ago".
-export type FlowAttention = 'escalated' | 'review_timeout' | 'dev_stalled' | 'dispatch_unconfirmed' | 'plan_waiting' | 'incident'
+export type FlowAttention = 'escalated' | 'review_timeout' | 'dev_stalled' | 'dispatch_unconfirmed' | 'plan_waiting' | 'incident' | 'spec_lost'
 
 // What the plan is waiting for, when it is waiting for a human. Supplied by the caller that read `plan.json`:
 // the badge is a view, and the plan is a separate file (`docs/plan-model-design.md` §2.2).
@@ -257,6 +257,8 @@ export interface FlowBadge {
   review_overdue: boolean
   // Why a human is needed, or null while the flow is moving on its own.
   attention: FlowAttention | null
+  attention_detail: string | null
+  queue_depth: number
   // The item the plan is waiting for, when `attention` is `plan_waiting`.
   plan: PlanAttention | null
   // How far the plan got, when the flow has one. The badge needs the numbers, not just "done": a finished plan and a
@@ -278,6 +280,8 @@ export function flowBadge(
   planProgress: { done: number, total: number } | null = null,
   incidentSummary: FlowBadge['incident_summary'] = null,
 ): FlowBadge {
+  const queueDepth = state.specs.filter(spec => !state.dispatched_specs.includes(spec.id)).length
+  const lostSpec = lostQueuedSpec(state)
   const overdue = state.state === 'reviewing'
     && state.review_started_at !== null
     && now - state.review_started_at >= state.review_timeout_sec * 1000
@@ -297,18 +301,38 @@ export function flowBadge(
     ? 'plan_waiting' as const
     : null
   const incidentAttention = incidentSummary && incidentSummary.open > 0 ? 'incident' as const : null
+  const specLost = lostSpec ? 'spec_lost' as const : null
   return {
     status: state.state,
     rounds: state.rounds,
     max_rounds: state.max_rounds,
     review_overdue: overdue,
-    attention: incidentAttention ?? escalation ?? stalled ?? devStalled ?? planAttention,
+    attention: incidentAttention ?? escalation ?? stalled ?? devStalled ?? specLost ?? planAttention,
+    attention_detail: lostSpec ? `queued spec ${lostSpec} is missing from both the queue and dispatch history` : null,
+    queue_depth: queueDepth,
     plan: incidentAttention !== null ? null : planAttention === null ? null : plan,
     plan_progress: planProgress,
     incident_summary: incidentSummary,
     close_reason: state.close_reason ?? null,
     updated_at: Date.parse(state.updated_at) || 0,
   }
+}
+
+function lostQueuedSpec(state: FlowState): string | null {
+  const seen = new Set<string>()
+  for (const entry of [...state.log].reverse()) {
+    if (entry.event === 'spec_queued') {
+      for (const id of entry.detail.split(',').map(value => value.trim()).filter(Boolean)) {
+        if (seen.has(id)) continue
+        seen.add(id)
+        if (!state.specs.some(spec => spec.id === id) && !state.dispatched_specs.includes(id)) return id
+      }
+    } else if (entry.event === 'spec_dropped') {
+      const id = entry.detail.split(':', 1)[0]?.trim()
+      if (id) seen.add(id)
+    }
+  }
+  return null
 }
 
 // The plan's attention, read from `flows/<run-id>/plan.json` when there is one: the first open item that cannot
