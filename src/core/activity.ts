@@ -149,9 +149,10 @@ function renderFrame(paneText: string): RenderedFrame {
 // the only signal available, and the gate stays fail-closed through `detectPaneBusy` alone.
 const READY_HINTS: Partial<Record<Provider, readonly RegExp[]>> = {
   // Hermes draws `❯` plus a status line; both the `ctx --` variant and the `☤ provider · …` variant
-  // have been seen, so either counts. Codex draws the ask line and a `← for agents` hint.
+  // have been seen, so either counts. Codex draws the ask line and normally `← for agents`; its message-selection mode
+  // replaces that footer with copy/follow/clear controls while leaving the composer in place.
   hermes: [/ctx\s+--/i, /^\s*☤/m],
-  codex: [/Ask Codex to do anything/i, /←\s*for agents/i],
+  codex: [/Ask Codex to do anything/i, /←\s*for agents/i, /(?:\^c|ctrl\+c)\s*copy[\s\S]*enter\s+copy\s*(?:&|and)\s*follow[\s\S]*esc\s+clear/i],
 }
 
 // Lines that are chrome rather than the composer: the provider's model line, its footer, a rule, a status glyph. A pane
@@ -160,10 +161,11 @@ const READY_HINTS: Partial<Record<Provider, readonly RegExp[]>> = {
 // Status glyphs (`◦`, `•`, `●`, `·`) are *not* here: a pasted brief may be Markdown and open a line with a bullet, and
 // treating that as chrome stopped the composer walk in the middle of the box (block 73, review round 2). At the left margin
 // such a row is transcript (`TRANSCRIPT_LINE`) and is handled with the margin it needs.
+const CODEX_SELECTION_CHROME_LINE = /^(?:(?:\^c|ctrl\+c)\s*copy\b|enter\s+copy\s*(?:&|and)\s*follow\b|esc\s+clear\b)/i
 const CHROME_LINE = /^(?:☤|─{5,}|←\s*for agents|(?:GPT-|Claude|DeepSeek|Hermes|Kimi|GLM)\b.*·)/i
 
 function isChrome(line: string): boolean {
-  return CHROME_LINE.test(line)
+  return CHROME_LINE.test(line) || CODEX_SELECTION_CHROME_LINE.test(line)
 }
 
 // Where the composer sits: the last non-chrome row in the bottom of the frame, under (at most) a couple of chrome rows.
@@ -172,7 +174,11 @@ function isChrome(line: string): boolean {
 const COMPOSER_WINDOW = 4
 
 function composerRow(lines: string[]): { line: string, index: number } | null {
-  const start = Math.max(0, lines.length - COMPOSER_WINDOW)
+  // The selection footer wraps to multiple rows in a narrow pane. Widen this bounded search only when those controls are
+  // present, so ordinary panes retain the original window and a dialog cannot pull a stale composer out of scrollback.
+  const wrappedSelectionFooter = lines.slice(-8).some(line => CODEX_SELECTION_CHROME_LINE.test(line))
+  const window = wrappedSelectionFooter ? 8 : COMPOSER_WINDOW
+  const start = Math.max(0, lines.length - window)
   for (let index = lines.length - 1; index >= start; index -= 1) {
     const line = lines[index]!
     if (isChrome(line)) continue

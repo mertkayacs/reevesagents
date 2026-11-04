@@ -194,6 +194,44 @@ describe('a composer without the glyph (block 73)', () => {
   })
 })
 
+describe('Codex message selection mode (block 88)', () => {
+  const selected = [
+    '  › Ask Codex to do anything',
+    '  GPT-6-Luna high · ~/projects/flow-finish',
+    '  ^c copy · enter copy & follow · esc clear',
+  ].join('\n')
+
+  it.each([
+    '^c copy · enter copy & follow · esc clear',
+    'ctrl+c copy | enter copy and follow | esc clear',
+    '^c copy\n  enter copy & follow\n  esc clear',
+  ])('recognizes the selection footer variant %s as an idle composer', footer => {
+    const frame = selected.replace('^c copy · enter copy & follow · esc clear', footer)
+    expect(inspectPane(frame, 'codex', { now: 10_000 })).toMatchObject({ state: 'idle', reason: 'composer_glyph' })
+  })
+
+  it('does not treat the footer as a composer without the placeholder', () => {
+    const frame = selected.replace('› Ask Codex to do anything', 'Draft someone has not submitted')
+    expect(inspectPane(frame, 'codex', { now: 10_000 })).toMatchObject({ state: 'unknown', reason: 'placeholder_absent' })
+  })
+
+  it('keeps busy first, copy mode unknown, and dialogs separate', () => {
+    const busy = selected.replace('  › Ask Codex to do anything', '  ◦ Working (8s • esc to interrupt)\n  › Ask Codex to do anything')
+    expect(inspectPane(busy, 'codex', { now: 10_000 }).state).toBe('busy')
+
+    const copy = selected.replace('  › Ask Codex to do anything', '  [12/345]\n  › Ask Codex to do anything')
+    expect(inspectPane(copy, 'codex', { now: 10_000 })).toMatchObject({ state: 'unknown', reason: 'copy_mode' })
+
+    const dialog = [
+      '  ▌ Select an environment',
+      '    1. staging',
+      '    2. production',
+      '  ← for agents · ? for shortcuts',
+    ].join('\n')
+    expect(inspectPane(dialog, 'codex', { now: 10_000 }).state).toBe('unknown')
+  })
+})
+
 describe('the glyph counts only where the composer is (block 73, review round 1)', () => {
   it('does not read a prompt quoted in the body as a live composer', () => {
     // A pane whose input box has been replaced by a modal, with an old prompt a few rows above it: the `›` belongs to a turn

@@ -1127,6 +1127,23 @@ describe('the tick asks for the review instead of holding dev_busy (block 74)', 
     expect(ports.send).toHaveBeenCalled()
   })
 
+  it('requests review when the Codex reviewer is in message-selection mode (block 88)', () => {
+    seed(makeState({ state: 'idle' }))
+    const selection = [
+      '› Ask Codex to do anything',
+      'GPT-6-Luna high · ~/projects/flow-finish',
+      '^c copy · enter copy & follow · esc clear',
+    ].join('\n')
+    const ports = makePorts({ paneBusy: () => detectPaneBusy(selection, 'codex') })
+
+    const stepped = step(ports, { head: 'bbb222' })
+
+    expect(detectPaneBusy(selection, 'codex')).toBe('idle')
+    expect(stepped.decision.reason).toBe('review_requested')
+    expect(stepped.decision.reason).not.toBe('review_pane_unknown')
+    expect(ports.send).toHaveBeenCalledTimes(1)
+  })
+
   it('still holds dev_busy on a pane that is really running', () => {
     seed(makeState({ state: 'idle' }))
     const running = [
