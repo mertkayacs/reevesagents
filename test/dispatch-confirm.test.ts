@@ -2445,3 +2445,94 @@ describe('a notes file the engine cannot read is not a missing answer (block 83)
     expect(readFlow('run-1').state).toBe('reviewing')
   })
 })
+
+// Block 84, the live `salon-dashboard` run of 04.11: the reviewer's pane showed `CHANGES_REQUESTED` (a verdict the pane cannot bind
+// to a commit) while its notes file was unusable, and the branch that holds for the file consulted neither the deadline nor the
+// file. Sixteen minutes of ticks wrote the same state without a journal line, past a deadline that had already expired.
+describe('the "pane verdict is not bound" hold has an exit (block 84)', () => {
+  function seedReview(): void {
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2']) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+  }
+
+  const HEAD84 = 'f'.repeat(40)
+  // Six verdicts in the capture, the baseline at five: the pane looks "fresh" without saying anything about this head.
+  const SIX_VERDICTS = Array.from({ length: 6 }, () => 'round\nVERDICT: CHANGES_REQUESTED\nMAJOR src/app.ts:1 — x\n> ').join('\n')
+
+  function reviewing(baseline: number, head = HEAD84): void {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 6, max_total_rounds: 24, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 5, active_plan_item: 'P1.1', review_started_at: NOW - 1_000,
+      claim: { head, verdict: null, verdict_count: baseline, verdict_applied: false, spec_id: 'P1.1' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+  }
+
+  it('names the unusable file instead of holding silently past the deadline', () => {
+    seedReview()
+    reviewing(5)
+    writeFileSync(stagingPath('run-1', HEAD84, 5, root), 'VERDICT: CHANGES_REQUESTED' + '\n' + 'BLOCKER a.ts:1 — boom\n')
+    // The first tick reads the file (verdict on the first line is an answer since block 83) — no hold at all.
+    const read = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD84, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => SIX_VERDICTS, send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(read.observations.verdict_source).toBe('file')
+    expect(read.decision.reason).toBe('fix_dispatched')
+
+    // The same shape with a file that cannot be read. A fresh head, so the durable record published by the step above cannot
+    // answer for it: the tick names the unusable file, and the tick past the deadline still names it.
+    const broken = '0'.repeat(40)
+    reviewing(5, broken)
+    writeFileSync(stagingPath('run-1', broken, 5, root), 'BLOCKER a.ts:1 — boom\nMAJOR b.ts:2 — bang\n')
+    const asked = stepFlow('run-1', {
+      now: NOW, at: AT, head: broken, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => SIX_VERDICTS, send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(asked.decision.reason).toBe('review_notes_invalid')
+
+    const late = stepFlow('run-1', {
+      now: NOW + 1_800_000, at: AT, head: broken, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => SIX_VERDICTS, send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(late.decision.reason).toBe('awaiting_verdict')
+    expect(readFlow('run-1').hold?.detail).toContain('is not usable')
+    expect(readFlow('run-1').state).not.toBe('escalated')
+  })
+
+  it('escalates once the deadline passes when no file ever arrives', () => {
+    // The exit the branch never had: a pane verdict cannot bind itself to a commit, so with no file and no time left the flow
+    // stops instead of holding until somebody notices.
+    seedReview()
+    reviewing(5)
+
+    const held = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD84, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => SIX_VERDICTS, send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(held.decision.reason).toBe('awaiting_verdict')
+    expect(readFlow('run-1').state).toBe('reviewing')
+
+    const expired = stepFlow('run-1', {
+      now: NOW + 900_000, at: AT, head: HEAD84, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => SIX_VERDICTS, send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(expired.decision.reason).toBe('review_timeout')
+    expect(readFlow('run-1').state).toBe('escalated')
+  })
+})

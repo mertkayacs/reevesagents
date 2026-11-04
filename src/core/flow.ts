@@ -1762,6 +1762,12 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // file the prompt asked for names the commit it judges, so a fix round needs it; a pane answer is accepted only as an
   // ACCEPT (a close), which the head and the baseline already pin down (block 69).
   if (observations.verdict !== null && observations.verdict !== 'ACCEPT' && !fromFile) {
+    // This hold had no exit at all: while the pane kept the old CHANGES_REQUESTED and the counter stayed above the baseline, every
+    // tick returned the same hold, `sameHold` skipped it, and the flow sat for sixteen minutes with a deadline that could never
+    // fire (block 84). The answer is supposed to arrive as a file; if none has arrived by the round's deadline, the flow escalates
+    // as the last resort. A file that is there and unusable never reaches this branch — the invalid-file handling above already
+    // named it and asked once for a rewrite (block 83).
+    if (timedOut) return expired()
     return hold(
       state,
       'awaiting_verdict',

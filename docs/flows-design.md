@@ -515,6 +515,13 @@ closed something is refused — the item is not closed by somebody else's commit
 recorded in the plan's conflicts), and the flow carries on. It does not escalate: a historical inconsistency can never be repaired,
 so an escalation would make every resumed run escalate again for ever.
 
+**The "pane verdict is not bound" hold has an exit (block 84).** A pane `CHANGES_REQUESTED` says nothing about *this* head — the
+capture window still holds earlier rounds — so the flow waits for the notes file that names its commit. That wait had no exit at
+all: while the pane kept the old verdict and the counter stayed above the baseline, every tick returned the same hold, `sameHold`
+skipped it, and a live run sat sixteen minutes past a deadline that could never fire. The branch now escalates once the round's
+deadline passes with no file (`review_timeout`, the last resort), and a file that is there but unusable never reaches it — the
+invalid-file handling above has already named it and asked for its one rewrite.
+
 **A notes file is read in either order, and an unreadable one is named (block 83).** The live run of 04.11 held `awaiting_verdict` —
 "waiting for its notes file" — for the whole 900-second deadline while the file sat on disk: the reviewer had written
 `VERDICT: CHANGES_REQUESTED` on line 1 and its MINOR on line 2, and the parser only looked at the last line. The panel answer puts
