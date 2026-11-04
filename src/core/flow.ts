@@ -1410,6 +1410,14 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   // reviewer to read a document (block 22, D6).
   if (observations.docs_only_since_claim === true) return reanchor(state, observations.head)
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
+  // A valid answer for this exact head outranks a new review request, even if the ordinary settlement path
+  // declined it for a transient dispatch gate. Keep waiting for the existing answer to be applicable rather
+  // than asking the reviewer to review the same commit again.
+  if (observations.verdict_source === 'file' && observations.verdict !== null
+    && observations.notes_head === observations.head && state.answered_round !== observations.notes_ref) {
+    const answered = settleFromNotes(state, observations)
+    return answered ?? hold(state, 'awaiting_verdict')
+  }
   const gate = reviewGate(state, observations)
   if (gate) return gate
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path, false, promptBudget(state, observations))
@@ -1424,6 +1432,13 @@ function settleFromNotes(state: FlowState, observations: FlowObservations): Flow
   if (observations.verdict_source !== 'file' || observations.verdict === null) return null
   const head = observations.notes_head
   if (!head) return null
+  // A file for an unrelated commit is not an answer to this flow. The observed head covers a reviewer who
+  // wrote notes in the same tick the engine would otherwise request that review; claim/pending cover rounds
+  // the flow had already bound. Without this check any valid old inbox file could settle unrelated work.
+  if (![observations.head, state.claim.head, state.pending?.head].some(candidate => candidate === head)) return null
+  // The same durable answer can remain readable after a fix/next-spec dispatch. Its round reference, not the
+  // current pane or verdict marker, is the idempotency key.
+  if (state.answered_round === observations.notes_ref) return null
   // Already applied for this very round *and* nothing is left open for it: nothing to settle. The marker alone is not enough —
   // the live run had it set with its item still `in_work`, so the answer was on disk, the item was open, and every tick
   // answered `head_unchanged` (block 41, case B).
@@ -1480,10 +1495,7 @@ function settleFromNotes(state: FlowState, observations: FlowObservations): Flow
     ...decision,
     next_claim: { ...decision.next_claim, head },
     log_event: 'settled_by_observation',
-    extra_events: [
-      ...(decision.extra_events ?? []),
-      { event: 'settled_by_observation', detail: `${head.slice(0, 7)} verdict ${observations.verdict}` },
-    ],
+    log_detail: `${head.slice(0, 7)} verdict ${observations.verdict}`,
   }
 }
 
@@ -1577,9 +1589,33 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
 
   if (verdict === 'ACCEPT') {
-    // Without a plan an ACCEPT is the legacy close, and `tickReviewing` has already done it: a flow that is idle with an
-    // ACCEPT and no plan is simply done with its work. With a plan the item is still open and must be closed.
-    if (!observations.plan) return null
+    // Without a plan, a spec-driven flow uses the same close/advance path as `tickReviewing`: that function is not
+    // necessarily the caller when a valid notes file arrives after the flow returned to idle (block 86).
+    if (!observations.plan) {
+      const specDriven = state.specs.length > 0 || state.dispatched_specs.length > 0
+      if (!specDriven) return null
+      const next = nextSpec(state)
+      let accepted: FlowDecision
+      if (!next) {
+        accepted = withNotes(withNext(state, 'flow_done', {
+          next_state: 'done',
+          next_review_started_at: null,
+          next_claim: { ...state.claim, verdict: 'ACCEPT', verdict_count: observations.verdict_count },
+          next_unsubstantiated_attempts: 0,
+          next_answered_round: observations.verdict_source === 'file' ? (observations.notes_ref ?? undefined) : undefined,
+        }), observations)
+      } else {
+        const gate = dispatchGate(state, observations)
+        if (gate) return gate
+        accepted = withNotes(specDispatch(state, next, observations), observations)
+      }
+      return {
+        ...accepted,
+        next_verdict_handled_for: state.claim.head,
+        next_verdict_handled_item: state.active_plan_item,
+        next_claim_verdict_applied: accepted.kind === 'dispatch_spec' ? false : true,
+      }
+    }
     // Nothing to close means the answer was already used. The item is the one the claim bound, or the active one when the claim has
     // no binding (states written before it): a flow whose field was cleared — a refused close does that — still owes the close for
     // the item its verdict names (block 47).

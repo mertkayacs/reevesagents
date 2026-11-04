@@ -2576,3 +2576,100 @@ describe('an agent question waits for a human (block 80)', () => {
     expect(send).not.toHaveBeenCalled()
   })
 })
+
+describe('an ACCEPT note settles a spec flow without a plan (block 86)', () => {
+  const spec = (id: string) => ({ id, title: id, goal: 'goal', requirements: ['r'], checks: ['c'], report: [] })
+  const note = (head: string, verdict: 'ACCEPT' | 'CHANGES_REQUESTED' = 'ACCEPT') => {
+    const path = stagingPath('run-1', head, 1, root)
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, verdict === 'ACCEPT' ? 'no findings: clean\nVERDICT: ACCEPT\n' : 'MAJOR src/a.ts:1 — fix this\nVERDICT: CHANGES_REQUESTED\n')
+  }
+  const seedIdleSpecFlow = (head: string, claimHead = 'a'.repeat(40), extra: Partial<FlowState> = {}) => {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, specs: [spec('S1')], at: AT,
+    })
+    saveFlow({
+      ...state, ...extra, state: 'idle', dispatched_specs: ['S1'],
+      claim: { ...state.claim, head: claimHead, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+  }
+
+  it('settles an idle ACCEPT once and never requests review for the answered head', () => {
+    const head = 'b'.repeat(40)
+    seedIdleSpecFlow(head)
+    note(head)
+    const first = stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, plan: null,
+      ports: ports(() => ({ sent: true })), evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    const after = readFlow('run-1')
+    expect(first.decision.reason).toBe('flow_done')
+    expect(after.state).toBe('done')
+    expect(after.pending).toBeNull()
+    expect(after.log.filter(entry => entry.event === 'settled_by_observation')).toHaveLength(1)
+    expect(after.log.find(entry => entry.event === 'settled_by_observation')?.detail).toContain('verdict ACCEPT')
+    expect(after.log.some(entry => entry.event === 'request_review' && entry.detail.includes(head))).toBe(false)
+
+    const second = stepFlow('run-1', {
+      now: NOW + 1_000, at: new Date(NOW + 1_000).toISOString(), head, tree_clean: true, plan: null,
+      ports: ports(() => ({ sent: true })), evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(second.decision.reason).toBe('flow_closed')
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'settled_by_observation')).toHaveLength(1)
+  })
+
+  it('dispatches one fix for CHANGES_REQUESTED and consumes that notes round', () => {
+    const head = 'c'.repeat(40)
+    seedIdleSpecFlow(head)
+    note(head, 'CHANGES_REQUESTED')
+    const sent: string[] = []
+    const options = {
+      head, tree_clean: true, plan: null,
+      ports: ports((_pane, text) => { sent.push(text); return { sent: true } }),
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    }
+    const first = stepFlow('run-1', { ...options, now: NOW, at: AT })
+    expect(first.decision.reason).toBe('fix_dispatched')
+    expect(readFlow('run-1').state).toBe('fixing')
+    expect(readFlow('run-1').answered_round).toBe(notesRef(head, 1))
+    stepFlow('run-1', { ...options, now: NOW + 1_000, at: new Date(NOW + 1_000).toISOString() })
+    expect(sent).toHaveLength(1)
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'settled_by_observation')).toHaveLength(1)
+  })
+
+  it('keeps the ordinary reviewing path when the note head matches the claim', () => {
+    const head = 'd'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, specs: [spec('S1')], at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', dispatched_specs: ['S1'], review_started_at: NOW - 60_000,
+      claim: { ...state.claim, head, spec_id: null },
+    })
+    note(head)
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, plan: null,
+      ports: ports(() => ({ sent: true })), evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('flow_done')
+    expect(readFlow('run-1').state).toBe('done')
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'settled_by_observation')).toHaveLength(0)
+    expect(readFlow('run-1').log.some(entry => entry.event === 'flow_done')).toBe(true)
+  })
+
+  it('ignores an ACCEPT for a head outside the flow history', () => {
+    const observed = 'e'.repeat(40)
+    const unrelated = 'f'.repeat(40)
+    seedIdleSpecFlow(observed, observed)
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: observed, tree_clean: true, plan: null,
+      notes: { source: 'file', head: unrelated, verdict: 'ACCEPT', text: '', ref: notesRef(unrelated, 1), counts: { blocker: 0, major: 0, minor: 0 } },
+      ports: ports(() => ({ sent: true })), evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(result.decision.reason).toBe('head_unchanged')
+    expect(readFlow('run-1').state).toBe('idle')
+    expect(readFlow('run-1').dispatched_specs).toEqual(['S1'])
+    expect(readFlow('run-1').log.some(entry => entry.event === 'settled_by_observation')).toBe(false)
+    expect(readFlow('run-1').log.some(entry => entry.event === 'request_review')).toBe(false)
+  })
+})
