@@ -242,12 +242,13 @@ describe('the ticker is idempotent and switchable', () => {
 })
 
 describe('the tick does not starve the sweep', () => {
-  it('returns promptly even with several flows and one broken file', () => {
+  it('keeps a dry-run observation pass under the original budget', () => {
     seed(planWith(['P1.1']), { inWork: 'P1.1' })
     const started = Date.now()
-    const result = tickAllFlows({ now: NOW, at: AT, ports: ports(), } as never)
-    // Includes filesystem, git and registry observations; allow room for a slow CI runner.
-    expect(Date.now() - started).toBeLessThan(10_000)
+    // Isolate the sweep's enumeration and observation cost from a live send's provider/confirmation latency.
+    const result = tickAllFlows({ dryRun: true, now: NOW, at: AT, ports: ports(), } as never)
+    // The original local observation budget is five seconds.
+    expect(Date.now() - started).toBeLessThan(5_000)
     expect(result.skipped).toEqual([])
   })
 })

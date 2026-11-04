@@ -54,7 +54,7 @@ import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js
 import type { PlanTickView } from './flow-plan.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
-import { DEFAULT_IDLE_SEND_TIMINGS, paneBusy, paneDiagnosis, paneReadyForNudge, peekAgentRaw, sendWhenIdle } from './runtime.js'
+import { paneBusy, paneDiagnosis, paneReadyForNudge, peekAgentRaw, sendWhenIdle } from './runtime.js'
 import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
 import type { FlowVerdict } from './verdict.js'
@@ -88,6 +88,7 @@ function withEnterRetries(
 export interface DispatchSendOptions {
   pasted?: { at: number } | null
   stallRetry?: boolean
+  maxEnters?: number
 }
 
 export interface FlowPorts {
@@ -122,7 +123,9 @@ export const defaultFlowPorts: FlowPorts = {
   peek: (agentId, lines) => peekAgentRaw(agentId, lines),
   send: (agentId, text, options) => sendWhenIdle(agentId, text, {
     pasted: options?.pasted ?? null,
+    ...(options?.maxEnters === undefined ? {} : { maxEnters: options.maxEnters }),
     ...(options?.stallRetry ? { maxEnters: 1, refuseCopyMode: true } : {}),
+    ...(options?.maxEnters === 1 ? { refuseCopyMode: true } : {}),
   }),
   paneDiagnosis: agentId => paneDiagnosis(agentId),
   devNudgeReady: (agentId, text, pasted) => paneReadyForNudge(agentId, text, pasted),
@@ -761,10 +764,10 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
         else {
           const paste = state.dispatch_paste
           const isCollapsedPaste = /^\[Pasted (?:Content|text) \d+ (?:chars|lines)\]/i.test(composer.trim())
-          const confirmMs = DEFAULT_IDLE_SEND_TIMINGS.confirmMs ?? DEFAULT_IDLE_SEND_TIMINGS.submitWaitMs
           const freshOwnedPaste = paste?.agent === agentId && paste.head === (state.pending.head ?? state.claim.head)
             && observedNow >= paste.at
-            && observedNow - paste.at <= confirmMs
+            // This persisted stamp is tied to the pending claim and is the only ownership proof a restarted
+            // process has for a collapsed composer marker. The claim TTL is longer than the runtime confirm window.
           pendingDispatchDelivery = isCollapsedPaste && freshOwnedPaste ? 'ours' : 'ambiguous'
         }
       } else pendingDispatchDelivery = 'ambiguous'
@@ -1199,7 +1202,8 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       pasted: paste !== null && paste.agent === dispatch.agent && paste.head === (phase.decision.head ?? dispatch.state.claim.head)
         ? { at: paste.at }
         : null,
-    ...(phase.decision.kind === 'dispatch_stall_retry' ? { stallRetry: true } : {}),
+      ...(phase.decision.kind === 'dispatch_stall_retry' ? { stallRetry: true } : {}),
+      ...(phase.decision.log_event === 'dispatch_retry_enter' ? { maxEnters: 1 } : {}),
     })
 
     // Phase three — settle, and only for our own claim: a claim that someone else already settled

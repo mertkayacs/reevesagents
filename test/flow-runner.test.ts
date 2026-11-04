@@ -450,7 +450,7 @@ describe('stepFlow', () => {
       task: 'review', task_status: 'working', task_note: '', tmux_session: 's', tmux_window_id: '@2', tmux_pane_id: '%2',
       rc_enabled: false, permissions: 'ask', inbox: [], last_seen: NOW, started_at: AT, ended_at: null,
     })
-    const pastedAt = NOW - 1_000
+    const pastedAt = NOW - (PENDING_TTL_SEC + 30) * 1000
     seed(makeState({
       pending: {
         op_id: 'op-review', kind: 'request_review', target: 'review', head: 'bbb222', spec_id: null,
@@ -459,7 +459,7 @@ describe('stepFlow', () => {
       dispatch_paste: { agent: 'rev-1', head: 'bbb222', at: pastedAt },
     }))
     const frame = '› [Pasted Content 100 chars]\nGPT-6-Sol medium · ~/repo'
-    const send = vi.fn((_agent: string, _text: string, _options?: { pasted?: { at: number } | null, stallRetry?: boolean }) => ({ sent: true as const }))
+    const send = vi.fn((_agent: string, _text: string, _options?: { pasted?: { at: number } | null, stallRetry?: boolean, maxEnters?: number }) => ({ sent: true as const }))
     const ports = makePorts({ peek: () => frame, send })
 
     const result = step(ports)
@@ -467,6 +467,7 @@ describe('stepFlow', () => {
     expect(result.decision.log_event).toBe('dispatch_retry_enter')
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]?.[2]?.pasted).toEqual({ at: pastedAt })
+    expect(send.mock.calls[0]?.[2]?.maxEnters).toBe(1)
     expect(result.status).toBe('applied')
     expect(result.state.state).toBe('reviewing')
   })
