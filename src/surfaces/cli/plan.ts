@@ -15,7 +15,7 @@ import type { Command } from 'commander'
 import { listFlowFiles, readFlow } from '../../core/flow-store.js'
 import type { FlowState } from '../../core/flow.js'
 import { appendLog } from '../../core/flow.js'
-import { isGitTreeClean, readGitHead } from '../../core/flow-runner.js'
+import { headIsDocsOnly, isGitTreeClean, readGitHead } from '../../core/flow-runner.js'
 import { applyPlanMarks } from '../../core/plan-mark.js'
 import { saveFlow } from '../../core/flow-store.js'
 import { readRun } from '../../core/runs.js'
@@ -498,6 +498,7 @@ function anchorAfterDocumentChange(runId: string): void {
   if (state.state === 'done') return
   const head = readGitHead(state.repo) || state.claim.head
   if (head === state.claim.head) return
+  if (headIsDocsOnly(state, head) !== true) return
   saveFlow({
     ...state,
     claim: { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: null },

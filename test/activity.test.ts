@@ -492,6 +492,17 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(modal, 'codex', { now: 10_000 }).state).toBe('unknown')
   })
 
+  it('recognizes a numbered agent question as an unknown, non-idle pane', () => {
+    const question = [
+      'There is a conflict in the brief.',
+      '❯ 1. Use the ordinary bridge (Recommended)',
+      '  2. Keep internal networking',
+      '  3. Add a loopback proxy sidecar',
+      '↑/↓ to choose — Enter to submit',
+    ].join('\n')
+    expect(inspectPane(question, 'hermes', { now: 10_000 })).toMatchObject({ state: 'unknown', reason: 'agent_question' })
+  })
+
   it('does not hold a pane whose hint is exactly on the status rows of a finished turn', () => {
     // The other side of the asymmetry: hermes prints `enter прервать` on the very row it prints the box on, so a hint there
     // is a turn running — not a quote.

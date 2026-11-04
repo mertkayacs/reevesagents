@@ -1727,7 +1727,8 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // not about the reviewer: after `dispatch_unconfirmed` the round's answer is already consumed, so a
   // freshness check first would hold the tick in `awaiting_verdict` and let the dev's new commit sit
   // unseen until the review timeout escalated the flow.
-  if (observations.head !== state.claim.head) {
+  if (observations.head !== state.claim.head
+    && !(fromFile && observations.notes_head === state.claim.head && observations.verdict !== null)) {
     // A commit that only touched the plan or its briefs is not work: the engine's own mark of a closed item is exactly
     // such a commit, and asking a reviewer to read a checkbox is a round spent on nothing (block 72). Re-anchor on it and
     // keep the round for work.

@@ -378,6 +378,7 @@ export type PaneReason =
   | 'placeholder_absent'
   | 'placeholder_pending'
   | 'samples_disagree'
+  | 'agent_question'
 
 export interface PaneInspection {
   state: PaneBusyState
@@ -406,6 +407,16 @@ export function inspectPane(
   const lines = frame.lines
   const sample: PaneSample = { at: now, fingerprint: paneFingerprint(lines) }
   if (lines.length === 0) return { state: 'unknown', reason: 'empty_capture', sample }
+
+  // Interactive numbered-choice prompts (common when an agent needs a human decision) are neither a free
+  // composer nor ordinary work. Keep this structural and tail-scoped; unrelated dialogs have no numbered
+  // choice plus the navigation/Enter instructions together.
+  const tail = lines.slice(-12).join('\n')
+  if (/❯\s*\d+[.)]/u.test(tail)
+    && /(?:^|\n)\s*\d+[.)]\s+\S/m.test(tail)
+    && /(?:↑|↓|up|down).{0,80}enter|enter.{0,80}(?:↑|↓|up|down)/iu.test(tail)) {
+    return { state: 'unknown', reason: 'agent_question', sample }
+  }
 
   // 1. Busy first, but only where the provider prints it — its status rows around the composer. The body of a pane is prose:
   //    an agent may quote `◦ Working (… • esc to interrupt)` or `enter прервать` in a report, a diff or a log, and that must

@@ -165,7 +165,7 @@ export function releaseRound(runId: string, options: FlowControlOptions & { reas
   if (!reason) throw new FlowStateError('a release needs a reason: pass --reason "<why the round was lost>"')
   // Read and decide before taking any lock: the plan mutation below takes the runs lock itself, and two nested acquisitions would time out.
   const before = readFlow(runId, { root: options.root })
-  const item = before.active_plan_item
+  const item = before.active_plan_item ?? before.claim.spec_id
   if (!item) throw new FlowStateError(`flow for run ${before.run_id} has no plan item in flight; there is no round to release`)
   if (roundIsLive(before)) {
     throw new FlowStateError(
@@ -196,7 +196,7 @@ export function releaseRound(runId: string, options: FlowControlOptions & { reas
   }
 
   const result = transition(runId, options, (state) => {
-    if (state.active_plan_item !== item) {
+    if (state.active_plan_item !== item && state.claim.spec_id !== item) {
       throw new FlowStateError(`the round on ${item} changed while it was being released; run it again`)
     }
     const at = options.at ?? new Date().toISOString()
