@@ -415,8 +415,10 @@ export function inspectPane(
   const tail = lines.slice(-12).join('\n')
   const tailLines = lines.slice(-12)
   const choiceStart = tailLines.findIndex(line => /❯\s*\d+[.)]/u.test(line))
-  const questionContext = (choiceStart > 0 ? tailLines.slice(0, choiceStart) : tailLines.slice(0, -1)).join(' ')
-  const excludedSettingsDialog = /^\s*(?:(?:select|choose|switch|change|set|pick)\s+(?:(?:a|the)\s+)?(?:theme|model|appearance|color scheme|settings|preferences)|(?:theme|model|appearance|color scheme|settings|preferences)(?:\s+(?:settings|selection))?)\s*:?\s*$/im.test(questionContext)
+  const questionLines = choiceStart > 0 ? tailLines.slice(0, choiceStart) : tailLines.slice(0, -1)
+  const questionContext = questionLines.join(' ')
+  const dialogHeading = [...questionLines].reverse().find(line => line.trim() !== '')?.trim() ?? ''
+  const excludedSettingsDialog = /^(?:(?:select|choose|switch|change|set|pick)\s+(?:(?:a|the)\s+)?(?:theme|model|appearance|color scheme|settings|preferences)|(?:theme|model|appearance|color scheme|settings|preferences)(?:\s+(?:settings|selection))?)\s*:?$/i.test(dialogHeading)
   const approvalDialog = /\b(?:permission required|approval required|tool call|allow this tool|confirm execution)\b/i.test(questionContext)
     || (/\b(?:command|tool|permission|approval)\b/i.test(tail)
       && /\b(?:allow once|always allow|deny|reject)\b/i.test(tail))

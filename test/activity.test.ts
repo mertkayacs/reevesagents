@@ -513,10 +513,12 @@ describe('busy is read off the status rows only (block 74)', () => {
     const model = ['Choose model', '❯ 1. Fast', '  2. Accurate', '↑/↓ to choose — Enter to submit'].join('\n')
     const ordinaryTheme = ['Select a theme', '❯ 1. Light', '  2. Dark', '↑/↓ to choose — Enter to submit'].join('\n')
     const ordinaryModel = ['Choose a model', '❯ 1. Fast', '  2. Accurate', '↑/↓ to choose — Enter to submit'].join('\n')
+    const afterOutput = ['Finished task', 'Changes are saved', 'Select a theme', '❯ 1. Light', '  2. Dark', '↑/↓ to choose — Enter to submit'].join('\n')
     expect(inspectPane(theme, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
     expect(inspectPane(model, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
     expect(inspectPane(ordinaryTheme, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
     expect(inspectPane(ordinaryModel, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
+    expect(inspectPane(afterOutput, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
   })
 
   it('still detects a work question about which model to use', () => {
