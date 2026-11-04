@@ -1674,13 +1674,18 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   const answered = state.claim.verdict_applied && state.verdict_handled_for === state.claim.head
   const expired = (): FlowDecision => (answered ? hold(state, 'awaiting_verdict') : escalate(state, observations, 'review_timeout'))
   // A notes file that exists and cannot be read outranks everything else in this function. The answer is on disk, so this is not
-  // *silence*: neither a verdict the pane also printed, nor the deadline, turns an unreadable file into "no answer". Ask once —
-  // strictly — for a rewrite of this head's file, whatever the pane shows and however late this tick is; a second look at the same
-  // unusable file falls through to the ordinary handling below (block 83, review round 3).
+  // *silence*: neither a verdict the pane also printed, nor the deadline, turns an unreadable file into "no answer" (block 83,
+  // review round 3).
   if (observations.notes_invalid !== undefined && observations.head === state.claim.head) {
     const refused = state.claim.head.slice(0, 7)
     const alreadyAsked = state.log.some(entry => entry.event === 'review_notes_invalid_retry' && entry.detail.includes(refused))
-    if (!alreadyAsked) {
+    // Asked once and still unusable: hold with the reason, and keep holding. The deadline is not evidence of silence here — the
+    // answer is on disk and cannot be read — so this must not fall through to `expired()` and escalate a run whose reviewer
+    // already answered (block 83, review round 4).
+    if (alreadyAsked) {
+      return hold(state, 'awaiting_verdict', `the notes file for ${refused} is not usable: ${observations.notes_invalid}`)
+    }
+    {
       const gate = reviewGate(state, observations)
       if (gate) return gate
       return withNotes({

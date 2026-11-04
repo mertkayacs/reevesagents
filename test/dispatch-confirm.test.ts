@@ -2383,6 +2383,34 @@ describe('a notes file the engine cannot read is not a missing answer (block 83)
     expect(readFlow('run-1').state).not.toBe('escalated')
   })
 
+  it('keeps holding with the unusable-file reason after the rewrite was asked for, past the deadline too', () => {
+    // Round 4: once the strict rewrite has been asked for, a file that stays unusable must not fall through to the ordinary
+    // timeout — with no fresh pane verdict that path escalated `review_timeout` on an answer that was on disk.
+    seedReview()
+    reviewingFlow()
+    writeFileSync(stagingPath('run-1', HEAD83, 1, root), 'MINOR apps/api/src/a.ts:70 — a finding\nMAJOR apps/api/src/b.ts:2 — another\n')
+
+    const asked = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD83, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(asked.decision.reason).toBe('review_notes_invalid')
+
+    // The same unusable file, now past the retry's own deadline, with no pane verdict to fall back on.
+    const late = stepFlow('run-1', {
+      now: NOW + 3_600_000, at: AT, head: HEAD83, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(late.decision.reason).toBe('awaiting_verdict')
+    const after = readFlow('run-1')
+    expect(after.state).toBe('reviewing')
+    expect(after.state).not.toBe('escalated')
+    expect(after.hold?.detail).toContain('is not usable')
+  })
+
   it('names an unusable file in the hold, and asks once for a rewrite instead of waiting out the deadline', () => {
     seedReview()
     reviewingFlow()
