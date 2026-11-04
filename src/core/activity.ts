@@ -415,7 +415,7 @@ export function inspectPane(
   const tail = lines.slice(-12).join('\n')
   const tailLines = lines.slice(-12)
   const choiceStart = tailLines.findIndex(line => /❯\s*\d+[.)]/u.test(line))
-  const firstOption = tailLines.findIndex(line => /(?:❯\s*)?\d+[.)]\s+\S/u.test(line))
+  const firstOption = tailLines.findIndex(line => /^\s*(?:❯\s*)?\d+[.)]\s+\S/u.test(line))
   const questionLines = firstOption > 0 ? tailLines.slice(0, firstOption) : (choiceStart > 0 ? tailLines.slice(0, choiceStart) : tailLines.slice(0, -1))
   const questionContext = questionLines.join(' ')
   const dialogHeading = [...questionLines].reverse().find(line => line.trim() !== '')?.trim() ?? ''
