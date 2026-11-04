@@ -515,6 +515,16 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(model, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
   })
 
+  it('still detects a work question about which model to use', () => {
+    const menu = ['Which model should this feature use?', '❯ 1. Fast', '  2. Accurate', '↑/↓ to choose — Enter to submit'].join('\n')
+    expect(inspectPane(menu, 'hermes', { now: 10_000 })).toMatchObject({ reason: 'agent_question', question: 'Which model should this feature use?' })
+  })
+
+  it('leaves numbered tool approval dialogs to the approvals path', () => {
+    const approval = ['Run command?', '❯ 1. Allow once', '  2. Always allow', '  3. Reject', '↑/↓ to choose — Enter to submit'].join('\n')
+    expect(inspectPane(approval, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
+  })
+
   it('does not hold a pane whose hint is exactly on the status rows of a finished turn', () => {
     // The other side of the asymmetry: hermes prints `enter прервать` on the very row it prints the box on, so a hint there
     // is a turn running — not a quote.

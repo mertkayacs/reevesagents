@@ -416,8 +416,11 @@ export function inspectPane(
   const tailLines = lines.slice(-12)
   const choiceStart = tailLines.findIndex(line => /❯\s*\d+[.)]/u.test(line))
   const questionContext = (choiceStart > 0 ? tailLines.slice(0, choiceStart) : tailLines.slice(0, -1)).join(' ')
-  const excludedDialog = /\b(?:theme|model|appearance|color scheme|settings|preferences)\b/i.test(tail)
-  if (!excludedDialog
+  const excludedSettingsDialog = /^\s*(?:(?:select|choose|switch|change|set|pick)\s+(?:the\s+)?(?:theme|model|appearance|color scheme|settings|preferences)|(?:theme|model|appearance|color scheme|settings|preferences)(?:\s+(?:settings|selection))?)\s*:?\s*$/im.test(questionContext)
+  const approvalDialog = /\b(?:permission required|approval required|tool call|run command|execute command|allow this tool)\b/i.test(questionContext)
+    || (/\b(?:command|tool|permission|approval)\b/i.test(tail)
+      && /\b(?:allow once|always allow|deny|reject)\b/i.test(tail))
+  if (!excludedSettingsDialog && !approvalDialog
     && /❯\s*\d+[.)]/u.test(tail)
     && /(?:^|\n)\s*\d+[.)]\s+\S/m.test(tail)
     && /(?:↑|↓|up|down).{0,80}enter|enter.{0,80}(?:↑|↓|up|down)/iu.test(tail)) {

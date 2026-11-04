@@ -2012,7 +2012,8 @@ function orphan(state: FlowState, reason: 'run_gone' | 'agents_gone'): FlowDecis
 function agentQuestionDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
   const current = state.agent_question
   const text = observations.agent_question?.trim().slice(0, 120) || null
-  if (current && observations.now - current.since >= AGENT_QUESTION_TIMEOUT_MS) {
+  const confirmedAnswer = current !== null && text === null && observations.dev_pane !== 'unknown'
+  if (current && !confirmedAnswer && observations.now - current.since >= AGENT_QUESTION_TIMEOUT_MS) {
     return {
       ...escalate(state, observations, 'question_unanswered'),
       next_agent_question: null,

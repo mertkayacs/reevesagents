@@ -39,5 +39,9 @@ describe('agent question lifecycle', () => {
     expect(timedOut.reason).toBe('question_unanswered')
     expect(timedOut.next_state).toBe('escalated')
     expect(timedOut.log_event).toBe('question_unanswered')
+
+    const lateAnswer = flowTick(waiting, { ...obs(now + 20 * 60_000 + 1, null, 'blocked_owner'), dev_pane: 'idle' })
+    expect(lateAnswer.reason).toBe('agent_question_answered')
+    expect(lateAnswer.next_state).not.toBe('escalated')
   })
 })
