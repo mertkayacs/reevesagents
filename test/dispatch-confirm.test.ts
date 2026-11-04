@@ -1088,7 +1088,9 @@ describe('a historical double close does not block the run (block 45, defect 3)'
     // Reported once: the refusal itself on the tick that saw it, and only a requeue line on the ticks that follow (block 45, defect
     // 3 — and block 81, which keeps the binding of a round's own item and puts back only a *stale* one).
     const refusalLines = new Set(readFlow('run-1').log
-      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued')
+      .filter(entry => entry.event.startsWith('plan_item_'))
+      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued'
+        || entry.event === 'plan_item_double_close_history')
       .map(entry => `${entry.event}:${entry.detail}`))
     expect(refusalLines.size).toBe(1)
     expect(readPlan('run-1').items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
@@ -1103,7 +1105,8 @@ describe('a historical double close does not block the run (block 45, defect 3)'
       evidence_policy: { min_seconds: 0, retries: 1 },
     })
     const lines = new Set(readFlow('run-1').log
-      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued')
+      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued'
+        || entry.event === 'plan_item_double_close_history')
       .map(entry => `${entry.event}:${entry.detail}`))
     expect(lines.size).toBe(1)
   })
@@ -1193,7 +1196,9 @@ describe('the settle closes the item the claim names (block 46)', () => {
     expect(items.find(item => item.id === 'P1.3')!.status).not.toBe('queued')
     // One fact, however many ticks read it: the refusal (or, once it is history, the requeue that tidies the binding).
     const refusalLines = new Set(readFlow('run-1').log
-      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued')
+      .filter(entry => entry.event.startsWith('plan_item_'))
+      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued'
+        || entry.event === 'plan_item_double_close_history')
       .map(entry => `${entry.event}:${entry.detail}`))
     expect(refusalLines.size).toBe(1)
   })
@@ -2045,8 +2050,14 @@ describe('a refused close does not unbind the item it was dispatched for (block 
     expect(item.status).toBe('in_work')
     // The rounds the item had already spent are still its own.
     expect(item.rounds).toBe(2)
-    // And the conflict is not reported a second time.
+    // The conflict is not reported a second time, and the history line does not claim the item was requeued: it stayed bound.
     expect(after.log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(0)
+    expect(after.log.filter(entry => entry.event === 'plan_item_requeued')).toHaveLength(0)
+    const history = after.log.filter(entry => entry.event === 'plan_item_double_close_history')
+    for (const entry of history) {
+      expect(entry.detail).toContain('stays bound')
+      expect(entry.detail).not.toContain('back in the queue')
+    }
   })
 
   it('prints the item’s round, not the flow’s, against the item’s cap', () => {

@@ -1167,9 +1167,10 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
     next_review_started_at: state.review_started_at,
     next_claim: { ...state.claim, verdict_applied: true },
     next_active_plan_item: keepBinding ? id : null,
-    // The first refusal is the news; a repeat is the flow tidying a binding it already refused, and it says that instead of
-    // reporting the same double close twice (block 45, defect 3).
-    ...(recorded ? { log_event: 'plan_item_requeued' as const } : {}),
+    // The first refusal is the news; a repeat is history (block 45, defect 3). What a repeat says depends on what it did: an item
+    // that goes back to the queue is `plan_item_requeued`, while the round's own item keeps its binding and its status, and the line
+    // must not claim it was requeued (block 81, review round 2).
+    ...(recorded ? { log_event: keepBinding ? ('plan_item_double_close_history' as const) : ('plan_item_requeued' as const) } : {}),
     // Only an item that was queued by mistake goes back to the queue: the one this round belongs to was dispatched and is being
     // worked on, so demoting it is what left the picker convinced the flow was idle (block 46, MAJOR 2) and the plan blind to its
     // rounds (block 81). An item that is not the round's owner keeps the old treatment.
@@ -1178,7 +1179,14 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
       : {}),
     log_detail: detail,
   }
-  if (recorded) return { ...refusal, log_detail: `${id}: the close was refused earlier; the item is back in the queue` }
+  if (recorded) {
+    return {
+      ...refusal,
+      log_detail: keepBinding
+        ? `${id}: the close was refused earlier; ${id} stays bound and keeps its rounds`
+        : `${id}: the close was refused earlier; the item is back in the queue`,
+    }
+  }
   return refusal
 }
 
