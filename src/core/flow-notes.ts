@@ -179,16 +179,27 @@ export interface NotesValidation {
   reason?: string
 }
 
-// What counts as a usable findings file (§11.2): non-empty, ending on a verdict line, and carrying at
-// least one finding unless the verdict is ACCEPT — "nothing to fix" is a legitimate round.
+// What counts as a usable findings file (§11.2): non-empty, carrying a verdict line, and at least one finding unless the verdict
+// is ACCEPT — "nothing to fix" is a legitimate round.
+//
+// The verdict is read at the **end of the file or at its start**. The panel answer puts it first (`VERDICT: …` then the findings)
+// and the file paragraph asks for it last, which a live reviewer read as two instructions and satisfied the first one: its file
+// carried `VERDICT: CHANGES_REQUESTED` on line 1 and a MINOR on line 2, the parser saw no verdict, and the flow waited out the
+// 900-second deadline on an answer that was sitting on disk (block 83). Both orders are unambiguous answers; what must not change
+// is that a CHANGES_REQUESTED without a finding is not one.
 export function validateNotesText(text: string): NotesValidation {
   const trimmed = text.trim()
   if (!trimmed) return { verdict: null, counts: { blocker: 0, major: 0, minor: 0 }, reason: 'empty' }
   const lines = trimmed.split('\n')
   const lastLine = lines.at(-1)!.trim()
-  const verdictMatch = VERDICT_LINE_PATTERN.exec(lastLine)
+  const firstLine = lines[0]!.trim()
+  const verdictMatch = VERDICT_LINE_PATTERN.exec(lastLine) ?? VERDICT_LINE_PATTERN.exec(firstLine)
   if (!verdictMatch) {
-    return { verdict: null, counts: { blocker: 0, major: 0, minor: 0 }, reason: 'no verdict line at the end' }
+    return {
+      verdict: null,
+      counts: { blocker: 0, major: 0, minor: 0 },
+      reason: lastLine === firstLine ? 'no verdict line' : 'no verdict line at the start or the end',
+    }
   }
   const verdict = verdictMatch[1]!.toUpperCase() === 'ACCEPT' ? 'ACCEPT' : 'CHANGES_REQUESTED'
   const counts = countFindings(trimmed)

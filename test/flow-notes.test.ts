@@ -59,8 +59,23 @@ describe('validation', () => {
   })
 
   it('refuses a file whose last line is not a verdict', () => {
-    expect(validateNotesText('MAJOR x:1 — y\n').reason).toBe('no verdict line at the end')
+    expect(validateNotesText('MAJOR x:1 — y\nMINOR z:2 — w\n').reason).toBe('no verdict line at the start or the end')
+    // A one-line file has no start/end to tell apart.
+    expect(validateNotesText('MAJOR x:1 — y\n').reason).toBe('no verdict line')
     expect(validateNotesText('   ').reason).toBe('empty')
+  })
+
+  it('accepts the verdict on the first line as well as the last (block 83)', () => {
+    // The panel answer puts the verdict first; the file paragraph asks for it last. A live reviewer satisfied the first one, its
+    // file was refused, and the flow waited out the review deadline on an answer that was on disk.
+    const leading = validateNotesText('VERDICT: CHANGES_REQUESTED\nMINOR apps/api/src/a.ts:70 — a finding\n')
+    expect(leading.reason).toBeUndefined()
+    expect(leading.verdict).toBe('CHANGES_REQUESTED')
+    expect(leading.counts).toEqual({ blocker: 0, major: 0, minor: 1 })
+
+    // A leading ACCEPT with nothing else is still a valid answer, and a CHANGES_REQUESTED without findings is still not one.
+    expect(validateNotesText('VERDICT: ACCEPT\nno findings\n')).toMatchObject({ verdict: 'ACCEPT' })
+    expect(validateNotesText('VERDICT: CHANGES_REQUESTED\n').reason).toBe('CHANGES_REQUESTED without a BLOCKER/MAJOR/MINOR line')
   })
 
   it('counts and extracts only finding lines', () => {

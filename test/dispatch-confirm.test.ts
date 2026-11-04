@@ -2301,3 +2301,86 @@ describe('an answered review never times out (block 82)', () => {
     expect(readFlow('run-1').state).not.toBe('escalated')
   })
 })
+
+// Block 83, the live `salon-dashboard` run of 04.11: the reviewer wrote `VERDICT: CHANGES_REQUESTED` on line 1 and its MINOR on
+// line 2. The parser only looked at the last line, refused the file, and the flow held `awaiting_verdict` — "waiting for its notes
+// file" — for the whole 900-second deadline while the answer sat on disk.
+describe('a notes file the engine cannot read is not a missing answer (block 83)', () => {
+  function seedReview(): void {
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2']) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+  }
+
+  const HEAD83 = 'e'.repeat(40)
+
+  function reviewingFlow(): void {
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 6, max_total_rounds: 24, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 1, active_plan_item: 'P1.1', review_started_at: NOW - 60_000,
+      claim: { head: HEAD83, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+  }
+
+  it('reads a file whose verdict is on the first line, and dispatches the fix', () => {
+    seedReview()
+    reviewingFlow()
+    writeFileSync(stagingPath('run-1', HEAD83, 1, root), 'VERDICT: CHANGES_REQUESTED\nMINOR apps/api/src/a.ts:70 — a finding\n')
+
+    const ticked = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD83, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // The answer was read, not waited out: the fix is dispatched on the finding the file carries.
+    expect(ticked.observations.verdict_source).toBe('file')
+    expect(ticked.decision.reason).toBe('fix_dispatched')
+    expect(ticked.decision.notes_counts).toMatchObject({ minor: 1 })
+    expect(readFlow('run-1').state).toBe('fixing')
+  })
+
+  it('names an unusable file in the hold, and asks once for a rewrite instead of waiting out the deadline', () => {
+    seedReview()
+    reviewingFlow()
+    // No verdict line anywhere: unusable, and nothing the engine can act on.
+    writeFileSync(stagingPath('run-1', HEAD83, 1, root), 'MINOR apps/api/src/a.ts:70 — a finding\nMAJOR apps/api/src/b.ts:2 — another\n')
+
+    const asked = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD83, tree_clean: true, plan: undefined,
+      ports: {
+        paneBusy: () => 'idle' as const,
+        peek: () => '',
+        send: () => ({ sent: true as const }),
+      },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    // One strict re-request, and the journal says why: the file is there, it just cannot be read.
+    expect(asked.decision.kind).toBe('request_review')
+    expect(asked.decision.reason).toBe('review_notes_invalid')
+    const askedLine = readFlow('run-1').log.find(entry => entry.event === 'review_notes_invalid_retry')
+    expect(askedLine?.detail).toContain('not usable')
+    expect(readFlow('run-1').state).toBe('reviewing')
+
+    // A second tick does not ask again; it holds and names the reason (not "waiting for its notes file").
+    const held = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD83, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(held.decision.reason).toBe('awaiting_verdict')
+    expect(readFlow('run-1').hold?.detail).toContain('is not usable')
+    expect(readFlow('run-1').state).toBe('reviewing')
+  })
+})

@@ -515,6 +515,15 @@ closed something is refused — the item is not closed by somebody else's commit
 recorded in the plan's conflicts), and the flow carries on. It does not escalate: a historical inconsistency can never be repaired,
 so an escalation would make every resumed run escalate again for ever.
 
+**A notes file is read in either order, and an unreadable one is named (block 83).** The live run of 04.11 held `awaiting_verdict` —
+"waiting for its notes file" — for the whole 900-second deadline while the file sat on disk: the reviewer had written
+`VERDICT: CHANGES_REQUESTED` on line 1 and its MINOR on line 2, and the parser only looked at the last line. The panel answer puts
+the verdict first and the file paragraph asked for it last, so both orders are now accepted (`validateNotesText`: last line, then
+first; a `CHANGES_REQUESTED` without a finding is still not an answer), and the prompt says plainly that the file is the reverse of
+the answer above — findings first, verdict last. An unusable file is no longer reported as a missing one: the hold says
+`the notes file for <head> is not usable: <reason>`, and the tick asks once — strictly — for a rewrite (`review_notes_invalid_retry`)
+instead of waiting out a deadline on an answer that already exists.
+
 **An answered review never times out (block 82).** The live `salon-dashboard` run escalated `review_timeout` six times on reviews
 whose verdict had been applied: the close was refused (the head had already closed another item), the refusal left the flow in
 `reviewing` with the review clock still armed, and fifteen minutes later the ticker escalated a review nobody was waiting for — in

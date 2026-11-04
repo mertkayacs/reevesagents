@@ -441,6 +441,8 @@ export type FlowReason =
   | 'dispatch_pending'
   | 'dispatch_unresolved'
   | 'review_unsubstantiated'
+  // The notes file of the round could not be read, and the reviewer was asked once to rewrite it (block 83).
+  | 'review_notes_invalid'
   | 'review_dispatch_unconfirmed'
   | 'plan_incomplete'
   | 'plan_item_double_close'
@@ -841,8 +843,11 @@ export function renderReviewPrompt(parts: {
     lines.push(
       '',
       `Also write those same lines to ${parts.notes_path} — one finding per line,`,
-      'each starting with BLOCKER, MAJOR or MINOR followed by file:line, then what is wrong and what to do,',
-      'and end the file with the line "VERDICT: ACCEPT" or "VERDICT: CHANGES_REQUESTED".',
+      'each starting with BLOCKER, MAJOR or MINOR followed by file:line, then what is wrong and what to do.',
+      // The panel answer puts the verdict first; the file puts it last. Saying only "and end the file with the verdict" next to
+      // "answer with the verdict first" was read as a contradiction, and a live file arrived with the verdict on line 1 (block 83).
+      'The file is the reverse of the answer above: findings first, and the LAST line of the file is',
+      '"VERDICT: ACCEPT" or "VERDICT: CHANGES_REQUESTED".',
     )
   }
   return lines.join('\n')
@@ -1709,9 +1714,36 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   const fresh = observations.verdict !== null && !fileAnswered
     && (fromFile || observations.verdict_count > state.claim.verdict_count)
   if (!fresh) {
+    // A file this build cannot read is not a missing answer, and waiting the deadline out for it stops the run on an answer that
+    // is already on disk. Say why the file was refused (`notes_invalid <reason>`), and ask once — strictly — for a rewrite of this
+    // head's file; a second round of the same invalid file waits like any other silence (block 83).
+    const invalid = observations.notes_invalid
+    if (invalid !== undefined && !timedOut) {
+      const refused = state.claim.head.slice(0, 7)
+      const alreadyAsked = state.log.some(entry => entry.event === 'review_notes_invalid_retry' && entry.detail.includes(refused))
+      if (!alreadyAsked) {
+        return withNotes({
+          ...reviewRequest(
+            state,
+            state.claim.head,
+            observations.verdict_count,
+            'review_notes_invalid',
+            observations.now,
+            observations.notes_staging_path,
+            true,
+            promptBudget(state, observations),
+          ),
+          log_event: 'review_notes_invalid_retry',
+          log_detail: `${refused}: the notes file was not usable (${invalid}); asked for a rewrite`,
+        }, observations)
+      }
+    }
     // Nothing answered within the budget: a reviewer that crashed, hit a login screen or is stuck
     // on a modal never prints a verdict, so the flow escalates instead of waiting for ever.
-    return timedOut ? expired() : hold(state, 'awaiting_verdict')
+    if (timedOut) return expired()
+    return invalid === undefined
+      ? hold(state, 'awaiting_verdict')
+      : hold(state, 'awaiting_verdict', `the notes file for ${state.claim.head.slice(0, 7)} is not usable: ${invalid}`)
   }
 
   // A pane verdict is not bound to a commit. The capture window still holds the verdicts of earlier rounds, so a
