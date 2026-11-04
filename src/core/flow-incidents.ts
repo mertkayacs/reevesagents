@@ -218,7 +218,12 @@ function signalsFor(
   // parked escalated flow is rechecked so an `incident_opened` row cannot turn into unknown_hold.
   const latest = [...state.log].reverse().find(entry => entry.event !== 'incident_opened' && entry.event !== 'incident_resolved') ?? null
   const latestDetail = latest?.detail ?? ''
-  const escalatedReason = decision?.reason ?? (state.state === 'escalated' ? latestDetail : reason)
+  // A manual tick of an escalated flow appends `flow_closed`; the cause belongs to the latest escalation
+  // event, not that subsequent hold. Preserve it so one blocker stays one incident across parked sweeps.
+  const escalationCause = [...state.log].reverse().find(entry => entry.event === 'escalate')?.detail
+  const escalatedReason = state.state === 'escalated'
+    ? (decision?.reason !== 'flow_closed' ? decision?.reason : undefined) ?? escalationCause ?? latestDetail
+    : decision?.reason ?? reason
   if (escalatedReason.includes('dispatch_unresolved') || latest?.event === 'dispatch_unresolved') {
     signals.push({ kind: 'dispatch_unconfirmed', severity: 'blocker', spec_id: item, reason: latestDetail || escalatedReason })
   } else if (escalatedReason.includes('review_timeout')) {
@@ -243,7 +248,7 @@ function signalsFor(
   const normal = new Set([
     '', 'head_unchanged', 'tree_dirty', 'dev_busy', 'review_busy', 'dev_pane_unknown', 'review_pane_unknown',
     'awaiting_verdict', 'review_timer_started', 'dispatch_pending', 'dispatch_unresolved',
-    'plan_incomplete', 'plan_in_flight', 'fix_refused', 'agent_question', 'agent_question_answered',
+    'plan_incomplete', 'plan_in_flight', 'fix_refused', 'flow_closed', 'agent_question', 'agent_question_answered',
   ])
   if (decision?.kind === 'none' && !normal.has(decision.reason) && decision.reason !== 'dev_stalled'
     && decision.reason !== 'review_timeout' && decision.reason !== 'rounds_exhausted') {

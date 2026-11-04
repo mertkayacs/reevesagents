@@ -49,7 +49,6 @@ import { loadConfig } from './config.js'
 import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound, PLAN_LIMITS } from './plan.js'
 import { applyPlanMarks } from './plan-mark.js'
 import { emitNotification } from './notifications.js'
-import { raiseEscalationApproval } from './flow-escalation.js'
 import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js'
 import type { PlanTickView } from './flow-plan.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
@@ -641,30 +640,6 @@ function emitPlanAttention(state: FlowState, observations: FlowObservations, dec
   })
 }
 
-// Every escalation becomes an approval: the operator gets a decision to make instead of a stopped pipeline with a
-// log line. `raiseEscalationApproval` is idempotent per episode, so a ticker that sees the same escalated flow again
-// does not create a second ticket.
-function raiseEscalationFor(state: FlowState, decision: FlowDecision): void {
-  if (state.state !== 'escalated') return
-  // These blockers are routed through the incident ACK deadline. Creating the legacy escalation approval here
-  // would notify a human on the same tick, bypassing the orchestrator's ten-minute chance to take ownership.
-  const incidentRoutedCause = [decision.reason, state.log.at(-1)?.detail ?? '']
-    .find(reason => /^(?:review_timeout|rounds_exhausted|total_rounds_exhausted)\b/.test(reason))
-  if (incidentRoutedCause) return
-  const reason = decision.kind === 'escalate' ? decision.reason : (state.log.at(-1)?.detail ?? '')
-  try {
-    raiseEscalationApproval({
-      run_id: state.run_id,
-      flow_id: state.flow_id,
-      episode: state.notify_episode,
-      reason: reason || 'escalated',
-      item_id: state.active_plan_item,
-    })
-  } catch {
-    // The approval is how a human hears about it, but a failure to write it must not undo the escalation itself.
-  }
-}
-
 function emitFlowAttention(state: FlowState, decision: FlowDecision): void {
   // The state is the authority, not the decision's kind: a `composer_dirty` escalation is a `dispatch_spec`
   // decision that ended in `escalated`, and gating on `kind` silently dropped exactly that case. The dedupe key
@@ -1115,7 +1090,6 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     // The mirror is updated; the document that lists the work follows it, then anything a previous tick had to defer.
     markPlanDocument(before, observations, phase.decision, options)
     emitFlowAttention(phase.settled?.state ?? before, phase.decision)
-    raiseEscalationFor(phase.settled?.state ?? before, phase.decision)
     emitPlanAttention(before, observations, phase.decision)
     // A hold that only becomes visible wrote the reason, not an answer: publishing the reviewer's file here would
     // record a round nobody accepted and remove the staging copy the next tick still needs (the bug that made a

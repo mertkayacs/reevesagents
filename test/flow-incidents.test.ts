@@ -109,16 +109,22 @@ describe('durable flow incidents', () => {
     runAndRootAgent()
     const flow = state({ state: 'escalated' })
     reconcileFlowIncidents(flow, obs(), hold('review_timeout'), { root, now: NOW })
+    expect(listRunApprovals('run-1')).toHaveLength(0)
     reconcileFlowIncidents(flow, obs(), hold('review_timeout'), { root, now: NOW + 600_000 })
     reconcileFlowIncidents(flow, obs(), hold('review_timeout'), { root, now: NOW + 700_000 })
     expect(listFlowIncidents('run-1', { root })[0]).toMatchObject({ owner: 'human', status: 'open', approval_id: expect.any(String) })
     expect(listRunApprovals('run-1')).toHaveLength(1)
   })
 
-  it('keeps the original escalation cause when a parked flow is reconciled again', () => {
+  it('keeps the original escalation cause after incident and flow_closed journal entries', () => {
     const flow = state({ state: 'escalated', log: [{ at: AT, event: 'escalate', detail: 'review_timeout' }] })
     const first = reconcileFlowIncidents(flow, obs(), hold('review_timeout'), { root, now: NOW, at: AT })
-    reconcileFlowIncidents(first, undefined, undefined, { root, now: NOW + 60_000 })
+    const closedHold = {
+      ...first,
+      log: [...first.log, { at: new Date(NOW + 60_000).toISOString(), event: 'flow_closed', detail: 'flow_closed' }],
+    }
+    saveFlow(closedHold, { root })
+    reconcileFlowIncidents(closedHold, undefined, undefined, { root, now: NOW + 60_000 })
 
     expect(listFlowIncidents('run-1', { root })).toMatchObject([
       { kind: 'review_timeout', severity: 'blocker', count: 2, status: 'open' },

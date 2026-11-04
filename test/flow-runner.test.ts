@@ -57,6 +57,18 @@ function seed(state = makeState()): FlowState {
   return state
 }
 
+function seedApprovalRun(): void {
+  writeRun({
+    id: 'run-1', name: 'run-1', status: 'running', tmux_session: 's', reeves_window_id: '@0', reeves_pane_id: '%0',
+    root_agent_id: 'dev-1', working_dir: root, preset_name: null, started_at: AT, ended_at: null,
+  })
+  writeAgent({
+    id: 'dev-1', run_id: 'run-1', nickname: 'orchestrator', provider: 'codex', model: '', role: 'root', working_dir: root,
+    task: 'coordinate', task_status: 'working', task_note: '', tmux_session: 's', tmux_window_id: '@1', tmux_pane_id: '%1',
+    rc_enabled: false, permissions: 'ask', inbox: [], last_seen: NOW, started_at: AT, ended_at: null,
+  })
+}
+
 function flowFile(): string {
   return join(root, 'flows', 'run-1.json')
 }
@@ -398,15 +410,7 @@ describe('stepFlow', () => {
   })
 
   it('escalates a review that timed out without sending anything', () => {
-    writeRun({
-      id: 'run-1', name: 'run-1', status: 'running', tmux_session: 's', reeves_window_id: '@0', reeves_pane_id: '%0',
-      root_agent_id: 'dev-1', working_dir: root, preset_name: null, started_at: AT, ended_at: null,
-    })
-    writeAgent({
-      id: 'dev-1', run_id: 'run-1', nickname: 'orchestrator', provider: 'codex', model: '', role: 'root', working_dir: root,
-      task: 'coordinate', task_status: 'working', task_note: '', tmux_session: 's', tmux_window_id: '@1', tmux_pane_id: '%1',
-      rc_enabled: false, permissions: 'ask', inbox: [], last_seen: NOW, started_at: AT, ended_at: null,
-    })
+    seedApprovalRun()
     seed(makeState({
       state: 'reviewing',
       review_started_at: NOW - 901_000,
@@ -423,6 +427,22 @@ describe('stepFlow', () => {
     expect(readFlow('run-1').log.some(entry => entry.event === 'escalate')).toBe(true)
     expect(listRunApprovals('run-1')).toHaveLength(0)
     expect(listFlowIncidents('run-1', { root })).toMatchObject([{ kind: 'review_timeout', severity: 'blocker', owner: 'orchestrator' }])
+  })
+
+  it('does not raise a legacy human approval on a manual tick of a parked escalation', () => {
+    seedApprovalRun()
+    seed(makeState({
+      state: 'escalated',
+      log: [{ at: AT, event: 'escalate', detail: 'review_timeout' }],
+    }))
+
+    const result = step(makePorts())
+
+    expect(result.decision.reason).toBe('flow_closed')
+    expect(listRunApprovals('run-1')).toHaveLength(0)
+    expect(listFlowIncidents('run-1', { root })).toMatchObject([
+      { kind: 'review_timeout', severity: 'blocker', status: 'open', owner: 'orchestrator' },
+    ])
   })
 
   it('escalates without sending anything when the round budget is spent', () => {
