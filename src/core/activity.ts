@@ -414,9 +414,23 @@ export function inspectPane(
   // choice plus the navigation/Enter instructions together.
   const tail = lines.slice(-12).join('\n')
   const tailLines = lines.slice(-12)
-  const choiceStart = tailLines.findIndex(line => /❯\s*\d+[.)]/u.test(line))
-  const firstOption = tailLines.findIndex(line => /^\s*(?:❯\s*)?\d+[.)]\s+\S/u.test(line))
-  const questionLines = firstOption > 0 ? tailLines.slice(0, firstOption) : (choiceStart > 0 ? tailLines.slice(0, choiceStart) : tailLines.slice(0, -1))
+  const selectedOption = tailLines.findIndex(line => /^\s*❯\s*\d+[.)]\s+\S/u.test(line))
+  const optionRow = /^\s*(?:❯\s*)?\d+[.)]\s+\S/u
+  let firstOption = selectedOption
+  while (firstOption > 0) {
+    let previous = firstOption - 1
+    while (previous >= 0 && tailLines[previous]!.trim() === '') previous -= 1
+    if (previous < 0 || !optionRow.test(tailLines[previous]!)) break
+    firstOption = previous
+  }
+  let lastOption = selectedOption
+  while (lastOption >= 0 && lastOption + 1 < tailLines.length) {
+    let next = lastOption + 1
+    while (next < tailLines.length && tailLines[next]!.trim() === '') next += 1
+    if (next >= tailLines.length || !optionRow.test(tailLines[next]!)) break
+    lastOption = next
+  }
+  const questionLines = firstOption > 0 ? tailLines.slice(0, firstOption) : tailLines.slice(0, -1)
   const questionContext = questionLines.join(' ')
   const dialogHeading = [...questionLines].reverse().find(line => line.trim() !== '')?.trim() ?? ''
   const excludedSettingsDialog = /^(?:(?:select|choose|switch|change|set|pick)\s+(?:(?:a|the)\s+)?(?:theme|model|appearance|color scheme|settings|preferences)|(?:theme|model|appearance|color scheme|settings|preferences)(?:\s+(?:settings|selection))?)\s*:?$/i.test(dialogHeading)
@@ -424,8 +438,8 @@ export function inspectPane(
     || (/\b(?:command|tool|permission|approval)\b/i.test(tail)
       && /\b(?:allow once|always allow|deny|reject)\b/i.test(tail))
   if (!excludedSettingsDialog && !approvalDialog
-    && /❯\s*\d+[.)]/u.test(tail)
-    && /(?:^|\n)\s*\d+[.)]\s+\S/m.test(tail)
+    && selectedOption >= 0
+    && tailLines.slice(firstOption, lastOption + 1).filter(line => optionRow.test(line)).length >= 2
     && /(?:↑|↓|up|down).{0,80}enter|enter.{0,80}(?:↑|↓|up|down)/iu.test(tail)) {
     const prompt = questionContext.replace(/\s+/g, ' ').trim().slice(-120)
     return { state: 'unknown', reason: 'agent_question', question: prompt || 'agent requested a choice', sample }

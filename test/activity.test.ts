@@ -516,6 +516,7 @@ describe('busy is read off the status rows only (block 74)', () => {
     const afterOutput = ['Finished task', 'Changes are saved', 'Select a theme', '❯ 1. Light', '  2. Dark', '↑/↓ to choose — Enter to submit'].join('\n')
     const secondSelected = ['Select a theme', '  1. Light', '❯ 2. Dark', '  3. System', '↑/↓ to choose — Enter to submit'].join('\n')
     const afterNumberedProse = ['Step 1. Done', 'Select a theme', '  1. Light', '❯ 2. Dark', '  3. System', '↑/↓ to choose — Enter to submit'].join('\n')
+    const afterEarlierList = ['1. Finished setup', '2. Ran tests', 'Select a theme', '  1. Light', '❯ 2. Dark', '  3. System', '↑/↓ to choose — Enter to submit'].join('\n')
     expect(inspectPane(theme, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
     expect(inspectPane(model, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
     expect(inspectPane(ordinaryTheme, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
@@ -523,6 +524,7 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(afterOutput, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
     expect(inspectPane(secondSelected, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
     expect(inspectPane(afterNumberedProse, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
+    expect(inspectPane(afterEarlierList, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
   })
 
   it('still detects a work question about which model to use', () => {
