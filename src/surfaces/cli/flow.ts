@@ -120,6 +120,9 @@ function printStatus(state: FlowState, path: string): void {
     console.log(`plan      ${state.plan.done}/${state.plan.total} done${state.plan.waiting > 0 ? ` · ${state.plan.waiting} waiting for you` : ''}  (imported ${state.plan.imported_at})`)
   }
   if (state.active_plan_item) console.log(`plan item ${state.active_plan_item} in flight`)
+  if (state.agent_question) {
+    console.log(`agent question ${state.agent_question.agent}: ${state.agent_question.text}`)
+  }
   // Why the flow is standing still. Until this line existed the reason lived only in the ticker's stdout, and "standing
   // and silent" was the diagnosis an operator had to reach by running a `--dry-run` tick themselves (block 64).
   if (state.hold) console.log(`hold      ${state.hold.reason} since ${state.hold.since}`)

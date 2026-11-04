@@ -2012,6 +2012,14 @@ function orphan(state: FlowState, reason: 'run_gone' | 'agents_gone'): FlowDecis
 function agentQuestionDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
   const current = state.agent_question
   const text = observations.agent_question?.trim().slice(0, 120) || null
+  if (current && observations.now - current.since >= AGENT_QUESTION_TIMEOUT_MS) {
+    return {
+      ...escalate(state, observations, 'question_unanswered'),
+      next_agent_question: null,
+      log_event: 'question_unanswered',
+      log_detail: `${current.agent}: ${current.text}`,
+    }
+  }
   if (text) {
     const signature = `${state.roles.dev}: ${text}`
     const lastLifecycle = [...state.log].reverse().find(entry =>
@@ -2020,15 +2028,9 @@ function agentQuestionDecision(state: FlowState, observations: FlowObservations)
     if (lastLifecycle?.event === 'agent_question_answered' || lastLifecycle?.event === 'question_unanswered') {
       // The same prompt can reappear after the human acted; it is a new request and gets a new timestamp/event.
     } else if (lastLifecycle?.event === 'agent_question') {
-      if (current && observations.now - current.since >= AGENT_QUESTION_TIMEOUT_MS) {
-        return { ...escalate(state, observations, 'question_unanswered'), next_agent_question: null, log_event: 'question_unanswered', log_detail: signature }
-      }
       return hold(state, 'agent_question')
     }
     if (current && current.text === text && current.agent === state.roles.dev) {
-      if (observations.now - current.since >= AGENT_QUESTION_TIMEOUT_MS) {
-        return { ...escalate(state, observations, 'question_unanswered'), next_agent_question: null, log_event: 'question_unanswered', log_detail: `${current.agent}: ${current.text}` }
-      }
       return hold(state, 'agent_question')
     }
     const item = state.claim.spec_id ?? state.active_plan_item
@@ -2041,6 +2043,7 @@ function agentQuestionDecision(state: FlowState, observations: FlowObservations)
     }
   }
   if (!current) return null
+  if (observations.dev_pane === 'unknown') return hold(state, 'agent_question')
   const item = current.item
   const planItem = item ? observations.plan?.items.find(entry => entry.id === item) : undefined
   return {

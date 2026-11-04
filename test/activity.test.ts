@@ -503,6 +503,11 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(question, 'hermes', { now: 10_000 })).toMatchObject({ state: 'unknown', reason: 'agent_question' })
   })
 
+  it('detects a structurally complete question menu even when its heading is not phrased as a question', () => {
+    const menu = ['Network topology:', '❯ 1. Standard bridge', '  2. Internal network with proxy', '↑/↓ select · Enter confirm'].join('\n')
+    expect(inspectPane(menu, 'hermes', { now: 10_000 })).toMatchObject({ state: 'unknown', reason: 'agent_question', question: 'Network topology:' })
+  })
+
   it('does not classify a theme or model chooser as an agent question', () => {
     const theme = ['Select theme', '❯ 1. Light', '  2. Dark', '↑/↓ to choose — Enter to submit'].join('\n')
     const model = ['Choose model', '❯ 1. Fast', '  2. Accurate', '↑/↓ to choose — Enter to submit'].join('\n')

@@ -376,6 +376,17 @@ describe('flow status', () => {
     expect(out).toContain('state     idle  round 0/24 flow')
   })
 
+  it('prints the persisted agent question independently of the latest hold or journal event', async () => {
+    const { state } = seedFlow()
+    saveFlow({
+      ...state,
+      agent_question: { agent: 'dev-1', item: 'P1.1', text: 'Network topology:', since: Date.now() },
+      log: [{ at: new Date().toISOString(), event: 'hold', detail: 'head_unchanged' }],
+    }, { root: tmpDir })
+    const { out } = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(out).toContain('agent question dev-1: Network topology:')
+  })
+
   it('fails with a readable message when no flow exists', async () => {
     const failure = await runCli(['flow', 'status', '--run', 'ghost']).then(
       () => null,

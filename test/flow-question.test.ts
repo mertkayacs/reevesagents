@@ -31,7 +31,11 @@ describe('agent question lifecycle', () => {
     expect(answered.next_plan_status).toMatchObject({ id: 'P1.1', status: 'in_work' })
     expect(applyDecisionToState(waiting, answered, new Date(now + 20_000).toISOString()).agent_question).toBeNull()
 
-    const timedOut = flowTick(waiting, obs(now + 20 * 60_000, question, 'blocked_owner'))
+    const unreadable = flowTick(waiting, { ...obs(now + 15_000, null, 'blocked_owner'), dev_pane: 'unknown' })
+    expect(unreadable.reason).toBe('agent_question')
+    expect(unreadable.log_event).toBeUndefined()
+
+    const timedOut = flowTick(waiting, { ...obs(now + 20 * 60_000, null, 'blocked_owner'), dev_pane: 'unknown' })
     expect(timedOut.reason).toBe('question_unanswered')
     expect(timedOut.next_state).toBe('escalated')
     expect(timedOut.log_event).toBe('question_unanswered')

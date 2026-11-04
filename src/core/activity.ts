@@ -417,7 +417,7 @@ export function inspectPane(
   const choiceStart = tailLines.findIndex(line => /❯\s*\d+[.)]/u.test(line))
   const questionContext = (choiceStart > 0 ? tailLines.slice(0, choiceStart) : tailLines.slice(0, -1)).join(' ')
   const excludedDialog = /\b(?:theme|model|appearance|color scheme|settings|preferences)\b/i.test(tail)
-  if (!excludedDialog && /(?:\?|\b(?:which|should|choose|conflict|prefer|use)\b)/iu.test(questionContext)
+  if (!excludedDialog
     && /❯\s*\d+[.)]/u.test(tail)
     && /(?:^|\n)\s*\d+[.)]\s+\S/m.test(tail)
     && /(?:↑|↓|up|down).{0,80}enter|enter.{0,80}(?:↑|↓|up|down)/iu.test(tail)) {
