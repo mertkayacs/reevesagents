@@ -58,6 +58,7 @@ import { paneBusy, paneDiagnosis, paneReadyForNudge, peekAgentRaw, sendWhenIdle 
 import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
 import type { FlowVerdict } from './verdict.js'
+import stripAnsi from 'strip-ansi'
 
 // Everything the engine must not know about. Injected so a test can describe a pane, a commit and
 // a reviewer without tmux, git or a nine-second paste settle.
@@ -99,6 +100,20 @@ export interface FlowPorts {
   // the state can leave it out, and the hold then reports the state alone (block 73).
   paneDiagnosis?: (_agentId: string) => string | null
   devNudgeReady?: (_agentId: string, _text?: string, _pasted?: { at: number } | null) => boolean | 'recorded_paste'
+}
+
+// The marker is deliberately recognized only at the end of the latest visible dev response. Searching for it
+// anywhere in a pane would replay an old block after the agent had resumed work. Terminal input/status chrome
+// can follow the response, so ignore only those known trailing UI rows before checking the final content row.
+export function ownerDecisionBlockFromPane(text: string): string | null {
+  const ignoredTail = /^(?:\s*|›\s*|❯\s*|←\s*for agents\s*·\s*\?\s*for shortcuts\s*|\?\s*for shortcuts\s*|esc(?:ape)?\s+to interrupt\b.*|ctrl\+c\s+to\b.*)$/i
+  const providerMeta = /^[\w.-]+(?:\s+[\w.-]+){0,3}\s+·\s+(?:~[/\\]|[/\\]|[a-z]:[/\\])/i
+  const lines = stripAnsi(text)
+    .split(/\r?\n/)
+    .map(line => line.trim())
+  while (lines.length > 0 && (ignoredTail.test(lines.at(-1)!) || providerMeta.test(lines.at(-1)!))) lines.pop()
+  const match = /^FLOW-BLOCKED:\s*(\S(?:.*\S)?)\s*$/i.exec(lines.at(-1) ?? '')
+  return match?.[1]?.slice(0, 500) ?? null
 }
 
 export const defaultFlowPorts: FlowPorts = {
@@ -564,7 +579,7 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
             run_id: before.run_id,
             project: projectOfRepo(before.repo),
             source: 'product',
-            dedupe_key: `${before.flow_id}:plan.item_blocked:${status.id}:${before.notify_episode}`,
+            dedupe_key: `${before.flow_id}:plan.item_blocked:${status.id}`,
           })
         }
         next = moveItemByEngine(next, {
@@ -705,6 +720,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     : false
   const devPane: PaneBusyState = state.roles.dev ? ports.paneBusy(state.roles.dev) : 'unknown'
   const reviewPane: PaneBusyState = state.roles.review ? ports.paneBusy(state.roles.review) : 'unknown'
+  const devText = devPane === 'idle' ? ports.peek(state.roles.dev, VERDICT_SCAN_LINES) : ''
   const paneText = reviewPane === 'unknown' ? '' : ports.peek(state.roles.review, VERDICT_SCAN_LINES)
   // An unreadable reviewer pane carries no verdict evidence at all: report "no verdict" and let
   // the engine hold on `review_pane_unknown` instead of reading a failed capture as zero verdicts.
@@ -733,6 +749,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
       review: reviewPane === 'unknown' ? (ports.paneDiagnosis?.(state.roles.review) ?? null) : null,
     },
     agent_question: devDiagnosis?.startsWith('agent_question:') ? devDiagnosis.slice('agent_question:'.length).trim() : null,
+    owner_blocked: devPane === 'idle' ? ownerDecisionBlockFromPane(devText) : null,
     verdict: fromFile ? (notes.verdict ?? null) : scan.last,
     verdict_count: scan.count,
     verdict_notes: fromFile ? notes.text : scan.notes,

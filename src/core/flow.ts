@@ -395,6 +395,9 @@ export interface FlowObservations {
   // instead of a bare `review_pane_unknown` (block 73).
   pane_diagnostics?: { dev: string | null, review: string | null }
   agent_question?: string | null
+  // A final `FLOW-BLOCKED:` line from the plan item's latest completed dev response. It is actionable only
+  // on an ACCEPT and only for a plan-owned item; it is never inferred from reviewer notes or off-plan work.
+  owner_blocked?: string | null
 }
 
 // The record of a paste this flow made and has not had confirmed: what a retry tick has instead of the runtime's
@@ -1095,7 +1098,14 @@ function messageForDispatch(state: FlowState, spec: BlockSpec, observations: Flo
   // the body, because "no path" is not a reason to paste a document into a terminal.
   const item = observations.plan?.items.find(entry => entry.id === spec.id)
   const pointer = renderPointerPrompt({ id: spec.id, title: spec.title, path: pointerPath(state, spec, item?.spec_path) })
-  return pointer.length <= DISPATCH_POINTER_MAX ? pointer : `${pointer.slice(0, DISPATCH_POINTER_MAX - 1)}…`
+  const ownerDecisionInstruction = item
+    ? '\n\nIf owner input is needed to finish this item, leave it incomplete and end your report with: FLOW-BLOCKED: <what the owner must decide>. Otherwise omit the marker.'
+    : ''
+  const pointerBudget = DISPATCH_POINTER_MAX - ownerDecisionInstruction.length
+  const boundedPointer = pointer.length <= pointerBudget
+    ? pointer
+    : `${pointer.slice(0, Math.max(pointerBudget - 1, 0))}…`
+  return `${boundedPointer}${ownerDecisionInstruction}`
 }
 
 function specDispatch(state: FlowState, spec: BlockSpec, observations: FlowObservations): FlowDecision {
@@ -1287,6 +1297,23 @@ function planAcceptDecision(
   observations: FlowObservations,
   plan: PlanTickView,
 ): FlowDecision {
+  const blockedReason = observations.owner_blocked?.trim().slice(0, 500)
+  const blockedId = state.claim.spec_id ?? state.active_plan_item
+  if (blockedReason && blockedId && plan.items.some(item => item.id === blockedId
+    && item.status !== 'done' && item.status !== 'skipped' && item.status !== 'blocked_owner')) {
+    return {
+      ...hold(state, 'plan_incomplete', `${blockedId} is blocked_owner: ${blockedReason}`),
+      next_plan_status: { id: blockedId, status: 'blocked_owner', block_reason: 'owner_decision' },
+      next_active_plan_item: null,
+      next_claim: { ...state.claim, verdict: 'ACCEPT', verdict_count: observations.verdict_count },
+      next_claim_verdict_applied: true,
+      next_verdict_handled_for: state.claim.head,
+      next_verdict_handled_item: blockedId,
+      log_event: 'plan_item_blocked',
+      log_detail: `${blockedId} blocked_owner: owner_decision · ${blockedReason}`,
+    }
+  }
+
   // Closing an item and recording it are one write, and so is what the flow has in flight afterwards: the closed item must
   // not stay in `active_plan_item`, or the next tick believes a task is running and never starts the next one (block 31,
   // D11). A decision that dispatches the next item names it; anything else leaves nothing in flight.
@@ -1672,7 +1699,8 @@ function settledVerdictDecision(state: FlowState, observations: FlowObservations
   const boundItem = state.claim.spec_id
   const owesClose = boundItem !== null
     && observations.plan !== undefined
-    && observations.plan.items.some(item => item.id === boundItem && item.status !== 'done' && item.status !== 'skipped')
+    && observations.plan.items.some(item => item.id === boundItem
+      && item.status !== 'done' && item.status !== 'skipped' && item.status !== 'blocked_owner')
   if (state.claim.verdict_applied && !owesClose) return null
   // An ACCEPT that is still owed a close outranks the marker: the marker says "this verdict was applied", and a plan item
   // that is still open is proof it was not. The live run showed how that happens — a review timed out, the same item was

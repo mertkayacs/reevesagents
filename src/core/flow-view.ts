@@ -347,7 +347,7 @@ export function flowSectionLines(state: FlowState, options: FlowSectionOptions =
   }
   if (typeof options.queue_depth === 'number') lines.push(`queue    ${options.queue_depth} pending`)
   if (options.plan) {
-    const why = options.plan.reason === 'needs_brief' ? 'needs a brief' : 'blocked'
+    const why = options.plan.reason === 'needs_brief' ? 'needs a brief' : 'blocked_owner'
     lines.push(`waiting  ${options.plan.item} (${why})`)
   }
   if (badge.attention === 'review_timeout') lines.push('attention review timed out')

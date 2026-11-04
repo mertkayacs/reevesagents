@@ -20,7 +20,8 @@ import { planTickView } from '../src/core/flow-plan.js'
 import { releaseRound, resumeFlow } from '../src/core/flow-control.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 import { startFlow } from '../src/core/flow-start.js'
-import { flowSectionLines, flowStatusPayload } from '../src/core/flow-view.js'
+import { flowSectionLines, flowStatusPayload, planAttentionOf } from '../src/core/flow-view.js'
+import { readNotifications } from '../src/core/notifications.js'
 
 const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []) => {
   if (file === 'git' && args.includes('rev-parse')) return 'bbb222\n'
@@ -246,6 +247,76 @@ describe('a verdict already collected is work, even when the head has not moved 
     const items = readPlan('run-1').items
     expect(items.find(item => item.id === 'P1.2')!.status).toBe('in_work')
     expect(items.find(item => item.id === 'P1.2')!.head).toBeNull()
+  })
+
+  it('blocks an accepted plan item when the latest dev completion requests an owner decision', () => {
+    const doc = ['- [ ] **P1.1** — first', '- [ ] **P1.2** — second'].join('\n')
+    const brief = (id: string) => JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] })
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ['P1.1', 'P1.2']) {
+      plan = attachSpec(plan, { id, text: brief(id), format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT }).plan
+    }
+    plan = { ...plan, items: plan.items.map(item => item.id === 'P1.1' ? { ...item, status: 'in_work' as const } : item) }
+    mkdirSync(join(root, 'docs'), { recursive: true })
+    writeFileSync(join(root, 'docs/plan.md'), doc)
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    idleWithVerdict('ACCEPT', {
+      active_plan_item: 'P1.1',
+      claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 2, verdict_applied: false, spec_id: 'P1.1' },
+    })
+
+    const completion = 'Implemented the generic verification flow.\nFLOW-BLOCKED: provider write verification needs an authorized test scope and verified write capability\n›\n? for shortcuts'
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: { ...ports(() => ({ sent: true })), peek: () => completion },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(result.decision.reason).toBe('plan_incomplete')
+    expect(result.decision.next_plan_status).toMatchObject({ id: 'P1.1', status: 'blocked_owner', block_reason: 'owner_decision' })
+    expect(result.decision.next_plan_close).toBeUndefined()
+    expect(result.decision.next_active_plan_item).toBeNull()
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_blocked')).toHaveLength(1)
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')?.status).toBe('blocked_owner')
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.2')?.status).toBe('queued')
+    expect(readFileSync(join(root, 'docs/plan.md'), 'utf8')).toContain('- [ ] **P1.1**')
+    expect(flowSectionLines(readFlow('run-1'), { plan: planAttentionOf('run-1') }).join('\n')).toContain('blocked_owner')
+    expect(readNotifications().events.filter(event => event.kind === 'plan.item_blocked')).toHaveLength(1)
+    expect(readNotifications().events.some(event => event.kind === 'plan.item_done')).toBe(false)
+
+    const repeated = stepFlow('run-1', {
+      now: NOW + 5_000, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: { ...ports(() => ({ sent: true })), peek: () => completion },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(repeated.decision.reason).toBe('head_unchanged')
+    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_blocked')).toHaveLength(1)
+    expect(readNotifications().events.filter(event => event.kind === 'plan.item_blocked')).toHaveLength(1)
+  })
+
+  it('does not treat an older completion marker as the latest answer, and keeps ACCEPT unchanged', () => {
+    const doc = '- [ ] **P1.1** — first'
+    const brief = JSON.stringify({ id: 'P1.1', title: 'P1.1', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] })
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, { id: 'P1.1', text: brief, format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT }).plan
+    plan = { ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    idleWithVerdict('ACCEPT', {
+      active_plan_item: 'P1.1',
+      claim: { head: HEAD, verdict: 'ACCEPT', verdict_count: 2, verdict_applied: false, spec_id: 'P1.1' },
+    })
+
+    const result = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: { ...ports(() => ({ sent: true })), peek: () => 'FLOW-BLOCKED: old response\nA later completion finished the item.\n›' },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(result.decision.next_plan_close?.id).toBe('P1.1')
+    expect(result.decision.next_plan_status).toBeUndefined()
+    expect(readPlan('run-1').items.find(item => item.id === 'P1.1')?.status).toBe('done')
   })
 
   it('settles the verdict before it looks at a head that has already moved (A1)', () => {

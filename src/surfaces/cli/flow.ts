@@ -224,7 +224,7 @@ function planWaitingLine(state: FlowState): string | null {
       .map(item => `${item.id} (needs a brief)`)
     const blocked = plan.items
       .filter(item => item.status === 'blocked_owner')
-      .map(item => `${item.id} (blocked${item.block_reason ? `: ${item.block_reason}` : ''})`)
+      .map(item => `${item.id} (blocked_owner${item.block_reason ? `: ${item.block_reason}` : ''})`)
     const parts = [...needsBrief, ...blocked]
     return parts.length > 0 ? parts.join(', ') : null
   } catch {
