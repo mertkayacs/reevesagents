@@ -4,7 +4,7 @@
 // queued Enter answering a prompt nobody was ready for. The fake driver makes the pane text
 // scriptable, so a whole send — gate, paste, Enter, confirm — runs without tmux.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -225,6 +225,28 @@ describe('sendWhenIdle', () => {
     })).toEqual({ sent: true })
     expect(driver.pasted()).toEqual([])
     expect(driver.calls.filter(call => call.args[0] === 'send-keys' && call.args[3] === 'Enter')).toHaveLength(1)
+  })
+
+  it('limits a recovered default-flow-port send to exactly one Enter', async () => {
+    const runtime = await seed()
+    const originalSend = runtime.sendWhenIdle
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
+    const pastedAt = Date.now()
+    const sendSpy = vi.spyOn(runtime, 'sendWhenIdle').mockImplementation((agentId, text, options) =>
+      originalSend(agentId, text, { ...options, driver, ...FAST }))
+
+    try {
+      const { defaultFlowPorts } = await import('../src/core/flow-runner.js')
+      expect(defaultFlowPorts.send('agent-1', 'hello', { pasted: { at: pastedAt }, maxEnters: 1 }))
+        .toEqual({ sent: true })
+      expect(sendSpy).toHaveBeenCalledWith('agent-1', 'hello', {
+        pasted: { at: pastedAt }, maxEnters: 1, refuseCopyMode: true,
+      })
+      expect(driver.calls.filter(call => call.args[0] === 'send-keys' && call.args[3] === 'Enter')).toHaveLength(1)
+    } finally {
+      sendSpy.mockRestore()
+    }
   })
 
   it('refuses a busy pane without touching it', async () => {
