@@ -115,6 +115,16 @@ describe('durable flow incidents', () => {
     expect(listRunApprovals('run-1')).toHaveLength(1)
   })
 
+  it('keeps the original escalation cause when a parked flow is reconciled again', () => {
+    const flow = state({ state: 'escalated', log: [{ at: AT, event: 'escalate', detail: 'review_timeout' }] })
+    const first = reconcileFlowIncidents(flow, obs(), hold('review_timeout'), { root, now: NOW, at: AT })
+    reconcileFlowIncidents(first, undefined, undefined, { root, now: NOW + 60_000 })
+
+    expect(listFlowIncidents('run-1', { root })).toMatchObject([
+      { kind: 'review_timeout', severity: 'blocker', count: 2, status: 'open' },
+    ])
+  })
+
   it('auto-resolves cleared conditions once and does not reopen the same episode', () => {
     const flow = state({ hold: { reason: 'review_pane_unknown', since: AT } })
     reconcileFlowIncidents(flow, obs({ now: NOW + 6000, pane_diagnostics: { dev: null, review: 'footer absent' } }), hold('review_pane_unknown'), { root, now: NOW + 6000, pane_unknown_grace_ms: 5000 })

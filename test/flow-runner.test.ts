@@ -9,6 +9,9 @@ import { durablePath, panePath, publishNotes, stagingPath } from '../src/core/fl
 import type { FlowPorts, FlowStepResult, NotesRead, StepFlowOptions } from '../src/core/flow-runner.js'
 import { detectPaneBusy } from '../src/core/activity.js'
 import { PANE_UNKNOWN_HOLD_MS, observeFlow, stepFlow } from '../src/core/flow-runner.js'
+import { listRunApprovals } from '../src/core/approvals.js'
+import { writeAgent, writeRun } from '../src/core/runs.js'
+import { listFlowIncidents } from '../src/core/flow-incidents.js'
 
 // The effect layer: observation reads, and the claim -> act -> settle dispatch. Nothing here sends
 // into a pane the gate did not confirm, an ambiguous paste is never repeated, and a claim left on
@@ -385,7 +388,7 @@ describe('stepFlow', () => {
     expect(first.state.claim.verdict_count).toBe(2)
     expect(first.state.pending).toBeNull()
     expect(readFlow('run-1').claim.verdict_count).toBe(2)
-    expect(readFlow('run-1').log.at(-1)?.event).toBe('dispatch_unconfirmed')
+    expect(readFlow('run-1').log.some(entry => entry.event === 'dispatch_unconfirmed')).toBe(true)
 
     // The next tick sees the same verdict on screen and decides nothing: no second paste.
     const second = step(ports, { head: 'aaa111', notes: fileAnswer('CHANGES_REQUESTED', 'aaa111') })
@@ -395,6 +398,15 @@ describe('stepFlow', () => {
   })
 
   it('escalates a review that timed out without sending anything', () => {
+    writeRun({
+      id: 'run-1', name: 'run-1', status: 'running', tmux_session: 's', reeves_window_id: '@0', reeves_pane_id: '%0',
+      root_agent_id: 'dev-1', working_dir: root, preset_name: null, started_at: AT, ended_at: null,
+    })
+    writeAgent({
+      id: 'dev-1', run_id: 'run-1', nickname: 'orchestrator', provider: 'codex', model: '', role: 'root', working_dir: root,
+      task: 'coordinate', task_status: 'working', task_note: '', tmux_session: 's', tmux_window_id: '@1', tmux_pane_id: '%1',
+      rc_enabled: false, permissions: 'ask', inbox: [], last_seen: NOW, started_at: AT, ended_at: null,
+    })
     seed(makeState({
       state: 'reviewing',
       review_started_at: NOW - 901_000,
@@ -408,7 +420,9 @@ describe('stepFlow', () => {
     expect(result.status).toBe('applied')
     expect(ports.send).not.toHaveBeenCalled()
     expect(readFlow('run-1').state).toBe('escalated')
-    expect(readFlow('run-1').log.at(-1)?.event).toBe('escalate')
+    expect(readFlow('run-1').log.some(entry => entry.event === 'escalate')).toBe(true)
+    expect(listRunApprovals('run-1')).toHaveLength(0)
+    expect(listFlowIncidents('run-1', { root })).toMatchObject([{ kind: 'review_timeout', severity: 'blocker', owner: 'orchestrator' }])
   })
 
   it('escalates without sending anything when the round budget is spent', () => {
@@ -736,7 +750,7 @@ describe('verdict evidence', () => {
 
     expect(result.decision.reason).toBe('review_unsubstantiated')
     expect(result.state.state).toBe('escalated')
-    expect(result.state.log.at(-1)!.detail).toContain('the reviewer is not reviewing')
+    expect([...result.state.log].reverse().find(entry => entry.event !== 'incident_opened' && entry.event !== 'incident_resolved')!.detail).toContain('the reviewer is not reviewing')
     expect(ports.send).not.toHaveBeenCalled()
   })
 
@@ -805,7 +819,7 @@ describe('verdict evidence', () => {
     const result = step(ports, { head: 'aaa111', verdict_evidence: MINUTE, notes: fileAnswer('CHANGES_REQUESTED', 'aaa111') })
 
     expect(result.state.state).toBe('escalated')
-    expect(result.state.log.at(-1)!.detail).toContain('composer holds text that is not ours')
+    expect([...result.state.log].reverse().find(entry => entry.event !== 'incident_opened' && entry.event !== 'incident_resolved')!.detail).toContain('composer holds text that is not ours')
     // Nothing was pasted: the refusal happened before any write.
     expect(ports.send).toHaveBeenCalledTimes(1)
   })
@@ -915,7 +929,7 @@ describe('a dispatch nobody confirmed (block 69)', () => {
     expect(after.claim.verdict_count).toBe(0)
     expect(after.pending).toBeNull()
     expect(after.enter_retries).toBe(1)
-    expect(after.log.at(-1)).toMatchObject({ event: 'dispatch_retry_enter', detail: 'unconfirmed_paste: attempt 1/3' })
+    expect([...after.log].reverse().find(entry => entry.event === 'dispatch_retry_enter')).toMatchObject({ event: 'dispatch_retry_enter', detail: 'unconfirmed_paste: attempt 1/3' })
 
     // The next tick asks for the same review: `sendWhenIdle` sees our text in the box and presses Enter only.
     const second = makePorts({ send: vi.fn(() => ({ sent: true as const })) })
@@ -938,7 +952,7 @@ describe('a dispatch nobody confirmed (block 69)', () => {
     const after = readFlow('run-1')
     expect(after.state).toBe('escalated')
     expect(after.enter_retries).toBe(0)
-    expect(after.log.at(-1)!.detail).toContain('3 Enters did not submit it')
+    expect([...after.log].reverse().find(entry => entry.event === 'escalate')!.detail).toContain('3 Enters did not submit it')
     expect(after.log.some(entry => entry.event === 'escalate' && entry.detail.includes('review_dispatch_unconfirmed'))).toBe(true)
   })
 

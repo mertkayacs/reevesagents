@@ -214,7 +214,9 @@ function signalsFor(
   }
   if (dispatch) signals.push({ kind: 'dispatch_unconfirmed', severity: 'blocker', spec_id: item, reason: dispatchLog?.detail ?? 'dispatch submit could not be confirmed' })
 
-  const latest = state.log.at(-1) ?? null
+  // Incident journal entries are outputs of this reconciler, not new flow causes. Ignore them when a
+  // parked escalated flow is rechecked so an `incident_opened` row cannot turn into unknown_hold.
+  const latest = [...state.log].reverse().find(entry => entry.event !== 'incident_opened' && entry.event !== 'incident_resolved') ?? null
   const latestDetail = latest?.detail ?? ''
   const escalatedReason = decision?.reason ?? (state.state === 'escalated' ? latestDetail : reason)
   if (escalatedReason.includes('dispatch_unresolved') || latest?.event === 'dispatch_unresolved') {

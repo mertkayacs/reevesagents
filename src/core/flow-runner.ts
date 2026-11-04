@@ -646,12 +646,18 @@ function emitPlanAttention(state: FlowState, observations: FlowObservations, dec
 // does not create a second ticket.
 function raiseEscalationFor(state: FlowState, decision: FlowDecision): void {
   if (state.state !== 'escalated') return
+  // These blockers are routed through the incident ACK deadline. Creating the legacy escalation approval here
+  // would notify a human on the same tick, bypassing the orchestrator's ten-minute chance to take ownership.
+  const incidentRoutedCause = [decision.reason, state.log.at(-1)?.detail ?? '']
+    .find(reason => /^(?:review_timeout|rounds_exhausted|total_rounds_exhausted)\b/.test(reason))
+  if (incidentRoutedCause) return
+  const reason = decision.kind === 'escalate' ? decision.reason : (state.log.at(-1)?.detail ?? '')
   try {
     raiseEscalationApproval({
       run_id: state.run_id,
       flow_id: state.flow_id,
       episode: state.notify_episode,
-      reason: decision.kind === 'escalate' ? decision.reason : (state.log.at(-1)?.detail ?? 'escalated'),
+      reason: reason || 'escalated',
       item_id: state.active_plan_item,
     })
   } catch {
