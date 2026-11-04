@@ -322,6 +322,8 @@ export interface FlowObservations {
   now: number
   // HEAD of the flow's repository. Empty means "could not read it", which is not "unchanged".
   head: string
+  // Commit timestamp for HEAD (epoch ms). Used to prove that a dispatch produced a commit after its claim.
+  head_committed_at?: number
   // False when the worktree has uncommitted changes: reviewing a half-written tree burns a round.
   tree_clean: boolean
   dev_pane: PaneBusyState
@@ -395,6 +397,10 @@ export interface FlowObservations {
   // instead of a bare `review_pane_unknown` (block 73).
   pane_diagnostics?: { dev: string | null, review: string | null }
   agent_question?: string | null
+  // Delivery evidence for a dispatch whose process was interrupted. `empty` is only reported for a positively idle
+  // pane with an empty composer; `ours` requires a persisted, fresh paste record; everything else is ambiguous.
+  pending_dispatch_delivery?: 'ours' | 'empty' | 'ambiguous'
+  pending_dispatch_composer?: string
   // A final `FLOW-BLOCKED:` line from the plan item's latest completed dev response. It is actionable only
   // on an ACCEPT and only for a plan-owned item; it is never inferred from reviewer notes or off-plan work.
   owner_blocked?: string | null
@@ -461,6 +467,8 @@ export type FlowReason =
   | 'review_timeout'
   | 'dispatch_pending'
   | 'dispatch_unresolved'
+  | 'dispatch_released_unlanded'
+  | 'settled_by_observation'
   | 'review_unsubstantiated'
   // The notes file of the round could not be read, and the reviewer was asked once to rewrite it (block 83).
   | 'review_notes_invalid'
@@ -519,6 +527,8 @@ export interface FlowDecision {
   // A plan item this decision moves by itself (blocked after spending its rounds).
   next_plan_status?: { id: string, status: FlowPlanItemStatus, block_reason?: string | null }
   next_agent_question?: FlowAgentQuestion | null
+  // A stale dispatch claim was positively shown not to have reached an empty idle composer.
+  clear_pending?: boolean
   next_dev_stall_attempts?: number
   next_stalled_since?: number | null
   // The status, round count and claim after this decision is applied. Carried in the decision so
@@ -1633,7 +1643,41 @@ function settleFromNotes(state: FlowState, observations: FlowObservations): Flow
 // genuinely in flight and the caller holds.
 function settleByObservation(state: FlowState, observations: FlowObservations): FlowDecision | null {
   const pending = state.pending
-  if (!pending || pending.kind !== 'request_review') return null
+  if (!pending) return null
+  const plannedSpecDispatch = pending.kind === 'dispatch_spec' && pending.spec_id !== null
+    && observations.plan?.items.some(item => item.id === pending.spec_id) === true
+  if (pending.kind === 'dispatch_fix' || plannedSpecDispatch) {
+    const committedAfterClaim = observations.head !== ''
+      && observations.head !== pending.head
+      && typeof observations.head_committed_at === 'number'
+      && observations.head_committed_at > pending.at
+      && observations.tree_clean
+    if (!committedAfterClaim) return null
+    const nextClaim: FlowClaim = {
+      ...state.claim,
+      head: observations.head,
+      verdict: null,
+      verdict_count: observations.verdict_count,
+      verdict_applied: false,
+      spec_id: pending.spec_id ?? state.claim.spec_id,
+    }
+    return {
+      kind: 'none',
+      reason: 'settled_by_observation',
+      log_event: 'settled_by_observation',
+      log_detail: `${pending.kind} ${pending.head ?? state.claim.head} landed as ${observations.head}`,
+      next_state: 'fixing',
+      next_rounds: state.rounds + 1,
+      next_review_started_at: null,
+      next_claim: nextClaim,
+      next_active_plan_item: pending.spec_id ?? state.active_plan_item,
+      ...(pending.kind === 'dispatch_spec' && pending.spec_id
+        ? { next_plan_status: { id: pending.spec_id, status: 'in_work' as const } }
+        : {}),
+      next_claim_verdict_applied: true,
+    }
+  }
+  if (pending.kind !== 'request_review') return null
   const fromFile = observations.verdict_source === 'file' && observations.verdict !== null
   // "A new verdict" is measured against the counter the request was sent with, not the flow's counter today: a later tick may
   // have moved that one, and comparing against it either loses the answer (7 > 7) or accepts an older one for it.
@@ -2295,12 +2339,40 @@ export function flowTick(state: FlowState, observations: FlowObservations): Flow
   // caller sees the claim on disk, decides nothing, and pastes nothing. It outranks the orphan
   // check on purpose: a send in flight has to settle (or expire) before the flow is parked.
   if (state.pending) {
+    // A durable answer can arrive while the sender is between claim and settle. It is stronger evidence than an
+    // unresolved paste claim and must be consumed before the TTL path considers any recovery or escalation.
+    const answeredWhilePending = settleFromNotes(state, observations)
+    if (answeredWhilePending) return answeredWhilePending
     // A claim in flight is not a lock on the world: if the work it asked for has visibly happened — the round's notes
     // file answers, or the pane's verdict counter grew — then the claim is stale, not pending, and the flow settles it
     // from what it can see instead of waiting for a TTL that will escalate work which is already done (D7).
     const byObservation = settleByObservation(state, observations)
     if (byObservation) return byObservation
     if (observations.now - state.pending.at < PENDING_TTL_SEC * 1000) return hold(state, 'dispatch_pending')
+    if (observations.pending_dispatch_delivery !== 'empty') {
+      // Re-decide the same action. The runner carries the persisted ownership stamp into sendWhenIdle, which submits
+      // the existing composer contents with one Enter and cannot paste the prompt a second time.
+      const recovered = flowTick({ ...state, pending: null }, observations)
+      const visibleComposer = observations.pending_dispatch_composer?.replace(/\s+/g, '')
+      const exactComposer = !!recovered.message && !!visibleComposer
+        && visibleComposer === recovered.message.replace(/\s+/g, '')
+      if (recovered.message && recovered.kind === state.pending.kind && recovered.head === state.pending.head
+        && recovered.target === state.pending.target && (recovered.spec_id ?? null) === state.pending.spec_id
+        && (observations.pending_dispatch_delivery === 'ours' || exactComposer)) {
+        return { ...recovered, log_event: 'dispatch_retry_enter', log_detail: `resuming recorded dispatch ${state.pending.head ?? ''}` }
+      }
+    }
+    if (observations.pending_dispatch_delivery === 'empty' && observations.head === state.pending.head) {
+      // A positively idle, empty composer plus an unchanged head proves the dead process did not deliver the prompt.
+      // Release the stale claim, then let the next tick make a fresh decision.
+      return {
+        kind: 'none', reason: 'dispatch_released_unlanded', log_event: 'dispatch_refused',
+        log_detail: 'expired dispatch claim had no paste in the idle composer; released for a fresh decision',
+        next_state: state.state, next_rounds: state.rounds, next_review_started_at: state.review_started_at,
+        next_claim: state.claim,
+        clear_pending: true,
+      }
+    }
     // Past the TTL the claim belongs to a process that is gone, and nobody can tell whether the
     // paste landed. Re-sending blind is how one prompt becomes two, so a human decides.
     return escalate(state, observations, 'dispatch_unresolved')
@@ -2325,6 +2397,7 @@ export function flowTick(state: FlowState, observations: FlowObservations): Flow
 // Does applying this decision change anything on disk? A hold answers false, which is what keeps
 // a 2 s tick from rewriting the file (and its log) on every pass.
 export function decisionChangesState(state: FlowState, decision: FlowDecision): boolean {
+  if (decision.clear_pending === true && state.pending !== null) return true
   if (state.state !== decision.next_state) return true
   if (state.rounds !== decision.next_rounds) return true
   if (state.claim.head !== decision.next_claim.head) return true

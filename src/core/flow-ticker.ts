@@ -49,6 +49,10 @@ export interface TickAllOptions {
 // advanced, then return" — a promise here would let two passes overlap and re-do the same work.
 export function tickAllFlows(options: TickAllOptions = {}): TickAllResult {
   const result: TickAllResult = { advanced: [], held: [], skipped: [] }
+  // A pass can include many flows, but a single interactive send can spend up to the pane's settle window. Letting
+  // every run send in one sweep made the systemd service time out halfway through a claimed dispatch. The remaining
+  // flows are still observed in dry-run mode and wait for the next minute's pass.
+  let sendUsed = false
   for (const file of listFlowFiles(options.root)) {
     let state
     try {
@@ -76,7 +80,7 @@ export function tickAllFlows(options: TickAllOptions = {}): TickAllResult {
     try {
       step = stepFlow(file.run_id, {
         root: options.root,
-        dryRun: options.dryRun,
+        dryRun: options.dryRun === true || sendUsed,
         ...(options.now === undefined ? {} : { now: options.now }),
         ...(options.at === undefined ? {} : { at: options.at }),
         ...(options.ports === undefined ? {} : { ports: options.ports }),
@@ -86,7 +90,12 @@ export function tickAllFlows(options: TickAllOptions = {}): TickAllResult {
       result.skipped.push({ run_id: file.run_id, why: err instanceof Error ? err.message : String(err) })
       continue
     }
+    if (step.send !== undefined) sendUsed = true
     const entry = { run_id: file.run_id, status: step.status, reason: step.decision.reason }
+    if (options.dryRun !== true && sendUsed && step.send === undefined && result.advanced.length + result.held.length > 0) {
+      result.held.push({ run_id: file.run_id, status: step.decision.next_state, reason: 'pass_send_limit' })
+      continue
+    }
     if (step.status === 'applied' || step.status === 'unconfirmed') result.advanced.push(entry)
     else result.held.push(entry)
   }

@@ -20,7 +20,7 @@
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import type { PaneBusyState } from './activity.js'
+import { composerText, isComposerPlaceholder, type PaneBusyState } from './activity.js'
 import type { EvidencePolicy, FlowDecision, FlowHold, FlowLogEntry, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
 import { DEFAULT_EVIDENCE_POLICY } from './flow.js'
 import {
@@ -54,7 +54,7 @@ import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js
 import type { PlanTickView } from './flow-plan.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
-import { paneBusy, paneDiagnosis, paneReadyForNudge, peekAgentRaw, sendWhenIdle } from './runtime.js'
+import { DEFAULT_IDLE_SEND_TIMINGS, paneBusy, paneDiagnosis, paneReadyForNudge, peekAgentRaw, sendWhenIdle } from './runtime.js'
 import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
 import type { FlowVerdict } from './verdict.js'
@@ -138,6 +138,18 @@ export function readGitHead(repo: string): string {
   } catch {
     // Empty, not a throw: an unreadable HEAD is an observation the engine holds on ('head_unknown').
     return ''
+  }
+}
+
+function commitTimestamp(repo: string, head: string): number | undefined {
+  if (!repo || !isCommitId(head)) return undefined
+  try {
+    const seconds = Number(execFileSync('git', ['-C', repo, 'show', '-s', '--format=%ct', head], {
+      encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim())
+    return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -241,6 +253,7 @@ export interface ObserveFlowOptions {
   ports?: FlowPorts
   // Caller-known facts win: a probe or a re-check can pass them instead of shelling out to git.
   head?: string
+  head_committed_at?: number
   tree_clean?: boolean
   // The clock the timeout is measured against; the default is the wall clock.
   now?: number
@@ -685,7 +698,10 @@ function observations_explicit_clean(text: string): boolean {
 
 export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}): FlowObservations {
   const ports = options.ports ?? defaultFlowPorts
+  const observedNow = options.now ?? Date.now()
   const head = options.head ?? readGitHead(state.repo)
+  const headCommittedAt = options.head_committed_at
+    ?? (state.pending && state.pending.head !== head ? commitTimestamp(state.repo, head) : undefined)
   const treeClean = options.tree_clean ?? isGitTreeClean(state.repo)
   const plan = options.plan === null ? undefined : (options.plan ?? readPlanView(state) ?? undefined)
   const itemId = state.claim.spec_id ?? state.active_plan_item
@@ -714,13 +730,39 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     ? registryPresence(state)
     : { run_present: options.run_present, agents_present: options.agents_present }
   const notes = readRoundNotes(state, options, head)
+  let pendingDispatchDelivery: FlowObservations['pending_dispatch_delivery']
+  let pendingDispatchComposer: string | undefined
+  if (state.pending) {
+    const agentId = state.roles[state.pending.target]
+    const paneState = state.pending.target === 'dev' ? devPane : reviewPane
+    if (agentId && paneState === 'idle') {
+      const pane = ports.peek(agentId, VERDICT_SCAN_LINES)
+      const agents = tryListAgents(state.run_id)
+      const provider = agents?.find(agent => agent.id === agentId)?.provider
+      const composer = provider ? composerText(pane, provider) : null
+      if (composer !== null && provider !== undefined) {
+        pendingDispatchComposer = composer
+        if (composer.trim() === '' || isComposerPlaceholder(composer, provider)) pendingDispatchDelivery = 'empty'
+        else {
+          const paste = state.dispatch_paste
+          const isCollapsedPaste = /^\[Pasted (?:Content|text) \d+ (?:chars|lines)\]/i.test(composer.trim())
+          const confirmMs = DEFAULT_IDLE_SEND_TIMINGS.confirmMs ?? DEFAULT_IDLE_SEND_TIMINGS.submitWaitMs
+          const freshOwnedPaste = paste?.agent === agentId && paste.head === (state.pending.head ?? state.claim.head)
+            && observedNow >= paste.at
+            && observedNow - paste.at <= confirmMs
+          pendingDispatchDelivery = isCollapsedPaste && freshOwnedPaste ? 'ours' : 'ambiguous'
+        }
+      } else pendingDispatchDelivery = 'ambiguous'
+    } else pendingDispatchDelivery = 'ambiguous'
+  }
   const devDiagnosis = devPane === 'unknown' ? (ports.paneDiagnosis?.(state.roles.dev) ?? null) : null
   // The file wins when it is valid: it is the answer the reviewer chose to persist, and it is bound to
   // this round. The pane count is still reported so the baseline keeps working for the pane path.
   const fromFile = notes.source === 'file' && notes.text !== undefined
   const observations: FlowObservations = {
-    now: options.now ?? Date.now(),
+    now: observedNow,
     head,
+    head_committed_at: headCommittedAt,
     tree_clean: treeClean,
     dev_pane: devPane,
     dev_nudge_ready: devNudgeReady,
@@ -761,6 +803,8 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     docs_only_since_claim: options.docs_only_since_claim ?? docsOnlySince(state, head) ?? false,
     head_docs_only: options.head_docs_only ?? headIsDocsOnly(state, head) ?? false,
     head_mark_commit: options.head_mark_commit ?? headIsMarkCommit(state, head),
+    ...(pendingDispatchDelivery === undefined ? {} : { pending_dispatch_delivery: pendingDispatchDelivery }),
+    ...(pendingDispatchComposer === undefined ? {} : { pending_dispatch_composer: pendingDispatchComposer }),
   }
   // A pane verdict read on the engine's own mark commit is not an answer about the work: the reviewer was shown a checkbox tick.
   // Drop it and put the counter back where the re-anchor left it, so the verdict cannot close an item on a head nobody reviewed

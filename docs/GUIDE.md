@@ -194,6 +194,20 @@ human is highlighted with the same warning colour as a stale run.
   send into the flow file, and the second finds that claim and sends nothing. If a
   tick dies mid-send, the claim is escalated to a human after two minutes instead of
   being pasted again.
+- A `flow tick --all` pass sends at most one prompt. It observes the remaining flows
+  without sending, so a large registry cannot run the service past its start timeout.
+  The packaged CLI does not install a systemd unit; when using a user service, give
+  `reeves-flow-tick.service` a 300 second start timeout (the flow-tick unit is the
+  installer/host's responsibility):
+
+  ```ini
+  # systemctl --user edit reeves-flow-tick.service
+  [Service]
+  TimeoutStartSec=300
+  ```
+
+  Then reload the user manager with `systemctl --user daemon-reload`. Cron users do
+  not need a service timeout; the one-send limit applies to them too.
 - `pause` and `stop` also win against a tick that is already preparing a send: the
   runner holds the dispatch gate for the whole act (check, paste, settle) and the
   control commands take the same gate, so a flow you stopped does not receive one

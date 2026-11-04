@@ -421,6 +421,78 @@ describe('stepFlow', () => {
     expect(after.pending).toBeNull()
   })
 
+  it('settles a dead fix dispatch from a newer commit instead of escalating', () => {
+    seed(makeState({
+      state: 'fixing',
+      pending: {
+        op_id: 'op-fix', kind: 'dispatch_fix', target: 'dev', head: 'aaa111', spec_id: null,
+        at: NOW - (PENDING_TTL_SEC + 1) * 1000,
+      },
+    }))
+    const ports = makePorts()
+
+    const result = step(ports, { head: 'ccc333', head_committed_at: NOW - 30_000 })
+
+    expect(result.decision.log_event).toBe('settled_by_observation')
+    expect(result.status).toBe('applied')
+    expect(result.state.state).toBe('fixing')
+    expect(result.state.rounds).toBe(1)
+    expect(result.state.claim.head).toBe('ccc333')
+    expect(result.state.log.some(entry => entry.event === 'settled_by_observation')).toBe(true)
+    expect(ports.send).not.toHaveBeenCalled()
+  })
+
+  it('submits one Enter for a recorded prompt still in the reviewer composer', () => {
+    seedApprovalRun()
+    writeAgent({
+      id: 'rev-1', run_id: 'run-1', nickname: 'reviewer', provider: 'codex', model: '', role: 'worker', working_dir: root,
+      task: 'review', task_status: 'working', task_note: '', tmux_session: 's', tmux_window_id: '@2', tmux_pane_id: '%2',
+      rc_enabled: false, permissions: 'ask', inbox: [], last_seen: NOW, started_at: AT, ended_at: null,
+    })
+    const pastedAt = NOW - 1_000
+    seed(makeState({
+      pending: {
+        op_id: 'op-review', kind: 'request_review', target: 'review', head: 'bbb222', spec_id: null,
+        at: NOW - (PENDING_TTL_SEC + 1) * 1000,
+      },
+      dispatch_paste: { agent: 'rev-1', head: 'bbb222', at: pastedAt },
+    }))
+    const frame = '› [Pasted Content 100 chars]\nGPT-6-Sol medium · ~/repo'
+    const send = vi.fn((_agent: string, _text: string, _options?: { pasted?: { at: number } | null, stallRetry?: boolean }) => ({ sent: true as const }))
+    const ports = makePorts({ peek: () => frame, send })
+
+    const result = step(ports)
+
+    expect(result.decision.log_event).toBe('dispatch_retry_enter')
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]?.[2]?.pasted).toEqual({ at: pastedAt })
+    expect(result.status).toBe('applied')
+    expect(result.state.state).toBe('reviewing')
+  })
+
+  it('releases an expired claim without sending when the idle composer is empty', () => {
+    seedApprovalRun()
+    writeAgent({
+      id: 'rev-1', run_id: 'run-1', nickname: 'reviewer', provider: 'codex', model: '', role: 'worker', working_dir: root,
+      task: 'review', task_status: 'working', task_note: '', tmux_session: 's', tmux_window_id: '@2', tmux_pane_id: '%2',
+      rc_enabled: false, permissions: 'ask', inbox: [], last_seen: NOW, started_at: AT, ended_at: null,
+    })
+    seed(makeState({
+      pending: {
+        op_id: 'op-review', kind: 'request_review', target: 'review', head: 'aaa111', spec_id: null,
+        at: NOW - (PENDING_TTL_SEC + 1) * 1000,
+      },
+    }))
+    const frame = '› Ask Codex to do anything\nGPT-6-Sol medium · ~/repo'
+    const ports = makePorts({ peek: () => frame })
+
+    const result = step(ports, { head: 'aaa111' })
+
+    expect(result.decision.reason).toBe('dispatch_released_unlanded')
+    expect(result.state.pending).toBeNull()
+    expect(ports.send).not.toHaveBeenCalled()
+  })
+
   it('holds while the claim is younger than the TTL', () => {
     seed(makeState({
       pending: {

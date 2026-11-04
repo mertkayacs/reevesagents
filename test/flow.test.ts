@@ -509,6 +509,45 @@ describe('the dispatch claim', () => {
     expect(applied.pending).toBeNull()
   })
 
+  it('settles a fix claim from a newer clean commit after the claim timestamp', () => {
+    const state = makeState({
+      state: 'fixing',
+      claim: { ...makeState().claim, verdict: 'CHANGES_REQUESTED' },
+      pending: { ...claim, head: 'aaa111', kind: 'dispatch_fix', target: 'dev', at: NOW - 180_000 },
+    })
+    const decision = flowTick(state, makeObservations({
+      head: 'ccc333', head_committed_at: NOW - 30_000, now: NOW,
+    }))
+
+    expect(decision.log_event).toBe('settled_by_observation')
+    expect(decision.next_state).toBe('fixing')
+    expect(decision.next_rounds).toBe(state.rounds + 1)
+    expect(decision.next_claim.head).toBe('ccc333')
+    expect(applyDecisionToState(state, decision, AT).pending).toBeNull()
+  })
+
+  it('releases an expired claim when an idle composer proves no paste landed', () => {
+    const state = makeState({
+      pending: { ...claim, head: 'aaa111', kind: 'dispatch_fix', target: 'dev', at: NOW - 180_000 },
+    })
+    const decision = flowTick(state, makeObservations({ pending_dispatch_delivery: 'empty' }))
+
+    expect(decision.reason).toBe('dispatch_released_unlanded')
+    expect(decision.clear_pending).toBe(true)
+    expect(applyDecisionToState(state, decision, AT).pending).toBeNull()
+  })
+
+  it('re-decides an expired request when the recorded prompt still owns the composer', () => {
+    const state = makeState({
+      pending: { ...claim, at: NOW - 180_000 },
+    })
+    const decision = flowTick(state, makeObservations({ head: 'bbb222', pending_dispatch_delivery: 'ours' }))
+
+    expect(decision.kind).toBe('request_review')
+    expect(decision.head).toBe('bbb222')
+    expect(decision.log_event).toBe('dispatch_retry_enter')
+  })
+
   it('writes the claim with the identity of its own op, and clears it on settle', () => {
     const idle = makeState()
     const decision = flowTick(idle, makeObservations({ head: 'bbb222', verdict_count: 3 }))

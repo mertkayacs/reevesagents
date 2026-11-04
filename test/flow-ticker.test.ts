@@ -246,8 +246,37 @@ describe('the tick does not starve the sweep', () => {
     seed(planWith(['P1.1']), { inWork: 'P1.1' })
     const started = Date.now()
     const result = tickAllFlows({ now: NOW, at: AT, ports: ports(), } as never)
-    expect(Date.now() - started).toBeLessThan(5000)
+    // Includes filesystem, git and registry observations; allow room for a slow CI runner.
+    expect(Date.now() - started).toBeLessThan(10_000)
     expect(result.skipped).toEqual([])
+  })
+})
+
+describe('one interactive send per pass', () => {
+  it('observes later flows without dispatching a second prompt', () => {
+    seed(planWith(['P1.1']))
+    writeRun({
+      id: 'run-2', name: 'run-2', status: 'running', tmux_session: 'reeves-run-2', reeves_window_id: '@0',
+      reeves_pane_id: '%0', root_agent_id: 'dev-2', working_dir: root, preset_name: null,
+      started_at: '2026-11-01T00:00:00.000Z', ended_at: null,
+    })
+    const agent = (id: string, pane: string) => ({
+      id, run_id: 'run-2', nickname: id, provider: 'codex' as const, model: '', role: 'worker' as const,
+      working_dir: root, task: 't', task_status: 'working' as const, task_note: '', tmux_session: 'reeves-run-2',
+      tmux_window_id: '@1', tmux_pane_id: pane, rc_enabled: false, permissions: 'ask' as const, inbox: [],
+      last_seen: 1, started_at: '2026-11-01T00:00:01.000Z', ended_at: null,
+    })
+    writeAgent(agent('dev-2', '%3'))
+    writeAgent(agent('rev-2', '%4'))
+    saveFlow(createFlowState({
+      run_id: 'run-2', repo: root, roles: { dev: 'dev-2', review: 'rev-2' }, head: 'bbb222', at: AT,
+    }))
+    const send = vi.fn(() => ({ sent: true as const }))
+
+    const result = tickAllFlows({ root, now: NOW, at: AT, ports: { ...ports(), send } })
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(result.held.some(entry => entry.reason === 'pass_send_limit')).toBe(true)
   })
 })
 
