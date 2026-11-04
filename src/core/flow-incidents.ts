@@ -227,7 +227,7 @@ function signalsFor(
     : decision?.reason ?? reason
   if (escalatedReason.includes('dispatch_unresolved') || escalatedReason.includes('review_dispatch_unconfirmed')
     || latest?.event === 'dispatch_unresolved') {
-    signals.push({ kind: 'dispatch_unconfirmed', severity: 'blocker', spec_id: item, reason: latestDetail || escalatedReason })
+    signals.push({ kind: 'dispatch_unconfirmed', severity: 'blocker', spec_id: item, reason: escalatedReason || latestDetail })
   } else if (escalatedReason.includes('review_timeout')) {
     signals.push({ kind: 'review_timeout', severity: 'blocker', spec_id: item, reason: escalatedReason })
   } else if (/rounds_exhausted|total_rounds_exhausted|rounds spent/.test(escalatedReason)) {

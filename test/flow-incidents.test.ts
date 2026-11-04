@@ -131,6 +131,26 @@ describe('durable flow incidents', () => {
     ])
   })
 
+  it('keeps the exhausted submit cause in dispatch incident evidence after a flow_closed hold', () => {
+    const flow = state({
+      state: 'escalated',
+      log: [
+        { at: AT, event: 'dispatch_retry_enter', detail: 'unconfirmed_paste: attempt 3/3' },
+        { at: AT, event: 'escalate', detail: 'review_dispatch_unconfirmed: the prompt is in the review pane and 3 Enters did not submit it' },
+        { at: new Date(NOW + 1).toISOString(), event: 'flow_closed', detail: 'flow_closed' },
+      ],
+    })
+    reconcileFlowIncidents(flow, undefined, undefined, { root, now: NOW })
+
+    expect(listFlowIncidents('run-1', { root })).toMatchObject([
+      {
+        kind: 'dispatch_unconfirmed', severity: 'blocker', status: 'open',
+        evidence: { reason: expect.stringContaining('review_dispatch_unconfirmed') },
+      },
+    ])
+    expect(listFlowIncidents('run-1', { root })).toHaveLength(1)
+  })
+
   it('auto-resolves cleared conditions once and does not reopen the same episode', () => {
     const flow = state({ hold: { reason: 'review_pane_unknown', since: AT } })
     reconcileFlowIncidents(flow, obs({ now: NOW + 6000, pane_diagnostics: { dev: null, review: 'footer absent' } }), hold('review_pane_unknown'), { root, now: NOW + 6000, pane_unknown_grace_ms: 5000 })
