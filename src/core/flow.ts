@@ -1162,9 +1162,12 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
   const refusal: FlowDecision = {
     kind: 'none',
     reason: 'plan_item_double_close',
-    next_state: state.state,
+    // The verdict for this head is consumed by the refusal itself: there is nothing left to wait for, so the flow leaves
+    // `reviewing` and its clock stops. Leaving both (`reviewing` + a running clock) is what made an answered review tick on until
+    // `review_timeout_sec` escalated a run whose reviewer had already answered (block 82, six live repeats).
+    next_state: 'idle',
     next_rounds: state.rounds,
-    next_review_started_at: state.review_started_at,
+    next_review_started_at: null,
     next_claim: { ...state.claim, verdict_applied: true },
     next_active_plan_item: keepBinding ? id : null,
     // The first refusal is the news; a repeat is history (block 45, defect 3). What a repeat says depends on what it did: an item
@@ -1660,7 +1663,11 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // come from the pane at all — that is the point of the channel — so it is not gated by this; the
   // dispatch itself still needs a positively idle dev pane further down. An expired deadline still
   // wins, because it is a fact about the request and not about what this tick can see.
-  const expired = (): FlowDecision => escalate(state, observations, 'review_timeout')
+  // An answered review cannot time out: the verdict for this very head has been applied, so "no answer within the budget" is not
+  // a fact about this flow. Escalating here is how a run whose reviewer had answered stood still for fifteen minutes and then
+  // stopped (block 82). The state says so itself, which is what makes it a check and not a guess.
+  const answered = state.claim.verdict_applied && state.verdict_handled_for === state.claim.head
+  const expired = (): FlowDecision => (answered ? hold(state, 'awaiting_verdict') : escalate(state, observations, 'review_timeout'))
   if (!fromFile && observations.review_pane === 'unknown') {
     return timedOut ? expired() : hold(state, 'review_pane_unknown')
   }

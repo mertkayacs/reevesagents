@@ -515,6 +515,15 @@ closed something is refused — the item is not closed by somebody else's commit
 recorded in the plan's conflicts), and the flow carries on. It does not escalate: a historical inconsistency can never be repaired,
 so an escalation would make every resumed run escalate again for ever.
 
+**An answered review never times out (block 82).** The live `salon-dashboard` run escalated `review_timeout` six times on reviews
+whose verdict had been applied: the close was refused (the head had already closed another item), the refusal left the flow in
+`reviewing` with the review clock still armed, and fifteen minutes later the ticker escalated a review nobody was waiting for — in
+one repeat eleven seconds before the dev's own commit arrived. The refusal now spends the verdict completely: the flow returns to
+`idle` and `review_started_at` is `null`, because the next step is a moved head or a dispatch, not an answer. `tickReviewing` also
+refuses to time out a flow whose current head has already been answered (`claim.verdict_applied && verdict_handled_for ===
+claim.head`) — the state says it, so the safety net is a check and not a guess — which is what keeps a resumed run from re-arming a
+deadline on the same head.
+
 **A refused close refuses the close, not the binding (block 81).** The live `salon-dashboard` run dispatched T2.3.1's brief, then
 refused an ACCEPT on a head that had already closed T2.2.6 — and the refusal also cleared `active_plan_item` and put T2.3.1 back in
 the queue. The dev kept working on the brief while `plan.json` held `queued, rounds 0`: every fix round went uncounted, the per-item

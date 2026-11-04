@@ -2183,3 +2183,121 @@ describe('a refused close does not unbind the item it was dispatched for (block 
     expect(blocked.status === 'blocked_owner' || capped.decision.reason === 'rounds_exhausted').toBe(true)
   })
 })
+
+// Block 82, the live `salon-dashboard` run: a verdict arrived and was applied, the close it wanted was refused (the head had
+// already closed another item) — and the refusal left the flow in `reviewing` with the review clock still running. Fifteen
+// minutes later the engine escalated `review_timeout` on a review that had been answered. Six repeats, two of them costing the run.
+describe('an answered review never times out (block 82)', () => {
+  function seedTwoItems(): void {
+    const ids = ['P1.1', 'P1.2']
+    const doc = ids.map(id => `- [ ] **${id}** — ${id}`).join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ids) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+  }
+
+  it('leaves `reviewing` and stops the clock when the close is refused', () => {
+    seedTwoItems()
+    const head = 'a'.repeat(40)
+    const plan = readPlan('run-1')
+    savePlan({
+      ...plan,
+      items: plan.items.map(item => (item.id === 'P1.1'
+        ? { ...item, status: 'done' as const, head, closed_by: 'accept' as const }
+        : { ...item, status: 'in_work' as const })),
+    })
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 6, max_total_rounds: 24, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 1, active_plan_item: 'P1.2', review_started_at: NOW - 60_000,
+      claim: { head, verdict: null, verdict_count: 1, verdict_applied: false, spec_id: 'P1.2' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', head, 2, root), 'VERDICT: ACCEPT\n')
+
+    const refused = stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    expect(refused.decision.reason).toBe('plan_item_double_close')
+    const after = readFlow('run-1')
+    // The verdict is spent, so nothing is waiting: the flow is workable and its review clock is stopped.
+    expect(after.state).toBe('idle')
+    expect(after.review_started_at).toBeNull()
+
+    // Long past `review_timeout_sec`, nothing escalates: the answer for this head was applied, and there is no review to time out.
+    const later = stepFlow('run-1', {
+      now: NOW + 3_600_000, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+    expect(later.decision.reason).not.toBe('review_timeout')
+    expect(readFlow('run-1').state).toBe('idle')
+
+    // And once the dev commits, the new head goes to review.
+    const moved = 'b'.repeat(40)
+    const revived = stepFlow('run-1', {
+      now: NOW + 3_660_000, at: AT, head: moved, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+    expect(revived.decision.kind).toBe('request_review')
+    expect(readFlow('run-1').claim.head).toBe(moved)
+  })
+
+  it('holds instead of escalating when a reviewing flow is already answered', () => {
+    // The safety net, on the state the live run was in when the timer fired: `reviewing`, the verdict applied, the head still the
+    // one that was reviewed.
+    seedTwoItems()
+    const head = 'c'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 6, max_total_rounds: 24, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 1, active_plan_item: 'P1.2', review_started_at: NOW - 900_000,
+      verdict_handled_for: head,
+      claim: { head, verdict: 'ACCEPT', verdict_count: 2, verdict_applied: true, spec_id: 'P1.2' },
+    })
+
+    const ticked = stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(ticked.decision.reason).not.toBe('review_timeout')
+    expect(readFlow('run-1').state).not.toBe('escalated')
+    expect(readFlow('run-1').state).toBe('reviewing')
+  })
+
+  it('does not time the same head out again after a resume', () => {
+    // `flow resume` on an escalated run: the answer is still the one already applied, so the fresh budget must not re-arm a
+    // deadline on it.
+    seedTwoItems()
+    const head = 'd'.repeat(40)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 6, max_total_rounds: 24, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'escalated', rounds: 2, active_plan_item: 'P1.2', review_started_at: NOW - 900_000,
+      verdict_handled_for: head,
+      claim: { head, verdict: 'ACCEPT', verdict_count: 2, verdict_applied: true, spec_id: 'P1.2' },
+    })
+    resumeFlow('run-1', { at: AT })
+
+    const ticked = stepFlow('run-1', {
+      now: NOW + 60_000, at: AT, head, tree_clean: true,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(ticked.decision.reason).not.toBe('review_timeout')
+    expect(readFlow('run-1').state).not.toBe('escalated')
+  })
+})
