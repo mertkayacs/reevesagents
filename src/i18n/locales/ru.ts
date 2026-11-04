@@ -57,6 +57,7 @@ export const ru = {
     'flow.attention.review_timeout': 'ревью просрочено',
     'flow.attention.plan_waiting': 'план: ждёт бриф',
     'flow.attention.dispatch_unconfirmed': 'отправка не подтверждена',
+    'flow.attention.dev_stalled': 'разработка остановилась на пункте плана',
     'flow.badge.rounds': 'поток: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'поток: {{status}}',
   'flow.badge.plan_progress': 'поток: план {{done}}/{{total}}',

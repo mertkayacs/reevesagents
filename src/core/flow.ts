@@ -233,6 +233,10 @@ export interface FlowState {
   // Seconds a requested review may stay unanswered. Per flow, so a slow reviewer can be given
   // more room without touching the engine.
   review_timeout_sec: number
+  dev_timeout_sec: number
+  dev_stall_max_attempts: number
+  dev_stall_attempts: number
+  stalled_since: number | null
   // When the outstanding review was requested (epoch ms), null when no review is outstanding.
   // Without it the engine cannot tell "the reviewer is thinking" from "the reviewer is gone".
   review_started_at: number | null
@@ -304,6 +308,8 @@ export interface FlowInit {
   // Optional: defaults to `defaultTotalRounds(max_rounds)`.
   max_total_rounds?: number
   review_timeout_sec?: number
+  dev_timeout_sec?: number
+  dev_stall_max_attempts?: number
   specs?: BlockSpec[]
   at?: string
 }
@@ -325,6 +331,7 @@ export interface FlowObservations {
   // How many verdicts the scanned capture contains. Callers must use the same window for every
   // tick of one flow, or the counter is not comparable.
   verdict_count: number
+  dev_nudge_ready?: boolean
   // The reviewer's BLOCKER/MAJOR/MINOR lines, already redacted by `verdict.ts`.
   verdict_notes?: string
   // Whether the flow's run and both role agents still exist in the registry. Absent means "this
@@ -421,7 +428,7 @@ export interface EvidencePolicy {
 
 export const DEFAULT_EVIDENCE_POLICY: EvidencePolicy = { min_seconds: 30, retries: 1 }
 
-export type FlowActionKind = 'request_review' | 'dispatch_fix' | 'dispatch_spec' | 'escalate' | 'orphan' | 'none'
+export type FlowActionKind = 'request_review' | 'dispatch_fix' | 'dispatch_spec' | 'dispatch_stall_retry' | 'escalate' | 'orphan' | 'none'
 
 // Machine-readable why. A hold and an action share the type, because `kind` already says which
 // one it is and one vocabulary keeps `flow status` and the JSON payload aligned.
@@ -471,6 +478,8 @@ export type FlowReason =
   | 'agent_question'
   | 'agent_question_answered'
   | 'question_unanswered'
+  | 'dev_stalled'
+  | 'dispatch_stall_retry'
 
 export interface FlowDecision {
   kind: FlowActionKind
@@ -504,6 +513,8 @@ export interface FlowDecision {
   // A plan item this decision moves by itself (blocked after spending its rounds).
   next_plan_status?: { id: string, status: FlowPlanItemStatus, block_reason?: string | null }
   next_agent_question?: FlowAgentQuestion | null
+  next_dev_stall_attempts?: number
+  next_stalled_since?: number | null
   // The status, round count and claim after this decision is applied. Carried in the decision so
   // the transition is computed once, purely, instead of being re-derived by the writer.
   next_state: FlowStatus
@@ -567,6 +578,10 @@ export function createFlowState(init: FlowInit): FlowState {
     review_timeout_sec: init.review_timeout_sec && init.review_timeout_sec > 0
       ? Math.floor(init.review_timeout_sec)
       : REVIEW_TIMEOUT_SEC,
+    dev_timeout_sec: init.dev_timeout_sec && init.dev_timeout_sec > 0 ? Math.floor(init.dev_timeout_sec) : REVIEW_TIMEOUT_SEC,
+    dev_stall_max_attempts: init.dev_stall_max_attempts && init.dev_stall_max_attempts > 0 ? Math.floor(init.dev_stall_max_attempts) : 2,
+    dev_stall_attempts: 0,
+    stalled_since: null,
     review_started_at: null,
     claim: { head: init.head ?? '', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
     specs: init.specs ?? [],
@@ -643,6 +658,19 @@ export function parseFlowState(raw: unknown): FlowState {
     max_total_rounds: count(record.max_total_rounds, defaultTotalRounds(count(record.max_rounds, MAX_ROUNDS) || MAX_ROUNDS))
       || defaultTotalRounds(count(record.max_rounds, MAX_ROUNDS) || MAX_ROUNDS),
     review_timeout_sec: count(record.review_timeout_sec, REVIEW_TIMEOUT_SEC) || REVIEW_TIMEOUT_SEC,
+    dev_timeout_sec: count(record.dev_timeout_sec, REVIEW_TIMEOUT_SEC) || REVIEW_TIMEOUT_SEC,
+    dev_stall_max_attempts: count(record.dev_stall_max_attempts, 2) || 2,
+    dev_stall_attempts: count(record.dev_stall_attempts),
+    stalled_since: (() => {
+      if (typeof record.stalled_since === 'number' && Number.isFinite(record.stalled_since)) return Math.floor(record.stalled_since)
+      if (Object.hasOwn(record, 'stalled_since')) return null
+      // Older live flows have no explicit timer; recover the plan dispatch time from their durable journal.
+      const item = text(claim.spec_id) || text(record.active_plan_item)
+      if (!item) return null
+      const dispatched = [...log].reverse().find(entry => entry.detail.includes(`plan_item_dispatched ${item}`))
+      const at = dispatched ? Date.parse(dispatched.at) : Number.NaN
+      return Number.isFinite(at) ? at : null
+    })(),
     review_started_at: typeof record.review_started_at === 'number' && Number.isFinite(record.review_started_at)
       ? Math.floor(record.review_started_at)
       : null,
@@ -746,7 +774,7 @@ function parsePendingDispatch(raw: unknown): FlowPendingDispatch | null {
   const opId = text(record.op_id)
   if (!opId) throw new FlowStateError('flow state has a pending dispatch without an op id')
   const kind = record.kind
-  if (kind !== 'request_review' && kind !== 'dispatch_fix' && kind !== 'dispatch_spec') {
+  if (kind !== 'request_review' && kind !== 'dispatch_fix' && kind !== 'dispatch_spec' && kind !== 'dispatch_stall_retry') {
     throw new FlowStateError(`flow state has a pending dispatch of an unknown kind ${JSON.stringify(kind)}`)
   }
   const target = record.target
@@ -1376,6 +1404,8 @@ function planItemDispatch(state: FlowState, item: PlanItemTick, observations: Fl
     ...decision,
     reason: 'plan_item_dispatched',
     next_active_plan_item: item.id,
+    next_dev_stall_attempts: 0,
+    next_stalled_since: observations.now,
     log_detail: `plan_item_dispatched ${item.id}`,
   }
 }
@@ -1403,6 +1433,8 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   if (settled) return settled
 
   if (observations.head === state.claim.head) {
+    const stalled = devStallDecision(state, observations)
+    if (stalled) return stalled
     return bootstrapDecision(state, observations) ?? hold(state, 'head_unchanged')
   }
 
@@ -1421,6 +1453,41 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   const gate = reviewGate(state, observations)
   if (gate) return gate
   return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path, false, promptBudget(state, observations))
+}
+
+function devStallDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
+  const id = state.claim.spec_id ?? state.active_plan_item
+  if (!id || state.pending) return null
+  const item = observations.plan?.items.find(entry => entry.id === id)
+  if (!item || item.status !== 'in_work') return null
+  const started = state.stalled_since
+  if (started === null || observations.now - started < state.dev_timeout_sec * 1000) return null
+  if (!observations.tree_clean) return hold(state, 'tree_dirty')
+  if (observations.dev_pane === 'busy') return hold(state, 'dev_busy')
+  if (observations.dev_pane !== 'idle') return hold(state, 'dev_pane_unknown')
+  // The runtime computes this before paneBusy, which can recover copy mode. Missing readiness evidence is fail-closed.
+  if (observations.dev_nudge_ready !== true) return null
+  if (state.dev_stall_attempts >= state.dev_stall_max_attempts) {
+    return { ...escalate(state, observations, 'dev_stalled'), log_detail: `dev_stalled ${id} idle after ${state.dev_stall_attempts} retries` }
+  }
+  const brief = state.claim.brief_path ?? item.spec_path ?? `docs/briefs/${id}.md`
+  return {
+    kind: 'dispatch_stall_retry',
+    reason: 'dispatch_stall_retry',
+    next_state: state.state,
+    next_rounds: state.rounds,
+    next_review_started_at: state.review_started_at,
+    next_claim: { ...state.claim },
+    next_active_plan_item: id,
+    next_dev_stall_attempts: state.dev_stall_attempts + 1,
+    next_stalled_since: observations.now,
+    target: 'dev',
+    head: state.claim.head,
+    spec_id: id,
+    log_event: 'dispatch_stall_retry',
+    log_detail: `${id} attempt ${state.dev_stall_attempts + 1}/${state.dev_stall_max_attempts}`,
+    message: `Continue plan item ${id}. Its brief is ${brief}. Read the brief and finish the remaining work; report what is still blocked if you cannot complete it.`,
+  }
 }
 
 // A notes file is the answer to its round, and it outranks every other decision: if the reviewer wrote it, the flow applies it
@@ -2142,6 +2209,8 @@ export function decisionChangesState(state: FlowState, decision: FlowDecision): 
   if (state.claim.verdict_count !== decision.next_claim.verdict_count) return true
   if (state.review_started_at !== decision.next_review_started_at) return true
   if (decision.next_agent_question !== undefined && JSON.stringify(state.agent_question) !== JSON.stringify(decision.next_agent_question)) return true
+  if (decision.next_dev_stall_attempts !== undefined && state.dev_stall_attempts !== decision.next_dev_stall_attempts) return true
+  if (decision.next_stalled_since !== undefined && state.stalled_since !== decision.next_stalled_since) return true
   if (decision.next_plan_status !== undefined) return true
   // A hold that clears a stale `active_plan_item` must reach the disk; otherwise the field survives and blocks the plan for
   // ever, which is the defect the clear exists for. `undefined` means "the decision does not touch the field", `null` means
@@ -2220,6 +2289,10 @@ function withDelta(
       : (decision.next_claim.head !== state.claim.head ? null : state.verdict_handled_item),
     active_plan_item: decision.next_active_plan_item === undefined ? state.active_plan_item : decision.next_active_plan_item,
     agent_question: decision.next_agent_question === undefined ? state.agent_question : decision.next_agent_question,
+    dev_stall_attempts: decision.next_dev_stall_attempts ?? (decision.next_claim.head !== state.claim.head ? 0 : state.dev_stall_attempts),
+    stalled_since: decision.next_stalled_since === undefined
+      ? (decision.next_claim.head !== state.claim.head ? null : state.stalled_since)
+      : decision.next_stalled_since,
     // A new episode starts when the flow *becomes* escalated, which is exactly when a human has to be told.
     notify_episode: options.advance && state.state !== 'escalated' && decision.next_state === 'escalated'
       ? state.notify_episode + 1

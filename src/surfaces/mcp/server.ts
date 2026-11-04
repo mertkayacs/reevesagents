@@ -693,6 +693,8 @@ const TOOLS: ToolDef[] = [
         repo: { type: 'string', description: 'Project directory the flow watches; defaults to the run working directory.' },
         max_rounds: { type: 'number', description: 'Fix rounds the flow may spend before it escalates (default 6).' },
         review_timeout_sec: { type: 'number', description: 'Seconds a requested review may stay unanswered before it escalates (default 900).' },
+        dev_timeout_sec: { type: 'number', description: 'Seconds an idle dev may hold a plan item before a retry (default 900).' },
+        dev_stall_max_attempts: { type: 'number', description: 'Re-nudges before an idle plan item escalates (default 2).' },
         replace: { type: 'boolean', description: 'Start over on a run whose flow is closed (escalated or done). An active flow is never replaced.' },
       },
       required: ['run_id', 'dev', 'review'],
@@ -705,6 +707,8 @@ const TOOLS: ToolDef[] = [
         repo: asString(a.repo) || undefined,
         max_rounds: asPositiveNumber(a.max_rounds),
         review_timeout_sec: asPositiveNumber(a.review_timeout_sec),
+        dev_timeout_sec: asPositiveNumber(a.dev_timeout_sec),
+        dev_stall_max_attempts: asPositiveNumber(a.dev_stall_max_attempts),
         replace: a.replace === true,
       })
       return ok(flowStatusPayload(started.state, started.path))

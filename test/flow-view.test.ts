@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os'
 import type { FlowState } from '../src/core/flow.js'
 import { createFlowState } from '../src/core/flow.js'
 import { flowPath, saveFlow } from '../src/core/flow-store.js'
-import { flowBadge, flowDispatchNote, flowStatusPayload, readFlowBadge, resolveFlowRunId } from '../src/core/flow-view.js'
+import { flowBadge, flowDispatchNote, flowSectionLines, flowStatusPayload, readFlowBadge, resolveFlowRunId } from '../src/core/flow-view.js'
 
 // The published payload: one shape for `flow status --json` and for the MCP `flow_status` tool, so
 // a host CLI and a terminal cannot be told different things about the same flow.
@@ -198,5 +198,14 @@ describe('a dispatch nobody confirmed is visible, not only journalled (block 69)
     // A closed or parked flow owns no attention: nobody is waiting for it to move.
     expect(flowBadge({ ...state, state: 'paused' }).attention).not.toBe('dispatch_unconfirmed')
     expect(flowBadge({ ...state, state: 'done' }).attention).not.toBe('dispatch_unconfirmed')
+  })
+
+  it('surfaces an overdue plan-item dev stall and its persisted clock in status', () => {
+    const state = makeState('run-stall', { stalled_since: Date.parse('2026-01-01T00:00:00.000Z'), dev_timeout_sec: 900 })
+    const badge = flowBadge(state, Date.parse('2026-01-01T00:15:00.000Z'))
+    expect(badge.attention).toBe('dev_stalled')
+    expect(flowStatusPayload(state).stalled_since).toBe(state.stalled_since)
+    expect(flowStatusPayload(state).dev_timeout_sec).toBe(900)
+    expect(flowSectionLines(state).some(line => line.includes('attention dev stalled'))).toBe(true)
   })
 })

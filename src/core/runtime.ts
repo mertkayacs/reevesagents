@@ -770,6 +770,22 @@ export function paneBusy(agentId: string, options: RuntimeOptions = {}): PaneBus
   }
 }
 
+// A stall retry needs stronger evidence than a normal dispatch: inspecting must not cancel copy mode,
+// and only an idle pane with an empty composer is safe to nudge.
+export function paneReadyForNudge(agentId: string, options: RuntimeOptions = {}): boolean {
+  const driver = options.driver ?? realDriver
+  try {
+    const agent = findAgent(agentId)
+    if (agent.headless || !agent.tmux_pane_id || !paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return false
+    const text = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+    if (paneInCopyMode(text) || paneInTmuxMode(agent, driver)) return false
+    const inspection = inspectPane(text, agent.provider)
+    return inspection.state === 'idle' && composerText(text, agent.provider) === ''
+  } catch {
+    return false
+  }
+}
+
 export interface IdleSendTimings {
   // A provider prompt appears seconds after the paste, so the confirm window is generous.
   pasteSettleMs: number
@@ -813,6 +829,8 @@ export type SendOutcome =
 
 export interface IdleSendOptions extends RuntimeOptions {
   timings?: Partial<IdleSendTimings>
+  maxEnters?: number
+  refuseCopyMode?: boolean
   // What the caller knows about a paste it already made into this pane, from a record that outlives this process (the
   // flow's `dispatch_paste`). It makes a collapsed marker attributable on a retry tick, where the in-process map is empty
   // by construction (block 69, review round 2).
@@ -849,6 +867,9 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
   // Copy mode eats Enter as a scroll, and the paste lands nowhere usable: cancel it first, then probe
   // again. A pane that is still in copy mode after the cancel is not ready, so nothing is typed.
   let paneText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  if (options.refuseCopyMode === true && (paneInCopyMode(paneText) || paneInTmuxMode(agent, driver))) {
+    return { sent: false, reason: 'unknown' }
+  }
 
   // A configurable window, not a fixed nap: a cold provider can spend most of a minute before its first
   // turn shows a busy marker, and the flow calls that a failed dispatch. It is also the window in which a collapsed
@@ -944,7 +965,8 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
     ...(retries > 0 ? { enter_retries: retries } : {}),
   })
   const pastedOutcome = (at: number): SendOutcome => ({ ...retried('unconfirmed_paste'), pastedAt: at } as SendOutcome)
-  for (let enter = 1; enter <= MAX_SUBMIT_ENTERS; enter += 1) {
+  const maxEnters = Math.max(1, Math.min(MAX_SUBMIT_ENTERS, Math.floor(options.maxEnters ?? MAX_SUBMIT_ENTERS)))
+  for (let enter = 1; enter <= maxEnters; enter += 1) {
     if (enter > 1) {
       // The repeat is decided where the ownership of the text is known: a fresh frame with no busy marker, and a box that still
       // holds our prompt. `idle` is deliberately *not* required — a pane whose composer holds our text and shows no turn is the
@@ -983,7 +1005,7 @@ export function sendWhenIdle(agentId: string, text: string, options: IdleSendOpt
       return retried('unconfirmed')
     }
     // Still idle, still ours: the Enter was swallowed. Count the repeat and try once more, up to the cap.
-    if (enter < MAX_SUBMIT_ENTERS) retries += 1
+    if (enter < maxEnters) retries += 1
   }
   // Three Enters and no turn. When the box still holds our paste the honest answer is `unconfirmed_paste`: no round exists, and
   // the next attempt needs one Enter rather than a second paste (block 69). The paste stamp is refreshed because the composer was

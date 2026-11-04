@@ -42,6 +42,10 @@ export interface FlowStatusPayload {
   max_rounds: number
   review_started_at: number | null
   review_timeout_sec: number
+  dev_timeout_sec: number
+  dev_stall_attempts: number
+  dev_stall_max_attempts: number
+  stalled_since: number | null
   head: string
   claim: { head: string, verdict: string | null, verdict_count: number, verdict_applied: boolean, spec_id: string | null }
   // The dispatch in flight: a claim written by a tick that has not settled it yet. This is why a
@@ -93,7 +97,7 @@ export interface FlowDispatchNote {
 // success, and the entries already say it: `dispatch_unconfirmed` / `dispatch_retry_enter` leave the dispatch open, a
 // settled decision (`request_review`, `dispatch_fix`, `dispatch_spec`) or a refusal closes it. The brief's point is that
 // this fact used to live only in the log, where nobody watching the flow could see it (block 69).
-const SETTLED_DISPATCH_EVENTS = /^(?:request_review|dispatch_fix|dispatch_spec|plan_item_dispatched)$/
+const SETTLED_DISPATCH_EVENTS = /^(?:request_review|dispatch_fix|dispatch_spec|dispatch_stall_retry|plan_item_dispatched)$/
 export function flowDispatchNote(state: FlowState): FlowDispatchNote | null {
   for (let index = state.log.length - 1; index >= 0; index -= 1) {
     const entry = state.log[index]!
@@ -152,6 +156,10 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
     max_rounds: state.max_rounds,
     review_started_at: state.review_started_at,
     review_timeout_sec: state.review_timeout_sec,
+    dev_timeout_sec: state.dev_timeout_sec,
+    dev_stall_attempts: state.dev_stall_attempts,
+    dev_stall_max_attempts: state.dev_stall_max_attempts,
+    stalled_since: state.stalled_since,
     head: state.claim.head,
     claim: {
       head: state.claim.head,
@@ -215,7 +223,7 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
 // The badge a run row shows. Derived on every read from the flow document, never stored in a run
 // record: a heuristic written into a lifecycle field outlives the reason that produced it, and the
 // next reader cannot tell "escalated" from "was escalated an hour ago".
-export type FlowAttention = 'escalated' | 'review_timeout' | 'dispatch_unconfirmed' | 'plan_waiting'
+export type FlowAttention = 'escalated' | 'review_timeout' | 'dev_stalled' | 'dispatch_unconfirmed' | 'plan_waiting'
 
 // What the plan is waiting for, when it is waiting for a human. Supplied by the caller that read `plan.json`:
 // the badge is a view, and the plan is a separate file (`docs/plan-model-design.md` §2.2).
@@ -262,7 +270,11 @@ export function flowBadge(
     && flowDispatchNote(state) !== null
     ? 'dispatch_unconfirmed' as const
     : null
-  const planAttention = escalation === null && stalled === null && plan !== null && (state.state === 'idle' || state.state === 'reviewing' || state.state === 'fixing')
+  const devStalled = escalation === null && stalled === null && state.stalled_since !== null
+    && (state.dev_stall_attempts > 0 || now - state.stalled_since >= state.dev_timeout_sec * 1000)
+    && state.state !== 'done' && state.state !== 'orphaned' && state.state !== 'paused'
+    ? 'dev_stalled' as const : null
+  const planAttention = escalation === null && stalled === null && devStalled === null && plan !== null && (state.state === 'idle' || state.state === 'reviewing' || state.state === 'fixing')
     ? 'plan_waiting' as const
     : null
   return {
@@ -270,7 +282,7 @@ export function flowBadge(
     rounds: state.rounds,
     max_rounds: state.max_rounds,
     review_overdue: overdue,
-    attention: escalation ?? stalled ?? planAttention,
+    attention: escalation ?? stalled ?? devStalled ?? planAttention,
     plan: planAttention === null ? null : plan,
     plan_progress: planProgress,
     close_reason: state.close_reason ?? null,
@@ -340,6 +352,7 @@ export function flowSectionLines(state: FlowState, options: FlowSectionOptions =
   }
   if (badge.attention === 'review_timeout') lines.push('attention review timed out')
   else if (badge.attention === 'escalated') lines.push('attention rounds spent — approve or deny in Approvals')
+  else if (badge.attention === 'dev_stalled') lines.push(`attention dev stalled · retry ${state.dev_stall_attempts}/${state.dev_stall_max_attempts}`)
   else if (badge.attention === 'plan_waiting') lines.push('attention waiting for you')
   // Where the next move comes from: the external driver, reported by its own last pass — never by a setting the
   // panel does not own.

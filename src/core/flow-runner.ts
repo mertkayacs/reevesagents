@@ -53,7 +53,7 @@ import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js
 import type { PlanTickView } from './flow-plan.js'
 import { isRunsLockTimeout, readRun, runPath, tryListAgents, withRunsLock } from './runs.js'
 import type { AgentRecord, RunRecord } from './types.js'
-import { paneBusy, paneDiagnosis, peekAgentRaw, sendWhenIdle } from './runtime.js'
+import { paneBusy, paneDiagnosis, paneReadyForNudge, peekAgentRaw, sendWhenIdle } from './runtime.js'
 import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
 import type { FlowVerdict } from './verdict.js'
@@ -84,6 +84,7 @@ function withEnterRetries(
 
 export interface DispatchSendOptions {
   pasted?: { at: number } | null
+  stallRetry?: boolean
 }
 
 export interface FlowPorts {
@@ -96,13 +97,18 @@ export interface FlowPorts {
   // Why a pane was last read as it was ('composer_not_found', 'footer_absent', …). Optional: a test that only cares about
   // the state can leave it out, and the hold then reports the state alone (block 73).
   paneDiagnosis?: (_agentId: string) => string | null
+  devNudgeReady?: (_agentId: string) => boolean
 }
 
 export const defaultFlowPorts: FlowPorts = {
   paneBusy: agentId => paneBusy(agentId),
   peek: (agentId, lines) => peekAgentRaw(agentId, lines),
-  send: (agentId, text, options) => sendWhenIdle(agentId, text, { pasted: options?.pasted ?? null }),
+  send: (agentId, text, options) => sendWhenIdle(agentId, text, {
+    pasted: options?.pasted ?? null,
+    ...(options?.stallRetry ? { maxEnters: 1, refuseCopyMode: true } : {}),
+  }),
   paneDiagnosis: agentId => paneDiagnosis(agentId),
+  devNudgeReady: agentId => paneReadyForNudge(agentId),
 }
 
 export function readGitHead(repo: string): string {
@@ -682,6 +688,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
   const ports = options.ports ?? defaultFlowPorts
   const head = options.head ?? readGitHead(state.repo)
   const treeClean = options.tree_clean ?? isGitTreeClean(state.repo)
+  const devNudgeReady = state.roles.dev ? (ports.devNudgeReady?.(state.roles.dev) ?? false) : false
   const devPane: PaneBusyState = state.roles.dev ? ports.paneBusy(state.roles.dev) : 'unknown'
   const reviewPane: PaneBusyState = state.roles.review ? ports.paneBusy(state.roles.review) : 'unknown'
   const paneText = reviewPane === 'unknown' ? '' : ports.peek(state.roles.review, VERDICT_SCAN_LINES)
@@ -703,6 +710,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     head,
     tree_clean: treeClean,
     dev_pane: devPane,
+    dev_nudge_ready: devNudgeReady,
     review_pane: reviewPane,
     // A pane the detector could not classify says why, in its own words: the hold is explained rather than merely named
     // (block 73).
@@ -1111,6 +1119,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       pasted: paste !== null && paste.agent === dispatch.agent && paste.head === (phase.decision.head ?? dispatch.state.claim.head)
         ? { at: paste.at }
         : null,
+    ...(phase.decision.kind === 'dispatch_stall_retry' ? { stallRetry: true } : {}),
     })
 
     // Phase three — settle, and only for our own claim: a claim that someone else already settled
@@ -1132,7 +1141,12 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
         // the one answer that makes it worse. A human reads the pane.
         // Saved like every other settled decision: an escalation that is computed but never written is an
         // escalation nobody sees, and the next tick would re-decide it from a state that says otherwise.
-        const escalated = escalateOnDirtyComposer(after, phase.decision, at)
+        const escalated = escalateOnDirtyComposer(after, {
+          ...phase.decision,
+          // A raced dirty composer means no retry was submitted; preserve the old timer and count.
+          next_dev_stall_attempts: undefined,
+          next_stalled_since: undefined,
+        }, at)
         return { state: escalated, status: 'unconfirmed', path: saveFlow(escalated, { root: options.root }) }
       }
       if (send.reason === 'pane_changed') {

@@ -81,7 +81,7 @@ function seedIdleFlow(): FlowState {
 }
 
 function ports(send: (_pane: string, _text: string) => { sent: true } | { sent: false, reason: 'unconfirmed' | 'pane_changed' }, paneText = '') {
-  return { paneBusy: () => 'idle' as const, peek: () => paneText, send }
+  return { paneBusy: () => 'idle' as const, peek: () => paneText, send, devNudgeReady: () => true }
 }
 
 describe('an unconfirmed review request is still a round (D1)', () => {
@@ -1616,6 +1616,109 @@ describe('a closed item must not stay in flight (D11)', () => {
     })
     expect(sent).toHaveLength(0)
     expect(['head_unchanged', 'plan_incomplete']).toContain(result.decision.reason)
+  })
+})
+
+describe('an idle dev does not strand a plan item', () => {
+  function seedInFlight(overrides: Partial<FlowState> = {}): void {
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: '- [ ] **P1.1** — first', now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 'first', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) })
+    const base = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, at: AT,
+      dev_timeout_sec: 900, dev_stall_max_attempts: 2,
+    })
+    saveFlow({
+      ...base,
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1', brief_path: 'docs/briefs/P1.1.json' },
+      active_plan_item: 'P1.1', stalled_since: NOW - 900_000,
+      ...overrides,
+    })
+  }
+
+  function stallStep(now: number, options: { tree_clean?: boolean, head?: string, dev?: 'idle' | 'busy' | 'unknown', ready?: boolean, send?: () => { sent: true } | { sent: false, reason: 'composer_dirty' } } = {}) {
+    return stepFlow('run-1', {
+      now, at: new Date(now).toISOString(), head: options.head ?? HEAD, tree_clean: options.tree_clean ?? true,
+      ports: {
+        paneBusy: agent => agent === 'dev-1' ? options.dev ?? 'idle' : 'idle',
+        peek: () => '',
+        devNudgeReady: () => options.ready ?? true,
+        send: options.send ?? (() => ({ sent: true as const })),
+      },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+  }
+
+  it('re-nudges once after the timeout without spending a round', () => {
+    seedInFlight()
+    let sends = 0
+    const result = stallStep(NOW, { send: () => { sends += 1; return { sent: true } } })
+    expect(result.decision.reason).toBe('dispatch_stall_retry')
+    expect(result.decision.kind).toBe('dispatch_stall_retry')
+    expect(sends).toBe(1)
+    const saved = readFlow('run-1')
+    expect(saved.rounds).toBe(0)
+    expect(saved.dev_stall_attempts).toBe(1)
+    expect(saved.stalled_since).toBe(NOW)
+    expect(saved.log.at(-1)?.event).toBe('dispatch_stall_retry')
+  })
+
+  it('allows two timed retries, then escalates as dev_stalled without another send', () => {
+    seedInFlight()
+    let sends = 0
+    for (const now of [NOW, NOW + 900_000]) {
+      const result = stallStep(now, { send: () => { sends += 1; return { sent: true } } })
+      expect(result.decision.reason).toBe('dispatch_stall_retry')
+    }
+    const escalation = stallStep(NOW + 1_800_000, { send: () => { sends += 1; return { sent: true } } })
+    expect(escalation.decision.kind).toBe('escalate')
+    expect(escalation.decision.reason).toBe('dev_stalled')
+    expect(readFlow('run-1').state).toBe('escalated')
+    expect(readFlow('run-1').rounds).toBe(0)
+    expect(readFlow('run-1').log.at(-1)?.detail).toContain('dev_stalled')
+    expect(sends).toBe(2)
+  })
+
+  it.each([
+    ['busy pane', { dev: 'busy' as const, ready: true }],
+    ['dirty composer', { dev: 'idle' as const, ready: false }],
+    ['copy mode', { dev: 'idle' as const, ready: false }],
+  ])('does not send or count a retry with a %s', (_label, options) => {
+    seedInFlight()
+    let sends = 0
+    stallStep(NOW, { ...options, send: () => { sends += 1; return { sent: true } } })
+    expect(sends).toBe(0)
+    expect(readFlow('run-1').dev_stall_attempts).toBe(0)
+  })
+
+  it('reviews a moved head and resets the stall counter', () => {
+    seedInFlight({ dev_stall_attempts: 1, stalled_since: NOW - 1_000 })
+    const result = stallStep(NOW, { head: 'e60048c000000000000000000000000000000000' })
+    expect(result.decision.kind).toBe('request_review')
+    expect(readFlow('run-1').dev_stall_attempts).toBe(0)
+    expect(readFlow('run-1').stalled_since).toBeNull()
+  })
+
+  it('holds tree_dirty without retrying', () => {
+    seedInFlight()
+    let sends = 0
+    const result = stallStep(NOW, { tree_clean: false, send: () => { sends += 1; return { sent: true } } })
+    expect(result.decision.reason).toBe('tree_dirty')
+    expect(sends).toBe(0)
+    expect(readFlow('run-1').dev_stall_attempts).toBe(0)
+  })
+
+  it('does not count a composer that becomes dirty after the idle observation', () => {
+    seedInFlight()
+    const result = stallStep(NOW, { send: () => ({ sent: false, reason: 'composer_dirty' }) })
+    expect(result.decision.reason).toBe('dispatch_stall_retry')
+    expect(readFlow('run-1').state).toBe('escalated')
+    expect(readFlow('run-1').dev_stall_attempts).toBe(0)
+    expect(readFlow('run-1').stalled_since).toBe(NOW - 900_000)
   })
 })
 

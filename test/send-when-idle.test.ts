@@ -175,6 +175,27 @@ describe('paneBusy', () => {
 })
 
 describe('sendWhenIdle', () => {
+  it('can bound a stall retry to exactly one Enter', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_IDLE, CODEX_IDLE, CODEX_OUR_TEXT]
+    expect(sendWhenIdle('agent-1', 'continue from the brief', { driver, ...FAST, maxEnters: 1, refuseCopyMode: true }))
+      .toMatchObject({ sent: false, reason: 'unconfirmed' })
+    expect(driver.calls.filter(call => call.args[0] === 'send-keys' && call.args[3] === 'Enter')).toHaveLength(1)
+  })
+
+  it('does not cancel or send into tmux copy mode for a stall retry', async () => {
+    const { sendWhenIdle } = await seed()
+    const driver = new PaneDriver()
+    const tmux = driver.tmux.bind(driver)
+    driver.tmux = (args, input) => args[0] === 'display-message' ? '1' : tmux(args, input)
+    driver.captures = [CODEX_IDLE]
+    expect(sendWhenIdle('agent-1', 'continue from the brief', { driver, ...FAST, maxEnters: 1, refuseCopyMode: true }))
+      .toEqual({ sent: false, reason: 'unknown' })
+    expect(driver.calls.some(call => call.args.includes('-X'))).toBe(false)
+    expect(driver.pasted()).toEqual([])
+  })
+
   it('refuses a busy pane without touching it', async () => {
     const { sendWhenIdle } = await seed()
     const driver = new PaneDriver()

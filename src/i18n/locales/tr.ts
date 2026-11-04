@@ -55,6 +55,7 @@ export const tr = {
     'flow.attention.review_timeout': 'inceleme zaman aşımı',
     'flow.attention.plan_waiting': 'plan: brif bekliyor',
     'flow.attention.dispatch_unconfirmed': 'gönderim onaylanmadı',
+    'flow.attention.dev_stalled': 'geliştirici plan öğesinde takıldı',
     'flow.badge.rounds': 'akış: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'akış: {{status}}',
   'flow.badge.plan_progress': 'akış: plan {{done}}/{{total}}',

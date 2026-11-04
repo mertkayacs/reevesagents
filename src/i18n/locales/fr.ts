@@ -54,6 +54,7 @@ export const fr = {
     'flow.attention.review_timeout': 'délai de revue dépassé',
     'flow.attention.plan_waiting': 'plan : en attente d’un brief',
     'flow.attention.dispatch_unconfirmed': 'envoi non confirmé',
+    'flow.attention.dev_stalled': 'développement bloqué sur un élément du plan',
     'flow.badge.rounds': 'flux : {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'flux : {{status}}',
   'flow.badge.plan_progress': 'flux : plan {{done}}/{{total}}',

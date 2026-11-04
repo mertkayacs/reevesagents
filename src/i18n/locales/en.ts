@@ -57,6 +57,7 @@ export const en = {
   'flow.attention.review_timeout': 'review timed out',
   'flow.attention.plan_waiting': 'plan: waiting for a brief',
   'flow.attention.dispatch_unconfirmed': 'dispatch not confirmed',
+  'flow.attention.dev_stalled': 'dev stalled on a plan item',
   'flow.badge.rounds': 'flow: {{status}} ({{rounds}}/{{max}})',
   'flow.badge.status': 'flow: {{status}}',
   'flow.badge.plan_progress': 'flow: plan {{done}}/{{total}}',

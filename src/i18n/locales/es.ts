@@ -57,6 +57,7 @@ export const es = {
     'flow.attention.review_timeout': 'revisión agotada',
     'flow.attention.plan_waiting': 'plan: esperando un brief',
     'flow.attention.dispatch_unconfirmed': 'envío sin confirmar',
+    'flow.attention.dev_stalled': 'el agente de desarrollo se atascó en una tarea del plan',
     'flow.badge.rounds': 'flujo: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'flujo: {{status}}',
   'flow.badge.plan_progress': 'flujo: plan {{done}}/{{total}}',

@@ -37,6 +37,8 @@ export interface StartFlowInput {
   repo?: string
   max_rounds?: number
   review_timeout_sec?: number
+  dev_timeout_sec?: number
+  dev_stall_max_attempts?: number
   // Spec files to queue on the new flow: the blocks the dev receives after the first ACCEPT.
   specs?: string[]
   // Start over on a run whose flow is closed (escalated/done). An active flow is never replaced.
@@ -144,6 +146,8 @@ export function startFlow(input: StartFlowInput, options: StartFlowOptions = {})
         head,
         max_rounds: input.max_rounds,
         review_timeout_sec: input.review_timeout_sec,
+        dev_timeout_sec: input.dev_timeout_sec,
+        dev_stall_max_attempts: input.dev_stall_max_attempts,
         specs,
         at,
       })

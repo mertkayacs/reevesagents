@@ -120,6 +120,9 @@ function printStatus(state: FlowState, path: string): void {
     console.log(`plan      ${state.plan.done}/${state.plan.total} done${state.plan.waiting > 0 ? ` · ${state.plan.waiting} waiting for you` : ''}  (imported ${state.plan.imported_at})`)
   }
   if (state.active_plan_item) console.log(`plan item ${state.active_plan_item} in flight`)
+  if (state.stalled_since !== null) {
+    console.log(`dev idle since ${new Date(state.stalled_since).toISOString()} · retry ${state.dev_stall_attempts}/${state.dev_stall_max_attempts}`)
+  }
   if (state.agent_question) {
     console.log(`agent question ${state.agent_question.agent}: ${state.agent_question.text}`)
   }
@@ -251,6 +254,8 @@ export function registerFlow(program: Command): void {
     .option('--spec <file...>', 'block spec files to queue on the new flow')
     .option('--max-rounds <n>', 'fix rounds before the flow escalates', (value: string) => Number(value))
     .option('--review-timeout <sec>', 'seconds a requested review may stay unanswered', (value: string) => Number(value))
+    .option('--dev-timeout <sec>', 'seconds an idle dev may hold a plan item before a retry', (value: string) => Number(value))
+    .option('--dev-stall-attempts <n>', 're-nudges before a stalled plan item escalates', (value: string) => Number(value))
     .option('--replace', 'start over on a run whose flow is escalated or done')
     .option('--json', 'output JSON')
     .action((opts: {
@@ -261,6 +266,8 @@ export function registerFlow(program: Command): void {
       spec?: string[]
       maxRounds?: number
       reviewTimeout?: number
+      devTimeout?: number
+      devStallAttempts?: number
       replace?: boolean
       json?: boolean
     }) => {
@@ -273,6 +280,8 @@ export function registerFlow(program: Command): void {
           specs: opts.spec,
           max_rounds: opts.maxRounds,
           review_timeout_sec: opts.reviewTimeout,
+          dev_timeout_sec: opts.devTimeout,
+          dev_stall_max_attempts: opts.devStallAttempts,
           replace: opts.replace === true,
         })
         if (opts.json) {

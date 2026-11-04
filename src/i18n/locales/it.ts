@@ -55,6 +55,7 @@ export const it = {
     'flow.attention.review_timeout': 'revisione scaduta',
     'flow.attention.plan_waiting': 'piano: in attesa di un brief',
     'flow.attention.dispatch_unconfirmed': 'invio non confermato',
+    'flow.attention.dev_stalled': 'sviluppo bloccato su un elemento del piano',
     'flow.badge.rounds': 'flusso: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'flusso: {{status}}',
   'flow.badge.plan_progress': 'flusso: piano {{done}}/{{total}}',
