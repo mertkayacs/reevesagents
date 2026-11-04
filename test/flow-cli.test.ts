@@ -7,6 +7,7 @@ import type { FlowState } from '../src/core/flow.js'
 import { createFlowState } from '../src/core/flow.js'
 import type { BlockSpec } from '../src/core/spec.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { createPlan, savePlan } from '../src/core/plan.js'
 import { publishNotes } from '../src/core/flow-notes.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 
@@ -343,11 +344,36 @@ describe('flow status', () => {
     expect(payload.path.startsWith('~') || payload.path.startsWith(tmpDir)).toBe(true)
   })
 
+  it('prints each counter against its own budget (block 81)', async () => {
+    // Two budgets: the item's rounds against the per-item cap, and the flow's spent rounds against its own fuse. Printing the
+    // flow's counter against the item's cap is what showed `round 7/6` in the panel.
+    const { state } = seedFlow('run-c2')
+    const stamp = Date.parse('2026-01-01T00:00:00.000Z')
+    const plan = createPlan({ run_id: 'run-c2', source_path: 'docs/plan.md', text: '- [ ] **P1.1** — first', now: stamp, at: '2026-01-01T00:00:00.000Z' }).plan
+    savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const, rounds: 2 })) }, { root: tmpDir })
+    saveFlow({
+      ...state,
+      state: 'fixing',
+      rounds: 9,
+      max_rounds: 6,
+      max_total_rounds: 24,
+      active_plan_item: 'P1.1',
+      claim: { head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1' },
+    }, { root: tmpDir })
+
+    const { out } = await runCli(['flow', 'status', '--run', 'run-c2'])
+
+    expect(out).toContain('P1.1 rounds 2/6')
+    expect(out).toContain('9/24 flow')
+    expect(out).not.toContain('round 9/6')
+  })
+
   it('accepts a unique run-id prefix and prints a text summary', async () => {
     seedFlow('run-c1')
     const { out } = await runCli(['flow', 'status', '--run', 'run-c'])
     expect(out).toContain('flow      run-c1')
-    expect(out).toContain('state     idle  round 0/6')
+    // The flow's own counter against the flow's fuse: `round N/M flow` (block 81 — the per-item cap is not the flow's budget).
+    expect(out).toContain('state     idle  round 0/24 flow')
   })
 
   it('fails with a readable message when no flow exists', async () => {

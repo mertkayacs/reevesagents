@@ -897,7 +897,7 @@ function reviewRequest(
   notesPath?: string,
   strict = false,
   // What the prompt prints: the round of the item this request is for, and that item's cap (block 81).
-  budget: { round: number, max_rounds: number } = { round: state.rounds + 1, max_rounds: state.max_rounds },
+  budget: { round: number, max_rounds: number } = clampBudget(state.rounds + 1, state.max_rounds),
 ): FlowDecision {
   const roundItem = state.claim.spec_id ?? state.active_plan_item
   const roundBrief = state.claim.brief_path ?? briefPathFor(state, roundItem)
@@ -1154,10 +1154,11 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
       (conflict.kind === 'plan_item_double_close' && conflict.item_id === id) || conflict.detail === detail)
   // Refused either way — a second close on that head must not happen. The only difference is the journal: the first time the
   // conflict is news, afterwards it is history, and repeating it every tick is what made a resumed run unresumable (block 45).
-  // A refusal that is *news* keeps the binding when the item is the round's own: it was just dispatched and the dev is working on
-  // it (block 81). A refusal that is *history* is a stale binding — the same conflict was already recorded — and that item goes
-  // back to the queue so the picker can move on (block 46, MAJOR 2).
-  const keepBinding = roundOwner && !recorded
+  // The binding of the round's own item survives the refusal, however often it repeats: it was dispatched and the dev is working on
+  // it, and dropping it again on a repeated refusal is what erased the item's rounds (block 81, review round 1). `recorded` only
+  // decides whether the conflict is news or history, never whether the item stays bound; an item that is *not* this round's keeps
+  // block 46's treatment and goes back to the queue.
+  const keepBinding = roundOwner
   const refusal: FlowDecision = {
     kind: 'none',
     reason: 'plan_item_double_close',
@@ -1821,6 +1822,9 @@ function unsubstantiated(state: FlowState, observations: FlowObservations): Flow
     observations.now,
     observations.notes_staging_path,
     true,
+    // The retry is the same round: it prints the item's round against the item's cap, like every other prompt (block 81, review
+    // round 1).
+    promptBudget(state, observations),
   )
   return {
     ...retry,

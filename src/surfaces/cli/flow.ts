@@ -26,11 +26,30 @@ import { shortHomePath } from '../../utils/paths.js'
 import { finalizePlanCommands, registerPlanCommands } from './plan.js'
 import { requireDestructiveConfirmation } from './helpers.js'
 
-// `round N/M` with N > M is never printed: the flow's own counter can run past the per-item cap (block 81 showed `round 7/6` in
-// the operator's status line, which tells nobody anything). The number is clamped, the fuse itself is unchanged.
-function roundText(state: { rounds: number, max_rounds: number }): string {
-  const shown = state.max_rounds > 0 ? Math.min(state.rounds, state.max_rounds) : state.rounds
-  return `${shown}/${state.max_rounds}`
+// Two budgets, two counters, never mixed: the flow's spent rounds go against its own fuse (`max_total_rounds`), and the item the
+// round belongs to reports its own rounds against the per-item budget. Printing one against the other is what put `round 7/6` in
+// front of an operator (block 81).
+function roundText(state: FlowState): string {
+  const total = state.max_total_rounds > 0 ? state.max_total_rounds : state.max_rounds
+  const flow = `${Math.min(state.rounds, total)}/${total} flow`
+  const item = planItemRound(state)
+  return item === null ? flow : `${item} · ${flow}`
+}
+
+// The bound item's own round, read from the plan when there is one: `<id> rounds N/M`. `null` when the flow has no plan item.
+function planItemRound(state: FlowState): string | null {
+  const id = state.claim.spec_id ?? state.active_plan_item
+  // The plan file is the record, the summary in the flow state may lag behind it: read the file when there is a bound item.
+  if (!id) return null
+  try {
+    const plan = readPlan(state.run_id)
+    const item = plan.items.find(entry => entry.id === id)
+    if (!item) return null
+    const max = state.max_rounds > 0 ? state.max_rounds : item.rounds
+    return `${id} rounds ${Math.min(item.rounds, max)}/${max}`
+  } catch {
+    return null
+  }
 }
 
 // The payload and the id resolution are shared with the MCP tools, so a host CLI and
@@ -94,7 +113,7 @@ function printStatus(state: FlowState, path: string): void {
   const verdict = state.claim.verdict ?? 'none'
   const last = state.log.at(-1)
   console.log(`flow      ${state.run_id}`)
-  console.log(`state     ${state.state}  round ${roundText(state)}${state.max_total_rounds ? ` (flow cap ${state.max_total_rounds})` : ''}`)
+  console.log(`state     ${state.state}  round ${roundText(state)}`)
   if (state.plan) {
     // The one-line summary the plan commands keep in step: a surface can say `plan 12/23` without opening
     // `plan.json`, which is the whole point of storing it here (§3.1 of the plan design).

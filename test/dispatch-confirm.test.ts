@@ -1184,10 +1184,12 @@ describe('the settle closes the item the claim names (block 46)', () => {
       evidence_policy: { min_seconds: 0, retries: 1 },
     })
 
-    // Not stuck: the refused item is back in the queue (not "in flight" for ever), the conflict is reported once, and the plan has
-    // moved to the next item.
+    // The item whose round this is stays bound — block 81's rule, which the review of round 1 made unconditional: a repeated
+    // refusal may not erase the binding (and with it the item's rounds) again. What keeps a resumed run moving is that the item is
+    // genuinely the one in flight, not that it was parked in `queued`.
     const items = readPlan('run-1').items
-    expect(items.find(item => item.id === 'P1.2')!.status).toBe('queued')
+    expect(items.find(item => item.id === 'P1.2')!.status).toBe('in_work')
+    expect(readFlow('run-1').active_plan_item).toBe('P1.2')
     expect(items.find(item => item.id === 'P1.3')!.status).not.toBe('queued')
     // One fact, however many ticks read it: the refusal (or, once it is history, the requeue that tidies the binding).
     const refusalLines = new Set(readFlow('run-1').log
@@ -2008,6 +2010,45 @@ describe('a refused close does not unbind the item it was dispatched for (block 
     expect(item.status).not.toBe('queued')
   })
 
+  it('keeps the binding on a repeated refusal, and the rounds with it', () => {
+    // The review of round 1: a refusal whose conflict is *already recorded* must not unbind the claim's own item again — that is how
+    // the rounds were erased in the first place. `recorded` decides whether the line is news, never whether the item stays bound.
+    seedPlan()
+    const head = commit(1)
+    const plan = readPlan('run-1')
+    savePlan({
+      ...plan,
+      items: plan.items.map(item => (item.id === 'P1.1'
+        ? { ...item, status: 'done' as const, head, closed_by: 'accept' as const }
+        : { ...item, status: 'in_work' as const, rounds: 2 })),
+      // The same double close, already on record from the tick that first saw it.
+      conflicts: [{ at: AT, item_id: 'P1.2', kind: 'plan_item_double_close' as const, detail: 'historical' }],
+    })
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 6, max_total_rounds: 24, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 3, active_plan_item: 'P1.2', review_started_at: NOW - 60_000,
+      claim: { head, verdict: null, verdict_count: 1, verdict_applied: false, spec_id: 'P1.2' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', head, 2, root), 'VERDICT: ACCEPT\n')
+
+    stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    const after = readFlow('run-1')
+    expect(after.active_plan_item).toBe('P1.2')
+    const item = readPlan('run-1').items.find(entry => entry.id === 'P1.2')!
+    expect(item.status).toBe('in_work')
+    // The rounds the item had already spent are still its own.
+    expect(item.rounds).toBe(2)
+    // And the conflict is not reported a second time.
+    expect(after.log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(0)
+  })
+
   it('prints the item’s round, not the flow’s, against the item’s cap', () => {
     // The panel said "Flow round 12 of 6": the flow's own counter was printed against the per-item budget. With a plan the round is
     // the item's, measured against that item's cap — and it is clamped, so `round N of M` never has N > M.
@@ -2038,6 +2079,39 @@ describe('a refused close does not unbind the item it was dispatched for (block 
     expect(Number(printed![1])).toBeLessThanOrEqual(Number(printed![2]))
     // The flow's own counter is not what the dev is asked to satisfy.
     expect(sent[0]).not.toContain('round 10 of')
+  })
+
+  it('prints the retry against the right budget, never `round N of M` with N > M', () => {
+    // The retry re-asks the same round and used to fall back to the flow's counter against the *per-item* cap — `round 10 of 2`
+    // (block 81, review round 1). It now goes through the same budget as every other prompt.
+    const head = commit(7)
+    const base = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 2, max_total_rounds: 24, at: AT,
+    })
+    saveFlow({
+      ...base, state: 'reviewing', rounds: 9, review_started_at: NOW - 1_000,
+      claim: { head, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+    })
+    const sent: string[] = []
+    const ticked = stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, plan: null,
+      // The answer is a bare pane verdict with no notes and no tool lines: too thin to accept, so the tick re-asks.
+      ports: {
+        paneBusy: () => 'idle' as const,
+        peek: () => 'VERDICT: ACCEPT',
+        send: (_pane, message) => { sent.push(message); return { sent: true as const } },
+      },
+      verdict_evidence: { elapsed_ms: 1_000, notes_bytes: 11, notes_findings: 0, pane_tool_lines: 0 },
+      evidence_policy: { min_seconds: 30, retries: 2 },
+    })
+
+    expect(ticked.decision.reason).toBe('review_unsubstantiated')
+    expect(sent).toHaveLength(1)
+    const printed = sent[0]!.match(/round (\d+) of (\d+)/)
+    expect(printed).not.toBeNull()
+    expect(Number(printed![1])).toBeLessThanOrEqual(Number(printed![2]))
+    // Without a plan the flow's own fuse is the only budget there is.
+    expect(sent[0]).toContain('round 10 of 24')
   })
 
   it('counts every fix round of the item the claim names, and stops at its own cap', () => {
