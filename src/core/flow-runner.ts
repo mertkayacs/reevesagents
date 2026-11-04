@@ -18,7 +18,7 @@
 // the engine, which escalates it after `PENDING_TTL_SEC` instead of re-sending.
 
 import { randomUUID } from 'node:crypto'
-import { statSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { composerText, isComposerPlaceholder, type PaneBusyState } from './activity.js'
 import type { EvidencePolicy, FlowDecision, FlowHold, FlowLogEntry, FlowObservations, FlowState, VerdictEvidence } from './flow.js'
@@ -47,7 +47,7 @@ import {
 } from './flow-notes.js'
 import { withDispatchGate } from './flow-dispatch-gate.js'
 import { loadConfig } from './config.js'
-import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound, PLAN_LIMITS } from './plan.js'
+import { planExists, readPlan, mutatePlan, closeItemOnAccept, moveItemByEngine, addItemRound, PLAN_LIMITS, parsePlanDocument, resolveRepositoryPath } from './plan.js'
 import { applyPlanMarks } from './plan-mark.js'
 import { emitNotification } from './notifications.js'
 import { planTickSummary as planSummaryLine, planTickView } from './flow-plan.js'
@@ -522,6 +522,20 @@ export function readPlanView(state: FlowState): PlanTickView | null {
   return planTickView(plan, { perItem: state.max_rounds, total: state.max_total_rounds })
 }
 
+// Conflicts are an import-time snapshot. A developer may check a row after import, so stale-row recovery
+// must consult the source document on every tick before deciding whether it can close that row.
+function readCheckedPlanDocument(state: FlowState): string[] | undefined {
+  try {
+    const plan = readPlan(state.run_id)
+    const source = resolveRepositoryPath(plan.source_path, state.repo)
+    return parsePlanDocument(readFileSync(source.absolute, 'utf-8')).items
+      .filter(item => item.checked)
+      .map(item => item.id)
+  } catch {
+    return undefined
+  }
+}
+
 // Apply what the decision asked the plan to record. Runs after the flow state is saved, and is idempotent in
 // the parts that matter: closing an item that is already closed and moving a status that is already set are
 // both no-ops.
@@ -704,6 +718,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     ?? (state.pending && state.pending.head !== head ? commitTimestamp(state.repo, head) : undefined)
   const treeClean = options.tree_clean ?? isGitTreeClean(state.repo)
   const plan = options.plan === null ? undefined : (options.plan ?? readPlanView(state) ?? undefined)
+  const planDocumentChecked = readCheckedPlanDocument(state)
   const itemId = state.claim.spec_id ?? state.active_plan_item
   const item = itemId ? plan?.items.find(entry => entry.id === itemId) : undefined
   const nudgeText = itemId && item
@@ -800,6 +815,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     // schema-v1 flows have always used.
     plan,
     plan_conflicts: readPlanConflicts(state),
+    ...(planDocumentChecked === undefined ? {} : { plan_document_checked: planDocumentChecked }),
     docs_only_since_claim: options.docs_only_since_claim ?? docsOnlySince(state, head) ?? false,
     head_docs_only: options.head_docs_only ?? headIsDocsOnly(state, head) ?? false,
     head_mark_commit: options.head_mark_commit ?? headIsMarkCommit(state, head),

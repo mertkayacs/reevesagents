@@ -629,20 +629,25 @@ describe('plan in-flight rows are bound to the live claim (block 96)', () => {
     })
     const observations = makeObservations({
       head: 'aaa111', verdict: 'ACCEPT', verdict_source: 'file', notes_head: 'aaa111', notes_ref: 'notes/aaa111-r24.md',
-      plan: view('reviewing', null), plan_conflicts: [{ kind: 'ticked_by_hand', item_id: 'T4.3.2' }],
+      plan: view('reviewing', null), plan_document_checked: ['T4.3.2'],
     })
     const repair = flowTick(state, observations)
 
     expect(repair.reason).toBe('plan_item_requeued')
     expect(repair.next_plan_close).toMatchObject({ id: 'T4.3.2', head: 'aaa111' })
     expect(repair.next_answered_round).toBe('notes/aaa111-r24.md')
+    expect(repair.next_state).toBe('idle')
+    expect(repair.next_review_started_at).toBeNull()
+    expect(repair.next_claim.verdict).toBeNull()
     const applied = applyDecisionToState(state, repair, AT)
     expect(applied.answered_round).toBe('notes/aaa111-r24.md')
+    expect(applied.state).toBe('idle')
+    expect(applied.review_started_at).toBeNull()
 
     const afterRepair = { ...observations, plan: view('done', 'aaa111') }
     const second = flowTick(applied, afterRepair)
     const third = flowTick(applied, afterRepair)
-    expect(second.reason).toBe('awaiting_verdict')
+    expect(second.reason).not.toBe('awaiting_verdict')
     expect(decisionChangesState(applied, second)).toBe(false)
     expect(third).toEqual(second)
   })
@@ -651,7 +656,11 @@ describe('plan in-flight rows are bound to the live claim (block 96)', () => {
     const state = makeState({ state: 'reviewing', active_plan_item: 'T4.3.3', claim: {
       head: 'aaa111', verdict: null, verdict_count: 5, verdict_applied: false, spec_id: 'T4.3.3',
     } })
-    const decision = flowTick(state, makeObservations({ plan: view('reviewing', null) }))
+    const decision = flowTick(state, makeObservations({
+      plan: view('reviewing', null),
+      plan_document_checked: [],
+      plan_conflicts: [{ kind: 'ticked_by_hand', item_id: 'T4.3.2' }],
+    }))
 
     expect(decision.next_plan_status).toEqual({ id: 'T4.3.2', status: 'queued' })
     expect(decision.reason).toBe('plan_item_requeued')

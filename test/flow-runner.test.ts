@@ -496,6 +496,9 @@ describe('stepFlow', () => {
 
   it('repairs a headless checked reviewing row once and does not replay the consumed ACCEPT file', () => {
     const text = '- [ ] **T4.3.2** — stale task\n- [ ] **T4.3.3** — accepted task'
+    const repo = join(root, 'project')
+    mkdirSync(join(repo, 'docs'), { recursive: true })
+    writeFileSync(join(repo, 'docs/plan.md'), text)
     let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text, now: NOW, at: AT }).plan
     const brief = (id: string) => JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] })
     for (const id of ['T4.3.2', 'T4.3.3']) {
@@ -508,14 +511,11 @@ describe('stepFlow', () => {
     plan = moveItemByEngine(plan, { id: 'T4.3.3', status: 'in_work', now: NOW })
     plan = moveItemByEngine(plan, { id: 'T4.3.3', status: 'reviewing', now: NOW })
     plan = closeItemOnAccept(plan, { id: 'T4.3.3', head: 'bbb222', rounds: 1, notes_ref: null, now: NOW, at: AT })
-    plan = {
-      ...plan,
-      conflicts: [...plan.conflicts, {
-        kind: 'ticked_by_hand', item_id: 'T4.3.2', detail: 'document checkbox is checked', at: AT,
-      }],
-    }
     savePlan(plan)
+    // The document was checked after the plan snapshot was imported; conflicts therefore contain no ticked_by_hand row.
+    writeFileSync(join(repo, 'docs/plan.md'), text.replace('[ ] **T4.3.2**', '[x] **T4.3.2**'))
     seed(makeState({
+      repo,
       state: 'reviewing', review_started_at: NOW, active_plan_item: 'T4.3.3',
       claim: { head: 'bbb222', verdict: null, verdict_count: 5, verdict_applied: true, spec_id: 'T4.3.3' },
     }))
@@ -525,10 +525,13 @@ describe('stepFlow', () => {
     expect(first.decision.reason).toBe('plan_item_requeued')
     expect(readPlan('run-1')?.items.find(item => item.id === 'T4.3.2')).toMatchObject({ status: 'done', head: 'bbb222' })
     expect(readFlow('run-1').answered_round).toBe('notes/bbb222-r1.md')
+    expect(readFlow('run-1')).toMatchObject({ state: 'idle', review_started_at: null, claim: { verdict: null } })
 
     const second = step(ports, { head: 'bbb222', notes: fileAnswer('ACCEPT', 'bbb222') })
     const afterSecond = readFlow('run-1')
     expect(second.decision.reason).not.toBe('plan_in_flight')
+    expect(afterSecond.state).toBe('idle')
+    expect(afterSecond.review_started_at).toBeNull()
     expect(afterSecond.log.filter(entry => entry.event === 'plan_item_stale_recovered')).toHaveLength(1)
     const third = step(ports, { head: 'bbb222', notes: fileAnswer('ACCEPT', 'bbb222') })
     expect(third.status).toBe('skipped')

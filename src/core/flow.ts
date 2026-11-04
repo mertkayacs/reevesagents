@@ -383,6 +383,8 @@ export interface FlowObservations {
   notes_head?: string
   // The plan's recorded conflicts, so a guard can tell "this already happened and was reported" from "this is happening now".
   plan_conflicts?: Array<{ kind?: string, detail?: string, item_id?: string }>
+  // Current checkbox state from the source document. Conflicts are historical and can lag a later human edit.
+  plan_document_checked?: string[]
   // The round number of the notes file that answered — the file's own, which is not necessarily the round this tick
   // would compute: the reader finds a head's newest file, and a counter that moved must not hide it (block 69).
   notes_round?: number
@@ -1743,8 +1745,10 @@ function stalePlanFlightDecision(state: FlowState, observations: FlowObservation
   })
   if (!stale) return null
 
-  const checked = (observations.plan_conflicts ?? []).some(conflict =>
-    conflict.kind === 'ticked_by_hand' && conflict.item_id === stale.id)
+  const checked = observations.plan_document_checked !== undefined
+    ? observations.plan_document_checked.includes(stale.id)
+    : (observations.plan_conflicts ?? []).some(conflict =>
+      conflict.kind === 'ticked_by_hand' && conflict.item_id === stale.id)
   const consumedBoundItem = plan.items.find(item => item.id === (state.claim.spec_id ?? state.active_plan_item))
   const answerAlreadyApplied = consumedBoundItem?.status === 'done'
     && observations.notes_head === state.claim.head
@@ -1756,10 +1760,10 @@ function stalePlanFlightDecision(state: FlowState, observations: FlowObservation
   const base: FlowDecision = {
     kind: 'none',
     reason: 'plan_item_requeued',
-    next_state: state.state,
+    next_state: answerAlreadyApplied ? 'idle' : state.state,
     next_rounds: state.rounds,
-    next_review_started_at: state.review_started_at,
-    next_claim: state.claim,
+    next_review_started_at: answerAlreadyApplied ? null : state.review_started_at,
+    next_claim: answerAlreadyApplied ? { ...state.claim, verdict: null } : state.claim,
     log_event: 'plan_item_stale_recovered',
     ...(answeredRound ? {
       next_answered_round: answeredRound,
@@ -1782,7 +1786,7 @@ function stalePlanFlightDecision(state: FlowState, observations: FlowObservation
       ...base,
       log_detail: `${stale.id} stale reviewing row closed from the checked plan document at ${observations.head}`,
       next_plan_close: { id: stale.id, head: observations.head, rounds: stale.rounds, notes_ref: stale.notes_ref },
-      next_active_plan_item: state.active_plan_item === stale.id ? null : state.active_plan_item,
+      next_active_plan_item: answerAlreadyApplied || state.active_plan_item === stale.id ? null : state.active_plan_item,
     }
   }
 
@@ -1790,7 +1794,7 @@ function stalePlanFlightDecision(state: FlowState, observations: FlowObservation
     ...base,
     log_detail: `${stale.id} stale reviewing row returned to queued; no live claim owns it`,
     next_plan_status: { id: stale.id, status: 'queued' },
-    next_active_plan_item: state.active_plan_item === stale.id ? null : state.active_plan_item,
+    next_active_plan_item: answerAlreadyApplied || state.active_plan_item === stale.id ? null : state.active_plan_item,
   }
 }
 
