@@ -2350,6 +2350,39 @@ describe('a notes file the engine cannot read is not a missing answer (block 83)
     expect(readFlow('run-1').state).toBe('fixing')
   })
 
+  it('asks for the rewrite even when the pane prints a verdict, and even after the deadline', () => {
+    // The review of round 3: the invalid file is the fact, so neither a pane verdict beside it nor an expired deadline may turn it
+    // into "waiting for its notes file" or into an escalation.
+    seedReview()
+    reviewingFlow()
+    writeFileSync(stagingPath('run-1', HEAD83, 1, root), 'MINOR apps/api/src/a.ts:70 — a finding\nMAJOR apps/api/src/b.ts:2 — another\n')
+
+    const withPaneVerdict = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD83, tree_clean: true, plan: undefined,
+      // A pane CHANGES_REQUESTED is exactly what is not bound to this head — but it is not the reason for the hold either.
+      ports: {
+        paneBusy: () => 'idle' as const,
+        peek: () => 'round\nVERDICT: CHANGES_REQUESTED\nMAJOR src/app.ts:1 — x\n> ',
+        send: () => ({ sent: true as const }),
+      },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(withPaneVerdict.decision.reason).toBe('review_notes_invalid')
+    expect(readFlow('run-1').log.some(entry => entry.event === 'review_notes_invalid_retry')).toBe(true)
+
+    // A fresh flow, the same unusable file, observed only *after* the deadline: one rewrite request, not an escalation.
+    reviewingFlow()
+    saveFlow({ ...readFlow('run-1'), review_started_at: NOW - 3_600_000 }, { root })
+    const late = stepFlow('run-1', {
+      now: NOW, at: AT, head: HEAD83, tree_clean: true, plan: undefined,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: () => ({ sent: true as const }) },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+    expect(late.decision.reason).toBe('review_notes_invalid')
+    expect(readFlow('run-1').state).toBe('reviewing')
+    expect(readFlow('run-1').state).not.toBe('escalated')
+  })
+
   it('names an unusable file in the hold, and asks once for a rewrite instead of waiting out the deadline', () => {
     seedReview()
     reviewingFlow()

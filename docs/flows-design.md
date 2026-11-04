@@ -520,9 +520,10 @@ so an escalation would make every resumed run escalate again for ever.
 `VERDICT: CHANGES_REQUESTED` on line 1 and its MINOR on line 2, and the parser only looked at the last line. The panel answer puts
 the verdict first and the file paragraph asked for it last, so both orders are now accepted (`validateNotesText`: last line, then
 first; a `CHANGES_REQUESTED` without a finding is still not an answer), and the prompt says plainly that the file is the reverse of
-the answer above — findings first, verdict last. An unusable file is no longer reported as a missing one: the hold says
-`the notes file for <head> is not usable: <reason>`, and the tick asks once — strictly — for a rewrite (`review_notes_invalid_retry`)
-instead of waiting out a deadline on an answer that already exists.
+the answer above — findings first, verdict last. An unusable file is no longer reported as a missing one, and it outranks everything else the state can be waiting for: a pane
+verdict printed beside it and an expired deadline alike (the rewrite request is issued before either is looked at). The tick asks
+once — strictly — for a rewrite (`review_notes_invalid_retry`); a second look at the same unusable file holds with
+`the notes file for <head> is not usable: <reason>` instead of escalating on an answer that already exists.
 
 **An answered review never times out (block 82).** The live `salon-dashboard` run escalated `review_timeout` six times on reviews
 whose verdict had been applied: the close was refused (the head had already closed another item), the refusal left the flow in

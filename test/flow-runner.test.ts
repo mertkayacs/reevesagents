@@ -622,15 +622,18 @@ describe('the notes channel in the runner', () => {
 
   it('does not apply a pane answer when the notes file is unusable', () => {
     // The file is the channel a non-ACCEPT verdict has to come through (block 69): an unusable file plus a pane
-    // CHANGES_REQUESTED is a hold, not a fix round — the pane verdict is not bound to this commit.
+    // CHANGES_REQUESTED is never a fix round — the pane verdict is not bound to this commit. The first tick asks once for a
+    // rewrite (block 83), and the second holds.
     seed(reviewingState())
     writeStaging('run-1', NOTES_HEAD, 1, 'MAJOR x.ts:1 — no verdict line here\n')
     const ports = makePorts({ peek: () => verdictCapture(1) })
 
-    const result = step(ports, { head: NOTES_HEAD })
+    const first = step(ports, { head: NOTES_HEAD })
+    expect(first.decision.reason).toBe('review_notes_invalid')
+    expect(first.decision.kind).toBe('request_review')
 
-    expect(result.decision.reason).toBe('awaiting_verdict')
-    expect(ports.send).not.toHaveBeenCalled()
+    const second = step(ports, { head: NOTES_HEAD, now: 60_000 })
+    expect(second.decision.reason).toBe('awaiting_verdict')
     // The staging file is kept for a retry, and no durable record was published from it.
     expect(existsSync(stagingPath('run-1', NOTES_HEAD, 1, root))).toBe(true)
     expect(existsSync(durablePath('run-1', NOTES_HEAD, 1, root))).toBe(false)

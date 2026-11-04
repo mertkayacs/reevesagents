@@ -1673,6 +1673,32 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // stopped (block 82). The state says so itself, which is what makes it a check and not a guess.
   const answered = state.claim.verdict_applied && state.verdict_handled_for === state.claim.head
   const expired = (): FlowDecision => (answered ? hold(state, 'awaiting_verdict') : escalate(state, observations, 'review_timeout'))
+  // A notes file that exists and cannot be read outranks everything else in this function. The answer is on disk, so this is not
+  // *silence*: neither a verdict the pane also printed, nor the deadline, turns an unreadable file into "no answer". Ask once —
+  // strictly — for a rewrite of this head's file, whatever the pane shows and however late this tick is; a second look at the same
+  // unusable file falls through to the ordinary handling below (block 83, review round 3).
+  if (observations.notes_invalid !== undefined && observations.head === state.claim.head) {
+    const refused = state.claim.head.slice(0, 7)
+    const alreadyAsked = state.log.some(entry => entry.event === 'review_notes_invalid_retry' && entry.detail.includes(refused))
+    if (!alreadyAsked) {
+      const gate = reviewGate(state, observations)
+      if (gate) return gate
+      return withNotes({
+        ...reviewRequest(
+          state,
+          state.claim.head,
+          observations.verdict_count,
+          'review_notes_invalid',
+          observations.now,
+          observations.notes_staging_path,
+          true,
+          promptBudget(state, observations),
+        ),
+        log_event: 'review_notes_invalid_retry',
+        log_detail: `${refused}: the notes file was not usable (${observations.notes_invalid}); asked for a rewrite`,
+      }, observations)
+    }
+  }
   if (!fromFile && observations.review_pane === 'unknown') {
     return timedOut ? expired() : hold(state, 'review_pane_unknown')
   }
@@ -1718,26 +1744,6 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
     // is already on disk. Say why the file was refused (`notes_invalid <reason>`), and ask once — strictly — for a rewrite of this
     // head's file; a second round of the same invalid file waits like any other silence (block 83).
     const invalid = observations.notes_invalid
-    if (invalid !== undefined && !timedOut) {
-      const refused = state.claim.head.slice(0, 7)
-      const alreadyAsked = state.log.some(entry => entry.event === 'review_notes_invalid_retry' && entry.detail.includes(refused))
-      if (!alreadyAsked) {
-        return withNotes({
-          ...reviewRequest(
-            state,
-            state.claim.head,
-            observations.verdict_count,
-            'review_notes_invalid',
-            observations.now,
-            observations.notes_staging_path,
-            true,
-            promptBudget(state, observations),
-          ),
-          log_event: 'review_notes_invalid_retry',
-          log_detail: `${refused}: the notes file was not usable (${invalid}); asked for a rewrite`,
-        }, observations)
-      }
-    }
     // Nothing answered within the budget: a reviewer that crashed, hit a login screen or is stuck
     // on a modal never prints a verdict, so the flow escalates instead of waiting for ever.
     if (timedOut) return expired()
