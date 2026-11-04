@@ -1652,7 +1652,7 @@ describe('an idle dev does not strand a plan item', () => {
         paneBusy: agent => agent === 'dev-1' ? options.dev ?? 'idle' : 'idle',
         peek: () => '',
         devNudgeReady: (_agent, _text, pasted) => options.ready === 'needs_paste'
-          ? pasted !== null
+          ? (pasted !== null ? 'recorded_paste' : false)
           : options.ready ?? true,
         send: options.send ?? (() => ({ sent: true as const })),
       },
@@ -1742,6 +1742,20 @@ describe('an idle dev does not strand a plan item', () => {
     expect(retryOptions).toMatchObject({ stallRetry: true, pasted: { at: NOW + 5 } })
     expect(readFlow('run-1').dispatch_paste).toBeNull()
     expect(readFlow('run-1').rounds).toBe(0)
+  })
+
+  it('escalates when a recorded retry-enter prompt disappears before the next tick', () => {
+    seedInFlight()
+    stallStep(NOW, { send: () => ({ sent: false, reason: 'unconfirmed_paste', pastedAt: NOW + 5 }) })
+    expect(readFlow('run-1').log.at(-1)?.event).toBe('dispatch_retry_enter')
+    let sends = 0
+    const result = stallStep(NOW + 1_000, {
+      ready: true,
+      send: () => { sends += 1; return { sent: true } },
+    })
+    expect(result.decision.reason).toBe('dev_stalled')
+    expect(result.decision.kind).toBe('escalate')
+    expect(sends).toBe(0)
   })
 
   it('escalates a stale recorded stall paste instead of waiting on an unsafe composer forever', () => {

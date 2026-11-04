@@ -331,7 +331,7 @@ export interface FlowObservations {
   // How many verdicts the scanned capture contains. Callers must use the same window for every
   // tick of one flow, or the counter is not comparable.
   verdict_count: number
-  dev_nudge_ready?: boolean
+  dev_nudge_ready?: boolean | 'recorded_paste'
   // The reviewer's BLOCKER/MAJOR/MINOR lines, already redacted by `verdict.ts`.
   verdict_notes?: string
   // Whether the flow's run and both role agents still exist in the registry. Absent means "this
@@ -1467,7 +1467,7 @@ function devStallDecision(state: FlowState, observations: FlowObservations): Flo
   if (observations.dev_pane === 'busy') return hold(state, 'dev_busy')
   if (observations.dev_pane !== 'idle') return hold(state, 'dev_pane_unknown')
   // The runtime computes this before paneBusy, which can recover copy mode. Missing readiness evidence is fail-closed.
-  if (observations.dev_nudge_ready !== true) {
+  if (observations.dev_nudge_ready !== true && observations.dev_nudge_ready !== 'recorded_paste') {
     const paste = state.dispatch_paste
     if (paste?.purpose === 'dev_stall_retry' && paste.agent === state.roles.dev && paste.head === state.claim.head
       && observations.now - paste.at >= state.dev_timeout_sec * 1000) {
@@ -1475,7 +1475,7 @@ function devStallDecision(state: FlowState, observations: FlowObservations): Flo
     }
     return null
   }
-  if (hasUnresolvedStallDispatch(state)) {
+  if (observations.dev_nudge_ready !== 'recorded_paste' && hasUnresolvedStallDispatch(state)) {
     return { ...escalate(state, observations, 'dev_stalled'), log_detail: `dev_stalled ${id}: previous stall retry was not confirmed` }
   }
   if (state.dev_stall_attempts >= state.dev_stall_max_attempts) {
@@ -1508,6 +1508,7 @@ export function devStallRetryMessage(id: string, brief: string): string {
 function hasUnresolvedStallDispatch(state: FlowState): boolean {
   for (let index = state.log.length - 1; index >= 0; index -= 1) {
     const entry = state.log[index]!
+    if (entry.event === 'dispatch_retry_enter') return state.dispatch_paste?.purpose === 'dev_stall_retry'
     if (entry.event === 'dispatch_unconfirmed') return entry.detail.includes('dispatch_stall_retry')
     if (/^(?:request_review|dispatch_fix|dispatch_spec|dispatch_stall_retry|dispatch_refused|dispatch_unresolved)$/.test(entry.event)) return false
   }

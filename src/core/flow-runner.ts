@@ -98,7 +98,7 @@ export interface FlowPorts {
   // Why a pane was last read as it was ('composer_not_found', 'footer_absent', …). Optional: a test that only cares about
   // the state can leave it out, and the hold then reports the state alone (block 73).
   paneDiagnosis?: (_agentId: string) => string | null
-  devNudgeReady?: (_agentId: string, _text?: string, _pasted?: { at: number } | null) => boolean
+  devNudgeReady?: (_agentId: string, _text?: string, _pasted?: { at: number } | null) => boolean | 'recorded_paste'
 }
 
 export const defaultFlowPorts: FlowPorts = {

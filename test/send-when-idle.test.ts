@@ -217,7 +217,7 @@ describe('sendWhenIdle', () => {
     const driver = new PaneDriver()
     const pastedAt = Date.now()
     driver.captures = [CODEX_OUR_TEXT, CODEX_OUR_TEXT]
-    expect(paneReadyForNudge('agent-1', 'hello', { at: pastedAt }, { driver })).toBe(true)
+    expect(paneReadyForNudge('agent-1', 'hello', { at: pastedAt }, { driver })).toBe('recorded_paste')
 
     driver.captures = [CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
     expect(sendWhenIdle('agent-1', 'hello', {

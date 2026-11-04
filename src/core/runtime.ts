@@ -777,7 +777,7 @@ export function paneReadyForNudge(
   expectedText?: string,
   pasted?: { at: number } | null,
   options: RuntimeOptions = {},
-): boolean {
+): boolean | 'recorded_paste' {
   const driver = options.driver ?? realDriver
   try {
     const agent = findAgent(agentId)
@@ -804,7 +804,7 @@ export function paneReadyForNudge(
       pastedAt: pasted.at,
       now: Date.now(),
       windowMs: DEFAULT_IDLE_SEND_TIMINGS.confirmMs,
-    })
+    }) ? 'recorded_paste' : false
   } catch {
     return false
   }
