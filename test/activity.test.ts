@@ -511,8 +511,12 @@ describe('busy is read off the status rows only (block 74)', () => {
   it('does not classify a theme or model chooser as an agent question', () => {
     const theme = ['Select theme', '❯ 1. Light', '  2. Dark', '↑/↓ to choose — Enter to submit'].join('\n')
     const model = ['Choose model', '❯ 1. Fast', '  2. Accurate', '↑/↓ to choose — Enter to submit'].join('\n')
+    const ordinaryTheme = ['Select a theme', '❯ 1. Light', '  2. Dark', '↑/↓ to choose — Enter to submit'].join('\n')
+    const ordinaryModel = ['Choose a model', '❯ 1. Fast', '  2. Accurate', '↑/↓ to choose — Enter to submit'].join('\n')
     expect(inspectPane(theme, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
     expect(inspectPane(model, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
+    expect(inspectPane(ordinaryTheme, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
+    expect(inspectPane(ordinaryModel, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
   })
 
   it('still detects a work question about which model to use', () => {
@@ -523,6 +527,11 @@ describe('busy is read off the status rows only (block 74)', () => {
   it('leaves numbered tool approval dialogs to the approvals path', () => {
     const approval = ['Run command?', '❯ 1. Allow once', '  2. Always allow', '  3. Reject', '↑/↓ to choose — Enter to submit'].join('\n')
     expect(inspectPane(approval, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
+  })
+
+  it('recognizes a work question about which command to run', () => {
+    const question = ['Should I run command A or B?', '❯ 1. Command A', '  2. Command B', '↑/↓ to choose — Enter to submit'].join('\n')
+    expect(inspectPane(question, 'hermes', { now: 10_000 })).toMatchObject({ reason: 'agent_question', question: 'Should I run command A or B?' })
   })
 
   it('does not hold a pane whose hint is exactly on the status rows of a finished turn', () => {

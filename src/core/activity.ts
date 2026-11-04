@@ -416,8 +416,8 @@ export function inspectPane(
   const tailLines = lines.slice(-12)
   const choiceStart = tailLines.findIndex(line => /❯\s*\d+[.)]/u.test(line))
   const questionContext = (choiceStart > 0 ? tailLines.slice(0, choiceStart) : tailLines.slice(0, -1)).join(' ')
-  const excludedSettingsDialog = /^\s*(?:(?:select|choose|switch|change|set|pick)\s+(?:the\s+)?(?:theme|model|appearance|color scheme|settings|preferences)|(?:theme|model|appearance|color scheme|settings|preferences)(?:\s+(?:settings|selection))?)\s*:?\s*$/im.test(questionContext)
-  const approvalDialog = /\b(?:permission required|approval required|tool call|run command|execute command|allow this tool)\b/i.test(questionContext)
+  const excludedSettingsDialog = /^\s*(?:(?:select|choose|switch|change|set|pick)\s+(?:(?:a|the)\s+)?(?:theme|model|appearance|color scheme|settings|preferences)|(?:theme|model|appearance|color scheme|settings|preferences)(?:\s+(?:settings|selection))?)\s*:?\s*$/im.test(questionContext)
+  const approvalDialog = /\b(?:permission required|approval required|tool call|allow this tool|confirm execution)\b/i.test(questionContext)
     || (/\b(?:command|tool|permission|approval)\b/i.test(tail)
       && /\b(?:allow once|always allow|deny|reject)\b/i.test(tail))
   if (!excludedSettingsDialog && !approvalDialog
