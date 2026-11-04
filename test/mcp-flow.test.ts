@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createFlowState } from '../src/core/flow.js'
+import type { FlowDecision, FlowObservations } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
+import { listFlowIncidents, reconcileFlowIncidents } from '../src/core/flow-incidents.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 import { shortHomePath } from '../src/utils/paths.js'
 
@@ -101,6 +103,37 @@ describe('flow_status', () => {
     expect(result.isError).toBe(true)
     expect(payload(result).error).not.toContain('Unknown tool')
     expect(payload(result).error).toContain('run id is required')
+  })
+})
+
+describe('flow_incidents', () => {
+  it('lists, claims, acknowledges, and resolves an incident through MCP', async () => {
+    const flow = seedFlow()
+    const now = Date.parse('2026-11-04T12:00:00.000Z')
+    const observations: FlowObservations = {
+      now, head: flow.claim.head, tree_clean: true, dev_pane: 'idle', review_pane: 'idle', verdict: null, verdict_count: 0,
+    }
+    const decision = { kind: 'none', reason: 'future_hold', next_state: 'idle', next_rounds: 0,
+      next_claim: flow.claim, next_review_started_at: null } as unknown as FlowDecision
+    reconcileFlowIncidents(flow, observations, decision, { root: registry, now })
+    const incident = listFlowIncidents('run-flow-1', { root: registry })[0]!
+
+    const listed = payload(await call('flow_incidents', { run_id: 'run-flow-1', action: 'list' }))
+    expect(listed.incidents[0]).toMatchObject({ id: incident.id, owner: 'orchestrator', age_ms: expect.any(Number) })
+    expect(payload(await call('flow_incidents', { run_id: 'run-flow-1', action: 'claim', incident_id: incident.id })).owner).toBe('orchestrator')
+    expect(payload(await call('flow_incidents', { run_id: 'run-flow-1', action: 'ack', incident_id: incident.id })).status).toBe('acked')
+    expect(payload(await call('flow_incidents', { run_id: 'run-flow-1', action: 'resolve', incident_id: incident.id, note: 'condition cleared' })).status).toBe('resolved')
+  })
+
+  it('requires a note when resolving', async () => {
+    const flow = seedFlow()
+    const decision = { kind: 'none', reason: 'future_hold', next_state: 'idle', next_rounds: 0,
+      next_claim: flow.claim, next_review_started_at: null } as unknown as FlowDecision
+    reconcileFlowIncidents(flow, { now: Date.now(), head: flow.claim.head, tree_clean: true, dev_pane: 'idle', review_pane: 'idle', verdict: null, verdict_count: 0 }, decision, { root: registry })
+    const incident = listFlowIncidents('run-flow-1', { root: registry })[0]!
+    const result = await call('flow_incidents', { run_id: 'run-flow-1', action: 'resolve', incident_id: incident.id })
+    expect(result.isError).toBe(true)
+    expect(payload(result).error).toContain('requires a note')
   })
 })
 

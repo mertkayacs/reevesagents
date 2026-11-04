@@ -59,6 +59,7 @@ import type { SendOutcome } from './runtime.js'
 import { VERDICT_SCAN_LINES, scanVerdict } from './verdict.js'
 import type { FlowVerdict } from './verdict.js'
 import stripAnsi from 'strip-ansi'
+import { reconcileFlowIncidents } from './flow-incidents.js'
 
 // Everything the engine must not know about. Injected so a test can describe a pane, a commit and
 // a reviewer without tmux, git or a nine-second paste settle.
@@ -1117,11 +1118,18 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
       publishRoundNotes(before, observations, phase.decision, options)
       pruneClosedNotes(phase.settled.state, options)
     }
+    const settledState = phase.settled?.state ?? phase.state
+    const incidentState = reconcileFlowIncidents(
+      settledState,
+      isParked(before) ? undefined : observations,
+      isParked(before) ? undefined : phase.decision,
+      { root: options.root, now, at },
+    )
     return {
       observations,
       decision: phase.decision,
       status: phase.settled?.status ?? (phase.settled ? 'applied' : 'skipped'),
-      state: phase.settled?.state ?? phase.state,
+      state: incidentState,
       path: phase.settled?.path,
     }
   }
@@ -1281,12 +1289,13 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
   emitPlanAttention(before, observations, phase.decision)
   if (done.status === 'applied') publishRoundNotes(before, observations, phase.decision, options)
   pruneClosedNotes(done.state, options)
+  const incidentState = reconcileFlowIncidents(done.state, observations, phase.decision, { root: options.root, now, at })
   return {
     observations,
     decision: phase.decision,
     status: done.status,
     send: done.send,
-    state: done.state,
+    state: incidentState,
     path: done.path,
   }
 }

@@ -59,6 +59,7 @@ export const ar = {
     'flow.attention.plan_waiting': 'الخطة: في انتظار موجز',
     'flow.attention.dispatch_unconfirmed': 'الإرسال غير مؤكد',
     'flow.attention.dev_stalled': 'توقف المطور عند بند في الخطة',
+    'flow.attention.incident': 'حوادث التدفق',
     'flow.badge.rounds': 'التدفق: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'التدفق: {{status}}',
   'flow.badge.plan_progress': 'التدفق: خطة {{done}}/{{total}}',

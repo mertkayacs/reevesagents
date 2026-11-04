@@ -3,13 +3,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentRecord, RunRecord } from '../src/core/types.js'
-import type { FlowState } from '../src/core/flow.js'
+import type { FlowDecision, FlowObservations, FlowState } from '../src/core/flow.js'
 import { createFlowState } from '../src/core/flow.js'
 import type { BlockSpec } from '../src/core/spec.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { createPlan, savePlan } from '../src/core/plan.js'
 import { publishNotes } from '../src/core/flow-notes.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
+import { listFlowIncidents, reconcileFlowIncidents } from '../src/core/flow-incidents.js'
 
 // `flow start`, `flow status` and `flow tick` driven through the real commander program with a temp
 // registry. The tmux/git side is one mocked execFileSync, so no pane and no repository is touched.
@@ -310,6 +311,32 @@ describe('flow start', () => {
 })
 
 describe('flow status', () => {
+  it('shows incident owner and age and supports list, claim, ACK, and noted resolve', async () => {
+    const { state } = seedFlow()
+    const now = Date.parse('2026-11-04T12:00:00.000Z')
+    const observations: FlowObservations = {
+      now, head: state.claim.head, tree_clean: false, dev_pane: 'idle', review_pane: 'idle', verdict: null, verdict_count: 0,
+    }
+    const agedState = { ...state, stalled_since: now - 11_000, dev_timeout_sec: 10 }
+    saveFlow(agedState, { root: tmpDir })
+    const decision = { kind: 'none', reason: 'tree_dirty', next_state: 'idle', next_rounds: 0,
+      next_claim: state.claim, next_review_started_at: null } as FlowDecision
+    reconcileFlowIncidents(agedState, observations, decision, { root: tmpDir, now, at: new Date(now).toISOString() })
+    const incident = listFlowIncidents('run-c1', { root: tmpDir })[0]!
+
+    const { out: status } = await runCli(['flow', 'status', '--run', 'run-c1'])
+    expect(status).toContain(`incident  ${incident.id.slice(0, 8)} warn dev_stalled`)
+    const payload = JSON.parse((await runCli(['flow', 'status', '--run', 'run-c1', '--json'])).out)
+    expect(payload.incidents[0]).toMatchObject({ id: incident.id, owner: 'orchestrator', status: 'open', age_ms: expect.any(Number) })
+
+    expect((await runCli(['flow', 'incidents', 'list', '--run', 'run-c1'])).out).toContain(incident.id)
+    expect((await runCli(['flow', 'incidents', 'claim', '--run', 'run-c1', '--incident', incident.id.slice(0, 8)])).out).toContain('claimed')
+    expect((await runCli(['flow', 'incidents', 'ack', '--run', 'run-c1', '--incident', incident.id])).out).toContain('remains open')
+    expect(listFlowIncidents('run-c1', { root: tmpDir })[0]?.status).toBe('acked')
+    expect((await runCli(['flow', 'incidents', 'resolve', '--run', 'run-c1', '--incident', incident.id, '--note', 'observed and cleared'])).out).toContain('observed and cleared')
+    expect(listFlowIncidents('run-c1', { root: tmpDir, open_only: true })).toHaveLength(0)
+  })
+
   it('reports a damaged flow file without an absolute registry path', async () => {
     // The surface prints whatever the store raises, so the store is where the path has to be
     // rendered safely — this is the end-to-end half of that rule.

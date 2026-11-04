@@ -51,6 +51,7 @@ import { queueSpecFile } from '../../core/flow-queue.js'
 import { startFlow } from '../../core/flow-start.js'
 import { addFlowSpecs, dropFlowSpec, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
 import { stepFlow } from '../../core/flow-runner.js'
+import { ackFlowIncident, claimFlowIncident, flowIncidentAgeMs, listFlowIncidents, resolveFlowIncident } from '../../core/flow-incidents.js'
 import {
   createPlan, ensurePlanSummary, importInto, mutatePlan, planExists, planItemView, planPath, readPlan,
   resolveRepositoryPath,
@@ -727,6 +728,34 @@ const TOOLS: ToolDef[] = [
     handler: (a) => {
       const runId = resolveFlowRunId(asString(a.run_id))
       return ok(flowStatusPayload(readFlow(runId), flowPath(runId)))
+    },
+  },
+  {
+    name: 'flow_incidents',
+    description: 'List and route durable flow incidents. `claim` assigns responsibility to the orchestrator, `ack` records that the orchestrator has taken responsibility without resolving the incident, and `resolve` requires a note. No action sends text or keys to an agent pane.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix.' },
+        action: { type: 'string', enum: ['list', 'claim', 'ack', 'resolve'] },
+        incident_id: { type: 'string', description: 'Incident id or unique prefix for claim, ack, or resolve.' },
+        note: { type: 'string', description: 'Required explanation when resolving an incident.' },
+      },
+      required: ['run_id', 'action'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const action = asString(a.action)
+      if (action === 'list') {
+        const now = Date.now()
+        return ok({ run_id: runId, incidents: listFlowIncidents(runId, { open_only: true, now }).map(row => ({ ...row, age_ms: flowIncidentAgeMs(row, now) })) })
+      }
+      const incidentId = asString(a.incident_id)
+      if (!incidentId) throw new Error(`${action} needs an incident_id`)
+      if (action === 'claim') return ok(claimFlowIncident(runId, incidentId))
+      if (action === 'ack') return ok(ackFlowIncident(runId, incidentId))
+      if (action === 'resolve') return ok(resolveFlowIncident(runId, incidentId, asString(a.note)))
+      throw new Error(`unknown incident action ${JSON.stringify(action)}; expected list, claim, ack or resolve`)
     },
   },
   {

@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { archiveAndRemoveRun, writeRun, writeAgent } from '../../src/core/runs.js'
 import { createFlowState } from '../../src/core/flow.js'
 import { saveFlow } from '../../src/core/flow-store.js'
+import { reconcileFlowIncidents } from '../../src/core/flow-incidents.js'
+import type { FlowDecision, FlowObservations } from '../../src/core/flow.js'
 import { buildWebState, listWebProviders } from '../../src/surfaces/webui/state.js'
 import { PROVIDERS } from '../../src/core/providers.js'
 import { providerColor, providerDisplayName } from '../../src/utils/display.js'
@@ -180,6 +182,23 @@ describe('web flow badge', () => {
     }
     saveFlow(flow, { root: tmpDir })
   }
+
+  it('exposes open incidents with age and owner and summarizes them in the badge', () => {
+    writeRun(makeRun('r1'))
+    writeAgent(makeAgent('planner', 'r1', { role: 'root' }))
+    seedFlow()
+    const flow = createFlowState({ run_id: 'r1', repo: '/tmp/work', roles: { dev: 'dev-1', review: 'rev-1' }, head: 'abc1234', at: '2026-01-01T00:00:00.000Z' })
+    const now = Date.parse('2026-01-01T00:00:10.000Z')
+    const observations: FlowObservations = { now, head: 'abc1234', tree_clean: true, dev_pane: 'idle', review_pane: 'idle', verdict: null, verdict_count: 0 }
+    const decision = { kind: 'none', reason: 'future_hold', next_state: 'idle', next_rounds: 0,
+      next_claim: flow.claim, next_review_started_at: null } as unknown as FlowDecision
+    reconcileFlowIncidents(flow, observations, decision, { root: tmpDir, now })
+
+    const run = buildWebState({ liveTmuxTarget: () => true, language: 'en', now }).runs[0]!
+    expect(run.incidents).toMatchObject([{ kind: 'unknown_hold', owner: 'orchestrator', status: 'open', age_ms: 0 }])
+    expect(run.flow?.attention).toBe('incident')
+    expect(run.flow?.attention_label).toBe('flow incidents: 1 open, 0 blockers · orchestrator')
+  })
 
   it('renders the same label the TUI shows, from the shared helper', () => {
     writeRun(makeRun('r1'))

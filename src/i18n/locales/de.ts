@@ -54,6 +54,7 @@ export const de = {
     'flow.attention.plan_waiting': 'Plan: wartet auf ein Briefing',
     'flow.attention.dispatch_unconfirmed': 'Versand nicht bestätigt',
     'flow.attention.dev_stalled': 'Entwickler bei Planpunkt festgefahren',
+    'flow.attention.incident': 'Flow-Vorfälle',
     'flow.badge.rounds': 'Flow: {{status}} ({{rounds}}/{{max}})',
     'flow.badge.status': 'Flow: {{status}}',
   'flow.badge.plan_progress': 'Flow: Plan {{done}}/{{total}}',

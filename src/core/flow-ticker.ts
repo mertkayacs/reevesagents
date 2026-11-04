@@ -19,6 +19,7 @@ import type { FlowPorts, FlowStepResult } from './flow-runner.js'
 import { stepFlow } from './flow-runner.js'
 import type { FlowStatus } from './flow.js'
 import { writeTickStatus } from './tick-status.js'
+import { reconcileFlowIncidents } from './flow-incidents.js'
 
 // The states a tick may touch. `idle`, `fixing` and `reviewing` are the moving ones; everything else is either a
 // human decision (`paused`, `orphaned`, `escalated`) or the end (`done`).
@@ -57,6 +58,17 @@ export function tickAllFlows(options: TickAllOptions = {}): TickAllResult {
       continue
     }
     if (!TICKABLE.includes(state.state)) {
+      if (options.dryRun !== true) {
+        try {
+          reconcileFlowIncidents(state, undefined, undefined, {
+            root: options.root,
+            ...(options.now === undefined ? {} : { now: options.now }),
+            ...(options.at === undefined ? {} : { at: options.at }),
+          })
+        } catch {
+          // An incident delivery failure must not make a parked flow advance or block the rest of the sweep.
+        }
+      }
       result.skipped.push({ run_id: file.run_id, why: state.state })
       continue
     }

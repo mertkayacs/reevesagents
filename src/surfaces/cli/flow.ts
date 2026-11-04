@@ -25,6 +25,9 @@ import { redactSecrets } from '../../core/redact.js'
 import { shortHomePath } from '../../utils/paths.js'
 import { finalizePlanCommands, registerPlanCommands } from './plan.js'
 import { requireDestructiveConfirmation } from './helpers.js'
+import {
+  ackFlowIncident, claimFlowIncident, flowIncidentAgeMs, listFlowIncidents, resolveFlowIncident,
+} from '../../core/flow-incidents.js'
 
 // Two budgets, two counters, never mixed: the flow's spent rounds go against its own fuse (`max_total_rounds`), and the item the
 // round belongs to reports its own rounds against the per-item budget. Printing one against the other is what put `round 7/6` in
@@ -131,6 +134,9 @@ function printStatus(state: FlowState, path: string): void {
   if (state.hold) console.log(`hold      ${state.hold.reason} since ${state.hold.since}`)
   const waiting = planWaitingLine(state)
   if (waiting) console.log(`waiting   ${waiting}`)
+  for (const incident of listFlowIncidents(state.run_id, { open_only: true })) {
+    console.log(`incident  ${incident.id.slice(0, 8)} ${incident.severity} ${incident.kind}${incident.spec_id ? ` ${incident.spec_id}` : ''} · ${incident.owner} · ${formatIncidentAge(flowIncidentAgeMs(incident))}`)
+  }
   // Who drives this flow, from the driver's own receipt. The panel used to advance flows on its own and this line
   // described a setting instead; the driver is the external ticker now, and a line that named a setting lied to the
   // operator for as long as the timer kept running (block 68).
@@ -165,6 +171,49 @@ function printStatus(state: FlowState, path: string): void {
   console.log(`updated   ${state.updated_at}`)
   console.log(`last      ${last ? `${last.event} ${redactSecrets(last.detail)}` : '(no events)'}`)
   console.log(`file      ${shortHomePath(path)}`)
+}
+
+function formatIncidentAge(ageMs: number): string {
+  const seconds = Math.floor(ageMs / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
+function printIncidents(runId: string): void {
+  const rows = listFlowIncidents(runId, { open_only: true })
+  if (rows.length === 0) {
+    console.log(`no open incidents for ${runId}`)
+    return
+  }
+  for (const row of rows) {
+    console.log(`${row.id}  ${row.severity}  ${row.kind}${row.spec_id ? `  ${row.spec_id}` : ''}  owner=${row.owner}  status=${row.status}  age=${formatIncidentAge(flowIncidentAgeMs(row))}  count=${row.count}`)
+    if (row.evidence.reason) console.log(`  evidence ${redactSecrets(row.evidence.reason)}`)
+    if (row.note) console.log(`  note ${redactSecrets(row.note)}`)
+  }
+}
+
+function registerFlowIncidentCommands(flow: Command): void {
+  const incidents = flow.command('incidents').description('list and route durable flow incidents')
+  incidents.command('list').requiredOption('--run <id>', 'flow run id or unique prefix').action((options: { run: string }) => {
+    printIncidents(resolveFlowRunId(options.run))
+  })
+  incidents.command('claim').requiredOption('--run <id>', 'flow run id or unique prefix').requiredOption('--incident <id>', 'incident id or unique prefix').action((options: { run: string, incident: string }) => {
+    const runId = resolveFlowRunId(options.run)
+    const row = claimFlowIncident(runId, options.incident)
+    console.log(`claimed ${row.id} for orchestrator`)
+  })
+  incidents.command('ack').requiredOption('--run <id>', 'flow run id or unique prefix').requiredOption('--incident <id>', 'incident id or unique prefix').action((options: { run: string, incident: string }) => {
+    const runId = resolveFlowRunId(options.run)
+    const row = ackFlowIncident(runId, options.incident)
+    console.log(`acknowledged ${row.id}; it remains open until resolved`)
+  })
+  incidents.command('resolve').requiredOption('--run <id>', 'flow run id or unique prefix').requiredOption('--incident <id>', 'incident id or unique prefix').requiredOption('--note <text>', 'why the incident is resolved').action((options: { run: string, incident: string, note: string }) => {
+    const runId = resolveFlowRunId(options.run)
+    const row = resolveFlowIncident(runId, options.incident, options.note)
+    console.log(`resolved ${row.id}: ${row.note ?? ''}`)
+  })
 }
 
 function printTick(result: FlowStepResult, dryRun: boolean): void {
@@ -243,6 +292,7 @@ export function registerFlow(program: Command): void {
     .description('dev -> review -> fix pipeline for a run (start, status, tick)')
 
   registerPlanCommands(flow)
+  registerFlowIncidentCommands(flow)
 
   flow
     .command('start')

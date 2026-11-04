@@ -16,6 +16,8 @@ import { providerColor, providerDisplayName } from '../../utils/display.js'
 import { listRunApprovals, type ApprovalRisk } from '../../core/approvals.js'
 import type { FlowAttention, FlowBadge } from '../../core/flow-view.js'
 import { readFlowBadge } from '../../core/flow-view.js'
+import { flowIncidentAgeMs, listFlowIncidents } from '../../core/flow-incidents.js'
+import type { FlowIncident } from '../../core/flow-incidents.js'
 import { flowAttentionText, flowBadgeView, type FlowTranslate } from '../../core/flow-label.js'
 import { loadConfig } from '../../core/config.js'
 import { translate } from '../../i18n/catalog.js'
@@ -80,6 +82,7 @@ export interface WebRun {
   terminals: WebTerminal[]
   // Derived from the flow file on every snapshot, never stored on the run record.
   flow: WebRunFlow | null
+  incidents: Array<Pick<FlowIncident, 'id' | 'spec_id' | 'kind' | 'severity' | 'owner' | 'status' | 'first_seen' | 'last_seen' | 'count' | 'note'> & { age_ms: number }>
 }
 
 export interface WebRunHistory {
@@ -175,6 +178,19 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
     // Read once per run per snapshot: the flow file is small and this is the only place the web
     // view learns about it.
     const flow = readFlowBadge(run.id, now)
+    const incidents = listFlowIncidents(run.id, { open_only: true, now }).map(row => ({
+      id: row.id,
+      spec_id: row.spec_id,
+      kind: row.kind,
+      severity: row.severity,
+      owner: row.owner,
+      status: row.status,
+      first_seen: row.first_seen,
+      last_seen: row.last_seen,
+      count: row.count,
+      note: row.note,
+      age_ms: flowIncidentAgeMs(row, now),
+    }))
     const terminals = listAgents(run.id).map<WebTerminal>(agent => {
       agentIndex.set(agent.id, { nickname: agent.nickname, provider: agent.provider })
       const status = agent.ended_at ? 'ended' : agent.task_status
@@ -216,6 +232,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       canDelete: run.status === 'ended' || run.ended_at !== null,
       terminals,
       flow: flow ? webFlow(flow, t, { now, pulseMs: options.agent_pulse_ms }) : null,
+      incidents,
     }
   })
   const history = listRunHistory().map<WebRunHistory>(record => ({

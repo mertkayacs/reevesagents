@@ -15,6 +15,8 @@ import { redactSecrets } from './redact.js'
 import { tickStateText } from './tick-status.js'
 import type { TickStatus } from './tick-status.js'
 import { shortHomePath } from '../utils/paths.js'
+import { flowIncidentAgeMs, listFlowIncidents } from './flow-incidents.js'
+import type { FlowIncident } from './flow-incidents.js'
 
 // Run ids are what a flow is keyed by, and a flow of an archived run must still resolve, so this
 // reads the flow directory rather than the live run registry. An exact id wins; a unique prefix is
@@ -56,6 +58,7 @@ export interface FlowStatusPayload {
   // is moving or waiting on a dispatch, which `pending` already describes.
   hold: { reason: string, since: string, detail?: string } | null
   agent_question: { agent: string, item: string | null, text: string, since: number } | null
+  incidents: Array<Pick<FlowIncident, 'id' | 'spec_id' | 'kind' | 'severity' | 'owner' | 'status' | 'first_seen' | 'last_seen' | 'count' | 'note'> & { age_ms: number, evidence: FlowIncident['evidence'] }>
   // What the last review could prove: the numbers the evidence rule looked at. Never the notes text.
   last_evidence: { elapsed_ms: number, notes_findings: number, notes_bytes: number, pane_tool_lines: number } | null
   // The newest round's notes, as a reference and counters — never the text (§11.3 of the notification
@@ -182,6 +185,20 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
       text: redactSecrets(state.agent_question.text),
       since: state.agent_question.since,
     } : null,
+    incidents: listFlowIncidents(state.run_id, { open_only: true }).map(row => ({
+      id: row.id,
+      spec_id: row.spec_id,
+      kind: row.kind,
+      severity: row.severity,
+      owner: row.owner,
+      status: row.status,
+      first_seen: row.first_seen,
+      last_seen: row.last_seen,
+      count: row.count,
+      note: row.note,
+      evidence: row.evidence,
+      age_ms: flowIncidentAgeMs(row),
+    })),
     // The last decision that saw a verdict carries the numbers the evidence rule used; a state written
     // before this field existed simply has none.
     last_evidence: (() => {
@@ -223,7 +240,7 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
 // The badge a run row shows. Derived on every read from the flow document, never stored in a run
 // record: a heuristic written into a lifecycle field outlives the reason that produced it, and the
 // next reader cannot tell "escalated" from "was escalated an hour ago".
-export type FlowAttention = 'escalated' | 'review_timeout' | 'dev_stalled' | 'dispatch_unconfirmed' | 'plan_waiting'
+export type FlowAttention = 'escalated' | 'review_timeout' | 'dev_stalled' | 'dispatch_unconfirmed' | 'plan_waiting' | 'incident'
 
 // What the plan is waiting for, when it is waiting for a human. Supplied by the caller that read `plan.json`:
 // the badge is a view, and the plan is a separate file (`docs/plan-model-design.md` §2.2).
@@ -245,6 +262,7 @@ export interface FlowBadge {
   // How far the plan got, when the flow has one. The badge needs the numbers, not just "done": a finished plan and a
   // flow that never had one both end in `done`, and the label has to tell them apart.
   plan_progress: { done: number, total: number } | null
+  incident_summary: { open: number, blockers: number, owner: 'orchestrator' | 'human' } | null
   // Why a closed flow closed, so `closed` can be shown without pretending a plan finished.
   close_reason: string | null
   // When the flow file last changed: the "is this news?" input for a pulse that is not meant to last for ever.
@@ -258,6 +276,7 @@ export function flowBadge(
   now: number = Date.now(),
   plan: PlanAttention | null = null,
   planProgress: { done: number, total: number } | null = null,
+  incidentSummary: FlowBadge['incident_summary'] = null,
 ): FlowBadge {
   const overdue = state.state === 'reviewing'
     && state.review_started_at !== null
@@ -277,14 +296,16 @@ export function flowBadge(
   const planAttention = escalation === null && stalled === null && devStalled === null && plan !== null && (state.state === 'idle' || state.state === 'reviewing' || state.state === 'fixing')
     ? 'plan_waiting' as const
     : null
+  const incidentAttention = incidentSummary && incidentSummary.open > 0 ? 'incident' as const : null
   return {
     status: state.state,
     rounds: state.rounds,
     max_rounds: state.max_rounds,
     review_overdue: overdue,
-    attention: escalation ?? stalled ?? devStalled ?? planAttention,
-    plan: planAttention === null ? null : plan,
+    attention: incidentAttention ?? escalation ?? stalled ?? devStalled ?? planAttention,
+    plan: incidentAttention !== null ? null : planAttention === null ? null : plan,
     plan_progress: planProgress,
+    incident_summary: incidentSummary,
     close_reason: state.close_reason ?? null,
     updated_at: Date.parse(state.updated_at) || 0,
   }
@@ -364,7 +385,13 @@ export function flowSectionLines(state: FlowState, options: FlowSectionOptions =
 // skips a damaged file instead of breaking the board, while `flow status` still reports it (§3.3).
 export function readFlowBadge(runId: string, now: number = Date.now(), root?: string): FlowBadge | null {
   try {
-    return flowBadge(readFlow(runId, { root }), now, planAttentionOf(runId, root), planProgressOf(runId, root))
+    const incidents = listFlowIncidents(runId, { root, open_only: true })
+    const incidentSummary = incidents.length > 0 ? {
+      open: incidents.length,
+      blockers: incidents.filter(row => row.severity === 'blocker').length,
+      owner: incidents.some(row => row.owner === 'human') ? 'human' as const : 'orchestrator' as const,
+    } : null
+    return flowBadge(readFlow(runId, { root }), now, planAttentionOf(runId, root), planProgressOf(runId, root), incidentSummary)
   } catch {
     return null
   }
