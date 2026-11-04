@@ -101,6 +101,7 @@ export const FLOW_LOG_LIMIT = 50
 // re-send is the one answer that is certainly wrong.
 export const PENDING_TTL_SEC = 120
 export const AGENT_QUESTION_TIMEOUT_MS = 20 * 60 * 1000
+export const PLAN_IN_FLIGHT_STALE_TIMEOUT_MS = 15 * 60 * 1000
 
 export interface FlowClaim {
   // The commit the current review or fix is about. A verdict is only applied to this head.
@@ -469,6 +470,8 @@ export type FlowReason =
   | 'dispatch_unresolved'
   | 'dispatch_released_unlanded'
   | 'settled_by_observation'
+  | 'plan_item_requeued'
+  | 'plan_item_stale_in_flight'
   | 'review_unsubstantiated'
   // The notes file of the round could not be read, and the reviewer was asked once to rewrite it (block 83).
   | 'review_notes_invalid'
@@ -1338,10 +1341,17 @@ function planAcceptDecision(
   // D11). A decision that dispatches the next item names it; anything else leaves nothing in flight.
   const close = (decision: FlowDecision): FlowDecision => {
     const doubleClose = planItemDoubleClose(state, observations)
-    if (doubleClose) return doubleClose
+    if (doubleClose) {
+      return observations.verdict_source === 'file' && observations.notes_ref
+        ? { ...doubleClose, next_answered_round: observations.notes_ref }
+        : doubleClose
+    }
     return {
       ...withPlanClose(state, observations, decision),
       next_active_plan_item: decision.next_active_plan_item ?? null,
+      ...(observations.verdict_source === 'file' && observations.notes_ref
+        ? { next_answered_round: observations.notes_ref }
+        : {}),
     }
   }
 
@@ -1719,6 +1729,71 @@ function settleByObservation(state: FlowState, observations: FlowObservations): 
   return { ...decision, log_event: 'settled_by_observation' }
 }
 
+// A mirror row is in flight only when the persisted flow claim identifies it. Old plan files could
+// retain `reviewing` after the corresponding item had already been accepted and another item became
+// active; that row must be reconciled instead of blocking the picker forever.
+function stalePlanFlightDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
+  const plan = observations.plan
+  if (!plan) return null
+  const stale = plan.items.find(item => {
+    if (item.status !== 'reviewing') return false
+    if (state.claim.spec_id === item.id) return false
+    return !(state.claim.spec_id === null && state.state === 'reviewing'
+      && state.claim.head !== '')
+  })
+  if (!stale) return null
+
+  const checked = (observations.plan_conflicts ?? []).some(conflict =>
+    conflict.kind === 'ticked_by_hand' && conflict.item_id === stale.id)
+  const consumedBoundItem = plan.items.find(item => item.id === (state.claim.spec_id ?? state.active_plan_item))
+  const answerAlreadyApplied = consumedBoundItem?.status === 'done'
+    && observations.notes_head === state.claim.head
+  const answeredRound = answerAlreadyApplied && observations.verdict_source === 'file'
+    && observations.notes_head === state.claim.head && observations.notes_ref
+    ? observations.notes_ref
+    : undefined
+
+  const base: FlowDecision = {
+    kind: 'none',
+    reason: 'plan_item_requeued',
+    next_state: state.state,
+    next_rounds: state.rounds,
+    next_review_started_at: state.review_started_at,
+    next_claim: state.claim,
+    log_event: 'plan_item_stale_recovered',
+    ...(answeredRound ? {
+      next_answered_round: answeredRound,
+      next_claim_verdict_applied: true,
+      next_verdict_handled_for: state.claim.head,
+    } : {}),
+  }
+
+  if (checked) {
+    if (stale.head !== null || !observations.head || !observations.tree_clean) {
+      const holdSince = state.hold?.reason === 'plan_in_flight' ? Date.parse(state.hold.since) : observations.now
+      const detail = `plan_item_stale_in_flight: ${stale.id} is reviewing but nothing is in flight`
+      if (!Number.isFinite(holdSince) || observations.now - holdSince < PLAN_IN_FLIGHT_STALE_TIMEOUT_MS) {
+        return { ...hold(state, 'plan_in_flight', detail), ...(answeredRound ? { next_answered_round: answeredRound } : {}) }
+      }
+      return { ...escalate(state, observations, 'plan_item_stale_in_flight'), log_detail: detail,
+        ...(answeredRound ? { next_answered_round: answeredRound } : {}) }
+    }
+    return {
+      ...base,
+      log_detail: `${stale.id} stale reviewing row closed from the checked plan document at ${observations.head}`,
+      next_plan_close: { id: stale.id, head: observations.head, rounds: stale.rounds, notes_ref: stale.notes_ref },
+      next_active_plan_item: state.active_plan_item === stale.id ? null : state.active_plan_item,
+    }
+  }
+
+  return {
+    ...base,
+    log_detail: `${stale.id} stale reviewing row returned to queued; no live claim owns it`,
+    next_plan_status: { id: stale.id, status: 'queued' },
+    next_active_plan_item: state.active_plan_item === stale.id ? null : state.active_plan_item,
+  }
+}
+
 // Take a documentation-only commit as the new baseline: nothing is reviewed, nothing is dispatched, the round counter does
 // not move. The journal says so once, because "the flow moved its baseline" is a fact an operator wants to see; what does
 // not happen is a review request or a fix.
@@ -1985,7 +2060,9 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
   // already acted on is not fresh again. The comparison is against the *file's own* reference, not the round this tick
   // would compute: the reader looks for any round of the head, so a counter that moved (a phantom fix, a manual retry)
   // must not make a consumed answer look fresh (block 69).
-  const fileAnswered = fromFile && observations.notes_ref !== undefined && state.answered_round === observations.notes_ref
+  const fileAnswered = (fromFile && observations.notes_ref !== undefined && state.answered_round === observations.notes_ref)
+    || (fromFile && state.claim.verdict_applied && state.verdict_handled_for === state.claim.head
+      && observations.notes_head === state.claim.head)
   const fresh = observations.verdict !== null && !fileAnswered
     && (fromFile || observations.verdict_count > state.claim.verdict_count)
   if (!fresh) {
@@ -2377,6 +2454,8 @@ export function flowTick(state: FlowState, observations: FlowObservations): Flow
     // paste landed. Re-sending blind is how one prompt becomes two, so a human decides.
     return escalate(state, observations, 'dispatch_unresolved')
   }
+  const stalePlanFlight = stalePlanFlightDecision(state, observations)
+  if (stalePlanFlight) return stalePlanFlight
   // A notes file for a round answers that round, whatever the state and wherever `claim.head` points: this is the first thing
   // a tick settles, before the state machine gets a chance to ask again (block 41).
   const fromNotes = settleFromNotes(state, observations)
@@ -2408,6 +2487,7 @@ export function decisionChangesState(state: FlowState, decision: FlowDecision): 
   if (decision.next_dev_stall_attempts !== undefined && state.dev_stall_attempts !== decision.next_dev_stall_attempts) return true
   if (decision.next_stalled_since !== undefined && state.stalled_since !== decision.next_stalled_since) return true
   if (decision.next_plan_status !== undefined) return true
+  if (decision.next_plan_close !== undefined) return true
   // A hold that clears a stale `active_plan_item` must reach the disk; otherwise the field survives and blocks the plan for
   // ever, which is the defect the clear exists for. `undefined` means "the decision does not touch the field", `null` means
   // "cleared" — `??` conflated them and hid every clear (block 38, MAJOR 2).

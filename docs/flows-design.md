@@ -969,6 +969,14 @@ a duplicate path with its own failure modes (a brief whose id differs from the i
 outranked the plan). The claim protocol is the only sender, and the command says so — `ready for dispatch`, plus a line
 stating that nothing was sent. `--dry-run` is accepted and changes nothing.
 
+An `in_work` or `reviewing` plan row is not sufficient proof of a live round: it must match `claim.spec_id` (or a
+legacy flow still in `reviewing` with a non-null claim head and no `spec_id`). A stale reviewing row with no claim is
+returned to `queued`; if its head is null and the imported document has a `ticked_by_hand` checkbox conflict, it is
+closed through the normal ACCEPT plan mutation using the observed HEAD. A contradictory checked row with a non-null
+head gets a detailed `plan_in_flight` hold and escalates as `plan_item_stale_in_flight` after 15 minutes. ACCEPT notes
+references are consumed even when the accepted item waits behind a valid in-flight row, so the same file cannot re-run
+the close on every tick.
+
 ## 4. How it meets the surfaces
 
 ### 4.1 CLI (`src/surfaces/cli/flow.ts`, registered in `index.ts:41`–`:71` so `--help` order stays intentional)

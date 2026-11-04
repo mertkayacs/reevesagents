@@ -16,6 +16,7 @@ import { flowBadge } from '../src/core/flow-view.js'
 import { flowBadgeView } from '../src/core/flow-label.js'
 import { translate } from '../src/i18n/catalog.js'
 import type { BlockSpec } from '../src/core/spec.js'
+import { attachSpec, closeItemOnAccept, createPlan, moveItemByEngine, readPlan, savePlan } from '../src/core/plan.js'
 
 // The effect layer: observation reads, and the claim -> act -> settle dispatch. Nothing here sends
 // into a pane the gate did not confirm, an ambiguous paste is never repeated, and a claim left on
@@ -491,6 +492,48 @@ describe('stepFlow', () => {
     expect(result.decision.reason).toBe('dispatch_released_unlanded')
     expect(result.state.pending).toBeNull()
     expect(ports.send).not.toHaveBeenCalled()
+  })
+
+  it('repairs a headless checked reviewing row once and does not replay the consumed ACCEPT file', () => {
+    const text = '- [ ] **T4.3.2** — stale task\n- [ ] **T4.3.3** — accepted task'
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text, now: NOW, at: AT }).plan
+    const brief = (id: string) => JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] })
+    for (const id of ['T4.3.2', 'T4.3.3']) {
+      plan = attachSpec(plan, {
+        id, text: brief(id), format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    plan = moveItemByEngine(plan, { id: 'T4.3.2', status: 'in_work', now: NOW })
+    plan = moveItemByEngine(plan, { id: 'T4.3.2', status: 'reviewing', now: NOW })
+    plan = moveItemByEngine(plan, { id: 'T4.3.3', status: 'in_work', now: NOW })
+    plan = moveItemByEngine(plan, { id: 'T4.3.3', status: 'reviewing', now: NOW })
+    plan = closeItemOnAccept(plan, { id: 'T4.3.3', head: 'bbb222', rounds: 1, notes_ref: null, now: NOW, at: AT })
+    plan = {
+      ...plan,
+      conflicts: [...plan.conflicts, {
+        kind: 'ticked_by_hand', item_id: 'T4.3.2', detail: 'document checkbox is checked', at: AT,
+      }],
+    }
+    savePlan(plan)
+    seed(makeState({
+      state: 'reviewing', review_started_at: NOW, active_plan_item: 'T4.3.3',
+      claim: { head: 'bbb222', verdict: null, verdict_count: 5, verdict_applied: true, spec_id: 'T4.3.3' },
+    }))
+    const ports = makePorts()
+
+    const first = step(ports, { head: 'bbb222', notes: fileAnswer('ACCEPT', 'bbb222') })
+    expect(first.decision.reason).toBe('plan_item_requeued')
+    expect(readPlan('run-1')?.items.find(item => item.id === 'T4.3.2')).toMatchObject({ status: 'done', head: 'bbb222' })
+    expect(readFlow('run-1').answered_round).toBe('notes/bbb222-r1.md')
+
+    const second = step(ports, { head: 'bbb222', notes: fileAnswer('ACCEPT', 'bbb222') })
+    const afterSecond = readFlow('run-1')
+    expect(second.decision.reason).not.toBe('plan_in_flight')
+    expect(afterSecond.log.filter(entry => entry.event === 'plan_item_stale_recovered')).toHaveLength(1)
+    const third = step(ports, { head: 'bbb222', notes: fileAnswer('ACCEPT', 'bbb222') })
+    expect(third.status).toBe('skipped')
+    expect(readFlow('run-1').updated_at).toBe(afterSecond.updated_at)
+    expect(readPlan('run-1')?.items.find(item => item.id === 'T4.3.3')?.status).toBe('done')
   })
 
   it('holds while the claim is younger than the TTL', () => {

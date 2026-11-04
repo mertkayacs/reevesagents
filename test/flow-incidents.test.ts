@@ -174,4 +174,22 @@ describe('durable flow incidents', () => {
     const resolved = resolveFlowIncident('run-1', incident.id, 'reviewer recovered and flow was resumed', { root, at: new Date(NOW + 1000).toISOString() })
     expect(resolved).toMatchObject({ status: 'resolved', note: 'reviewer recovered and flow was resumed' })
   })
+
+  it('opens one blocker for a stale in-flight row and retains that cause after the flow parks', () => {
+    const cause = 'plan_item_stale_in_flight: T4.3.2 is reviewing but nothing is in flight'
+    const flow = state({
+      state: 'escalated',
+      log: [{ at: AT, event: 'escalate', detail: cause }],
+    })
+    reconcileFlowIncidents(flow, obs(), { ...hold('plan_item_stale_in_flight', cause), kind: 'escalate' }, { root, now: NOW, at: AT })
+    const parked = readFlow('run-1', { root })
+    reconcileFlowIncidents({
+      ...parked,
+      log: [...parked.log, { at: AT, event: 'hold', detail: 'flow_closed' }],
+    }, undefined, undefined, { root, now: NOW + 1000 })
+
+    const incidents = listFlowIncidents('run-1', { root })
+    expect(incidents).toHaveLength(1)
+    expect(incidents[0]).toMatchObject({ kind: 'plan_item_stale_in_flight', severity: 'blocker', spec_id: 'T4.3.2' })
+  })
 })

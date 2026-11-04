@@ -228,6 +228,10 @@ function signalsFor(
   if (escalatedReason.includes('dispatch_unresolved') || escalatedReason.includes('review_dispatch_unconfirmed')
     || latest?.event === 'dispatch_unresolved') {
     signals.push({ kind: 'dispatch_unconfirmed', severity: 'blocker', spec_id: item, reason: escalatedReason || latestDetail })
+  } else if (escalatedReason.includes('plan_item_stale_in_flight')) {
+    const staleReason = decision?.log_detail ?? escalatedReason
+    const staleItem = /plan_item_stale_in_flight:\s*(\S+)\s+is reviewing/.exec(staleReason)?.[1]
+    signals.push({ kind: 'plan_item_stale_in_flight', severity: 'blocker', spec_id: staleItem ?? item, reason: staleReason })
   } else if (escalatedReason.includes('review_timeout')) {
     signals.push({ kind: 'review_timeout', severity: 'blocker', spec_id: item, reason: escalatedReason })
   } else if (/rounds_exhausted|total_rounds_exhausted|rounds spent/.test(escalatedReason)) {
@@ -250,7 +254,7 @@ function signalsFor(
   const normal = new Set([
     '', 'head_unchanged', 'tree_dirty', 'dev_busy', 'review_busy', 'dev_pane_unknown', 'review_pane_unknown',
     'awaiting_verdict', 'review_timer_started', 'dispatch_pending', 'dispatch_unresolved',
-    'plan_incomplete', 'plan_in_flight', 'fix_refused', 'flow_closed', 'spec_pending', 'agent_question', 'agent_question_answered',
+    'plan_incomplete', 'plan_in_flight', 'plan_item_requeued', 'fix_refused', 'flow_closed', 'spec_pending', 'agent_question', 'agent_question_answered',
   ])
   if (decision?.kind === 'none' && !normal.has(decision.reason) && decision.reason !== 'dev_stalled'
     && decision.reason !== 'review_timeout' && decision.reason !== 'rounds_exhausted') {

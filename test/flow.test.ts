@@ -4,6 +4,7 @@ import type { FlowObservations, FlowState } from '../src/core/flow.js'
 import {
   MAX_ROUNDS,
   PENDING_TTL_SEC,
+  PLAN_IN_FLIGHT_STALE_TIMEOUT_MS,
   REVIEW_TIMEOUT_SEC,
   applyDecisionToState,
   claimPendingDispatch,
@@ -607,5 +608,96 @@ describe('the dispatch claim', () => {
     const parsed = parseFlowState(JSON.parse(JSON.stringify(state)))
     expect(parsed).toEqual(state)
     expect(parsed.pending).toEqual(claim)
+  })
+})
+
+describe('plan in-flight rows are bound to the live claim (block 96)', () => {
+  const tickItem = (id: string, status: 'reviewing' | 'done' | 'queued', head: string | null) => ({
+    id, title: id, status, block_reason: null, rounds: 1, spec: block(id), spec_path: `docs/briefs/${id}.json`,
+    head, notes_ref: null, missing: false,
+  })
+  const view = (staleStatus: 'reviewing' | 'done' | 'queued', staleHead: string | null) => ({
+    items: [tickItem('T4.3.2', staleStatus, staleHead), tickItem('T4.3.3', 'done', 'aaa111')],
+    max_rounds_per_item: 6,
+    max_total_rounds: 24,
+  })
+
+  it('closes a stale headless row checked in the document and consumes the duplicate ACCEPT file', () => {
+    const state = makeState({
+      state: 'reviewing', review_started_at: NOW - 60_000, active_plan_item: 'T4.3.3',
+      claim: { head: 'aaa111', verdict: null, verdict_count: 5, verdict_applied: true, spec_id: 'T4.3.3' },
+    })
+    const observations = makeObservations({
+      head: 'aaa111', verdict: 'ACCEPT', verdict_source: 'file', notes_head: 'aaa111', notes_ref: 'notes/aaa111-r24.md',
+      plan: view('reviewing', null), plan_conflicts: [{ kind: 'ticked_by_hand', item_id: 'T4.3.2' }],
+    })
+    const repair = flowTick(state, observations)
+
+    expect(repair.reason).toBe('plan_item_requeued')
+    expect(repair.next_plan_close).toMatchObject({ id: 'T4.3.2', head: 'aaa111' })
+    expect(repair.next_answered_round).toBe('notes/aaa111-r24.md')
+    const applied = applyDecisionToState(state, repair, AT)
+    expect(applied.answered_round).toBe('notes/aaa111-r24.md')
+
+    const afterRepair = { ...observations, plan: view('done', 'aaa111') }
+    const second = flowTick(applied, afterRepair)
+    const third = flowTick(applied, afterRepair)
+    expect(second.reason).toBe('awaiting_verdict')
+    expect(decisionChangesState(applied, second)).toBe(false)
+    expect(third).toEqual(second)
+  })
+
+  it('returns an unchecked stale row to queued', () => {
+    const state = makeState({ state: 'reviewing', active_plan_item: 'T4.3.3', claim: {
+      head: 'aaa111', verdict: null, verdict_count: 5, verdict_applied: false, spec_id: 'T4.3.3',
+    } })
+    const decision = flowTick(state, makeObservations({ plan: view('reviewing', null) }))
+
+    expect(decision.next_plan_status).toEqual({ id: 'T4.3.2', status: 'queued' })
+    expect(decision.reason).toBe('plan_item_requeued')
+  })
+
+  it('keeps a reviewing item in flight when the live claim owns it', () => {
+    const state = makeState({ state: 'reviewing', review_started_at: NOW, active_plan_item: 'T4.3.2', claim: {
+      head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'T4.3.2',
+    } })
+    const decision = flowTick(state, makeObservations({ plan: {
+      items: [tickItem('T4.3.2', 'reviewing', 'aaa111')], max_rounds_per_item: 6, max_total_rounds: 24,
+    } }))
+
+    expect(decision.reason).toBe('awaiting_verdict')
+    expect(decision.kind).toBe('none')
+    expect(decision.next_state).not.toBe('escalated')
+    expect(decision.next_plan_status).toBeUndefined()
+  })
+
+  it('keeps a legacy reviewing row when the flow still has a live reviewing head', () => {
+    const state = makeState({ state: 'reviewing', review_started_at: NOW, active_plan_item: null, claim: {
+      head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null,
+    } })
+    const decision = flowTick(state, makeObservations({ plan: {
+      items: [tickItem('T4.3.2', 'reviewing', null)], max_rounds_per_item: 6, max_total_rounds: 24,
+    } }))
+
+    expect(decision.reason).toBe('awaiting_verdict')
+    expect(decision.next_plan_status).toBeUndefined()
+  })
+
+  it('gives an unreconcilable checked row a visible hold, then escalates once the hold expires', () => {
+    const state = makeState({ state: 'reviewing', active_plan_item: 'T4.3.3', claim: {
+      head: 'aaa111', verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'T4.3.3',
+    } })
+    const initialObs = makeObservations({
+      plan: { items: [tickItem('T4.3.2', 'reviewing', 'bbb222')], max_rounds_per_item: 6, max_total_rounds: 24 },
+      plan_conflicts: [{ kind: 'ticked_by_hand', item_id: 'T4.3.2' }],
+    })
+    const first = flowTick(state, initialObs)
+    expect(first.reason).toBe('plan_in_flight')
+    expect(first.log_detail).toContain('T4.3.2 is reviewing but nothing is in flight')
+    const waiting = { ...state, hold: { reason: 'plan_in_flight', since: AT, detail: first.log_detail } }
+    const expired = flowTick(waiting, { ...initialObs, now: NOW + PLAN_IN_FLIGHT_STALE_TIMEOUT_MS })
+    expect(expired.kind).toBe('escalate')
+    expect(expired.reason).toBe('plan_item_stale_in_flight')
+    expect(expired.log_detail).toContain('T4.3.2')
   })
 })
