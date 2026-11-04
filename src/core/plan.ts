@@ -75,7 +75,7 @@ const TERMINAL_STATUSES: readonly PlanStatus[] = ['done', 'skipped']
 //   queued       -> pending, needs_brief, in_work, done, skipped, blocked_owner
 //   in_work      -> queued, reviewing, blocked_owner                    (a round is running: no closing)
 //   reviewing    -> in_work, queued, done, blocked_owner                (done only through the ACCEPT path)
-//   blocked_owner-> pending, needs_brief, queued, skipped               (the human unblocked it)
+//   blocked_owner-> pending, needs_brief, queued, skipped, in_work       (the human unblocked it, or an agent question was answered)
 //   done         -> (nothing: terminal)
 //   skipped      -> (nothing: terminal)
 export const PLAN_TRANSITIONS: Record<PlanStatus, readonly PlanStatus[]> = {
@@ -87,7 +87,7 @@ export const PLAN_TRANSITIONS: Record<PlanStatus, readonly PlanStatus[]> = {
   // cleared its active item — the sandbox showed it as `P1.1.1: in_work` with the work committed and accepted.
   in_work: ['queued', 'reviewing', 'done', 'blocked_owner'],
   reviewing: ['in_work', 'queued', 'done', 'blocked_owner'],
-  blocked_owner: ['pending', 'needs_brief', 'queued', 'skipped', 'done'],
+  blocked_owner: ['pending', 'needs_brief', 'queued', 'skipped', 'done', 'in_work'],
   done: [],
   skipped: [],
 }

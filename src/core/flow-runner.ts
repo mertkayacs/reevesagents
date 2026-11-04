@@ -694,6 +694,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     ? registryPresence(state)
     : { run_present: options.run_present, agents_present: options.agents_present }
   const notes = readRoundNotes(state, options, head)
+  const devDiagnosis = devPane === 'unknown' ? (ports.paneDiagnosis?.(state.roles.dev) ?? null) : null
   // The file wins when it is valid: it is the answer the reviewer chose to persist, and it is bound to
   // this round. The pane count is still reported so the baseline keeps working for the pane path.
   const fromFile = notes.source === 'file' && notes.text !== undefined
@@ -706,9 +707,10 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     // A pane the detector could not classify says why, in its own words: the hold is explained rather than merely named
     // (block 73).
     pane_diagnostics: {
-      dev: devPane === 'unknown' ? (ports.paneDiagnosis?.(state.roles.dev) ?? null) : null,
+      dev: devDiagnosis,
       review: reviewPane === 'unknown' ? (ports.paneDiagnosis?.(state.roles.review) ?? null) : null,
     },
+    agent_question: devDiagnosis?.startsWith('agent_question:') ? devDiagnosis.slice('agent_question:'.length).trim() : null,
     verdict: fromFile ? (notes.verdict ?? null) : scan.last,
     verdict_count: scan.count,
     verdict_notes: fromFile ? notes.text : scan.notes,
@@ -1032,6 +1034,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
     const { message, target } = decision
     if (!message || !target) {
       const next = applyDecisionToState(state, decision, at)
+      applyPlanDecision(state, observations, decision)
       const path = saveFlow(next, { root: options.root })
       return { state, decision, dispatch: null, settled: { state: next, path } }
     }

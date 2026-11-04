@@ -19,6 +19,7 @@ import { planTickView } from '../src/core/flow-plan.js'
 import { releaseRound, resumeFlow } from '../src/core/flow-control.js'
 import { writeAgent, writeRun } from '../src/core/runs.js'
 import { startFlow } from '../src/core/flow-start.js'
+import { flowSectionLines, flowStatusPayload } from '../src/core/flow-view.js'
 
 const execFileSync = vi.hoisted(() => vi.fn((file: string, args: string[] = []) => {
   if (file === 'git' && args.includes('rev-parse')) return 'bbb222\n'
@@ -2534,5 +2535,44 @@ describe('the "pane verdict is not bound" hold has an exit (block 84)', () => {
     })
     expect(expired.decision.reason).toBe('review_timeout')
     expect(readFlow('run-1').state).toBe('escalated')
+  })
+})
+
+describe('an agent question waits for a human (block 80)', () => {
+  it('persists the question and plan hold, then resumes the same item when the pane returns to normal', () => {
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: '- [ ] **P1.1** — implement', now: NOW, at: AT }).plan
+    plan = attachSpec(plan, {
+      id: 'P1.1', text: JSON.stringify({ id: 'P1.1', title: 'implement', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+      format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT,
+    }).plan
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan({ ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) })
+    const state = createFlowState({ run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, at: AT })
+    saveFlow({ ...state, active_plan_item: 'P1.1', claim: { ...state.claim, head: HEAD, spec_id: 'P1.1' } })
+    const send = vi.fn(() => ({ sent: true as const }))
+    const ports = {
+      paneBusy: (id: string) => id === 'dev-1' ? 'unknown' as const : 'idle' as const,
+      paneDiagnosis: (id: string) => id === 'dev-1' ? 'agent_question: Which network approach should I use?' : null,
+      peek: () => '', send,
+    }
+    const waiting = stepFlow('run-1', { now: NOW, at: AT, head: HEAD, tree_clean: true, ports }).state
+    expect(waiting.agent_question).toMatchObject({ agent: 'dev-1', item: 'P1.1' })
+    expect(waiting.log.some(entry => entry.event === 'agent_question')).toBe(true)
+    expect(readPlan('run-1').items[0]?.status).toBe('blocked_owner')
+    expect(flowStatusPayload(waiting).agent_question?.text).toContain('Which network')
+    expect(flowSectionLines(waiting).join('\n')).toContain('question dev-1: Which network')
+    expect(send).not.toHaveBeenCalled()
+
+    const repeated = stepFlow('run-1', { now: NOW + 1_000, at: new Date(NOW + 1_000).toISOString(), head: HEAD, tree_clean: true, ports }).state
+    expect(repeated.log.filter(entry => entry.event === 'agent_question')).toHaveLength(1)
+
+    const resumed = stepFlow('run-1', {
+      now: NOW + 10_000, at: new Date(NOW + 10_000).toISOString(), head: HEAD, tree_clean: true,
+      ports: { paneBusy: () => 'idle' as const, paneDiagnosis: () => null, peek: () => '', send },
+    }).state
+    expect(resumed.agent_question).toBeNull()
+    expect(resumed.log.some(entry => entry.event === 'agent_question_answered')).toBe(true)
+    expect(readPlan('run-1').items[0]?.status).toBe('in_work')
+    expect(send).not.toHaveBeenCalled()
   })
 })

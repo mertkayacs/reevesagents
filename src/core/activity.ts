@@ -383,6 +383,7 @@ export type PaneReason =
 export interface PaneInspection {
   state: PaneBusyState
   reason: PaneReason
+  question?: string
   // The frame, for a caller that wants to look again a second later and confirm it.
   sample: PaneSample
 }
@@ -412,10 +413,16 @@ export function inspectPane(
   // composer nor ordinary work. Keep this structural and tail-scoped; unrelated dialogs have no numbered
   // choice plus the navigation/Enter instructions together.
   const tail = lines.slice(-12).join('\n')
-  if (/❯\s*\d+[.)]/u.test(tail)
+  const tailLines = lines.slice(-12)
+  const choiceStart = tailLines.findIndex(line => /❯\s*\d+[.)]/u.test(line))
+  const questionContext = (choiceStart > 0 ? tailLines.slice(0, choiceStart) : tailLines.slice(0, -1)).join(' ')
+  const excludedDialog = /\b(?:theme|model|appearance|color scheme|settings|preferences)\b/i.test(tail)
+  if (!excludedDialog && /(?:\?|\b(?:which|should|choose|conflict|prefer|use)\b)/iu.test(questionContext)
+    && /❯\s*\d+[.)]/u.test(tail)
     && /(?:^|\n)\s*\d+[.)]\s+\S/m.test(tail)
     && /(?:↑|↓|up|down).{0,80}enter|enter.{0,80}(?:↑|↓|up|down)/iu.test(tail)) {
-    return { state: 'unknown', reason: 'agent_question', sample }
+    const prompt = questionContext.replace(/\s+/g, ' ').trim().slice(-120)
+    return { state: 'unknown', reason: 'agent_question', question: prompt || 'agent requested a choice', sample }
   }
 
   // 1. Busy first, but only where the provider prints it — its status rows around the composer. The body of a pane is prose:

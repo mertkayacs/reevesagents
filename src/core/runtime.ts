@@ -723,6 +723,9 @@ function inspectAgentPane(agent: AgentRecord, paneText: string, driver: RuntimeD
   const settle = (inspection: PaneInspection, settledText: string): PaneReading => {
     if (agent.tmux_pane_id) {
       paneReasonByPane.set(agent.tmux_pane_id, inspection.reason)
+      if (inspection.reason === 'agent_question') {
+        paneReasonByPane.set(agent.tmux_pane_id, `agent_question: ${inspection.question ?? 'agent requested a choice'}`)
+      }
       if (inspection.state === 'busy') lastBusyAtByPane.set(agent.tmux_pane_id, Date.now())
     }
     return { inspection, text: settledText }

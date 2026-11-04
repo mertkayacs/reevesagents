@@ -19,6 +19,7 @@ export interface PlanItemTick {
   id: string
   title: string
   status: PlanStatus
+  block_reason?: string | null
   rounds: number
   spec: BlockSpec | null
   // Where the brief came from, so a surface can queue it (`flow plan next`) or show it (`flow plan`).
@@ -54,6 +55,7 @@ export function planTickView(plan: Plan, budgets: { perItem: number, total: numb
       id: item.id,
       title: item.title,
       status: item.status,
+      block_reason: item.block_reason,
       rounds: item.rounds,
       spec: item.spec,
       spec_path: item.spec_path,

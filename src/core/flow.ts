@@ -100,6 +100,7 @@ export const FLOW_LOG_LIMIT = 50
 // process that took it died mid-send: nobody can tell whether the prompt landed, and a blind
 // re-send is the one answer that is certainly wrong.
 export const PENDING_TTL_SEC = 120
+export const AGENT_QUESTION_TIMEOUT_MS = 20 * 60 * 1000
 
 export interface FlowClaim {
   // The commit the current review or fix is about. A verdict is only applied to this head.
@@ -155,6 +156,13 @@ export interface FlowLogEntry {
   // (`notes/<head>-r<N>.md`) and the counts. The text itself never enters the journal.
   notes_ref?: string
   notes_counts?: { blocker: number, major: number, minor: number }
+}
+
+export interface FlowAgentQuestion {
+  agent: string
+  item: string | null
+  text: string
+  since: number
 }
 
 function parsePlanSummary(raw: unknown): FlowPlanSummary | null {
@@ -254,6 +262,7 @@ export interface FlowState {
   // The plan item whose brief the dispatch in flight was rendered from. An ACCEPT closes *this* item, not
   // "the next one in the document": the two differ as soon as a round runs long enough for the plan to change.
   active_plan_item: string | null
+  agent_question: FlowAgentQuestion | null
   // `<head>-r<round>` of the last notes-file answer a dispatch was built from. The key is head-scoped, so a
   // new commit starts clean; it exists because a file answer was otherwise fresh on *every* tick — after
   // `dispatch_unconfirmed` (claim released, staging file kept) the next tick rebuilt and re-pasted the same
@@ -378,6 +387,7 @@ export interface FlowObservations {
   // A hold that lasts long enough is journalled with this, so the operator sees what was looked for and not found
   // instead of a bare `review_pane_unknown` (block 73).
   pane_diagnostics?: { dev: string | null, review: string | null }
+  agent_question?: string | null
 }
 
 // The record of a paste this flow made and has not had confirmed: what a retry tick has instead of the runtime's
@@ -458,6 +468,9 @@ export type FlowReason =
   | 'fix_dispatched'
   | 'spec_dispatched'
   | 'flow_done'
+  | 'agent_question'
+  | 'agent_question_answered'
+  | 'question_unanswered'
 
 export interface FlowDecision {
   kind: FlowActionKind
@@ -490,6 +503,7 @@ export interface FlowDecision {
   next_plan_close?: { id: string, head: string, rounds: number, notes_ref: string | null }
   // A plan item this decision moves by itself (blocked after spending its rounds).
   next_plan_status?: { id: string, status: FlowPlanItemStatus, block_reason?: string | null }
+  next_agent_question?: FlowAgentQuestion | null
   // The status, round count and claim after this decision is applied. Carried in the decision so
   // the transition is computed once, purely, instead of being re-derived by the writer.
   next_state: FlowStatus
@@ -566,6 +580,7 @@ export function createFlowState(init: FlowInit): FlowState {
     verdict_handled_for: null,
     verdict_handled_item: null,
     active_plan_item: null,
+    agent_question: null,
     paused_from: null,
     paused_at: null,
     orphan_reason: null,
@@ -662,6 +677,11 @@ export function parseFlowState(raw: unknown): FlowState {
     verdict_handled_for: typeof record.verdict_handled_for === 'string' ? record.verdict_handled_for : null,
     verdict_handled_item: typeof record.verdict_handled_item === 'string' ? record.verdict_handled_item : null,
     active_plan_item: typeof record.active_plan_item === 'string' ? record.active_plan_item : null,
+    agent_question: (() => {
+      const q = asRecord(record.agent_question)
+      if (!q || typeof q.text !== 'string' || typeof q.agent !== 'string' || typeof q.since !== 'number') return null
+      return { agent: q.agent, item: typeof q.item === 'string' ? q.item : null, text: q.text.slice(0, 120), since: q.since }
+    })(),
     // A paused file always names where it came from; a missing field defaults to `idle`, which is
     // the only target a flow without a recorded origin could safely resume into.
     paused_from: status === 'paused'
@@ -1989,6 +2009,51 @@ function orphan(state: FlowState, reason: 'run_gone' | 'agents_gone'): FlowDecis
 }
 
 // One step. Pure: it reads its arguments and returns a decision, never a pane, a file or a clock.
+function agentQuestionDecision(state: FlowState, observations: FlowObservations): FlowDecision | null {
+  const current = state.agent_question
+  const text = observations.agent_question?.trim().slice(0, 120) || null
+  if (text) {
+    const signature = `${state.roles.dev}: ${text}`
+    const lastLifecycle = [...state.log].reverse().find(entry =>
+      ['agent_question', 'agent_question_answered', 'question_unanswered'].includes(entry.event)
+      && entry.detail === signature)
+    if (lastLifecycle?.event === 'agent_question_answered' || lastLifecycle?.event === 'question_unanswered') {
+      // The same prompt can reappear after the human acted; it is a new request and gets a new timestamp/event.
+    } else if (lastLifecycle?.event === 'agent_question') {
+      if (current && observations.now - current.since >= AGENT_QUESTION_TIMEOUT_MS) {
+        return { ...escalate(state, observations, 'question_unanswered'), next_agent_question: null, log_event: 'question_unanswered', log_detail: signature }
+      }
+      return hold(state, 'agent_question')
+    }
+    if (current && current.text === text && current.agent === state.roles.dev) {
+      if (observations.now - current.since >= AGENT_QUESTION_TIMEOUT_MS) {
+        return { ...escalate(state, observations, 'question_unanswered'), next_agent_question: null, log_event: 'question_unanswered', log_detail: `${current.agent}: ${current.text}` }
+      }
+      return hold(state, 'agent_question')
+    }
+    const item = state.claim.spec_id ?? state.active_plan_item
+    return {
+      ...hold(state, 'agent_question', `${state.roles.dev}: ${text}`),
+      next_agent_question: { agent: state.roles.dev, item, text, since: observations.now },
+      ...(item ? { next_plan_status: { id: item, status: 'blocked_owner' as const, block_reason: 'agent_question' } } : {}),
+      log_event: 'agent_question',
+      log_detail: `${state.roles.dev}: ${text}`,
+    }
+  }
+  if (!current) return null
+  const item = current.item
+  const planItem = item ? observations.plan?.items.find(entry => entry.id === item) : undefined
+  return {
+    ...hold(state, 'agent_question_answered', `${current.agent}: ${current.text}`),
+    next_agent_question: null,
+    ...(item && planItem?.status === 'blocked_owner' && planItem.block_reason === 'agent_question'
+      ? { next_plan_status: { id: item, status: 'in_work' as const } }
+      : {}),
+    log_event: 'agent_question_answered',
+    log_detail: `${current.agent}: ${current.text}`,
+  }
+}
+
 export function flowTick(state: FlowState, observations: FlowObservations): FlowDecision {
   if (state.state === 'escalated' || state.state === 'done') return hold(state, 'flow_closed')
   // Parked states are decided before anything is observed for a reason: a paused or orphaned flow
@@ -2014,6 +2079,8 @@ export function flowTick(state: FlowState, observations: FlowObservations): Flow
   // a tick settles, before the state machine gets a chance to ask again (block 41).
   const fromNotes = settleFromNotes(state, observations)
   if (fromNotes) return fromNotes
+  const questionDecision = agentQuestionDecision(state, observations)
+  if (questionDecision) return questionDecision
   // An explicit negative from the caller parks the flow; "not looked at" (undefined) does not.
   if (observations.run_present === false) return orphan(state, 'run_gone')
   if (observations.agents_present === false) return orphan(state, 'agents_gone')
@@ -2034,6 +2101,8 @@ export function decisionChangesState(state: FlowState, decision: FlowDecision): 
   if (state.claim.verdict !== decision.next_claim.verdict) return true
   if (state.claim.verdict_count !== decision.next_claim.verdict_count) return true
   if (state.review_started_at !== decision.next_review_started_at) return true
+  if (decision.next_agent_question !== undefined && JSON.stringify(state.agent_question) !== JSON.stringify(decision.next_agent_question)) return true
+  if (decision.next_plan_status !== undefined) return true
   // A hold that clears a stale `active_plan_item` must reach the disk; otherwise the field survives and blocks the plan for
   // ever, which is the defect the clear exists for. `undefined` means "the decision does not touch the field", `null` means
   // "cleared" — `??` conflated them and hid every clear (block 38, MAJOR 2).
@@ -2110,6 +2179,7 @@ function withDelta(
       ? decision.next_verdict_handled_item
       : (decision.next_claim.head !== state.claim.head ? null : state.verdict_handled_item),
     active_plan_item: decision.next_active_plan_item === undefined ? state.active_plan_item : decision.next_active_plan_item,
+    agent_question: decision.next_agent_question === undefined ? state.agent_question : decision.next_agent_question,
     // A new episode starts when the flow *becomes* escalated, which is exactly when a human has to be told.
     notify_episode: options.advance && state.state !== 'escalated' && decision.next_state === 'escalated'
       ? state.notify_episode + 1

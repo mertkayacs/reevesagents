@@ -51,6 +51,7 @@ export interface FlowStatusPayload {
   // `head_unchanged`, `awaiting_verdict`, …) and `detail` the human sentence a detailed hold carries. Null when the flow
   // is moving or waiting on a dispatch, which `pending` already describes.
   hold: { reason: string, since: string, detail?: string } | null
+  agent_question: { agent: string, item: string | null, text: string, since: number } | null
   // What the last review could prove: the numbers the evidence rule looked at. Never the notes text.
   last_evidence: { elapsed_ms: number, notes_findings: number, notes_bytes: number, pane_tool_lines: number } | null
   // The newest round's notes, as a reference and counters — never the text (§11.3 of the notification
@@ -167,6 +168,12 @@ export function flowStatusPayload(state: FlowState, path = flowPath(state.run_id
     hold: state.hold
       ? { reason: state.hold.reason, since: state.hold.since, ...(state.hold.detail ? { detail: state.hold.detail } : {}) }
       : null,
+    agent_question: state.agent_question ? {
+      agent: state.agent_question.agent,
+      item: state.agent_question.item,
+      text: redactSecrets(state.agent_question.text),
+      since: state.agent_question.since,
+    } : null,
     // The last decision that saw a verdict carries the numbers the evidence rule used; a state written
     // before this field existed simply has none.
     last_evidence: (() => {
@@ -321,6 +328,7 @@ export function flowSectionLines(state: FlowState, options: FlowSectionOptions =
     ? `round ${badge.rounds}`
     : `round ${badge.rounds}/${badge.max_rounds}`
   lines.push(`state    ${badge.status} · ${budget}`)
+  if (state.agent_question) lines.push(`question ${state.agent_question.agent}: ${state.agent_question.text}`)
   if (options.active_plan_item) {
     const suffix = options.plan && options.plan.item === options.active_plan_item ? '' : ''
     lines.push(`item     ${options.active_plan_item}${suffix}`)

@@ -149,7 +149,7 @@ human command may do (`HUMAN_TRANSITIONS`). The engine table:
 | `queued` | `pending`, `needs_brief`, `in_work`, `done`, `skipped`, `blocked_owner` |
 | `in_work` | `queued`, `reviewing`, `done`, `blocked_owner` |
 | `reviewing` | `in_work`, `queued`, `done`, `blocked_owner` |
-| `blocked_owner` | `pending`, `needs_brief`, `queued`, `skipped`, `done` |
+| `blocked_owner` | `pending`, `needs_brief`, `queued`, `skipped`, `done`, `in_work` (engine resumes the same item after an agent's interactive question is answered) |
 | `done`, `skipped` | — terminal |
 
 The **human** table is what `plan set` follows, and it is a strict subset:

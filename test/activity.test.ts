@@ -503,6 +503,13 @@ describe('busy is read off the status rows only (block 74)', () => {
     expect(inspectPane(question, 'hermes', { now: 10_000 })).toMatchObject({ state: 'unknown', reason: 'agent_question' })
   })
 
+  it('does not classify a theme or model chooser as an agent question', () => {
+    const theme = ['Select theme', '❯ 1. Light', '  2. Dark', '↑/↓ to choose — Enter to submit'].join('\n')
+    const model = ['Choose model', '❯ 1. Fast', '  2. Accurate', '↑/↓ to choose — Enter to submit'].join('\n')
+    expect(inspectPane(theme, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
+    expect(inspectPane(model, 'hermes', { now: 10_000 }).reason).not.toBe('agent_question')
+  })
+
   it('does not hold a pane whose hint is exactly on the status rows of a finished turn', () => {
     // The other side of the asymmetry: hermes prints `enter прервать` on the very row it prints the box on, so a hint there
     // is a turn running — not a quote.
