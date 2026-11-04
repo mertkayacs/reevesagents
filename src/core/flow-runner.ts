@@ -513,7 +513,11 @@ function markPlanDocument(before: FlowState, observations: FlowObservations, dec
 
 function applyPlanDecision(before: FlowState, observations: FlowObservations, decision: FlowDecision): void {
   if (!observations.plan) return
-  const activeId = before.active_plan_item
+  // The item the round belongs to: the claim's own item, with `active_plan_item` as the fallback for files written before the claim
+  // carried a spec. Resolving the owner from the plan instead of from `active_plan_item` alone is what made every fix round after a
+  // refused close invisible to the item (block 81).
+  const ownerId = before.claim.spec_id ?? before.active_plan_item
+  const activeId = ownerId
   const close = decision.next_plan_close
   const status = decision.next_plan_status
   const fixRound = decision.kind === 'dispatch_fix' && activeId !== null
@@ -569,7 +573,7 @@ function applyPlanDecision(before: FlowState, observations: FlowObservations, de
           ...next,
           conflicts: [...next.conflicts, {
             kind: 'plan_item_double_close' as const,
-            item_id: before.active_plan_item ?? '',
+            item_id: ownerId ?? '',
             detail: decision.log_detail,
             at: new Date().toISOString(),
           }].slice(-PLAN_LIMITS.conflicts),

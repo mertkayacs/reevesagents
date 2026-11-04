@@ -512,9 +512,17 @@ re-applied on the following tick and would close the item the tick before had ju
 close reads it back — never "whichever item is active now": the live run closed P2.2 with P2.1's commit, the header went into the
 next commit, and P2.3 ("About") was closed with work nobody did. One commit closes one item: a second close on a head that already
 closed something is refused — the item is not closed by somebody else's commit, `plan_item_double_close` is journalled once (and
-recorded in the plan's conflicts), the refused item goes back to the queue instead of staying "in flight", and the flow carries on
-with the next item. It does not escalate: a historical inconsistency can never be repaired, so an escalation would make every
-resumed run escalate again for ever.
+recorded in the plan's conflicts), and the flow carries on. It does not escalate: a historical inconsistency can never be repaired,
+so an escalation would make every resumed run escalate again for ever.
+
+**A refused close refuses the close, not the binding (block 81).** The live `salon-dashboard` run dispatched T2.3.1's brief, then
+refused an ACCEPT on a head that had already closed T2.2.6 — and the refusal also cleared `active_plan_item` and put T2.3.1 back in
+the queue. The dev kept working on the brief while `plan.json` held `queued, rounds 0`: every fix round went uncounted, the per-item
+cap never fired, and the panel printed `round 7 of 6`. So the refusal keeps the binding of the item the **claim** names (it was just
+dispatched and is being worked on) and puts back only a stale one — a refusal that is already history re-queues its item and says
+`plan_item_requeued` instead of repeating the conflict. Rounds are counted for the round's owner (`claim.spec_id ?? active_plan_item`)
+in `addItemRound` and in the per-item budget check, and a prompt prints the **item's** round against the item's cap, clamped: the
+flow's own counter is a separate fuse (`max_total_rounds`) and never appears as `round N of M` with N > M.
 
 **Play/pause is the operator's, and it is the engine's own operation (blocks 49, 51).** Two routes carry it:
 

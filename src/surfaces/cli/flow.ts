@@ -26,6 +26,13 @@ import { shortHomePath } from '../../utils/paths.js'
 import { finalizePlanCommands, registerPlanCommands } from './plan.js'
 import { requireDestructiveConfirmation } from './helpers.js'
 
+// `round N/M` with N > M is never printed: the flow's own counter can run past the per-item cap (block 81 showed `round 7/6` in
+// the operator's status line, which tells nobody anything). The number is clamped, the fuse itself is unchanged.
+function roundText(state: { rounds: number, max_rounds: number }): string {
+  const shown = state.max_rounds > 0 ? Math.min(state.rounds, state.max_rounds) : state.rounds
+  return `${shown}/${state.max_rounds}`
+}
+
 // The payload and the id resolution are shared with the MCP tools, so a host CLI and
 // `flow status --json` cannot show different things: both come from core/flow-view.ts.
 function pendingSpecs(state: FlowState): BlockSpec[] {
@@ -87,7 +94,7 @@ function printStatus(state: FlowState, path: string): void {
   const verdict = state.claim.verdict ?? 'none'
   const last = state.log.at(-1)
   console.log(`flow      ${state.run_id}`)
-  console.log(`state     ${state.state}  round ${state.rounds}/${state.max_rounds}${state.max_total_rounds ? ` (flow cap ${state.max_total_rounds})` : ''}`)
+  console.log(`state     ${state.state}  round ${roundText(state)}${state.max_total_rounds ? ` (flow cap ${state.max_total_rounds})` : ''}`)
   if (state.plan) {
     // The one-line summary the plan commands keep in step: a surface can say `plan 12/23` without opening
     // `plan.json`, which is the whole point of storing it here (§3.1 of the plan design).
@@ -157,11 +164,11 @@ function printTick(result: FlowStepResult, dryRun: boolean): void {
     // A pause/stop dropped the claim between the claim and the paste: nothing was sent, and the
     // operator's own command is what the flow now shows.
     console.log('result    cancelled — the flow was paused or stopped while the dispatch was being prepared; nothing was sent')
-    console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
+    console.log(`state     ${result.state.state}  round ${roundText(result.state)}`)
     return
   }
   console.log(`result    ${result.status}`)
-  console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
+  console.log(`state     ${result.state.state}  round ${roundText(result.state)}`)
   if (result.path) console.log(`file      ${shortHomePath(result.path)}`)
 }
 
@@ -475,7 +482,7 @@ export function registerFlow(program: Command): void {
           return
         }
         console.log(`released  ${result.item} — no review was requested for that round; the next tick dispatches it again`)
-        console.log(`state     ${result.state.state}  round ${result.state.rounds}/${result.state.max_rounds}`)
+        console.log(`state     ${result.state.state}  round ${roundText(result.state)}`)
       } catch (err) {
         fail(err)
       }

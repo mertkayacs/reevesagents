@@ -896,6 +896,8 @@ function reviewRequest(
   now: number,
   notesPath?: string,
   strict = false,
+  // What the prompt prints: the round of the item this request is for, and that item's cap (block 81).
+  budget: { round: number, max_rounds: number } = { round: state.rounds + 1, max_rounds: state.max_rounds },
 ): FlowDecision {
   const roundItem = state.claim.spec_id ?? state.active_plan_item
   const roundBrief = state.claim.brief_path ?? briefPathFor(state, roundItem)
@@ -918,8 +920,8 @@ function reviewRequest(
     message: renderReviewPrompt({
       head,
       repo: state.repo,
-      round: state.rounds + 1,
-      max_rounds: state.max_rounds,
+      round: budget.round,
+      max_rounds: budget.max_rounds,
       notes_path: notesPath,
       strict,
       // The item and its brief: `claim.spec_id` is the item this round belongs to, and the plan knows where its brief lives.
@@ -1008,8 +1010,8 @@ function fixDispatch(state: FlowState, observations: FlowObservations): FlowDeci
     message: renderFixPrompt({
       head: state.claim.head,
       notes,
-      round: rounds,
-      max_rounds: state.max_rounds,
+      round: promptBudget(state, observations).round,
+      max_rounds: promptBudget(state, observations).max_rounds,
     }),
   }
 }
@@ -1136,6 +1138,11 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
     item.id !== id && item.head === head && (item.status === 'done' || item.status === 'skipped'))
   if (!already) return null
   const refusedItem = observations.plan.items.find(item => item.id === id)
+  // Whose round this is: the item the claim names. The refusal is about the *close*, not about the binding — an accepted verdict on
+  // that head cannot close this item, but the item it was dispatched for stays the one the flow is working on. Clearing it lost
+  // every fix round of the next item: the live run kept working on T2.3.1's brief while `plan.json` held it `queued, rounds 0`,
+  // so the per-item cap never fired and the flow printed `round 7/6` (block 81).
+  const roundOwner = state.claim.spec_id === id
   const detail = `${head.slice(0, 7)} already closed ${already.id}; it cannot close ${id} as well`
   // A conflict that is already recorded is history, not news: closing more items on that head is refused, the line is written once,
   // and the flow carries on with the first open item. Escalating every tick made a resumed run unresumable — `done` is terminal,
@@ -1147,6 +1154,10 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
       (conflict.kind === 'plan_item_double_close' && conflict.item_id === id) || conflict.detail === detail)
   // Refused either way — a second close on that head must not happen. The only difference is the journal: the first time the
   // conflict is news, afterwards it is history, and repeating it every tick is what made a resumed run unresumable (block 45).
+  // A refusal that is *news* keeps the binding when the item is the round's own: it was just dispatched and the dev is working on
+  // it (block 81). A refusal that is *history* is a stale binding — the same conflict was already recorded — and that item goes
+  // back to the queue so the picker can move on (block 46, MAJOR 2).
+  const keepBinding = roundOwner && !recorded
   const refusal: FlowDecision = {
     kind: 'none',
     reason: 'plan_item_double_close',
@@ -1154,16 +1165,38 @@ function planItemDoubleClose(state: FlowState, observations: FlowObservations): 
     next_rounds: state.rounds,
     next_review_started_at: state.review_started_at,
     next_claim: { ...state.claim, verdict_applied: true },
-    next_active_plan_item: null,
-    // The item was dispatched but must not be closed by this commit: it goes back to the queue, not to `in_work`. Left in flight it
-    // kept the picker convinced that one task was running, so a resumed run never started the next item (block 46, MAJOR 2).
-    ...(refusedItem && (refusedItem.status === 'in_work' || refusedItem.status === 'reviewing')
+    next_active_plan_item: keepBinding ? id : null,
+    // The first refusal is the news; a repeat is the flow tidying a binding it already refused, and it says that instead of
+    // reporting the same double close twice (block 45, defect 3).
+    ...(recorded ? { log_event: 'plan_item_requeued' as const } : {}),
+    // Only an item that was queued by mistake goes back to the queue: the one this round belongs to was dispatched and is being
+    // worked on, so demoting it is what left the picker convinced the flow was idle (block 46, MAJOR 2) and the plan blind to its
+    // rounds (block 81). An item that is not the round's owner keeps the old treatment.
+    ...(!keepBinding && refusedItem && (refusedItem.status === 'in_work' || refusedItem.status === 'reviewing')
       ? { next_plan_status: { id, status: 'queued' as const } }
       : {}),
     log_detail: detail,
   }
-  if (recorded) return { ...refusal, log_detail: undefined }
+  if (recorded) return { ...refusal, log_detail: `${id}: the close was refused earlier; the item is back in the queue` }
   return refusal
+}
+
+// The round number a prompt prints, and the cap it is measured against. With a plan the round belongs to the **item** — its own
+// fix rounds against the per-item budget — while the flow-wide counter is a separate fuse. Printing the flow's counter against the
+// per-item cap is what produced "Flow round 12 of 6" in the dev's panel (block 81).
+function promptBudget(state: FlowState, observations: FlowObservations): { round: number, max_rounds: number } {
+  const ownerId = state.claim.spec_id ?? state.active_plan_item
+  const plan = observations.plan
+  const item = ownerId && plan ? plan.items.find(entry => entry.id === ownerId) : undefined
+  if (plan && item) return clampBudget(item.rounds + 1, plan.max_rounds_per_item)
+  return clampBudget(state.rounds + 1, state.max_total_rounds > 0 ? state.max_total_rounds : state.max_rounds)
+}
+
+// `round N of M` with N > M is never printed: an item can already be past its budget when the last prompt is built, and a panel
+// that says "round 7 of 6" tells the dev the counter is broken.
+function clampBudget(round: number, max: number): { round: number, max_rounds: number } {
+  if (!Number.isFinite(max) || max <= 0) return { round, max_rounds: max }
+  return { round: Math.min(round, max), max_rounds: max }
 }
 
 function planCloseOf(state: FlowState, observations: FlowObservations): FlowDecision['next_plan_close'] {
@@ -1286,7 +1319,9 @@ function planBudgetDecision(
       log_detail: `total rounds spent: ${state.rounds}/${plan.max_total_rounds} · ${planTickSummary(plan)}`,
     }
   }
-  const id = state.active_plan_item
+  // The round's owner, not merely the active item: after a refused close the two disagreed and the per-item cap was never
+  // consulted (block 81).
+  const id = state.claim.spec_id ?? state.active_plan_item
   if (!id) return null
   const item = plan.items.find(entry => entry.id === id)
   if (!item || !itemBudgetSpent(plan, item)) return null
@@ -1340,7 +1375,7 @@ function tickIdle(state: FlowState, observations: FlowObservations): FlowDecisio
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
-  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
+  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path, false, promptBudget(state, observations))
 }
 
 // A notes file is the answer to its round, and it outranks every other decision: if the reviewer wrote it, the flow applies it
@@ -1647,7 +1682,7 @@ function tickReviewing(state: FlowState, observations: FlowObservations): FlowDe
     if (observations.docs_only_since_claim === true) return reanchor(state, observations.head)
     const gate = reviewGate(state, observations)
     if (gate) return gate
-    return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now, observations.notes_staging_path)
+    return reviewRequest(state, observations.head, observations.verdict_count, 'head_moved', observations.now, observations.notes_staging_path, false, promptBudget(state, observations))
   }
 
   // A file answer is bound to `(head, round)`, which is why it does not need the pane's verdict counter — but an answer
@@ -1737,7 +1772,7 @@ function tickFixing(state: FlowState, observations: FlowObservations): FlowDecis
   if (!observations.tree_clean) return hold(state, 'tree_dirty')
   const gate = reviewGate(state, observations)
   if (gate) return gate
-  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path)
+  return reviewRequest(state, observations.head, observations.verdict_count, 'review_requested', observations.now, observations.notes_staging_path, false, promptBudget(state, observations))
 }
 
 // Is this verdict evidence of a review? Both halves are required: enough wall time since the request, and

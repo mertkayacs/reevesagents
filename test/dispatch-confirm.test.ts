@@ -1085,7 +1085,12 @@ describe('a historical double close does not block the run (block 45, defect 3)'
     // Not escalated, no second report, and the flow is free to work on the next item.
     expect(readFlow('run-1').state).not.toBe('escalated')
     // Reported once (this tick), refused, and the item is not closed by somebody else's commit.
-    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
+    // Reported once: the refusal itself on the tick that saw it, and only a requeue line on the ticks that follow (block 45, defect
+    // 3 — and block 81, which keeps the binding of a round's own item and puts back only a *stale* one).
+    const refusalLines = new Set(readFlow('run-1').log
+      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued')
+      .map(entry => `${entry.event}:${entry.detail}`))
+    expect(refusalLines.size).toBe(1)
     expect(readPlan('run-1').items.find(item => item.id === 'P1.2')!.status).not.toBe('done')
 
     // The refused item went back to the queue rather than staying "in flight" — that is what kept a resumed run from starting the
@@ -1097,7 +1102,10 @@ describe('a historical double close does not block the run (block 45, defect 3)'
       now: NOW + 5_000, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
       evidence_policy: { min_seconds: 0, retries: 1 },
     })
-    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
+    const lines = new Set(readFlow('run-1').log
+      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued')
+      .map(entry => `${entry.event}:${entry.detail}`))
+    expect(lines.size).toBe(1)
   })
 })
 
@@ -1181,7 +1189,11 @@ describe('the settle closes the item the claim names (block 46)', () => {
     const items = readPlan('run-1').items
     expect(items.find(item => item.id === 'P1.2')!.status).toBe('queued')
     expect(items.find(item => item.id === 'P1.3')!.status).not.toBe('queued')
-    expect(readFlow('run-1').log.filter(entry => entry.event === 'plan_item_double_close')).toHaveLength(1)
+    // One fact, however many ticks read it: the refusal (or, once it is history, the requeue that tidies the binding).
+    const refusalLines = new Set(readFlow('run-1').log
+      .filter(entry => entry.event === 'plan_item_double_close' || entry.event === 'plan_item_requeued')
+      .map(entry => `${entry.event}:${entry.detail}`))
+    expect(refusalLines.size).toBe(1)
   })
 })
 
@@ -1935,5 +1947,154 @@ describe('a repeat Enter is on the record (block 75)', () => {
     // What the journal and the tests read stays readable; `pasteTextToPane` is what hands the pane one line.
     expect(messages).toHaveLength(1)
     expect(messages[0]).toContain('\n')
+  })
+})
+
+// Block 81, the live `salon-dashboard` run of 03.11: an ACCEPT on `a9a6e19` was refused as a double close (that head had already
+// closed T2.2.6) — and the refusal also dropped the binding of T2.3.1, whose brief had just been dispatched. The dev kept working
+// on T2.3.1's brief while `plan.json` held it `queued, rounds 0`: every fix round went uncounted, the per-item cap never fired, and
+// the panel printed `round 7 of 6`.
+describe('a refused close does not unbind the item it was dispatched for (block 81)', () => {
+  // The same three-item plan the block-44/45 tests use, built here because their helpers are scoped to their own describe.
+  function seedPlan(): void {
+    const ids = ['P1.1', 'P1.2', 'P1.3']
+    const doc = ids.map(id => `- [ ] **${id}** — ${id}`).join('\n')
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    for (const id of ids) {
+      plan = attachSpec(plan, {
+        id, text: JSON.stringify({ id, title: id, goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] }),
+        format: 'json', spec_path: `docs/briefs/${id}.json`, now: NOW, at: AT,
+      }).plan
+    }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+  }
+
+  const commit = (index: number): string => String(index).repeat(40).slice(0, 40)
+
+  it('keeps the round’s own item bound, and puts back only a stale one', () => {
+    seedPlan()
+    const head = commit(1)
+    // P1.1 was closed by `head`; P1.2 is the item this round belongs to and its brief has just gone out.
+    const plan = readPlan('run-1')
+    savePlan({
+      ...plan,
+      items: plan.items.map(item => (item.id === 'P1.1'
+        ? { ...item, status: 'done' as const, head, closed_by: 'accept' as const }
+        : { ...item, status: 'in_work' as const })),
+    })
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 6, max_total_rounds: 24, at: AT,
+    })
+    saveFlow({
+      ...state, state: 'reviewing', rounds: 1, active_plan_item: 'P1.2', review_started_at: NOW - 60_000,
+      claim: { head, verdict: null, verdict_count: 1, verdict_applied: false, spec_id: 'P1.2' },
+    })
+    mkdirSync(join(root, 'flows', 'run-1', 'notes', 'inbox'), { recursive: true })
+    writeFileSync(stagingPath('run-1', head, 2, root), 'VERDICT: ACCEPT\n')
+
+    const ticked = stepFlow('run-1', {
+      now: NOW, at: AT, head, tree_clean: true, ports: ports(() => ({ sent: true })),
+      evidence_policy: { min_seconds: 30, retries: 1 },
+    })
+
+    expect(ticked.decision.reason).toBe('plan_item_double_close')
+    // The close is refused — and the item stays the one the flow is working on.
+    const after = readFlow('run-1')
+    expect(after.active_plan_item).toBe('P1.2')
+    expect(after.claim.spec_id).toBe('P1.2')
+    const item = readPlan('run-1').items.find(entry => entry.id === 'P1.2')!
+    expect(item.status).toBe('in_work')
+    expect(item.status).not.toBe('queued')
+  })
+
+  it('prints the item’s round, not the flow’s, against the item’s cap', () => {
+    // The panel said "Flow round 12 of 6": the flow's own counter was printed against the per-item budget. With a plan the round is
+    // the item's, measured against that item's cap — and it is clamped, so `round N of M` never has N > M.
+    seedPlan()
+    const plan = readPlan('run-1')
+    savePlan({ ...plan, items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'in_work' as const, rounds: 1 } : item)) })
+    const base = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 2, max_total_rounds: 24, at: AT,
+    })
+    // Nine flow rounds spent on other items, one round spent on this one.
+    saveFlow({
+      ...base, state: 'reviewing', rounds: 9, active_plan_item: null, review_started_at: NOW - 60_000,
+      claim: { head: commit(9), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1' },
+    })
+
+    const sent: string[] = []
+    const ticked = stepFlow('run-1', {
+      now: NOW, at: AT, head: commit(8), tree_clean: true,
+      ports: { paneBusy: () => 'idle' as const, peek: () => '', send: (_pane, message) => { sent.push(message); return { sent: true as const } } },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(ticked.decision.kind).toBe('request_review')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toContain('round 2 of 2')
+    const printed = sent[0]!.match(/round (\d+) of (\d+)/)
+    expect(printed).not.toBeNull()
+    expect(Number(printed![1])).toBeLessThanOrEqual(Number(printed![2]))
+    // The flow's own counter is not what the dev is asked to satisfy.
+    expect(sent[0]).not.toContain('round 10 of')
+  })
+
+  it('counts every fix round of the item the claim names, and stops at its own cap', () => {
+    seedPlan()
+    const plan = readPlan('run-1')
+    savePlan({ ...plan, items: plan.items.map(item => (item.id === 'P1.1' ? { ...item, status: 'in_work' as const } : item)) })
+
+    // `active_plan_item` is gone — exactly the state the old refusal left behind — and the claim still names the item.
+    const base = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 2, max_total_rounds: 20, at: AT,
+    })
+    let head = commit(2)
+    saveFlow({
+      ...base, state: 'reviewing', rounds: 0, active_plan_item: null, review_started_at: NOW - 60_000,
+      claim: { head, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1' },
+    })
+
+    // A CHANGES_REQUESTED for that item: the engine dispatches a fix, and the *item's* counter moves.
+    for (let round = 1; round <= 2; round += 1) {
+      const verdicts = Array.from({ length: round }, () => 'round\nVERDICT: CHANGES_REQUESTED\nMAJOR src/app.ts:1 — x\n> ').join('\n')
+      const before = readFlow('run-1')
+      saveFlow({
+        ...before, claim: { head, verdict: null, verdict_count: round - 1, verdict_applied: false, spec_id: 'P1.1' },
+      })
+      mkdirSync(dirname(stagingPath('run-1', head, round, root)), { recursive: true })
+      writeFileSync(stagingPath('run-1', head, round, root), 'MAJOR src/app.ts:1 — x\nVERDICT: CHANGES_REQUESTED\n')
+      stepFlow('run-1', {
+        now: NOW + round * 60_000, at: AT, head, tree_clean: true,
+        ports: { paneBusy: () => 'idle' as const, peek: () => verdicts, send: () => ({ sent: true as const }) },
+        evidence_policy: { min_seconds: 0, retries: 1 },
+      })
+      head = commit(2 + round)
+      const after = readFlow('run-1')
+      saveFlow({ ...after, state: 'reviewing', review_started_at: NOW, claim: { ...after.claim, head, spec_id: 'P1.1' } })
+    }
+
+    expect(readPlan('run-1').items.find(entry => entry.id === 'P1.1')!.rounds).toBe(2)
+
+    // The next fix is past the item's own budget: the item is blocked for a human instead of spending another round.
+    const before = readFlow('run-1')
+    saveFlow({ ...before, claim: { head, verdict: null, verdict_count: 2, verdict_applied: false, spec_id: 'P1.1' } })
+    mkdirSync(dirname(stagingPath('run-1', head, 3, root)), { recursive: true })
+    writeFileSync(stagingPath('run-1', head, 3, root), 'MAJOR src/app.ts:1 — x\nVERDICT: CHANGES_REQUESTED\n')
+    const capped = stepFlow('run-1', {
+      now: NOW + 600_000, at: AT, head, tree_clean: true,
+      ports: {
+        paneBusy: () => 'idle' as const,
+        peek: () => Array.from({ length: 3 }, () => 'round\nVERDICT: CHANGES_REQUESTED\nMAJOR src/app.ts:1 — x\n> ').join('\n'),
+        send: () => ({ sent: true as const }),
+      },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    })
+
+    expect(['rounds_exhausted', 'total_rounds_exhausted', 'plan_in_flight']).toContain(capped.decision.reason)
+    const blocked = readPlan('run-1').items.find(entry => entry.id === 'P1.1')!
+    // Whatever the path, the item is not silently given a third round.
+    expect(blocked.rounds).toBe(2)
+    expect(blocked.status === 'blocked_owner' || capped.decision.reason === 'rounds_exhausted').toBe(true)
   })
 })
