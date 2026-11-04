@@ -30,6 +30,7 @@ import {
   appendLogEntries,
   applyDecisionToState,
   applyUnconfirmedDispatch,
+  devStallRetryMessage,
   escalateOnDirtyComposer,
   escalateUnconfirmedDispatch,
   claimPendingDispatch,
@@ -97,7 +98,7 @@ export interface FlowPorts {
   // Why a pane was last read as it was ('composer_not_found', 'footer_absent', …). Optional: a test that only cares about
   // the state can leave it out, and the hold then reports the state alone (block 73).
   paneDiagnosis?: (_agentId: string) => string | null
-  devNudgeReady?: (_agentId: string) => boolean
+  devNudgeReady?: (_agentId: string, _text?: string, _pasted?: { at: number } | null) => boolean
 }
 
 export const defaultFlowPorts: FlowPorts = {
@@ -108,7 +109,7 @@ export const defaultFlowPorts: FlowPorts = {
     ...(options?.stallRetry ? { maxEnters: 1, refuseCopyMode: true } : {}),
   }),
   paneDiagnosis: agentId => paneDiagnosis(agentId),
-  devNudgeReady: agentId => paneReadyForNudge(agentId),
+  devNudgeReady: (agentId, text, pasted) => paneReadyForNudge(agentId, text, pasted),
 }
 
 export function readGitHead(repo: string): string {
@@ -688,7 +689,20 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
   const ports = options.ports ?? defaultFlowPorts
   const head = options.head ?? readGitHead(state.repo)
   const treeClean = options.tree_clean ?? isGitTreeClean(state.repo)
-  const devNudgeReady = state.roles.dev ? (ports.devNudgeReady?.(state.roles.dev) ?? false) : false
+  const plan = options.plan === null ? undefined : (options.plan ?? readPlanView(state) ?? undefined)
+  const itemId = state.claim.spec_id ?? state.active_plan_item
+  const item = itemId ? plan?.items.find(entry => entry.id === itemId) : undefined
+  const nudgeText = itemId && item
+    ? devStallRetryMessage(itemId, state.claim.brief_path ?? item.spec_path ?? `docs/briefs/${itemId}.md`)
+    : undefined
+  const recordedStallPaste = state.dispatch_paste?.agent === state.roles.dev
+    && state.dispatch_paste.head === state.claim.head
+    && state.dispatch_paste.purpose === 'dev_stall_retry'
+    ? { at: state.dispatch_paste.at }
+    : null
+  const devNudgeReady = state.roles.dev
+    ? (ports.devNudgeReady?.(state.roles.dev, nudgeText, recordedStallPaste) ?? false)
+    : false
   const devPane: PaneBusyState = state.roles.dev ? ports.paneBusy(state.roles.dev) : 'unknown'
   const reviewPane: PaneBusyState = state.roles.review ? ports.paneBusy(state.roles.review) : 'unknown'
   const paneText = reviewPane === 'unknown' ? '' : ports.peek(state.roles.review, VERDICT_SCAN_LINES)
@@ -742,7 +756,7 @@ export function observeFlow(state: FlowState, options: ObserveFlowOptions = {}):
     evidence_policy: options.evidence_policy ?? evidencePolicy(),
     // The plan owns the queue only when it exists: a flow without one keeps `state.specs`, which is what
     // schema-v1 flows have always used.
-    plan: options.plan === null ? undefined : (options.plan ?? readPlanView(state) ?? undefined),
+    plan,
     plan_conflicts: readPlanConflicts(state),
     docs_only_since_claim: options.docs_only_since_claim ?? docsOnlySince(state, head) ?? false,
     head_docs_only: options.head_docs_only ?? headIsDocsOnly(state, head) ?? false,
@@ -1171,6 +1185,7 @@ export function stepFlow(runId: string, options: StepFlowOptions = {}): FlowStep
             agent: dispatch.agent,
             head: phase.decision.head ?? dispatch.state.claim.head,
             at: send.pastedAt,
+            ...(phase.decision.kind === 'dispatch_stall_retry' ? { purpose: 'dev_stall_retry' as const } : {}),
           }
         if (after.enter_retries >= MAX_ENTER_RETRIES) {
           const escalated = escalateUnconfirmedDispatch(after, phase.decision, at)

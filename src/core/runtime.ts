@@ -771,16 +771,40 @@ export function paneBusy(agentId: string, options: RuntimeOptions = {}): PaneBus
 }
 
 // A stall retry needs stronger evidence than a normal dispatch: inspecting must not cancel copy mode,
-// and only an idle pane with an empty composer is safe to nudge.
-export function paneReadyForNudge(agentId: string, options: RuntimeOptions = {}): boolean {
+// and only an idle pane with either an empty composer or this flow's recorded prompt is safe to nudge.
+export function paneReadyForNudge(
+  agentId: string,
+  expectedText?: string,
+  pasted?: { at: number } | null,
+  options: RuntimeOptions = {},
+): boolean {
   const driver = options.driver ?? realDriver
   try {
     const agent = findAgent(agentId)
     if (agent.headless || !agent.tmux_pane_id || !paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return false
-    const text = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+    let text = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
     if (paneInCopyMode(text) || paneInTmuxMode(agent, driver)) return false
-    const inspection = inspectPane(text, agent.provider)
-    return inspection.state === 'idle' && composerText(text, agent.provider) === ''
+    const first = inspectPane(text, agent.provider, { now: Date.now() })
+    let inspection = first
+    if (first.reason === 'placeholder_pending') {
+      const waited = CONFIRM_MIN_GAP_MS + 100
+      waitBlocking(driver, waited)
+      text = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+      if (paneInCopyMode(text) || paneInTmuxMode(agent, driver)) return false
+      inspection = inspectPane(text, agent.provider, {
+        previous: first.sample,
+        now: Math.max(Date.now(), first.sample.at + waited),
+      })
+    }
+    if (inspection.state !== 'idle') return false
+    const composer = composerText(text, agent.provider)
+    if (composer === '') return true
+    if (!expectedText || !pasted) return false
+    return composerHoldsOurs(composer ?? '', expectedText, {
+      pastedAt: pasted.at,
+      now: Date.now(),
+      windowMs: DEFAULT_IDLE_SEND_TIMINGS.confirmMs,
+    })
   } catch {
     return false
   }

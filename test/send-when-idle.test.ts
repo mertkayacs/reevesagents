@@ -121,6 +121,13 @@ const CODEX_IDLE = [
   '  ← for agents · ? for shortcuts',
 ].join('\n')
 
+const CODEX_GLYPHLESS_IDLE = [
+  'Ask Codex to do anything',
+  '',
+  '  GPT-6-Luna high · ~/projects/reevesagents-flow',
+  '  ← for agents · ? for shortcuts',
+].join('\n')
+
 const CODEX_BUSY = [
   '  ◦ Working (3s • esc to interrupt)',
   '',
@@ -156,6 +163,15 @@ describe('paneBusy', () => {
     const driver = new PaneDriver()
     driver.captures = [HERMES_IDLE]
     expect(paneBusy('agent-1', { driver })).toBe('idle')
+  })
+
+  it('confirms a glyphless Codex placeholder without entering or cancelling copy mode', async () => {
+    const { paneReadyForNudge } = await seed()
+    const driver = new PaneDriver()
+    driver.captures = [CODEX_GLYPHLESS_IDLE, CODEX_GLYPHLESS_IDLE]
+    expect(paneReadyForNudge('agent-1', 'continue work', null, { driver })).toBe(true)
+    expect(driver.count('capture-pane')).toBe(2)
+    expect(driver.count('send-keys')).toBe(0)
   })
 
   it('is unknown for an unverified provider, a headless agent, a stale pane, a missing agent', async () => {
@@ -194,6 +210,21 @@ describe('sendWhenIdle', () => {
       .toEqual({ sent: false, reason: 'unknown' })
     expect(driver.calls.some(call => call.args.includes('-X'))).toBe(false)
     expect(driver.pasted()).toEqual([])
+  })
+
+  it('recognizes a recorded stall prompt and resumes with Enter only', async () => {
+    const { sendWhenIdle, paneReadyForNudge } = await seed()
+    const driver = new PaneDriver()
+    const pastedAt = Date.now()
+    driver.captures = [CODEX_OUR_TEXT, CODEX_OUR_TEXT]
+    expect(paneReadyForNudge('agent-1', 'hello', { at: pastedAt }, { driver })).toBe(true)
+
+    driver.captures = [CODEX_OUR_TEXT, CODEX_OUR_TEXT, CODEX_BUSY]
+    expect(sendWhenIdle('agent-1', 'hello', {
+      driver, ...FAST, maxEnters: 1, refuseCopyMode: true, pasted: { at: pastedAt },
+    })).toEqual({ sent: true })
+    expect(driver.pasted()).toEqual([])
+    expect(driver.calls.filter(call => call.args[0] === 'send-keys' && call.args[3] === 'Enter')).toHaveLength(1)
   })
 
   it('refuses a busy pane without touching it', async () => {

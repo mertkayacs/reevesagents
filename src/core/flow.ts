@@ -406,6 +406,7 @@ export interface FlowDispatchPaste {
   head: string
   // Epoch ms of the last moment the pane was read as still holding our prompt; refreshed on every failed attempt.
   at: number
+  purpose?: 'dev_stall_retry'
 }
 
 // What a tick can measure about the review behind a verdict.
@@ -808,7 +809,7 @@ function parseDispatchPaste(raw: unknown): FlowDispatchPaste | null {
   const head = text(record.head)
   const at = typeof record.at === 'number' && Number.isFinite(record.at) ? Math.floor(record.at) : 0
   if (!agent || !head || at <= 0) return null
-  return { agent, head, at }
+  return { agent, head, at, ...(record.purpose === 'dev_stall_retry' ? { purpose: 'dev_stall_retry' as const } : {}) }
 }
 
 // A queued spec was validated when it was added; on read only its identity is enforced, so a file
@@ -1466,7 +1467,17 @@ function devStallDecision(state: FlowState, observations: FlowObservations): Flo
   if (observations.dev_pane === 'busy') return hold(state, 'dev_busy')
   if (observations.dev_pane !== 'idle') return hold(state, 'dev_pane_unknown')
   // The runtime computes this before paneBusy, which can recover copy mode. Missing readiness evidence is fail-closed.
-  if (observations.dev_nudge_ready !== true) return null
+  if (observations.dev_nudge_ready !== true) {
+    const paste = state.dispatch_paste
+    if (paste?.purpose === 'dev_stall_retry' && paste.agent === state.roles.dev && paste.head === state.claim.head
+      && observations.now - paste.at >= state.dev_timeout_sec * 1000) {
+      return { ...escalate(state, observations, 'dev_stalled'), log_detail: `dev_stalled ${id}: recorded stall paste could not be safely resumed` }
+    }
+    return null
+  }
+  if (hasUnresolvedStallDispatch(state)) {
+    return { ...escalate(state, observations, 'dev_stalled'), log_detail: `dev_stalled ${id}: previous stall retry was not confirmed` }
+  }
   if (state.dev_stall_attempts >= state.dev_stall_max_attempts) {
     return { ...escalate(state, observations, 'dev_stalled'), log_detail: `dev_stalled ${id} idle after ${state.dev_stall_attempts} retries` }
   }
@@ -1485,9 +1496,22 @@ function devStallDecision(state: FlowState, observations: FlowObservations): Flo
     head: state.claim.head,
     spec_id: id,
     log_event: 'dispatch_stall_retry',
-    log_detail: `${id} attempt ${state.dev_stall_attempts + 1}/${state.dev_stall_max_attempts}`,
-    message: `Continue plan item ${id}. Its brief is ${brief}. Read the brief and finish the remaining work; report what is still blocked if you cannot complete it.`,
+    log_detail: `dispatch_stall_retry ${id} attempt ${state.dev_stall_attempts + 1}/${state.dev_stall_max_attempts}`,
+    message: devStallRetryMessage(id, brief),
   }
+}
+
+export function devStallRetryMessage(id: string, brief: string): string {
+  return `Continue plan item ${id}. Its brief is ${brief}. Read the brief and finish the remaining work; report what is still blocked if you cannot complete it.`
+}
+
+function hasUnresolvedStallDispatch(state: FlowState): boolean {
+  for (let index = state.log.length - 1; index >= 0; index -= 1) {
+    const entry = state.log[index]!
+    if (entry.event === 'dispatch_unconfirmed') return entry.detail.includes('dispatch_stall_retry')
+    if (/^(?:request_review|dispatch_fix|dispatch_spec|dispatch_stall_retry|dispatch_refused|dispatch_unresolved)$/.test(entry.event)) return false
+  }
+  return false
 }
 
 // A notes file is the answer to its round, and it outranks every other decision: if the reviewer wrote it, the flow applies it
@@ -2278,6 +2302,7 @@ function withDelta(
     // it, and the log is bounded, so the reason must survive the entry being pushed out.
     orphan_reason: decision.kind === 'orphan' ? (decision.notes ?? null) : state.orphan_reason,
     unsubstantiated_attempts: decision.next_unsubstantiated_attempts ?? state.unsubstantiated_attempts,
+    enter_retries: decision.kind === 'dispatch_stall_retry' ? 0 : state.enter_retries,
     answered_round: decision.next_answered_round === undefined ? state.answered_round : decision.next_answered_round,
     // A verdict is acted on once per commit: set by the branch that used it, dropped as soon as the head moves (the
     // next commit has its own verdict to earn).

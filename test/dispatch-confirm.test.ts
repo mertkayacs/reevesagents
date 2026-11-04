@@ -14,6 +14,7 @@ import type { FlowObservations, FlowState } from '../src/core/flow.js'
 import { readFlow, saveFlow } from '../src/core/flow-store.js'
 import { notesRef, stagingPath } from '../src/core/flow-notes.js'
 import { observeFlow, stepFlow } from '../src/core/flow-runner.js'
+import type { DispatchSendOptions } from '../src/core/flow-runner.js'
 import { attachSpec, createPlan, planPath, readPlan, savePlan } from '../src/core/plan.js'
 import { planTickView } from '../src/core/flow-plan.js'
 import { releaseRound, resumeFlow } from '../src/core/flow-control.js'
@@ -1640,13 +1641,19 @@ describe('an idle dev does not strand a plan item', () => {
     })
   }
 
-  function stallStep(now: number, options: { tree_clean?: boolean, head?: string, dev?: 'idle' | 'busy' | 'unknown', ready?: boolean, send?: () => { sent: true } | { sent: false, reason: 'composer_dirty' } } = {}) {
+  function stallStep(now: number, options: {
+    tree_clean?: boolean, head?: string, dev?: 'idle' | 'busy' | 'unknown', ready?: boolean | 'needs_paste',
+    send?: (_agent: string, _text: string, _options?: DispatchSendOptions) => { sent: true }
+      | { sent: false, reason: 'composer_dirty' | 'unconfirmed_paste' | 'unconfirmed', pastedAt?: number },
+  } = {}) {
     return stepFlow('run-1', {
       now, at: new Date(now).toISOString(), head: options.head ?? HEAD, tree_clean: options.tree_clean ?? true,
       ports: {
         paneBusy: agent => agent === 'dev-1' ? options.dev ?? 'idle' : 'idle',
         peek: () => '',
-        devNudgeReady: () => options.ready ?? true,
+        devNudgeReady: (_agent, _text, pasted) => options.ready === 'needs_paste'
+          ? pasted !== null
+          : options.ready ?? true,
         send: options.send ?? (() => ({ sent: true as const })),
       },
       evidence_policy: { min_seconds: 0, retries: 1 },
@@ -1719,6 +1726,45 @@ describe('an idle dev does not strand a plan item', () => {
     expect(readFlow('run-1').state).toBe('escalated')
     expect(readFlow('run-1').dev_stall_attempts).toBe(0)
     expect(readFlow('run-1').stalled_since).toBe(NOW - 900_000)
+  })
+
+  it('resumes a recorded stall paste with one Enter and no second paste', () => {
+    seedInFlight()
+    const first = stallStep(NOW, { send: () => ({ sent: false, reason: 'unconfirmed_paste', pastedAt: NOW + 5 }) })
+    expect(first.status).toBe('refused')
+    expect(readFlow('run-1').dispatch_paste).toMatchObject({ purpose: 'dev_stall_retry', at: NOW + 5 })
+    let retryOptions: DispatchSendOptions | undefined
+    const second = stallStep(NOW + 1_000, {
+      ready: 'needs_paste',
+      send: (_agent, _text, options) => { retryOptions = options; return { sent: true } },
+    })
+    expect(second.decision.reason).toBe('dispatch_stall_retry')
+    expect(retryOptions).toMatchObject({ stallRetry: true, pasted: { at: NOW + 5 } })
+    expect(readFlow('run-1').dispatch_paste).toBeNull()
+    expect(readFlow('run-1').rounds).toBe(0)
+  })
+
+  it('escalates a stale recorded stall paste instead of waiting on an unsafe composer forever', () => {
+    seedInFlight({ dispatch_paste: { agent: 'dev-1', head: HEAD, at: NOW - 900_000, purpose: 'dev_stall_retry' } })
+    let sends = 0
+    const result = stallStep(NOW, {
+      ready: false,
+      send: () => { sends += 1; return { sent: true } },
+    })
+    expect(result.decision.reason).toBe('dev_stalled')
+    expect(readFlow('run-1').state).toBe('escalated')
+    expect(sends).toBe(0)
+  })
+
+  it('escalates an unconfirmed stall send later without pasting the same nudge again', () => {
+    seedInFlight()
+    let sends = 0
+    stallStep(NOW, { send: () => { sends += 1; return { sent: false, reason: 'unconfirmed' } } })
+    expect(readFlow('run-1').log.at(-1)?.event).toBe('dispatch_unconfirmed')
+    const later = stallStep(NOW + 900_000, { send: () => { sends += 1; return { sent: true } } })
+    expect(later.decision.reason).toBe('dev_stalled')
+    expect(later.decision.kind).toBe('escalate')
+    expect(sends).toBe(1)
   })
 })
 
