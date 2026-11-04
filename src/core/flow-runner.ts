@@ -106,7 +106,7 @@ export interface FlowPorts {
 // anywhere in a pane would replay an old block after the agent had resumed work. Terminal input/status chrome
 // can follow the response, so ignore only those known trailing UI rows before checking the final content row.
 export function ownerDecisionBlockFromPane(text: string): string | null {
-  const ignoredTail = /^(?:\s*|›\s*|❯\s*|←\s*for agents\s*·\s*\?\s*for shortcuts\s*|\?\s*for shortcuts\s*|esc(?:ape)?\s+to interrupt\b.*|ctrl\+c\s+to\b.*)$/i
+  const ignoredTail = /^(?:\s*|›\s*|›\s*Ask Codex to do anything\s*|❯\s*|←\s*for agents\s*·\s*\?\s*for shortcuts\s*|\?\s*for shortcuts\s*|esc(?:ape)?\s+to interrupt\b.*|ctrl\+c\s+to\b.*)$/i
   const providerMeta = /^[\w.-]+(?:\s+[\w.-]+){0,3}\s+·\s+(?:~[/\\]|[/\\]|[a-z]:[/\\])/i
   const lines = stripAnsi(text)
     .split(/\r?\n/)

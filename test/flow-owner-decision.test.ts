@@ -58,6 +58,8 @@ describe('owner decision marker', () => {
       .toBe('needs an authorized write test scope')
     expect(ownerDecisionBlockFromPane('FLOW-BLOCKED: needs an authorized write test scope\n\n› \nGPT-6-Luna high · ~/repo\n← for agents · ? for shortcuts'))
       .toBe('needs an authorized write test scope')
+    expect(ownerDecisionBlockFromPane('Finished generic verification.\nFLOW-BLOCKED: needs an authorized write test scope\n\n› Ask Codex to do anything\nGPT-6-Luna high · ~/repo\n← for agents · ? for shortcuts'))
+      .toBe('needs an authorized write test scope')
     expect(ownerDecisionBlockFromPane('FLOW-BLOCKED: old blocker\n\nThe next completion finished the task.\n›')).toBeNull()
     expect(ownerDecisionBlockFromPane('FLOW-BLOCKED: old blocker\n1. Next output line\n›')).toBeNull()
   })
@@ -68,6 +70,9 @@ describe('owner decision marker', () => {
     expect(decision.next_plan_close).toBeUndefined()
     expect(decision.next_active_plan_item).toBeNull()
     expect(decision.next_claim_verdict_applied).toBe(true)
+    expect(decision.next_state).toBe('idle')
+    expect(decision.next_review_started_at).toBeNull()
+    expect(decision.next_claim.verdict).toBeNull()
     expect(decision.log_event).toBe('plan_item_blocked')
   })
 

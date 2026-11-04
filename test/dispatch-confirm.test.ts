@@ -295,6 +295,54 @@ describe('a verdict already collected is work, even when the head has not moved 
     expect(readNotifications().events.filter(event => event.kind === 'plan.item_blocked')).toHaveLength(1)
   })
 
+  it('consumes the notes ACCEPT when blocking, and cannot reuse it after the owner queues the item', () => {
+    const doc = '- [ ] **P1.1** — first'
+    const brief = JSON.stringify({ id: 'P1.1', title: 'P1.1', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] })
+    let plan = createPlan({ run_id: 'run-1', source_path: 'docs/plan.md', text: doc, now: NOW, at: AT }).plan
+    plan = attachSpec(plan, { id: 'P1.1', text: brief, format: 'json', spec_path: 'docs/briefs/P1.1.json', now: NOW, at: AT }).plan
+    plan = { ...plan, items: plan.items.map(item => ({ ...item, status: 'in_work' as const })) }
+    mkdirSync(dirname(planPath('run-1')), { recursive: true })
+    savePlan(plan)
+    const state = createFlowState({
+      run_id: 'run-1', repo: root, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, max_total_rounds: 8, at: AT,
+    })
+    saveFlow({
+      ...state,
+      state: 'reviewing',
+      active_plan_item: 'P1.1',
+      review_started_at: NOW,
+      claim: { head: HEAD, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: 'P1.1' },
+    })
+    const staging = stagingPath('run-1', HEAD, 1, root)
+    mkdirSync(dirname(staging), { recursive: true })
+    writeFileSync(staging, 'no findings: provider-specific writes need an owner-approved test scope\nVERDICT: ACCEPT\n')
+    const completion = 'Generic verification is complete.\nFLOW-BLOCKED: provider writes need an approved scope\n\n› Ask Codex to do anything\nGPT-6-Luna high · ~/repo\n← for agents · ? for shortcuts'
+    const options = {
+      now: NOW + 60_000, at: AT, head: HEAD, tree_clean: true, plan: undefined,
+      ports: { ...ports(() => ({ sent: true })), peek: () => completion },
+      evidence_policy: { min_seconds: 0, retries: 1 },
+    }
+
+    const blocked = stepFlow('run-1', options)
+    expect(blocked.observations.notes_ref).toBe(notesRef(HEAD, 1))
+    expect(blocked.decision.next_plan_status).toMatchObject({ status: 'blocked_owner', block_reason: 'owner_decision' })
+    const afterBlock = readFlow('run-1')
+    expect(afterBlock.state).toBe('idle')
+    expect(afterBlock.review_started_at).toBeNull()
+    expect(afterBlock.claim.verdict).toBeNull()
+    expect(afterBlock.answered_round).toBe(notesRef(HEAD, 1))
+    expect(readPlan('run-1').items[0]?.status).toBe('blocked_owner')
+
+    const queued = readPlan('run-1')
+    savePlan({ ...queued, items: queued.items.map(item => ({ ...item, status: 'queued' as const, block_reason: null })) })
+    const resumed = stepFlow('run-1', { ...options, now: NOW + 65_000 })
+    expect(resumed.observations.notes_ref).toBe(notesRef(HEAD, 1))
+    expect(resumed.decision.reason).toBe('plan_item_dispatched')
+    expect(resumed.decision.next_plan_close).toBeUndefined()
+    expect(readFlow('run-1').claim.verdict).toBeNull()
+    expect(readPlan('run-1').items[0]?.status).toBe('in_work')
+  })
+
   it('does not treat an older completion marker as the latest answer, and keeps ACCEPT unchanged', () => {
     const doc = '- [ ] **P1.1** — first'
     const brief = JSON.stringify({ id: 'P1.1', title: 'P1.1', goal: 'g', requirements: ['r'], checks: ['c'], report: ['r'] })

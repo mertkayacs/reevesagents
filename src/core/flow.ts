@@ -1303,12 +1303,19 @@ function planAcceptDecision(
     && item.status !== 'done' && item.status !== 'skipped' && item.status !== 'blocked_owner')) {
     return {
       ...hold(state, 'plan_incomplete', `${blockedId} is blocked_owner: ${blockedReason}`),
+      // This owner decision ends the review round. Keep no actionable ACCEPT in the claim: after the owner queues
+      // the item again, the same verdict (or its notes file) must not close the work that is about to be re-dispatched.
+      next_state: 'idle',
+      next_review_started_at: null,
       next_plan_status: { id: blockedId, status: 'blocked_owner', block_reason: 'owner_decision' },
       next_active_plan_item: null,
-      next_claim: { ...state.claim, verdict: 'ACCEPT', verdict_count: observations.verdict_count },
+      next_claim: { ...state.claim, verdict: null, verdict_count: observations.verdict_count },
       next_claim_verdict_applied: true,
       next_verdict_handled_for: state.claim.head,
       next_verdict_handled_item: blockedId,
+      ...(observations.verdict_source === 'file' && observations.notes_ref
+        ? { next_answered_round: observations.notes_ref }
+        : {}),
       log_event: 'plan_item_blocked',
       log_detail: `${blockedId} blocked_owner: owner_decision · ${blockedReason}`,
     }
