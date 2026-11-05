@@ -60,6 +60,23 @@ function runAndRootAgent(): void {
 }
 
 describe('durable flow incidents', () => {
+  it('keeps the tick decision as the journal tail while persisting its incident', () => {
+    const flow = state({
+      state: 'escalated',
+      log: [{ at: AT, event: 'flow_done', detail: 'flow completed' }],
+    })
+
+    const result = reconcileFlowIncidents(flow, obs(), { ...hold('review_timeout'), kind: 'escalate' }, {
+      root, now: NOW, at: AT,
+    })
+
+    expect(result.log.at(-1)).toMatchObject({ event: 'flow_done', detail: 'flow completed' })
+    expect(result.log.at(-2)?.event).toBe('incident_opened')
+    expect(listFlowIncidents('run-1', { root })).toMatchObject([
+      { kind: 'review_timeout', severity: 'blocker', status: 'open' },
+    ])
+  })
+
   it('does not alarm for pending TTL, a busy dev, or an in-time review', () => {
     const flow = state({ state: 'reviewing', review_started_at: NOW, review_timeout_sec: 900 })
     reconcileFlowIncidents(flow, obs(), hold('dispatch_pending'), { root, now: NOW, at: AT })

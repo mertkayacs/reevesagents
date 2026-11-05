@@ -290,13 +290,24 @@ function activeKey(row: FlowIncident): string {
   return keyFor(row.episode, row.kind, row.spec_id)
 }
 
-function withIncidentJournal(state: FlowState, events: { event: 'incident_opened' | 'incident_resolved', detail: string }[], at: string, root?: string): FlowState {
+function withIncidentJournal(
+  state: FlowState,
+  events: { event: 'incident_opened' | 'incident_resolved', detail: string }[],
+  at: string,
+  root?: string,
+  preserveTickTail = false,
+): FlowState {
   if (events.length === 0) return state
   let log = state.log
+  // Reconciliation runs after the state-machine write. Keep this tick's decision as the visible tail;
+  // durable incident details remain in incidents.json and the incident row appears immediately before it.
+  const tickTail = preserveTickTail && log.at(-1)?.at === at ? log.at(-1) : undefined
+  if (tickTail) log = log.slice(0, -1)
   for (const event of events) {
     if (log.some(entry => entry.event === event.event && entry.detail === event.detail)) continue
     log = [...appendLog({ ...state, log }, { at, event: event.event, detail: event.detail })].slice(-FLOW_LOG_LIMIT)
   }
+  if (tickTail) log = appendLog({ ...state, log }, tickTail)
   const updated = { ...state, log, updated_at: at }
   saveFlow(updated, { root })
   return updated
@@ -385,7 +396,7 @@ export function reconcileFlowIncidents(
     }
     writeStore(store, options.root)
     const current = readFlow(state.run_id, { root: options.root })
-    const updated = withIncidentJournal(current, events, at, options.root)
+    const updated = withIncidentJournal(current, events, at, options.root, decision !== undefined)
     state = updated
   })
 
