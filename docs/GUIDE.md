@@ -184,6 +184,26 @@ human is highlighted with the same warning colour as a stale run.
   transitions, dispatches, verdicts, refusals and escalations, newest last. It never
   holds a prompt body. An entry that consumed a review round points at it — `→ notes/<head>-r2.md ·
   2 MAJOR, 1 MINOR` — so the journal says where the findings are without carrying them.
+- `reevesagents flow incidents list --run <run>` — show durable open incidents and their owner,
+  severity, age, count and evidence. `claim --run <run> --incident <id>` assigns it to the
+  orchestrator; `ack` records that the orchestrator has taken responsibility. An ACK does not
+  resolve the incident. Use `resolve --run <run> --incident <id> --note <what changed>` only
+  when the condition is addressed. Warnings route to the orchestrator; blockers first give the
+  orchestrator ten minutes to ACK, then create a human approval if still unacknowledged. Open
+  incidents also appear in `flow status` and on the run's attention surfaces.
+- **When an agent asks a question:** `flow status` prints `agent question <agent>: <text>` and
+  the affected plan item waits for a human. Read the question in the pane, answer there using the
+  normal CLI or UI interaction, and let the next tick observe the agent return to work. The flow
+  never sends keys to answer for you. If the question remains unanswered for 20 minutes, it
+  escalates once as `question_unanswered`.
+- **When a send is interrupted:** `flow logs` records `submit_retry` when an Enter had to be
+  repeated within a send, and `dispatch_retry_enter` for an Enter-only retry on a later tick.
+  An interrupted tick leaves a persisted paste record; after the claim expires, the next tick may
+  press one Enter only if the matching pane still proves the prompt is there. It does not paste
+  that prompt again. If Enter cannot be confirmed, `dispatch_unconfirmed` is shown; an expired
+  claim whose delivery is ambiguous becomes
+  `dispatch_unresolved` for a human to inspect. `flow tick --all` sends at most one prompt per
+  pass and only observes the remaining flows.
 - **A flow is advanced by one external driver:** `reeves-flow-tick.timer` (or a cron entry) running
   `reevesagents flow tick --all` every minute. That pass is the only thing that advances a flow — an open
   Web UI dashboard and the TUI only report what the driver last did, and `GET /api/state` neither ticks nor
@@ -192,8 +212,9 @@ human is highlighted with the same warning colour as a stale run.
   the driver is the schedule, not a config key.
 - Two ticks at the same time are safe: the first writes the dispatch it is about to
   send into the flow file, and the second finds that claim and sends nothing. If a
-  tick dies mid-send, the claim is escalated to a human after two minutes instead of
-  being pasted again.
+  tick dies mid-send, the next pass checks the pane after two minutes: it submits a
+  confirmed prompt with one Enter, releases a confirmed empty composer, and asks a
+  human to inspect ambiguous delivery. It never pastes the same prompt twice.
 - A `flow tick --all` pass sends at most one prompt. It observes the remaining flows
   without sending, so a large registry cannot run the service past its start timeout.
   The packaged CLI does not install a systemd unit, so it does not prescribe a

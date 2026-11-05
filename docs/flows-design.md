@@ -871,11 +871,12 @@ send whose text is gone but whose busy hint never came keeps the older rule unch
 - **The paste outlives the process.** Every scheduled tick is a new process, so the runtime's in-process paste map is
   empty by the time the retry runs — a collapsed marker would look like somebody else's text and the tick would refuse
   as `composer_dirty`. The flow therefore writes `dispatch_paste: { agent, head, at }` into its own state on every
-  `unconfirmed_paste`, `ports.send` carries it back into `sendWhenIdle`, and the marker is attributable again. The record
-  supplies the *timestamp* and nothing more: the same `dispatch_confirm_seconds` window bounds it, so a record older than
-  the window is refused like any other stale marker. `at` is refreshed on every failed attempt (the moment the composer
-  was last read as ours), which is what keeps a 60 s tick well inside the 90 s window. The record is dropped as soon as
-  the dispatch settles, and it authorises nothing for a different head.
+  `unconfirmed_paste`, and `ports.send` carries it back into `sendWhenIdle`. For an ordinary retry, the timestamp is still
+  bounded by `dispatch_confirm_seconds`; `at` is refreshed whenever the composer is re-read as ours, which keeps a 60 s tick
+  well inside the 90 s window. For an expired pending claim, the runner also checks the recorded agent and head against the
+  live pane before choosing recovery, then caps the recovery send at one Enter. `sendWhenIdle` still validates the composer
+  before pressing that key; if ownership cannot be confirmed, it refuses rather than pasting again. The record is dropped
+  as soon as the dispatch settles, and it authorises nothing for a different head.
 - **A non-ACCEPT verdict must come from the file.** The pane capture still holds the verdicts of earlier rounds, and
   `claim.verdict_count` is a counter, not a binding: when one more verdict line appeared in the window it was applied to
   whatever head the flow was on. A `CHANGES_REQUESTED` read from the pane is therefore refused (`hold awaiting_verdict`
@@ -977,6 +978,46 @@ head gets a detailed `plan_in_flight` hold and escalates as `plan_item_stale_in_
 references are consumed even when the accepted item waits behind a valid in-flight row, so the same file cannot re-run
 the close on every tick.
 
+### 3.7 Durable incidents, agent questions and interrupted sends
+
+The flow state machine still decides what work can advance. Incident reconciliation records conditions that need attention in
+`~/.reeves/flows/<run-id>/incidents.json`; it does not send a prompt, press a key, edit the project or repair the condition itself.
+The flow log records incident open/resolve events for history, while `flow status` and the run attention surfaces show incidents that
+are still open.
+
+Incident identity is deduplicated per flow episode, kind and plan item: `(flow, episode, kind, item)`. Repeated observations update
+the same row's `count`, latest evidence and `last_seen`, rather than opening a new incident each tick. Current signals include
+`agent_question`, `dev_stalled`, `pane_unknown`, `dispatch_unconfirmed`, `review_timeout`, `rounds_exhausted`,
+`plan_item_stale_in_flight` and `unknown_hold`.
+
+Severity controls who owns the next action:
+
+- A `warn` starts with the orchestrator as owner. Examples include an agent question, an idle dev with a dirty tree, or a pane that
+  remains unreadable after its grace period.
+- A `blocker` also starts with the orchestrator, but has a ten-minute ACK deadline. If it is not ACKed by then, ownership moves to
+  the human and the engine creates an approval. Review timeouts, spent round budgets, unresolved dispatch delivery and stale
+  in-flight plan rows use this route.
+- `claim` assigns an incident to the orchestrator. `ack` records that the orchestrator has accepted responsibility and changes its
+  status to `acked`; it remains open and is not thereby fixed. `resolve --note` is the explicit resolution and requires a non-empty
+  note.
+
+On a later live observation, an incident whose condition is no longer signalled is marked resolved automatically. Parked flows are
+not observed for condition clearing, and an escalated blocker remains visible until it is handled. A resolved episode is not reopened
+as a second incident for the same dedupe key.
+
+An agent question is durable flow state as well as a warning incident. `flow status` prints `agent question <agent>: <text>`, and a
+plan item waiting on the answer is marked `blocked_owner` with reason `agent_question`. The engine waits for the human to answer in
+the agent pane through the ordinary interaction surface; it never sends a guessed answer or automated keys. When the pane is
+confirmed working or idle again, the question is recorded as answered and the item returns to work. An unanswered question escalates
+once as `question_unanswered` after twenty minutes.
+
+Dispatch recovery preserves the distinction between text that is still in our composer and a send whose delivery is ambiguous.
+`submit_retry` records an additional Enter within a send when the composer still proves it holds our prompt. If an interrupted
+dispatch is recovered across ticks, `dispatch_retry_enter` records the Enter-only retry; the recorded prompt is not pasted again,
+and recovery is bounded to one Enter. `dispatch_unconfirmed` means the send did not produce confirmation; `dispatch_unresolved`
+means an expired pending claim has ambiguous delivery and needs a human to inspect it. A `flow tick --all` pass may send at most
+one prompt, then observes the remaining flows without sending.
+
 ## 4. How it meets the surfaces
 
 ### 4.1 CLI (`src/surfaces/cli/flow.ts`, registered in `index.ts:41`–`:71` so `--help` order stays intentional)
@@ -995,6 +1036,10 @@ reevesagents flow resume --run <id> [--json]                        # shipped
 reevesagents flow stop   --run <id> [--yes] [--json]                # shipped
 reevesagents flow logs   --run <id> [-n N] [--json]                 # shipped
 reevesagents flow notes  --run <id> [--head <sha>] [-r N] [--json]  # shipped (block 09)
+reevesagents flow incidents list --run <id>                            # shipped
+reevesagents flow incidents claim --run <id> --incident <id>           # shipped
+reevesagents flow incidents ack --run <id> --incident <id>             # shipped
+reevesagents flow incidents resolve --run <id> --incident <id> --note <text> # shipped
 reevesagents flow tick   --all [--json] [--dry-run]                 # shipped (block 15): one pass for cron
 reevesagents flow plan   --run <id> [--json]                        # shipped (block 12)
 reevesagents flow plan import --run <id> --file <path> [--dry-run]   # shipped

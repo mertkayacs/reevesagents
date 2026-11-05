@@ -201,6 +201,8 @@ No arguments launches the TUI.
 | `mcp` | Start the MCP server over stdio. Host CLIs run this. |
 | `config [key] [value]` | Show or update editable settings. |
 | `flow status\|tick` | Read the dev -> review -> fix flow of a run, or take one engine step (`--dry-run` prints it). |
+| `flow status` | Show the current agent question and open incident rows when a flow needs a person. |
+| `flow incidents list\|claim\|ack\|resolve` | Review durable incidents, assign them to the orchestrator, acknowledge ownership, or resolve with a note. |
 | `presets` | List saved run presets. |
 | `save-preset` | Save a live run as a preset. |
 | `start-preset` | Start a run from a preset. |
