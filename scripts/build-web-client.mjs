@@ -17,6 +17,10 @@ const copies = [
   ['src/surfaces/webui/client/index.html', 'index.html'],
   ['src/surfaces/webui/client/app.css', 'app.css'],
   ['src/surfaces/webui/client/app.js', 'app.js'],
+  ['src/surfaces/webui/client/tick-line.js', 'tick-line.js'],
+  ['src/surfaces/webui/client/insights-core.js', 'insights-core.js'],
+  ['src/surfaces/webui/client/plan-controller.js', 'plan-controller.js'],
+  ['src/surfaces/webui/client/plan-error.js', 'plan-error.js'],
   ['src/surfaces/webui/client/brand-duck.json', 'brand-duck.json'],
   ['src/surfaces/webui/client/favicon.png', 'favicon.png'],
 ]

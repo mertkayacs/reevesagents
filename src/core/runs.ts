@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { homedir } from 'node:os'
+import { emitNotification } from './notifications.js'
 import { dirname, join } from 'node:path'
 import type {
   AgentRecord,
@@ -32,11 +32,14 @@ import type {
 import { redactSecrets } from './redact.js'
 import { isProvider } from './providers.js'
 import { reapPaneProcess } from './process.js'
+import { logDiagnostic } from './diagnostics.js'
 import * as tmux from './tmux.js'
+import { stateRoot } from './state-path.js'
+import { deleteFlowFileForRun } from './flow-store.js'
 
-export function stateRoot(): string {
-  return process.env.REEVES_REGISTRY || join(homedir(), '.reeves')
-}
+// Re-exported because every caller and every test names `stateRoot` from the registry module; the
+// implementation moved to `state-path.ts` to keep this module and the flow store acyclic.
+export { stateRoot }
 
 export function runsDir(): string {
   return join(stateRoot(), 'runs')
@@ -79,6 +82,15 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
+// The lock's own timeout is the one failure a caller can treat as "someone else is working": it is
+// matched by a predicate instead of by the message, because the message carries the absolute lock
+// path and every surface here prints its errors home-shortened.
+export const RUNS_LOCK_TIMEOUT = 'Timed out waiting for runs lock:'
+
+export function isRunsLockTimeout(err: unknown): boolean {
+  return err instanceof Error && err.message.startsWith(RUNS_LOCK_TIMEOUT)
+}
+
 export function withRunsLock<T>(fn: () => T): T {
   mkdirSync(stateRoot(), { recursive: true })
   const lockPath = join(stateRoot(), '.runs.lock')
@@ -102,7 +114,7 @@ export function withRunsLock<T>(fn: () => T): T {
         // lock disappeared between attempts
       }
 
-      if (Date.now() > deadline) throw new Error(`Timed out waiting for runs lock: ${lockPath}`)
+      if (Date.now() > deadline) throw new Error(`${RUNS_LOCK_TIMEOUT} ${lockPath}`)
       sleepSync(25)
     }
   }
@@ -367,6 +379,10 @@ export function deleteAgent(agentId: string): AgentRecord {
 export function deleteRunHistory(runId: string): void {
   withRunsLock(() => {
     rmSync(runHistoryPath(runId), { force: true })
+    // The flow is the one artefact that outlives a run's directory (§3.3): while the history record
+    // existed, `flow status` still described the run; once the record is gone there is no reader
+    // left, so the pipeline file goes with it. No other path deletes a flow automatically.
+    deleteFlowFileForRun(runId)
   })
 }
 
@@ -409,11 +425,41 @@ function listAgentsForRunIds(runIds: string[]): AgentRecord[] {
     }
   }
 
-  return agents.sort((a, b) => {
-    if (a.run_id !== b.run_id) return a.run_id.localeCompare(b.run_id)
-    if (a.role !== b.role) return a.role === 'root' ? -1 : 1
-    return new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-  })
+  return agents.sort(compareAgents)
+}
+
+// Failure-aware sibling of `listAgents`: `null` means "this process could not read the registry",
+// `[]` means "there are no agents". A decision that parks a flow must never read the first as the
+// second, so decisions use this and display code keeps the lenient one — the same pair the tmux
+// probes use (`tryAllWindowIds` next to `allWindowIds`).
+export function tryListAgents(runId: string): AgentRecord[] | null {
+  let files: string[]
+  try {
+    files = readdirSync(agentsDir(runId))
+  } catch (err) {
+    // A run without an agents directory really has no agents; anything else (EACCES on the run
+    // directory, a path that is not a directory) is a probe failure, not an empty answer.
+    return (err as { code?: string }).code === 'ENOENT' ? [] : null
+  }
+  const agents: AgentRecord[] = []
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue
+    const id = file.slice(0, -5)
+    try {
+      agents.push(readAgentUnlocked(runId, id))
+    } catch {
+      // A record that is there but does not parse is a probe failure; a file that vanished between
+      // `readdirSync` and the read really is gone.
+      if (existsSync(agentPath(runId, id))) return null
+    }
+  }
+  return agents.sort(compareAgents)
+}
+
+function compareAgents(a: AgentRecord, b: AgentRecord): number {
+  if (a.run_id !== b.run_id) return a.run_id.localeCompare(b.run_id)
+  if (a.role !== b.role) return a.role === 'root' ? -1 : 1
+  return new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
 }
 
 function buildRunHistoryRecord(run: RunRecord, status: RunHistoryStatus): RunHistoryRecord {
@@ -434,12 +480,31 @@ function buildRunHistoryRecord(run: RunRecord, status: RunHistoryStatus): RunHis
   }
 }
 
+// The archive is a run-level fact and the last one a run produces, so it is journalled here rather than in each
+// of its three callers (kill, stop, cleanup).
+function emitRunArchived(run: RunRecord, reason: string): void {
+  const parts = run.working_dir.split(/[\\/]+/).filter(Boolean)
+  emitNotification({
+    kind: 'run.archived',
+    title: `run ${run.name || run.id} archived`,
+    detail: `reason: ${reason}`,
+    run_id: run.id,
+    run_name: run.name,
+    project: parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : '',
+    source: 'product',
+  })
+}
+
 export function archiveAndRemoveRun(runId: string, status: RunHistoryStatus): RunHistoryRecord {
   return withRunsLock(() => {
     const run = readRunUnlocked(runId)
     const record = buildRunHistoryRecord(run, status)
     writeRunHistoryUnlocked(record)
     rmSync(runDir(runId), { recursive: true, force: true })
+    // Emitted while the run is still readable, and inside the lock, so the event carries the run's own name and
+    // project instead of a guess made after the directory is gone. `emitNotification` takes a different lock, and
+    // never throws.
+    emitRunArchived(run, status)
     return record
   })
 }
@@ -493,21 +558,27 @@ export function readAgentInbox(runId: string, agentId: string): Message[] {
 }
 
 export interface AutoCleanupOptions {
-  sessionExists?: (_session: string) => boolean
-  targetExists?: (_target: string, _session: string) => boolean
+  // A probe may answer `null` = "unknown" (tmux could not answer). Cleanup treats unknown
+  // as alive: archiving a run on an unanswered probe is how a live fleet disappears.
+  sessionExists?: (_session: string) => boolean | null
+  targetExists?: (_target: string, _session: string) => boolean | null
   killSession?: (_session: string) => void
   killViewers?: (_runSession: string) => void
+  // Test seams for the batch enumeration: `null` = tmux could not answer.
+  windowIds?: () => Set<string> | null
+  sessions?: () => { name: string }[] | null
   tmuxAvailable?: () => boolean
   cleanStale?: boolean
 }
 
 export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions = {}): boolean {
-  const targetExists = options.targetExists ?? tmux.targetExists
-  const sessionExists = options.sessionExists ?? tmux.sessionExists
+  const targetExists = options.targetExists ?? tmux.tryTargetExists
+  const sessionExists = options.sessionExists ?? tmux.trySessionExists
   const agents = listAgents(run.id).filter(agent => !agent.ended_at)
   const windowedAgents = agents.filter(agent => !agent.headless && agent.tmux_window_id)
-  if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id, agent.tmux_session))
-  return sessionExists(run.tmux_session)
+  // `!== false` on purpose: only a confident "it is not there" counts as dead.
+  if (windowedAgents.length > 0) return windowedAgents.some(agent => targetExists(agent.tmux_window_id, agent.tmux_session) !== false)
+  return sessionExists(run.tmux_session) !== false
 }
 
 // Removes state directories for runs whose status is 'ended' or whose tmux
@@ -519,8 +590,8 @@ export function runHasLiveTmuxTarget(run: RunRecord, options: AutoCleanupOptions
 // and its grouped web viewers are killed before archiving, so record removal
 // never leaves tmux state behind.
 export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: string[]; archived: string[] } {
-  const sessionExists = options.sessionExists ?? tmux.sessionExists
-  const targetExists = options.targetExists ?? tmux.targetExists
+  const sessionExists = options.sessionExists ?? tmux.trySessionExists
+  const targetExists = options.targetExists ?? tmux.tryTargetExists
   const killSession = options.killSession ?? tmux.killSession
   const killViewers = options.killViewers ?? tmux.killGroupedViewers
   // If the caller injected tmux checks (test drivers), treat tmux as available and skip the real probe.
@@ -536,10 +607,22 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
   // tmux spawn per run per tick. A stale verdict is always confirmed with fresh
   // per-run probes, so a window born after the enumeration is never misjudged.
   const useBatch = haveTmux && !options.sessionExists && !options.targetExists && runs.length > 0
-  const batchWindows = useBatch ? tmux.allWindowIds() : null
-  const batchSessions = useBatch ? new Set(tmux.listSessions().map(info => info.name)) : null
+  const batchWindows = useBatch ? (options.windowIds ?? tmux.tryAllWindowIds)() : null
+  const batchSessionList = useBatch ? (options.sessions ?? tmux.tryListSessions)() : null
+  // A failed enumeration is not "nothing is running": stand down and leave a trace, or the
+  // next tick — with a working tmux — would archive a fleet that was alive all along.
+  if (useBatch && (batchWindows === null || batchSessionList === null)) {
+    logDiagnostic('run-cleanup-skipped', {
+      reason: 'tmux-enumeration-failed',
+      runs: runs.length,
+      windows: batchWindows === null ? 'unknown' : batchWindows.size,
+      sessions: batchSessionList === null ? 'unknown' : batchSessionList.length,
+    })
+    return { removed: [], archived: [] }
+  }
+  const batchSessions = batchSessionList ? new Set(batchSessionList.map(info => info.name)) : null
   const batchTargetExists = batchWindows
-    ? (target: string, session: string): boolean => batchWindows.has(`${session}\0${target}`)
+    ? (target: string, session: string): boolean | null => batchWindows.has(`${session}\0${target}`) || tmux.tryTargetExists(target, session)
     : undefined
   const batchSessionExists = batchSessions
     ? (session: string): boolean => batchSessions.has(session)
@@ -561,7 +644,9 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
         // Viewers stay identifiable by group name even after the run session is
         // gone, so kill them unconditionally; the session kill needs it to exist.
         killViewers(run.tmux_session)
-        if (sessionExists(run.tmux_session)) {
+        // Only a confident "yes, it is there" authorises a kill: an unanswered probe means
+        // the record gets archived without touching tmux, never a live session torn down.
+        if (sessionExists(run.tmux_session) === true) {
           killSession(run.tmux_session)
           // The session was confirmed present seconds ago, so its recorded pane
           // pids are safe to escalate on: SIGHUP-resistant CLIs must not outlive
@@ -574,6 +659,12 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
       const record = archiveAndRemoveRun(run.id, isStale ? 'stale' : 'ended')
       removed.push(run.id)
       archived.push(record.id)
+      logDiagnostic('run-archived', {
+        run: record.name,
+        id: record.id,
+        reason: isStale ? 'stale' : 'ended',
+        agents: record.agent_count,
+      })
     } catch {
       // try again next refresh
     }

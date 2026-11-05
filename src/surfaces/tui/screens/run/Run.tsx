@@ -13,6 +13,10 @@ import { useToast } from '../../contexts/ToastContext.js'
 import { openRunTabs } from '../../../../core/runtime.js'
 import type { RunRecord } from '../../../../core/types.js'
 
+import { flowSectionLines, planAttentionOf } from '../../../../core/flow-view.js'
+import { readFlow } from '../../../../core/flow-store.js'
+import { readTickStatus } from '../../../../core/tick-status.js'
+
 const REFRESH_INTERVAL_MS = 5000
 
 type RowItem = 'Agents' | 'Output' | 'OpenTabs' | 'AddWorker' | '__section__' | 'StopRun' | 'Back'
@@ -47,6 +51,34 @@ export function Run() {
   const [selectedIdx, setSelectedIdx] = useState(0)
 
   const agents = run ? listAgents(run.id) : []
+
+  // The flow section: read-only, absent when the run has no flow, and re-read on the same slow interval as the run
+  // itself. A damaged flow file leaves the section empty — `flow status` is where that is reported.
+  const [flowLines, setFlowLines] = useState<string[]>([])
+  useEffect(() => {
+    const runId = run?.id
+    if (!runId) {
+      setFlowLines([])
+      return undefined
+    }
+    const readFlowSection = (): void => {
+      try {
+        const state = readFlow(runId)
+        setFlowLines(flowSectionLines(state, {
+          tick: readTickStatus(),
+          plan: planAttentionOf(runId),
+          active_plan_item: state.active_plan_item,
+          queue_depth: state.specs.filter(spec => !state.dispatched_specs.includes(spec.id)).length,
+        }))
+      } catch {
+        setFlowLines([])
+      }
+    }
+    readFlowSection()
+    const timer = setInterval(readFlowSection, REFRESH_INTERVAL_MS)
+    timer.unref()
+    return () => clearInterval(timer)
+  }, [run?.id])
 
   useEffect(() => {
     if (!selectedRunId) return
@@ -191,6 +223,18 @@ export function Run() {
       statusContext={statusContext}
       statusKeys="enter open · ↑↓ move · esc back"
     >
+      {flowLines.length > 0 ? (
+        <Box flexDirection="column">
+          <Section label="Flow" />
+          {flowLines.map(line => (
+            <Box key={line}>
+              <Text color={colors.text.dim} wrap="truncate-end">{line}</Text>
+            </Box>
+          ))}
+          <SectionEnd />
+        </Box>
+      ) : null}
+
       {compactBody ? (
         <Box flexDirection="column">
           <Section label={selectedIdx < 4 ? 'Actions' : 'Lifecycle'} />

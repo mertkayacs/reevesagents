@@ -1,0 +1,459 @@
+// Flow control: the operator's hands on a flow — pause, resume, stop, dropping a block the engine never sent,
+// and queueing a block after the flow already started.
+//
+// Every command here is one short runs-lock section: read the flow, validate the transition against
+// the engine's table (`FLOW_TRANSITIONS`, §3.4), write it back atomically. Nothing sends: a control
+// command changes what the *next* tick may do, it never pastes into a pane itself. That is why the
+// CLI, the MCP and a future TUI key all call this module and not the runtime.
+//
+// Two deliberate behaviours:
+// - `pause` and `stop` drop an unsettled dispatch claim. A human decision outranks a claim; leaving
+//   it behind would make `resume` wait out `PENDING_TTL_SEC` and then escalate a flow nobody is
+//   driving.
+// - `resume` returns the flow to the state it was paused from, never to "the beginning": a paused
+//   `fixing` flow resumes into `fixing`, so the engine still waits for the next HEAD instead of
+//   asking for a review of a commit it already reviewed. Resuming an *escalated* flow is the one
+//   exception the design makes (§3.4): it grants a fresh round budget and logs that it did.
+
+import type { FlowState, FlowStatus } from './flow.js'
+import { FLOW_LOG_LIMIT, FlowStateError, applyOperatorTransition, canTransition } from './flow.js'
+import type { BlockSpec } from './spec.js'
+import { readSpecFile } from './flow-queue.js'
+import type { FlowStoreOptions } from './flow-store.js'
+import { readFlow, saveFlow } from './flow-store.js'
+import { docsOnlySince, readGitHead } from './flow-runner.js'
+import { isRunsLockTimeout, withRunsLock } from './runs.js'
+import { mutatePlan, setItemStatus } from './plan.js'
+import { withDispatchGate } from './flow-dispatch-gate.js'
+import { planExists, readPlan } from './plan.js'
+import { pruneClosedFlowNotes } from './flow-notes.js'
+
+export interface FlowControlOptions extends FlowStoreOptions {
+  // Timestamp written into the log entry; the clock is the caller's so a test can pin it.
+  at?: string
+  now?: number
+  // How long to wait for an in-flight dispatch to finish before refusing. A test shortens it.
+  gate_timeout_ms?: number
+}
+
+export interface FlowControlResult {
+  state: FlowState
+  path: string
+}
+
+// Why a queue edit was refused. A code, not a sentence: the CLI's exit, the MCP's error and a test all have to
+// tell "there is no such block" from "that block was already sent" without parsing prose. The message repeats
+// the code in front so the printed line is still the diagnosis.
+export type FlowRefusalCode = 'not_found' | 'already_dispatched' | 'dispatch_pending' | 'flow_closed'
+
+export class FlowRefusalError extends FlowStateError {
+  readonly code: FlowRefusalCode
+
+  constructor(code: FlowRefusalCode, message: string) {
+    super(`${code}: ${message}`)
+    this.name = 'FlowRefusalError'
+    this.code = code
+  }
+}
+
+// One short critical section for a transition. `fn` runs inside the lock and reads the flow as it is
+// *now*, which is what makes two control commands (or a control command and a tick) safe: the second
+// one validates against the state the first one wrote.
+//
+// The dispatch gate comes first, the runs lock second — the same order the runner takes (`§2.4`), so
+// a control command can never land between a runner's claim check and the paste it guards. While a
+// prompt is being typed this waits for it to finish (bounded), then applies on top of the settled
+// state; if the sender is stuck the command refuses instead of hanging for ever.
+function transition(
+  runId: string,
+  options: FlowControlOptions,
+  // The name is documented in the comment above; a type-only position is reported as unused.
+  fn: (_state: FlowState) => FlowState,
+): FlowControlResult {
+  try {
+    const gated = withDispatchGate<FlowControlResult>(
+      () => withRunsLock<FlowControlResult>(() => {
+        const next = fn(readFlow(runId, { root: options.root }))
+        return { state: next, path: saveFlow(next, { root: options.root }) }
+      }),
+      { root: options.root, timeoutMs: options.gate_timeout_ms },
+    )
+    if (!gated.acquired) {
+      throw new FlowStateError('a dispatch is in flight; nothing was changed — try again in a moment')
+    }
+    return gated.value
+  } catch (err) {
+    // A timeout means another reevesagents process is writing the state tree right now: nothing was
+    // changed, and the operator can run the command again.
+    if (isRunsLockTimeout(err)) {
+      throw new FlowStateError('another reevesagents process is writing the state directory; try again')
+    }
+    throw err
+  }
+}
+
+// Where a resume would put the flow, without changing anything, so a surface can explain the command
+// before it runs. Null when the flow cannot be resumed at all.
+export function resumeTarget(state: FlowState): FlowStatus | null {
+  if (state.state === 'paused') return state.paused_from ?? 'idle'
+  if (state.state === 'escalated') return 'idle'
+  return null
+}
+
+export function pauseFlow(runId: string, options: FlowControlOptions = {}): FlowControlResult {
+  const at = options.at ?? new Date().toISOString()
+  const now = options.now ?? Date.now()
+  return transition(runId, options, (state) => {
+    if (state.state === 'paused') {
+      throw new FlowStateError(`flow for run ${state.run_id} is already paused; \`flow resume\` puts it back to work`)
+    }
+    return applyOperatorTransition(state, {
+      to: 'paused',
+      action: 'pause',
+      event: 'flow_paused',
+      detail: `from ${state.state}${state.pending ? ', dropped an unsettled dispatch' : ''}`,
+      at,
+      patch: { paused_from: state.state, paused_at: Math.floor(now) },
+    })
+  })
+}
+
+export function resumeFlow(runId: string, options: FlowControlOptions = {}): FlowControlResult {
+  const at = options.at ?? new Date().toISOString()
+  return transition(runId, options, (state) => {
+    if (state.state === 'paused') {
+      const target = state.paused_from ?? 'idle'
+      // The table guards the target too: a file claiming `paused_from: paused` must not resume into
+      // itself, and `paused_from: done` must not revive a closed flow.
+      if (!canTransition('paused', target)) {
+        throw new FlowStateError(`flow for run ${state.run_id} cannot resume into state ${target}`)
+      }
+      return applyOperatorTransition(state, {
+        to: target,
+        action: 'resume',
+        event: 'flow_resumed',
+        detail: `from paused to ${target}`,
+        at,
+        patch: { paused_from: null, paused_at: null, ...anchorOnHead(state) },
+      })
+    }
+    if (state.state === 'escalated') {
+      // A human granting a new budget is a decision, not a side effect of a commit (§3.4).
+      return applyOperatorTransition(state, {
+        to: 'idle',
+        action: 'resume',
+        event: 'flow_resumed',
+        detail: `from escalated to idle, rounds reset from ${state.rounds}`,
+        at,
+        patch: { rounds: 0, ...anchorOnHead(state) },
+      })
+    }
+    throw new FlowStateError(
+      `cannot resume a flow in state ${state.state} (only a paused or escalated flow can be resumed)`,
+    )
+  })
+}
+
+// A round the engine lost: the item is in flight, no review was requested, and nothing is pending. It happens when the flow's own
+// bookkeeping moves on without the step it owed (a resume anchored over a work commit, `flow-a` on 2026-11-02), and it leaves the operator
+// unable to touch the row because the engine still says "a round is in flight". Releasing it is an operator decision, journalled, and it
+// hands the row back to the pipeline: the next tick dispatches it again.
+export function releaseRound(runId: string, options: FlowControlOptions & { reason?: string } = {}): { state: FlowState, path: string, item: string } {
+  // A release is an operator's claim that the engine lost a round, and the journal is the only place that claim survives. Without a reason
+  // the entry says what happened but not why, and nobody can tell it from a bug later (block 58).
+  const reason = options.reason?.trim()
+  if (!reason) throw new FlowStateError('a release needs a reason: pass --reason "<why the round was lost>"')
+  // Read and decide before taking any lock: the plan mutation below takes the runs lock itself, and two nested acquisitions would time out.
+  const before = readFlow(runId, { root: options.root })
+  const item = before.active_plan_item ?? before.claim.spec_id
+  if (!item) throw new FlowStateError(`flow for run ${before.run_id} has no plan item in flight; there is no round to release`)
+  if (roundIsLive(before)) {
+    throw new FlowStateError(
+      `flow for run ${before.run_id} has a live round on ${item} (a review was requested); wait for the verdict, or stop the flow`,
+    )
+  }
+  if (before.state !== 'paused') {
+    // Only a parked flow is released: otherwise the next tick could be mid-send, and the round would be freed underneath it.
+    throw new FlowStateError(`flow for run ${before.run_id} is ${before.state}; pause it first, then release the round`)
+  }
+
+  // The flow's hold is only half of it: the plan also says `in_work`, and the picker skips a row that is in flight. Putting the row back in
+  // the queue is what makes the next tick dispatch it again — and it is done first, so a failure here leaves the round held rather than the
+  // row orphaned in the queue (block 56).
+  try {
+    mutatePlan(runId, plan => {
+      const row = plan?.items.find(entry => entry.id === item)
+      if (!plan || !row || (row.status !== 'in_work' && row.status !== 'reviewing')) return { plan: null, value: null }
+      const moved = setItemStatus(plan, {
+        id: item, status: 'queued', now: options.now ?? Date.now(), at: options.at,
+        intervention: { paused: true, round_live: false },
+      })
+      return { plan: moved.plan, value: null }
+    }, { root: options.root })
+  } catch {
+    // A plan that cannot be read or written is not a reason to leave the round held: the flow's side is released next, and the operator sees
+    // the row in `flow plan`.
+  }
+
+  const result = transition(runId, options, (state) => {
+    if (state.active_plan_item !== item && state.claim.spec_id !== item) {
+      throw new FlowStateError(`the round on ${item} changed while it was being released; run it again`)
+    }
+    const at = options.at ?? new Date().toISOString()
+    return {
+      ...state,
+      active_plan_item: null,
+      review_started_at: null,
+      pending: null,
+      updated_at: at,
+      log: [...state.log, {
+        at,
+        event: 'round_released',
+        detail: `${item}: ${reason}`,
+      }].slice(-FLOW_LOG_LIMIT),
+    }
+  })
+  return { ...result, item }
+}
+
+// A round is live when a review was actually requested for it: that is the fact the engine must not let a human bypass.
+export function roundIsLive(state: FlowState): boolean {
+  return state.review_started_at !== null || state.pending !== null
+}
+
+export function stopFlow(runId: string, options: FlowControlOptions = {}): FlowControlResult {
+  const at = options.at ?? new Date().toISOString()
+  return transition(runId, options, (state) => {
+    if (state.state === 'done') {
+      throw new FlowStateError(`flow for run ${state.run_id} is already closed (${state.close_reason ?? 'done'})`)
+    }
+    const stopped = applyOperatorTransition(state, {
+      to: 'done',
+      action: 'stop',
+      event: 'flow_stopped',
+      detail: `from ${state.state}${state.pending ? ', dropped an unsettled dispatch' : ''}`,
+      at,
+      patch: { close_reason: 'stopped by the operator' },
+    })
+    // The flow will not review again: keep the newest round as evidence, drop the rest (§11.3).
+    try { pruneClosedFlowNotes(state.run_id, { root: options.root }) } catch { /* housekeeping only */ }
+    return stopped
+  })
+}
+
+export interface AddSpecsInput {
+  run_id: string
+  // Structured JSON block specs.
+  files?: string[]
+  // Files ingested as unstructured markdown: an explicit downgrade, not an accident (§3.2).
+  markdown?: string[]
+}
+
+export interface AddSpecsResult extends FlowControlResult {
+  // The blocks this call queued, in argument order.
+  queued: BlockSpec[]
+}
+
+// Queue blocks on a flow that already exists. Every file is read and validated *before* the lock, so
+// one bad path leaves the flow untouched instead of half-queued; the queue is written once.
+// The item ids of the flow's plan, or null when there is none. Read-only and failure-tolerant: the plan is a
+// mirror, and a damaged one must not stop a spec from being queued.
+function planItemIds(runId: string): string[] | null {
+  try {
+    if (!planExists(runId)) return null
+    return readPlan(runId).items.map(item => item.id)
+  } catch {
+    return null
+  }
+}
+
+export function addFlowSpecs(input: AddSpecsInput, options: FlowControlOptions = {}): AddSpecsResult {
+  const at = options.at ?? new Date().toISOString()
+  const files = input.files ?? []
+  const markdown = input.markdown ?? []
+  if (files.length === 0 && markdown.length === 0) {
+    throw new FlowStateError('pass at least one --file or --markdown')
+  }
+
+  const before = readFlow(input.run_id, { root: options.root })
+  refuseClosed(before)
+
+  const queued: BlockSpec[] = []
+  const ids = [...before.specs.map(spec => spec.id), ...before.dispatched_specs]
+  for (const [paths, asMarkdown] of [[files, false], [markdown, true]] as const) {
+    for (const path of paths) {
+      const spec = readSpecFile(path, { repo: before.repo, existingIds: ids, asMarkdown })
+      queued.push(spec)
+      ids.push(spec.id)
+    }
+  }
+
+  return {
+    ...transition(input.run_id, options, (state) => {
+      // Re-checked inside the lock: a dispatch or another `add-spec` may have moved since the read
+      // above, and this call must not overwrite that queue with a stale copy.
+      refuseClosed(state)
+      const taken = queued.filter(spec =>
+        state.specs.some(entry => entry.id === spec.id) || state.dispatched_specs.includes(spec.id))
+      if (taken.length > 0) {
+        throw new FlowStateError(`block ${taken.map(spec => spec.id).join(', ')} was queued by another call meanwhile`)
+      }
+      // When the flow has a plan, a spec that is not an item of it is "off plan": allowed (a human may want a
+      // side task), but never silent — the journal says so, and `flow status` shows the same log.
+      const offPlan = planItemIds(state.run_id)
+      const strays = offPlan === null ? [] : queued.map(spec => spec.id).filter(id => !offPlan.includes(id))
+      return {
+        ...state,
+        specs: [...state.specs, ...queued],
+        log: [
+          ...state.log,
+          { at, event: 'spec_queued', detail: queued.map(spec => spec.id).join(', ') },
+          ...(strays.length > 0
+            ? [{ at, event: 'off_plan_spec', detail: `${strays.join(', ')} — queued outside the plan` }]
+            : []),
+        ].slice(-FLOW_LOG_LIMIT),
+        updated_at: at,
+      }
+    }),
+    queued,
+  }
+}
+
+export interface DropSpecInput {
+  run_id: string
+  // The id of the queued block to remove. It must name a block the engine has not sent.
+  id: string
+  // Why it is being dropped. Optional; journalled after the id when given.
+  reason?: string
+}
+
+export interface DropSpecResult extends FlowControlResult {
+  // The block that was removed, so a surface can print its id and title.
+  spec: BlockSpec
+}
+
+function mayDropUnconfirmedSpec(state: FlowState, id: string): boolean {
+  if (!state.specs.some(spec => spec.id === id) || state.pending !== null
+    || state.claim.spec_id !== id || state.state !== 'idle' || state.review_started_at !== null) return false
+  let unconfirmed = false
+  for (const entry of [...state.log].reverse()) {
+    if (entry.event === 'dispatch_unconfirmed' && entry.detail.includes(`spec_dispatched ${id}`)) {
+      unconfirmed = true
+      break
+    }
+    if ((entry.event === 'dispatch_spec' || entry.event === 'plan_item_dispatched')
+      && entry.detail.includes(id)) return false
+    if (entry.event === 'request_review' || entry.event === 'dispatch_fix') return false
+  }
+  return unconfirmed
+}
+
+// Drop a block the engine has not sent yet. The case it exists for: a block was queued and the work was done by
+// hand before the engine dispatched it, so leaving it in the queue means the next tick sends a brief for work
+// that is already finished (block 65, the live `c762729e`).
+//
+// Only a human decides this — nothing here guesses from a title or from HEAD — and only for a block the engine
+// never sent: `dispatched_specs` records that a brief may be in the dev's pane, so that list is never touched and
+// a dispatched block cannot be dropped at all. A pending claim refuses the edit outright: the tick that wrote it
+// may be pasting right now, which is why this shares the dispatch gate with `pause` and `stop`.
+//
+// It edits `specs` only. When the flow has an imported plan, the plan is the source of dispatch (§5), so a
+// plan-owned brief is still picked from the plan on the next tick; retiring an item is a plan command's job.
+export function dropFlowSpec(input: DropSpecInput, options: FlowControlOptions = {}): DropSpecResult {
+  const at = options.at ?? new Date().toISOString()
+  const id = input.id.trim()
+  const reason = input.reason?.trim()
+  // The removed record is read inside the lock and handed back through this holder: a block another call dropped a
+  // moment ago must answer `not_found`, so the answer can never come from the argument.
+  const removed: { spec: BlockSpec | null } = { spec: null }
+  const result = transition(input.run_id, options, (state) => {
+    if (state.state === 'done') {
+      throw new FlowRefusalError('flow_closed', `flow for run ${state.run_id} is closed (${state.close_reason ?? 'done'}); its queue cannot be changed`)
+    }
+    const unconfirmed = mayDropUnconfirmedSpec(state, id)
+    if (state.dispatched_specs.includes(id) && !unconfirmed) {
+      throw new FlowRefusalError('already_dispatched', `block ${id} was already sent to the dev; a dispatched block cannot be dropped`)
+    }
+    const queued = state.specs.find(spec => spec.id === id)
+    if (!id || !queued) {
+      const waiting = state.specs.filter(spec => !state.dispatched_specs.includes(spec.id)).map(spec => spec.id)
+      throw new FlowRefusalError('not_found', `no block ${id || '(none)'} queued on flow for run ${state.run_id}${waiting.length > 0 ? `; waiting: ${waiting.join(', ')}` : '; its queue is empty'}`)
+    }
+    if (state.pending) {
+      throw new FlowRefusalError('dispatch_pending', `a ${state.pending.kind} dispatch to ${state.pending.target} is in flight; nothing was dropped — try again in a moment`)
+    }
+    removed.spec = queued
+    return {
+      ...state,
+      specs: state.specs.filter(spec => spec.id !== id),
+      ...(unconfirmed ? { dispatched_specs: state.dispatched_specs.filter(specId => specId !== id) } : {}),
+      log: [
+        ...state.log,
+        // The id, plus the reason when a human gave one: never a brief body (§11.3).
+        { at, event: 'spec_dropped', detail: reason ? `${id}: ${reason}` : id },
+      ].slice(-FLOW_LOG_LIMIT),
+      updated_at: at,
+    }
+  })
+  // `transition` rethrows whatever its section threw, so a returned result means the block was found and removed.
+  return { ...result, spec: removed.spec! }
+}
+
+// The head a fresh spell starts from: the current one only when the movement since the claim is *known* to be documentation. `false`
+// (real work) and `null` (the range could not be read) both keep the old head — the contract of `docsOnlySince` is that unknown changes
+// count as work, and anchoring on the current head in that case swallowed a work commit and its review, which is exactly how `flow-a`
+// ended up in `in_work` with no request (block 57, MAJOR).
+function anchorHead(state: FlowState): string {
+  const current = readGitHead(state.repo) || state.claim.head
+  if (!state.claim.head) return current
+  return docsOnlySince(state, current) === true ? current : state.claim.head
+}
+
+// Is the item the claim is bound to still open? The question the settle asks, asked here so `resume` keeps the answer that is still due.
+function boundItemOpen(state: FlowState): boolean {
+  const id = state.claim.spec_id
+  if (!id) return false
+  try {
+    const plan = readPlan(state.run_id)
+    return plan.items.some(item => item.id === id && item.status !== 'done' && item.status !== 'skipped')
+  } catch {
+    // An unreadable plan is not a reason to throw the answer away: the settle will find nothing to close and say so.
+    return true
+  }
+}
+
+// `resume` starts a new working spell, so the commits that landed while the flow was parked are the new baseline: they are
+// "already accounted for" and do not earn a review (block 22, D6). Without this the first tick after a resume asked a
+// reviewer to read whatever had been committed in the meantime — including the plan document itself.
+//
+// What it must not do is throw away an answer the flow already has. `resume` used to reset `verdict` and `spec_id`, so a run that
+// escalated *after* its reviewer answered came back with nothing to apply and sat on the item for ever — that is exactly what
+// `landing-ten` did (`claim.head = 5badf48`, `verdict ACCEPT`, then `verdict none` after the resume). An answer that has not been
+// used keeps its head, its verdict and its binding: the whole point of resuming is to let the flow carry it out (block 48, MAJOR 2).
+function anchorOnHead(state: FlowState): { claim: FlowState['claim'], verdict_handled_for: null } {
+  // An answer is owed while the item it belongs to is still open — the marker `verdict_applied` is bookkeeping, and it can be set while
+  // the item it claims to have closed is still in flight (the settle treats exactly that as "the close is still due"). Resetting the
+  // claim on that state threw the answer away and left the run parked with nothing to apply (block 50, MAJOR).
+  const owed = state.claim.verdict !== null && (!state.claim.verdict_applied || boundItemOpen(state))
+  // Re-anchoring is for the commits that are not work: a plan import or an attached brief made while the flow was parked must not come back
+  // as "the head moved". A commit that touches code is work, and the flow owes it a review — so the claim keeps its old head and the next
+  // tick sees the movement and asks for the review. Anchoring on the new head regardless swallowed that step: `flow-a` came back from a
+  // resume with `claim.head` already at the dev's commit, `0/2`, and a tick that could only say `head_unchanged` (block 55).
+  const head = owed ? state.claim.head : anchorHead(state)
+  return {
+    claim: owed
+      ? { ...state.claim, head }
+      : { head, verdict: null, verdict_count: state.claim.verdict_count, verdict_applied: false, spec_id: null },
+    verdict_handled_for: null,
+  }
+}
+
+// A block queued on a closed flow is work nobody will ever dispatch: refuse it with the reason
+// instead of growing a file that only `flow status` reads.
+function refuseClosed(state: FlowState): void {
+  if (state.state !== 'done' && state.state !== 'escalated' && state.state !== 'orphaned') return
+  const why = state.close_reason ?? state.orphan_reason ?? 'closed'
+  throw new FlowStateError(
+    `flow for run ${state.run_id} is ${state.state}; a block queued there would never be dispatched (${why})`,
+  )
+}

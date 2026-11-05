@@ -27,6 +27,7 @@
       <button id="presets-btn" class="btn btn-secondary" type="button">Presets</button>
       <button id="doctor-btn" class="btn btn-secondary" type="button">Doctor</button>
       <button id="about-btn" class="btn btn-secondary" type="button">About</button>
+      <button id="logs-btn" class="btn btn-secondary" type="button" aria-haspopup="dialog">Logs</button>
       <button id="new-agent-btn" class="btn btn-agent" type="button">New agent</button>
       <button id="new-run-btn" class="btn btn-accent" type="button">New run</button>
     </div>
@@ -243,6 +244,76 @@
     </div>
   </dialog>
 
+  <dialog id="plan-dialog" class="dialog mcp-dialog plan-dialog">
+    <div class="mcp-panel">
+      <div class="dialog-header">
+        <div id="plan-dialog-title" class="dialog-title">Plan</div>
+        <button id="plan-play-pause" class="btn btn-secondary plan-play-pause" type="button"
+                aria-label="Pause the plan" aria-pressed="false">Pause</button>
+      </div>
+      <div id="plan-panel" class="insights-panel">
+        <div id="plan-ticks" class="plan-ticks" hidden></div>
+        <div class="plan-progress">
+          <div class="plan-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="plan-progress-fill" class="plan-progress-fill"></span>
+          </div>
+          <div id="plan-progress-text" class="plan-progress-text">0/0</div>
+        </div>
+        <div class="plan-filters" role="group" aria-label="plan filter">
+          <button id="plan-filter-all" class="chip is-active" type="button">All</button>
+          <button id="plan-filter-open" class="chip" type="button">Open</button>
+          <button id="plan-filter-waiting" class="chip" type="button">Waiting for you</button>
+        </div>
+        <div id="plan-waiting" class="plan-waiting" hidden></div>
+        <div id="plan-list" class="plan-list" role="list" aria-label="plan items"></div>
+        <div id="plan-detail" class="plan-detail" hidden></div>
+        <div id="plan-empty" class="logs-empty" hidden>
+          <div class="empty-title">No plan yet</div>
+          <div class="empty-body">Import the project document with `reevesagents flow plan import`.</div>
+        </div>
+      </div>
+      <div id="plan-error" class="dialog-error" hidden></div>
+      <div class="dialog-actions">
+        <button id="plan-close" class="btn" type="button">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="insights-dialog" class="dialog mcp-dialog">
+    <div class="mcp-panel">
+      <div class="dialog-header">
+        <div id="insights-title" class="dialog-title">Logs</div>
+        <div id="insights-subtitle" class="dialog-subtitle">What your agents reported.</div>
+      </div>
+
+
+      <div id="logs-panel" class="insights-panel">
+        <div class="logs-filters">
+          <label class="logs-filter">
+            <span>Run</span>
+            <select id="logs-filter-run" aria-label="filter by run"><option value="">All runs</option></select>
+          </label>
+          <label class="logs-filter logs-toggle">
+            <input id="logs-unread" type="checkbox" />
+            <span>Unread only</span>
+          </label>
+        </div>
+        <div id="logs-announcer" class="visually-hidden" aria-live="polite"></div>
+        <div id="logs-list" class="logs-list" role="list" aria-label="notifications"></div>
+        <div id="logs-empty" class="logs-empty" hidden>
+          <div class="empty-title">No notifications yet</div>
+          <div class="empty-body">Runs, approvals and flow events appear here as they happen.</div>
+        </div>
+        <div id="logs-error" class="dialog-error" hidden></div>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" id="logs-mark-read" class="btn btn-agent">Mark all read</button>
+        <button type="button" id="insights-close" class="btn">Close</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="welcome-dialog" class="dialog mcp-dialog">
     <div class="mcp-panel">
       <div class="dialog-header">
@@ -303,6 +374,10 @@
 
   <script src="xterm.js"></script>
   <script src="addon-fit.js"></script>
+  <script src="tick-line.js"></script>
+  <script src="insights-core.js"></script>
+  <script src="plan-controller.js"></script>
+  <script src="plan-error.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

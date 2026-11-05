@@ -507,18 +507,30 @@ button { letter-spacing: 0; }
 
 .run-head {
   display: flex;
-  align-items: center;
+  /* The card decides how tight its own header is: the sidebar width is not the viewport width, so a media query cannot ask
+     this question. The container is this row, whose width comes from the card — putting it on `.run-head-body` made that
+     flex item content-free and collapsed it to 8px (block 70). */
+  container-type: inline-size;
+  /* The actions sit in the top-right corner: `align-items: flex-start` on the row and `align-self: start` on the group, so a
+     taller head body never centres them against it. */
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--s-2);
   min-width: 0;
   padding: 0 var(--s-1);
 }
 
+/* Two rows, three columns. Row 1: the name (which yields last) and the counters (which yield first — they keep their
+   text in `title`). Row 2: the flow chip, the play/pause glyph and the plan icon, in that order and on one line. The
+   glyph had no cell of its own in the old two-column grid, so it fell to a third row under the chip (block 70). */
 .run-head-body {
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-auto-rows: min-content;
+  row-gap: 4px;
+  column-gap: 4px;
+  align-items: center;
 }
 
 .run-actions {
@@ -526,10 +538,14 @@ button { letter-spacing: 0; }
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--s-1);
+  align-self: start;
+  gap: 4px;
 }
 
 .run-name {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   color: var(--dim);
@@ -540,7 +556,15 @@ button { letter-spacing: 0; }
   white-space: nowrap;
 }
 
+/* The counters cannot push the chip out of its row: `max-width` caps the auto track they size, `min-width: 0` lets it
+   shrink to nothing, and the full text stays in `title`. Without the cap the counters claimed 161px of a 225px header and
+   the flow chip was clipped to 56px (block 70). */
 .run-meta {
+  grid-column: 2 / -1;
+  grid-row: 1;
+  justify-self: end;
+  min-width: 0;
+  max-width: 7ch;
   overflow: hidden;
   color: var(--muted);
   font-size: var(--fs-xs);
@@ -551,18 +575,181 @@ button { letter-spacing: 0; }
   letter-spacing: 0;
 }
 
+/* Flow chip under the run name: muted by default, warn when a human is needed. The text comes from
+   the server; only the attention state is styled here. */
+.run-flow {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-1);
+  padding: 0 var(--s-1);
+  color: color-mix(in srgb, var(--muted) 70%, var(--text));
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-flow[data-attention] {
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+/* The plan indicator. Four tones, each with the words its colour stands for — "1/3", "done 3/3",
+   "needs attention" — because colour alone is not information. The pulse marks news, not a state:
+   the server sets `is-pulsing` only while the flow file is fresh, so it expires on its own. */
+.flow-plan-state {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.flow-plan-state.is-paused {
+  color: color-mix(in srgb, var(--warn) 80%, var(--muted));
+}
+
+.plan-play-pause {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+}
+
+.flow-badge--progress {
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--border-faint));
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 7%, transparent);
+}
+
+.flow-badge--done {
+  border-color: color-mix(in srgb, var(--ok, #4ade80) 45%, var(--border-faint));
+  color: var(--ok, #4ade80);
+  background: color-mix(in srgb, var(--ok, #4ade80) 10%, transparent);
+}
+
+.flow-badge--attention {
+  border-color: color-mix(in srgb, var(--danger, #f87171) 50%, var(--border));
+  color: var(--danger, #f87171);
+  background: color-mix(in srgb, var(--danger, #f87171) 12%, transparent);
+}
+
+.flow-badge--paused {
+  /* "Paused" is a state a human chose, not the absence of one: the amber border and a dashed rule say "standing" even
+     when the label is glanced at, while the text keeps the muted tone (block 70). */
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+  border-style: dashed;
+  color: color-mix(in srgb, var(--warn) 75%, var(--text));
+  background: color-mix(in srgb, var(--warn) 6%, transparent);
+}
+
+.flow-plan-btn {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.flow-plan-btn:hover,
+.flow-plan-btn:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--muted) 50%, var(--border));
+}
+
+.flow-badge.is-pulsing {
+  animation: flow-badge-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes flow-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* A narrow card drops what it can afford to lose, in this order: the counters (their text is in `title`), then one step of
+   the chip's own size. The name, the full label, the glyph and the icon keep their line — measured on this panel at a
+   280px sidebar (head 225px, body 157px) and at 360px (head 305px, body 245px) (block 70). */
+@container (max-width: 262px) {
+  .run-meta {
+    display: none;
+  }
+}
+
+@container (max-width: 232px) {
+  .run-flow {
+    padding: 0 2px;
+    font-size: 10px;
+  }
+}
+
+/* A reader who asked for less motion gets the colour and the words, never the breathing. */
+@media (prefers-reduced-motion: reduce) {
+  .flow-plan-btn {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.flow-plan-btn:hover,
+.flow-plan-btn:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--muted) 50%, var(--border));
+}
+
+.flow-badge.is-pulsing { animation: none; }
+}
+
+/* Icon buttons the size of a window control: 24×24 keeps the hit area usable while the label lives in `aria-label`/`title`. */
 .run-action,
 .run-stop,
 .run-delete {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: var(--r-1);
-  padding: var(--s-1) var(--s-2);
   color: var(--muted);
   background: transparent;
   cursor: pointer;
   font-size: var(--fs-xs);
+  line-height: 1;
   transition: border-color var(--motion), color var(--motion), background var(--motion);
+}
+
+.run-action:focus-visible,
+.run-stop:focus-visible,
+.run-delete:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--run-color) 70%, transparent);
+  outline-offset: 1px;
 }
 
 .run-action:hover,
@@ -582,6 +769,8 @@ button { letter-spacing: 0; }
 }
 
 .run-delete {
+  /* Destructive, so it sits apart from the other two. */
+  margin-left: 4px;
   border-color: color-mix(in srgb, var(--error) 18%, transparent);
   color: color-mix(in srgb, var(--error) 72%, var(--muted));
 }
@@ -1067,6 +1256,8 @@ button { letter-spacing: 0; }
   white-space: nowrap;
 }
 
+/* The tail is the card's own line: it starts at the card's edge, not under the avatar. The 38px inset pushed the longest
+   tail (a queued agent: status + hint + stop) into a wrap with room to spare (block 70). */
 .card-tail {
   min-width: 0;
   width: 100%;
@@ -1075,7 +1266,6 @@ button { letter-spacing: 0; }
   align-items: center;
   justify-content: flex-start;
   gap: var(--s-2);
-  padding-left: calc(38px + var(--s-3));
 }
 
 .dot {
@@ -2094,10 +2284,6 @@ button { letter-spacing: 0; }
     padding-inline: var(--s-1);
   }
 
-  .card-tail {
-    padding-left: calc(34px + var(--s-2));
-  }
-
   .stage-status {
     min-width: 64px;
     padding-inline: var(--s-2);
@@ -2134,5 +2320,252 @@ button { letter-spacing: 0; }
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Insights dialog: Plan and Logs ------------------------------------------------------------ */
+.insights-tabs {
+  display: flex;
+  gap: var(--space-2, 8px);
+  margin: 0 0 var(--space-3, 12px);
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+}
+
+.insights-tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim, #9aa4b2);
+  cursor: pointer;
+  font: inherit;
+  padding: 6px 10px;
+}
+
+.insights-tab.is-active {
+  border-bottom-color: var(--accent, #e0b46a);
+  color: var(--text, #ece7dc);
+}
+
+.plan-ticks {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* A driver that is not there — no receipt at all, or a timer systemd reports as inactive — is the reason a flow sits
+   still, so the line says it in the attention colour instead of blending into the dialog's chrome. */
+.plan-ticks[data-tone='attention'] {
+  color: var(--danger, #f87171);
+}
+
+.plan-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.plan-progress-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.plan-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent, #e0b46a);
+  transition: width 240ms ease;
+}
+
+.plan-progress-text {
+  font-variant-numeric: tabular-nums;
+  min-width: 84px;
+  text-align: right;
+}
+
+.plan-filters,
+.logs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chip {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 3px 10px;
+}
+
+.chip.is-active {
+  border-color: var(--accent, #e0b46a);
+}
+
+.plan-waiting {
+  border: 1px solid rgba(224, 180, 106, 0.5);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+}
+
+.plan-waiting-title {
+  color: var(--accent, #e0b46a);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.plan-waiting-row {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.plan-waiting-id {
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+}
+
+.plan-list,
+.logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.plan-row {
+  align-items: center;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 8px;
+  grid-template-columns: 84px 1fr auto;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.plan-row:hover,
+.plan-row:focus-visible {
+  border-color: var(--accent, #e0b46a);
+  outline: none;
+}
+
+.plan-id {
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-badge {
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 1px 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.plan-badge[data-status='done'] { background: rgba(120, 200, 140, 0.18); }
+.plan-badge[data-status='in_work'],
+.plan-badge[data-status='reviewing'] { background: rgba(110, 170, 255, 0.18); }
+.plan-badge[data-status='blocked_owner'],
+.plan-badge[data-status='needs_brief'] { background: rgba(224, 180, 106, 0.2); }
+.plan-badge[data-status='skipped'] { background: rgba(160, 160, 160, 0.14); }
+
+.plan-detail {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.plan-detail-row {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.plan-detail-label {
+  color: var(--text-dim, #9aa4b2);
+  min-width: 96px;
+}
+
+.logs-row {
+  align-items: baseline;
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 84px 130px 90px 1fr;
+  padding: 5px 8px;
+}
+
+.logs-row[data-unread='true'] {
+  background: rgba(224, 180, 106, 0.08);
+}
+
+.logs-row[data-severity='error'] { border-left: 2px solid #e06c6c; }
+.logs-row[data-severity='warn'] { border-left: 2px solid #e0b46a; }
+
+.logs-time { font-variant-numeric: tabular-nums; }
+.logs-where, .logs-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logs-what { display: flex; flex-direction: column; gap: 1px; }
+.logs-detail { color: var(--text-dim, #9aa4b2); font-size: 12px; }
+
+.logs-filter { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.logs-toggle { cursor: pointer; }
+
+/* The card pulse: a soft ring that fades with the remaining time, and nothing at all under reduced motion. */
+.card-pulse {
+  position: relative;
+}
+
+.card-pulse::after {
+  animation: card-pulse-ring var(--pulse-remaining, 5000ms) ease-out 1;
+  border: 2px solid var(--accent, #e0b46a);
+  border-radius: inherit;
+  content: '';
+  inset: -1px;
+  pointer-events: none;
+  position: absolute;
+}
+
+@keyframes card-pulse-ring {
+  from { opacity: 0.85; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-pulse::after { animation: none; opacity: 0.5; }
+  .plan-progress-fill { transition: none; }
+}
+
+@media (max-width: 520px) {
+  .logs-row { grid-template-columns: 64px 1fr; }
+  .logs-who, .logs-where { display: none; }
+  .plan-row { grid-template-columns: 64px 1fr auto; }
+  /* Narrow card: "3 agents · running" is the first thing that can go — it stays in the title — while the flow chip and
+     its plan icon must stay on one line, side by side. */
+  .run-meta {
+    display: none;
   }
 }

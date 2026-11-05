@@ -129,6 +129,21 @@ async function main() {
     const rootTgz = pack(root, tmp)
     ok('packed root tarball')
 
+    // Every child below runs against a private tmux server. The Web UI sweeps the machine
+    // it can see for orphan sessions, so with the developer's server and this temp registry
+    // (no runs at all) it would read the live fleet of another state dir as orphans.
+    const tmuxRoot = join(tmp, 'tmux')
+    mkdirSync(tmuxRoot, { recursive: true })
+    const isolatedEnv = {
+      ...process.env,
+      TMUX_TMPDIR: tmuxRoot,
+      REEVES_REGISTRY: join(tmp, 'registry'),
+      REEVES_CONFIG: join(tmp, 'config.json'),
+    }
+    // An inherited TMUX (the check run from inside tmux) beats TMUX_TMPDIR when the
+    // socket is chosen, so it has to go or the isolation above is an illusion.
+    delete isolatedEnv.TMUX
+
     const cliOnly = join(tmp, 'cli-only')
     npmInit(cliOnly)
     run('npm', ['install', '--omit=optional', rootTgz], { cwd: cliOnly })
@@ -136,11 +151,7 @@ async function main() {
     assert(run(bin(cliOnly, 'reevesagents'), ['--version'], { cwd: cliOnly }) === rootVersion, 'root CLI version should match release')
     const noWeb = runMaybe(bin(cliOnly, 'reevesagents'), ['web', '--no-open', '--port', '19082'], {
       cwd: cliOnly,
-      env: {
-        ...process.env,
-        REEVES_REGISTRY: join(tmp, 'cli-only-registry'),
-        REEVES_CONFIG: join(tmp, 'cli-only-config.json'),
-      },
+      env: isolatedEnv,
     })
     assert(noWeb.status !== 0, 'web should fail when optional extras are omitted')
     assert((noWeb.stderr + noWeb.stdout).includes('optional modules'), 'web disabled message should mention optional modules')
@@ -150,12 +161,7 @@ async function main() {
     npmInit(webInstall)
     run('npm', ['install', rootTgz], { cwd: webInstall })
     const webPort = 19083
-    const webEnv = {
-      ...process.env,
-      REEVES_REGISTRY: join(tmp, 'web-registry'),
-      REEVES_CONFIG: join(tmp, 'web-config.json'),
-    }
-    const web = startWeb(webInstall, ['web', '--no-open', '--port', String(webPort)], webEnv)
+    const web = startWeb(webInstall, ['web', '--no-open', '--port', String(webPort)], isolatedEnv)
     try {
       await waitForHealth(webPort)
       const state = await http('GET', webPort, '/api/state')

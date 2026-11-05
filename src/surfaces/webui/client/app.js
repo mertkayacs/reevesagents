@@ -202,6 +202,39 @@
     'web.effortXhigh': 'Extra high',
     'web.effortMax': 'Max',
     'web.effortHelp': 'Higher effort spends more on reasoning. Provider default is safest.',
+    'web.logs': 'Logs',
+    'web.insightsTitle': 'Plan and logs',
+    'web.insightsSubtitle': 'What the flow is doing and what your agents reported.',
+    'web.tabPlan': 'Plan',
+    'web.tabLogs': 'Logs',
+    'web.logsAllRuns': 'All runs',
+    'web.planFilterAll': 'All',
+    'web.planFilterOpen': 'Open',
+    'web.planFilterWaiting': 'Waiting for you',
+    'web.planWaitingTitle': 'Waiting for you',
+    'web.planNeedsBrief': 'needs a brief',
+    'web.planBlockedOwner': 'blocked',
+    'web.planEmptyTitle': 'No plan yet',
+    'web.planEmptyBody': 'Import the project document with `reevesagents flow plan import`.',
+    'web.logsEmptyTitle': 'No notifications yet',
+    'web.logsEmptyBody': 'Runs, approvals and flow events appear here as they happen.',
+    'web.logsMarkRead': 'Mark all read',
+    'web.logsMarkedRead': 'marked as read',
+    'web.logsRun': 'Run',
+    'web.logsUnreadOnly': 'Unread only',
+    'web.planStatus': 'Status',
+    'web.planCommit': 'Commit',
+    'web.planRounds': 'Rounds',
+    'web.planNotes': 'Notes',
+    'web.planBrief': 'Brief',
+    'web.planStatus_pending': 'pending',
+    'web.planStatus_needs_brief': 'needs brief',
+    'web.planStatus_queued': 'queued',
+    'web.planStatus_in_work': 'in work',
+    'web.planStatus_reviewing': 'reviewing',
+    'web.planStatus_done': 'done',
+    'web.planStatus_blocked_owner': 'blocked',
+    'web.planStatus_skipped': 'skipped',
   }
 
   const el = {
@@ -269,6 +302,34 @@
     doctorRefresh: document.getElementById('doctor-refresh'),
     doctorClose: document.getElementById('doctor-close'),
     aboutBtn: document.getElementById('about-btn'),
+    logsBtn: document.getElementById('logs-btn'),
+    insightsDialog: document.getElementById('insights-dialog'),
+    insightsClose: document.getElementById('insights-close'),
+    planDialog: document.getElementById('plan-dialog'),
+    planDialogTitle: document.getElementById('plan-dialog-title'),
+    planClose: document.getElementById('plan-close'),
+    planPlayPause: document.getElementById('plan-play-pause'),
+    planError: document.getElementById('plan-error'),
+    planPanel: document.getElementById('plan-panel'),
+    logsPanel: document.getElementById('logs-panel'),
+    planList: document.getElementById('plan-list'),
+    planEmpty: document.getElementById('plan-empty'),
+    planDetail: document.getElementById('plan-detail'),
+    planWaiting: document.getElementById('plan-waiting'),
+    planTicks: document.getElementById('plan-ticks'),
+    planProgressFill: document.getElementById('plan-progress-fill'),
+    planProgressText: document.getElementById('plan-progress-text'),
+    planProgressBar: document.querySelector('#plan-panel .plan-progress-bar'),
+    planFilterAll: document.getElementById('plan-filter-all'),
+    planFilterOpen: document.getElementById('plan-filter-open'),
+    planFilterWaiting: document.getElementById('plan-filter-waiting'),
+    logsList: document.getElementById('logs-list'),
+    logsEmpty: document.getElementById('logs-empty'),
+    logsError: document.getElementById('logs-error'),
+    logsFilterRun: document.getElementById('logs-filter-run'),
+    logsUnread: document.getElementById('logs-unread'),
+    logsMarkRead: document.getElementById('logs-mark-read'),
+    logsAnnouncer: document.getElementById('logs-announcer'),
     aboutDialog: document.getElementById('about-dialog'),
     aboutList: document.getElementById('about-list'),
     aboutClose: document.getElementById('about-close'),
@@ -296,6 +357,23 @@
   }
 
   let runs = []
+  // Insights dialog state: which tab, which filter, and the payloads it renders. Kept in one object so a refresh
+  // from the SSE stream and a click on a tab cannot disagree about what is on screen.
+  const insights = {
+    tab: 'plan',
+    planFilter: 'all',
+    runId: '',
+    plan: null,
+    logs: [],
+    readSeq: 0,
+    latestSeq: 0,
+    notifications: null,
+    // The driver's receipt from the last snapshot (`/api/state.tick`): who advances flows and when it last did.
+    tick: null,
+  }
+  // When the client first saw each notification summary, so a reload mid-pulse keeps the remainder.
+  const pulseSeenAt = new Map()
+  let pulseTimer = null
   let history = []
   let approvals = []
   let providers = []
@@ -336,45 +414,104 @@
   // --- initial load + live stream ------------------------------------------
 
   async function loadState() {
-    const data = await api('GET', '/api/state')
-    applyState(data)
+    // The same reader as every later refresh: it is the call that measures the server clock, and a first load without that
+    // measurement renders the driver line from a clock the browser has not corrected yet (block 71).
+    await refreshState()
+  }
+
+  // The server clock, measured once per snapshot: the stream cannot carry it (a clock in the frame is exactly the value
+  // that made every frame different), so the offset is refreshed whenever a snapshot is read — including on every
+  // (re)connection, which is when a browser tab that slept needs it most.
+  let clockOffset = 0
+
+  // Any payload that carries the server clock — the snapshot, or a frame that was actually sent — corrects this browser's
+  // clock for the line it computes locally.
+  function noteServerClock(data) {
+    const offset = ticks.clockOffset(data, Date.now())
+    if (offset !== null) clockOffset = offset
   }
 
   async function refreshState() {
     const data = await api('GET', '/api/state')
+    noteServerClock(data)
     applyState(data)
   }
 
+  // One consumer for "a state payload arrived", whether it is the first `/api/state` load or an SSE frame. A field
+  // that a frame does not carry (providers, language, theme, version — the stream sends neither) is left untouched
+  // instead of being reset to an empty value, which is what a shared consumer must respect.
   function applyState(data) {
-    providers = data.providers || []
-    runs = data.runs || []
-    history = data.history || []
-    approvals = data.approvals || []
-    appVersion = data.version || ''
-    applyLanguage(data.language)
-    applyTheme(data.web_theme)
-    renderProviders()
+    if (Array.isArray(data.providers)) providers = data.providers
+    if (Array.isArray(data.runs)) runs = data.runs
+    if (Array.isArray(data.history)) history = data.history
+    if (Array.isArray(data.approvals)) approvals = data.approvals
+    // A snapshot can change the flow's state under an open dialog (another tab pressed Pause, a ticker escalated it). Without this the
+    // button kept its old label and a second click answered `already_paused` — a stale button is a bug the operator has to interpret
+    // (block 51).
+    if (data.tick !== undefined) {
+      insights.tick = data.tick
+      renderPlanTicks()
+    }
+    syncPlanPlayPause()
+    if (typeof data.version === 'string' && data.version) appVersion = data.version
+    if (data.language) applyLanguage(data.language)
+    if (data.web_theme) applyTheme(data.web_theme)
+    if (Array.isArray(data.providers)) renderProviders()
+    if (data.notifications) {
+      const previous = insights.notifications
+      insights.notifications = data.notifications
+      // Remember when each timestamp was first seen (diagnostics only): the remaining time is measured from the
+      // event's server stamp to now, so a reload continues the ring instead of restarting it.
+      for (const entry of data.notifications.unread_by || []) {
+        if (entry.latest_ts && !pulseSeenAt.has(entry.latest_ts)) pulseSeenAt.set(entry.latest_ts, Date.now())
+      }
+      // The dialog refreshes itself from the same stream. Marking read on another tab does not change
+      // `latest_seq` — only `read_seq` and `unread` — so the condition watches those as well, or this tab keeps
+      // showing rows highlighted as unread after somebody has read them.
+      const changed = previous && (
+        previous.latest_seq !== data.notifications.latest_seq
+        || previous.read_seq !== data.notifications.read_seq
+        || previous.unread !== data.notifications.unread
+      )
+      if (el.insightsDialog.open && changed) void loadLogs()
+      schedulePulseTick()
+    }
     renderSidebar()
     reconcileCreateDialog()
     reconcileSelectedAgent()
     if (!welcomeChecked) { welcomeChecked = true; maybeShowWelcome() }
   }
 
+  // The state the last rendered frame described, minus the driver line. A frame whose state is identical changed nothing
+  // but time — and time is not an event: it must not rebuild the cards (block 71).
+  let lastFrameKey = ''
+
   function subscribe() {
     const events = new EventSource('/api/events')
-    events.onopen = () => setConn('live')
+    events.onopen = () => {
+      setConn('live')
+      // A (re)connection re-reads the snapshot: it carries the server clock, and the driver line must be rebuilt from the
+      // marks rather than from whatever the previous connection was showing.
+      void refreshState().catch(() => {})
+    }
     events.onerror = () => setConn('down')
     events.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
-        if (Array.isArray(data.runs)) {
-          runs = data.runs
+        // The clock first: the line about to be drawn is computed from this browser's clock, corrected by the server's.
+        noteServerClock(data)
+        const key = ticks.frameKey(data)
+        // The driver line next: a new receipt, a new deadline or a changed `active` is news even when nothing else moved.
+        if (data.tick !== undefined) {
+          insights.tick = data.tick
+          renderPlanTicks()
         }
-        if (Array.isArray(data.history)) history = data.history
-        if (Array.isArray(data.approvals)) approvals = data.approvals
-        renderSidebar()
-        reconcileCreateDialog()
-        reconcileSelectedAgent()
+        if (key === lastFrameKey) return
+        lastFrameKey = key
+        // Everything a frame carries goes through the same consumer as the first load. The previous version only
+        // copied runs/history/approvals and dropped `notifications`, so a read (or a new event) on the stream never
+        // reached the badge, the pulse or the open Logs list.
+        applyState(data)
       } catch { /* ignore malformed frame */ }
     }
   }
@@ -512,6 +649,21 @@
     document.querySelector('#doctor-dialog .dialog-subtitle').textContent = t('web.doctorSubtitle')
     el.doctorRefresh.textContent = t('web.refresh')
     el.doctorClose.textContent = t('web.mcpClose')
+    el.logsBtn.textContent = t('web.logs')
+    document.querySelector('#insights-dialog .dialog-title').textContent = t('web.logsTitle')
+    document.querySelector('#insights-dialog .dialog-subtitle').textContent = t('web.logsSubtitle')
+    el.planClose.textContent = t('web.mcpClose')
+    el.planFilterAll.textContent = t('web.planFilterAll')
+    el.planFilterOpen.textContent = t('web.planFilterOpen')
+    el.planFilterWaiting.textContent = t('web.planFilterWaiting')
+    el.logsMarkRead.textContent = t('web.logsMarkRead')
+    el.insightsClose.textContent = t('web.mcpClose')
+    document.querySelector('#logs-panel .logs-filter span').textContent = t('web.logsRun')
+    document.querySelector('#logs-panel .logs-toggle span').textContent = t('web.logsUnreadOnly')
+    document.querySelector('#plan-empty .empty-title').textContent = t('web.planEmptyTitle')
+    document.querySelector('#plan-empty .empty-body').textContent = t('web.planEmptyBody')
+    document.querySelector('#logs-empty .empty-title').textContent = t('web.logsEmptyTitle')
+    document.querySelector('#logs-empty .empty-body').textContent = t('web.logsEmptyBody')
     document.querySelector('#about-dialog .dialog-title').textContent = `${t('web.about')} ReevesAgents`
     document.querySelector('#about-dialog .dialog-subtitle').textContent = t('web.aboutSubtitle')
     el.aboutClose.textContent = t('web.mcpClose')
@@ -949,16 +1101,61 @@
       const meta = document.createElement('span')
       meta.className = 'run-meta'
       meta.textContent = `${statusLabel(run.status)} · ${agentCountLabel(run.terminals.length)}`
+      // The counters are the first thing a narrow card drops; the tooltip is what keeps them reachable there.
+      meta.title = meta.textContent
       headBody.appendChild(meta)
+      // The flow chip is rendered by the server (core/flow-label.ts), so the client holds no copy of
+      // its wording; attention is an attribute on the same chip, painted by app.css.
+      if (run.flow) {
+        // The badge is a label, not a control: it says what the flow is doing and nothing else. The plan has its own icon
+        // beside it, so clicking the status cannot silently navigate somewhere.
+        const flow = document.createElement('span')
+        const tone = run.flow.tone || 'neutral'
+        flow.className = `run-flow flow-badge flow-badge--${tone}${run.flow.pulse ? ' is-pulsing' : ''}`
+        flow.textContent = run.flow.label
+        if (run.flow.attention) {
+          flow.dataset.attention = run.flow.attention
+        }
+        flow.title = run.flow.detail || run.flow.attention_label || run.flow.label
+        headBody.appendChild(flow)
+
+        // The plan icon: drawn only when the run has a plan (T1.6.6 — no disabled placeholders), and the only control that
+        // opens the plan dialog. The controller builds it, so the rules live where a test can drive them.
+        const planBtn = planController.createIcon({ ...run.flow, run_id: run.id }, { ariaLabel: t('web.planOpenLabel') })
+        if (planBtn) {
+          // Whether the plan is running or paused, between the chip and the icon that opens it. A glyph, not a button:
+          // pausing belongs to the dialog (one obvious control, with a label), and the card only has to say which state it
+          // is in. It is appended *before* the icon so the row reads chip · state · icon — in the old two-column grid this
+          // span had no cell of its own and fell to a third row (block 70).
+          const planState = document.createElement('span')
+          const paused = run.flow.status === 'paused'
+          planState.className = `flow-plan-state${paused ? ' is-paused' : ''}`
+          planState.dataset.paused = String(paused)
+          planState.setAttribute('aria-label', paused ? t('web.planPaused') : t('web.planRunning'))
+          planState.title = planState.getAttribute('aria-label')
+          planState.innerHTML = paused
+            ? '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">'
+              + '<path d="M5.5 3.5v9M10.5 3.5v9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>'
+            : '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">'
+              + '<path d="M5.5 3.2l7 4.8-7 4.8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/></svg>'
+          headBody.appendChild(planState)
+
+          planBtn.addEventListener('click', () => { void openPlanDialog(run.id) })
+          headBody.appendChild(planBtn)
+        }
+      }
       head.appendChild(headBody)
 
       const actions = document.createElement('div')
       actions.className = 'run-actions'
+      // Actions are icons in the corner, like window controls: the label moves into `aria-label`/`title` instead of
+      // disappearing, so the meaning survives for a screen reader and for a hover.
       if (run.status === 'running') {
         const add = document.createElement('button')
         add.className = 'run-action'
         add.type = 'button'
-        add.textContent = t('web.addAgent')
+        add.innerHTML = runActionIcon('add')
+        add.setAttribute('aria-label', t('web.addAgent'))
         add.title = t('web.addAgentTitle', { name: run.name })
         add.addEventListener('click', () => openAgentDialog(run.id))
         actions.appendChild(add)
@@ -967,7 +1164,8 @@
         const stop = document.createElement('button')
         stop.className = 'run-stop'
         stop.type = 'button'
-        stop.textContent = t('web.stop')
+        stop.innerHTML = runActionIcon('stop')
+        stop.setAttribute('aria-label', t('web.stop'))
         stop.title = t('web.stopRunTitle', { name: run.name })
         stop.addEventListener('click', () => stopRun(run))
         actions.appendChild(stop)
@@ -976,7 +1174,8 @@
         const del = document.createElement('button')
         del.className = 'run-delete'
         del.type = 'button'
-        del.textContent = t('common.delete')
+        del.innerHTML = runActionIcon('delete')
+        del.setAttribute('aria-label', t('common.delete'))
         del.title = t('web.deleteRunTitle', { name: run.name })
         del.addEventListener('click', () => deleteRun(run))
         actions.appendChild(del)
@@ -1100,9 +1299,438 @@
     return item
   }
 
+
+  // ---- Insights dialog: the Plan and Logs tabs -------------------------------------------------
+  const core = () => window.insightsCore || {
+    formatPlanProgress: (d, t) => ({ text: `${d}/${t}`, percent: 0 }),
+    pulseRemaining: () => 0,
+    filterPlanItems: items => items || [],
+    planWaiting: () => ({ needsBrief: [], blocked: [], total: 0 }),
+    planIconVisible: flow => Boolean(flow && flow.plan),
+  }
+
+  // The dialog is run-scoped: the agent the operator has selected decides which run's plan opens.
+  function selectedRun() {
+    if (selectedId) {
+      for (const run of runs) {
+        const agents = run.agents || []
+        const owner = agents.find(entry => entry.id === selectedId)
+        if (owner) return run
+      }
+    }
+    return runs[0] || null
+  }
+
+  async function openInsightsDialog() {
+    const run = selectedRun()
+    insights.runId = run ? run.id : ''
+    el.insightsDialog.showModal()
+    await loadLogs()
+    renderLogFilters()
+    el.insightsClose.focus()
+  }
+
+  // The plan dialog is opened by its own icon on the run card. The element is not remembered: `renderSidebar()` rebuilds
+  // every card on each SSE frame, so a held reference would be detached from the document by the time Esc is pressed and
+  // the focus would land on `body`. The run id survives a re-render; the button is looked up by it.
+  // The run id, the aria attribute and the focus target live in `plan-controller.js`: the card is rebuilt on every SSE frame,
+  // so a remembered element would be detached by the time the dialog closes.
+  const planController = window.planDialogController.createPlanDialogController(document)
+
+  async function openPlanDialog(runId) {
+    if (!runId) return
+    // The id is the memory; the element is never kept. A line raised for another run is not this run's news.
+    clearPlanError()
+    planController.open(runId)
+    insights.runId = runId
+    const run = runs.find(entry => entry.id === runId)
+    el.planDialogTitle.textContent = t('web.planTitle', { run: run ? run.name : runId })
+    insights.flowState = run && run.flow ? run.flow.status : null
+    renderPlanPlayPause(insights.flowState === 'paused')
+    renderPlanTicks()
+    el.planDialog.showModal()
+    await loadPlan(runId)
+    renderPlan()
+    el.planClose.focus()
+  }
+
+  function closePlanDialog() {
+    if (!el.planDialog.open) return
+    el.planDialog.close()
+  }
+
+  // The dialog's play/pause: the same operation as `flow pause` / `flow resume`, through one route. The button's label and
+  // `aria-pressed` follow the flow's state, so "Pause" never lies about a flow that is already parked.
+  // Ask the freshest snapshot which state the plan is in, and draw the button from it.
+  function syncPlanPlayPause() {
+    // A line raised for a run that is no longer the open one is not news: drop it as soon as the snapshot shows the move.
+    planErrorLine.bind(insights.runId)
+    if (!insights.runId) return
+    const run = runs.find(entry => entry.id === insights.runId)
+    if (!run || !run.flow) return
+    insights.flowState = run.flow.status
+    if (el.planDialog.open) renderPlanPlayPause(insights.flowState === 'paused')
+  }
+
+  function renderPlanPlayPause(paused) {
+    el.planPlayPause.textContent = paused ? t('web.planResume') : t('web.planPause')
+    el.planPlayPause.setAttribute('aria-pressed', String(paused))
+    el.planPlayPause.setAttribute('aria-label', paused ? t('web.planResumeLabel') : t('web.planPauseLabel'))
+  }
+
+  // Who advances the flows, in one line. The panel never drives them — the external ticker does — so this only reports
+  // the driver's own receipt, and says so plainly when no pass has been recorded (block 68). A timer that systemd
+  // reports as not active takes the attention tone: a driver that stopped is the reason a flow sits still.
+  // The driver line, from the marks the frame carries (`at`, `next_at`) and this browser's clock — never from a countdown
+  // the server computed, because a countdown makes every frame look new (block 71). `clockOffset` corrects a browser clock
+  // that disagrees with the server's; it comes from `/api/state`, the one payload that may carry "now".
+  //
+  // `tick-line.js` is part of the client build and is served from the same allowlist as this file; the fallback exists so
+  // a page that somehow loads without it still draws a (static) line instead of failing inside an SSE handler.
+  const ticks = window.tickLine || {
+    lineText: (tick, _now, translate) => (tick ? translate('web.ticksNow', { driver: tick.driver, age: 0 }) : translate('web.ticksNone')),
+    tone: (tick) => (!tick || tick.active === false ? 'attention' : 'neutral'),
+    frameKey: (data) => JSON.stringify([data.runs, data.history, data.approvals, data.notifications]),
+    clockOffset: () => null,
+  }
+  function renderPlanTicks() {
+    if (!el.planTicks) return
+    el.planTicks.hidden = false
+    el.planTicks.dataset.tone = ticks.tone(insights.tick)
+    el.planTicks.textContent = ticks.lineText(insights.tick, Date.now() + clockOffset, t)
+  }
+
+  // Once a second, and only the line: the sidebar is rebuilt when state changes, not when time passes.
+  function updatePlanTicksClock() {
+    if (!el.planTicks || !insights.tick) return
+    if (el.planDialog && !el.planDialog.open) return
+    renderPlanTicks()
+  }
+
+  // A refusal is a code (`not_pausable`, `already_paused`, …), and a code is not a sentence: `plan-error.js` owns the translation, the
+  // six-second life and the run it belongs to, so the behaviour can be driven in a real DOM with fake timers (block 59).
+  const planErrorLine = window.planErrorLine.createPlanErrorLine(document, { t: t })
+
+  function clearPlanError() {
+    planErrorLine.clear()
+  }
+
+  function showPlanError(code, runId) {
+    planErrorLine.show(code, runId)
+  }
+
+  async function togglePlanPlayPause() {
+    const runId = insights.runId
+    if (!runId) return
+    const paused = insights.flowState === 'paused'
+    el.planPlayPause.disabled = true
+    try {
+      const payload = await api('POST', `/api/flow/${paused ? 'resume' : 'pause'}`, { run_id: runId })
+      clearPlanError()
+      insights.flowState = payload && payload.flow ? payload.flow.state : insights.flowState
+      renderPlanPlayPause(insights.flowState === 'paused')
+      // The card's chip and glyph come from the next snapshot; ask for one now so the click is not invisible until the poll.
+      await refreshState()
+    } catch (err) {
+      // The answer belongs to the run the click was made for. If the operator has moved on to another plan in the meantime, saying
+      // anything here would be a story about the wrong plan.
+      if (insights.runId !== runId) return
+      const message = err instanceof Error ? err.message : String(err)
+      showPlanError(String(message || 'unknown'), runId)
+    } finally {
+      el.planPlayPause.disabled = false
+    }
+  }
+
+  async function loadPlan(runId) {
+    insights.plan = null
+    if (!runId) return
+    try {
+      const data = await api('GET', `/api/plan?run=${encodeURIComponent(runId)}`)
+      insights.plan = data && data.plan ? data.plan : null
+    } catch {
+      insights.plan = null
+    }
+  }
+
+  async function loadLogs() {
+    const run = el.logsFilterRun.value
+    const unread = el.logsUnread.checked
+    // Built by hand: `URLSearchParams` is a browser global the lint config does not know, and the query is two
+    // parameters wide.
+    const parts = ['limit=200']
+    if (run) parts.push(`run=${encodeURIComponent(run)}`)
+    if (unread) parts.push('unread=1')
+    const query = parts.join('&')
+    try {
+      const data = await api('GET', `/api/notifications?${query}`)
+      insights.logs = data.events || []
+      insights.readSeq = data.read_seq || 0
+      insights.latestSeq = data.latest_seq || 0
+      el.logsError.hidden = true
+    } catch (err) {
+      insights.logs = []
+      el.logsError.textContent = err instanceof Error ? err.message : String(err)
+      el.logsError.hidden = false
+    }
+    renderLogs()
+  }
+
+  function renderLogFilters() {
+    const current = el.logsFilterRun.value
+    el.logsFilterRun.replaceChildren()
+    const all = document.createElement('option')
+    all.value = ''
+    all.textContent = t('web.logsAllRuns')
+    el.logsFilterRun.appendChild(all)
+    for (const run of runs) {
+      const option = document.createElement('option')
+      option.value = run.id
+      option.textContent = run.name || run.id
+      el.logsFilterRun.appendChild(option)
+    }
+    el.logsFilterRun.value = runs.some(run => run.id === current) ? current : ''
+  }
+
+  function planStatusBadge(status) {
+    const badge = document.createElement('span')
+    badge.className = 'plan-badge'
+    badge.dataset.status = status
+    badge.textContent = t(`web.planStatus_${status}`)
+    return badge
+  }
+
+  function setPlanFilter(filter) {
+    insights.planFilter = filter === 'open' || filter === 'waiting' ? filter : 'all'
+    for (const [value, button] of [['all', el.planFilterAll], ['open', el.planFilterOpen], ['waiting', el.planFilterWaiting]]) {
+      button.classList.toggle('is-active', value === insights.planFilter)
+    }
+    renderPlan()
+  }
+
+  function renderPlan() {
+    const plan = insights.plan
+    el.planEmpty.hidden = Boolean(plan)
+    el.planList.replaceChildren()
+    el.planWaiting.replaceChildren()
+    el.planDetail.hidden = true
+    if (!plan) {
+      el.planProgressText.textContent = '0/0'
+      el.planProgressFill.style.width = '0%'
+      el.planWaiting.hidden = true
+      return
+    }
+    const progress = core().formatPlanProgress(plan.progress.done, plan.progress.total)
+    el.planProgressText.textContent = `${progress.text} · ${progress.percent}%`
+    el.planProgressFill.style.width = `${progress.percent}%`
+    el.planProgressBar.setAttribute('aria-valuenow', String(progress.percent))
+
+    const waiting = core().planWaiting(plan.items)
+    if (waiting.total > 0) {
+      el.planWaiting.hidden = false
+      const title = document.createElement('div')
+      title.className = 'plan-waiting-title'
+      title.textContent = t('web.planWaitingTitle')
+      el.planWaiting.appendChild(title)
+      for (const item of [...waiting.needsBrief.map(entry => [entry, 'needs_brief']), ...waiting.blocked.map(entry => [entry, 'blocked_owner'])]) {
+        const row = document.createElement('div')
+        row.className = 'plan-waiting-row'
+        const id = document.createElement('span')
+        id.className = 'plan-waiting-id'
+        id.textContent = item[0].id
+        const why = document.createElement('span')
+        why.className = 'plan-waiting-why'
+        why.textContent = t(item[1] === 'needs_brief' ? 'web.planNeedsBrief' : 'web.planBlockedOwner')
+        row.append(id, why)
+        el.planWaiting.appendChild(row)
+      }
+    } else {
+      el.planWaiting.hidden = true
+    }
+
+    const items = core().filterPlanItems(plan.items, insights.planFilter)
+    for (const item of items) {
+      const row = document.createElement('button')
+      row.type = 'button'
+      row.className = 'plan-row'
+      row.dataset.status = item.status
+      row.setAttribute('role', 'listitem')
+      const id = document.createElement('span')
+      id.className = 'plan-id'
+      id.textContent = item.id
+      const title = document.createElement('span')
+      title.className = 'plan-title'
+      title.textContent = item.title
+      // A row the document no longer lists keeps its status, but the badge says so explicitly: without it the row
+      // looks like ordinary open work that nobody is picking up.
+      row.append(id, title, planStatusBadge(item.missing_since ? 'missing' : item.status))
+      row.addEventListener('click', () => showPlanDetail(item))
+      el.planList.appendChild(row)
+    }
+  }
+
+  function showPlanDetail(item) {
+    el.planDetail.replaceChildren()
+    const rows = [
+      [`${t('web.planStatus')}`, item.missing_since ? t('web.planStatus_missing') : t(`web.planStatus_${item.status}`)],
+      ...(item.missing_since ? [[t('web.planMissingSince'), item.missing_since]] : []),
+      [t('web.planCommit'), item.head || '—'],
+      [t('web.planRounds'), String(item.rounds ?? 0)],
+      [t('web.planNotes'), item.notes_ref || '—'],
+      [t('web.planBrief'), item.spec_path || '—'],
+    ]
+    for (const [label, value] of rows) {
+      const row = document.createElement('div')
+      row.className = 'plan-detail-row'
+      const key = document.createElement('span')
+      key.className = 'plan-detail-label'
+      key.textContent = label
+      const val = document.createElement('span')
+      val.className = 'plan-detail-value'
+      val.textContent = value
+      row.append(key, val)
+      el.planDetail.appendChild(row)
+    }
+    el.planDetail.hidden = false
+  }
+
+  function renderLogs() {
+    el.logsList.replaceChildren()
+    el.logsEmpty.hidden = insights.logs.length > 0
+    for (const event of insights.logs) {
+      const row = document.createElement('div')
+      row.className = 'logs-row'
+      row.setAttribute('role', 'listitem')
+      row.tabIndex = -1
+      row.dataset.kind = event.kind
+      row.dataset.severity = event.severity
+      if (event.seq > insights.readSeq) row.dataset.unread = 'true'
+
+      const time = document.createElement('span')
+      time.className = 'logs-time'
+      time.textContent = new Date(event.received_at).toLocaleTimeString()
+      time.title = event.received_at
+
+      const where = document.createElement('span')
+      where.className = 'logs-where'
+      where.textContent = event.run_name || event.run_id || '—'
+
+      const who = document.createElement('span')
+      who.className = 'logs-who'
+      who.textContent = event.agent_nickname || event.agent_id || ''
+
+      const what = document.createElement('span')
+      what.className = 'logs-what'
+      const title = document.createElement('span')
+      title.className = 'logs-title'
+      title.textContent = event.title
+      what.appendChild(title)
+      if (event.detail) {
+        const detail = document.createElement('span')
+        detail.className = 'logs-detail'
+        detail.textContent = event.detail
+        what.appendChild(detail)
+      }
+      row.append(time, where, who, what)
+      el.logsList.appendChild(row)
+    }
+  }
+
+  async function markAllRead() {
+    try {
+      const result = await api('POST', '/api/notifications/read', {})
+      insights.readSeq = result.read_seq
+      el.logsAnnouncer.textContent = t('web.logsMarkedRead')
+      await loadLogs()
+      clearPulse()
+    } catch (err) {
+      el.logsError.textContent = err instanceof Error ? err.message : String(err)
+      el.logsError.hidden = false
+    }
+  }
+
+  // ---- the agent-card pulse --------------------------------------------------------------------
+  // One timer for the next expiry, not one per card: a card's remainder is derived from the newest unread event's
+  // server timestamp on every render, so a reload keeps the remainder instead of restarting the animation.
+  function pulseState() {
+    const notifications = insights.notifications || {}
+    const pulseMs = Number(notifications.agent_pulse_ms ?? 0)
+    return { pulseMs, latestTs: notifications.latest_ts || null }
+  }
+
+  // The pulse belongs to the card that has news: `unread_by` lists one entry per (run, agent), so an approval on one
+  // agent no longer animates the whole sidebar. An event with no agent is run-level and pulses the run's cards.
+  function pulseFor(agent, run) {
+    const notifications = insights.notifications || {}
+    const pulseMs = Number(notifications.agent_pulse_ms ?? 0)
+    if (pulseMs <= 0) return 0
+    const entries = Array.isArray(notifications.unread_by) ? notifications.unread_by : []
+    // An agent event and a run-level event can both apply to this card: keep the *newest* timestamp, not the last
+    // one in the array, or a card can pulse for a stale approval while its own news is newer.
+    let latest = null
+    for (const entry of entries) {
+      const applies = entry.agent_id === agent.id || (entry.agent_id === '' && run && entry.run_id === run.id)
+      if (!applies) continue
+      if (!latest || entry.latest_ts > latest) latest = entry.latest_ts
+    }
+    if (!latest) return 0
+    const seen = pulseSeenAt.get(latest)
+    return core().pulseRemaining(latest, Date.now(), pulseMs, seen)
+  }
+
+  function renderPulse(card, agent, run) {
+    const remaining = pulseFor(agent, run)
+    card.classList.toggle('card-pulse', remaining > 0)
+    if (remaining > 0) card.style.setProperty('--pulse-remaining', `${remaining}ms`)
+  }
+
+  // One timer for the *earliest* expiry, rescheduled whenever the summary changes: a timer pinned to the old
+  // `agent_pulse_ms` would outlive a shorter setting, and a timer started at the full length would repaint long after
+  // the last ring finished.
+  function schedulePulseTick() {
+    if (pulseTimer) { globalThis.clearTimeout(pulseTimer); pulseTimer = null }
+    const { pulseMs } = pulseState()
+    if (pulseMs <= 0) return
+    const entries = (insights.notifications && insights.notifications.unread_by) || []
+    let earliest = Number.POSITIVE_INFINITY
+    const now = Date.now()
+    for (const entry of entries) {
+      const remaining = core().pulseRemaining(entry.latest_ts, now, pulseMs)
+      if (remaining > 0 && remaining < earliest) earliest = remaining
+    }
+    if (!Number.isFinite(earliest)) return
+    pulseTimer = setTimeout(() => {
+      pulseTimer = null
+      renderSidebar()
+      schedulePulseTick()
+    }, earliest + 25)
+  }
+
+  function clearPulse() {
+    pulseSeenAt.clear()
+    if (pulseTimer) { globalThis.clearTimeout(pulseTimer); pulseTimer = null }
+    renderSidebar()
+  }
+
+  // 16-unit glyphs for the run actions, drawn like the plan icon: `currentColor`, no library, `aria-hidden` because the
+  // button carries the label.
+  function runActionIcon(kind) {
+    const glyph = kind === 'add'
+      ? '<path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>'
+      : kind === 'stop'
+        ? '<rect x="4" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/>'
+        : '<path d="M3.5 5h9M6.5 5V3.5h3V5M5 5l.6 8h4.8L11 5" stroke="currentColor" stroke-width="1.4" '
+          + 'stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+    return `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">${glyph}</svg>`
+  }
+
   function renderCard(run, agent) {
     const card = document.createElement('div')
     card.className = 'card' + (agent.status === 'ended' ? ' is-ended' : '')
+    // The plan dialog returns focus here when the run's card is gone: a keyboard user who pressed Esc must not land on
+    // `body`, and the card is the next best place to be ("this is the thing I was looking at").
+    card.dataset.runCard = run.id
+    card.tabIndex = -1
     card.setAttribute('aria-selected', String(agent.id === selectedId))
     card.dataset.status = agent.status
     card.dataset.provider = agent.provider
@@ -1174,6 +1802,7 @@
       tail.appendChild(lifecycle)
     }
     card.appendChild(tail)
+    renderPulse(card, agent, run)
 
     if (agent.canAttach) {
       open.title = t('web.openAgentTitle', { name: agent.nickname })
@@ -2104,6 +2733,20 @@
   el.doctorRefresh.addEventListener('click', loadDoctor)
   el.doctorClose.addEventListener('click', () => el.doctorDialog.close())
   el.aboutBtn.addEventListener('click', openAboutDialog)
+  el.logsBtn.addEventListener('click', () => { void openInsightsDialog() })
+  el.insightsClose.addEventListener('click', () => el.insightsDialog.close())
+  el.planClose.addEventListener('click', closePlanDialog)
+  el.planPlayPause.addEventListener('click', () => { void togglePlanPlayPause() })
+  // Esc closes the dialog natively; the focus has to come back to the icon that opened it, or the keyboard user lands on
+  // `body`. The button is looked up by run id at this moment, because the card may have been rebuilt by an SSE frame while
+  // the dialog was open — and if the card is gone entirely, the focus still has to land somewhere sensible.
+  planController.attach(el.planDialog)
+  el.planFilterAll.addEventListener('click', () => setPlanFilter('all'))
+  el.planFilterOpen.addEventListener('click', () => setPlanFilter('open'))
+  el.planFilterWaiting.addEventListener('click', () => setPlanFilter('waiting'))
+  el.logsFilterRun.addEventListener('change', () => { void loadLogs() })
+  el.logsUnread.addEventListener('change', () => { void loadLogs() })
+  el.logsMarkRead.addEventListener('click', () => { void markAllRead() })
   el.aboutClose.addEventListener('click', () => el.aboutDialog.close())
   el.welcomeConnect.addEventListener('click', () => { el.welcomeDialog.close(); openMcpDialog() })
   el.welcomeClose.addEventListener('click', () => el.welcomeDialog.close())
@@ -2180,6 +2823,14 @@
     if (!value) return t('web.unknown')
     return `${String(value).replace('T', ' ').slice(0, 16)}Z`
   }
+
+  // A second of local clock for the driver line only. It touches `#plan-ticks` and nothing else: the cards are rebuilt
+  // when the state changes, never because time passed (block 71).
+  globalThis.setInterval(updatePlanTicksClock, 1000)
+  document.addEventListener('visibilitychange', () => {
+    // A tab that slept comes back with a stale countdown; the marks and the corrected clock fix it without a request.
+    if (!document.hidden) updatePlanTicksClock()
+  })
 
   initBrandDuck()
   loadState().catch((err) => {

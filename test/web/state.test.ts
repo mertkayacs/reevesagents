@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { archiveAndRemoveRun, writeRun, writeAgent } from '../../src/core/runs.js'
+import { createFlowState } from '../../src/core/flow.js'
+import { saveFlow } from '../../src/core/flow-store.js'
+import { reconcileFlowIncidents } from '../../src/core/flow-incidents.js'
+import type { FlowDecision, FlowObservations } from '../../src/core/flow.js'
 import { buildWebState, listWebProviders } from '../../src/surfaces/webui/state.js'
 import { PROVIDERS } from '../../src/core/providers.js'
 import { providerColor, providerDisplayName } from '../../src/utils/display.js'
@@ -161,5 +165,103 @@ describe('listWebProviders', () => {
       expect(p.name).toBe(providerDisplayName(p.id))
       expect(p.color).toBe(providerColor(p.id))
     }
+  })
+})
+
+describe('web flow badge', () => {
+  function seedFlow(overrides: { state?: 'idle' | 'reviewing' | 'fixing' | 'escalated' | 'done', rounds?: number, review_started_at?: number | null } = {}): void {
+    const flow = {
+      ...createFlowState({
+        run_id: 'r1',
+        repo: '/tmp/work',
+        roles: { dev: 'dev-1', review: 'rev-1' },
+        head: 'abc1234',
+        at: '2026-01-01T00:00:00.000Z',
+      }),
+      ...overrides,
+    }
+    saveFlow(flow, { root: tmpDir })
+  }
+
+  it('exposes open incidents with age and owner and summarizes them in the badge', () => {
+    writeRun(makeRun('r1'))
+    writeAgent(makeAgent('planner', 'r1', { role: 'root' }))
+    seedFlow()
+    const flow = createFlowState({ run_id: 'r1', repo: '/tmp/work', roles: { dev: 'dev-1', review: 'rev-1' }, head: 'abc1234', at: '2026-01-01T00:00:00.000Z' })
+    const now = Date.parse('2026-01-01T00:00:10.000Z')
+    const observations: FlowObservations = { now, head: 'abc1234', tree_clean: true, dev_pane: 'idle', review_pane: 'idle', verdict: null, verdict_count: 0 }
+    const decision = { kind: 'none', reason: 'future_hold', next_state: 'idle', next_rounds: 0,
+      next_claim: flow.claim, next_review_started_at: null } as unknown as FlowDecision
+    reconcileFlowIncidents(flow, observations, decision, { root: tmpDir, now })
+
+    const run = buildWebState({ liveTmuxTarget: () => true, language: 'en', now }).runs[0]!
+    expect(run.incidents).toMatchObject([{ kind: 'unknown_hold', owner: 'orchestrator', status: 'open', age_ms: 0 }])
+    expect(run.flow?.attention).toBe('incident')
+    expect(run.flow?.attention_label).toBe('flow incidents: 1 open, 0 blockers · orchestrator')
+  })
+
+  it('renders the same label the TUI shows, from the shared helper', () => {
+    writeRun(makeRun('r1'))
+    writeAgent(makeAgent('planner', 'r1', { role: 'root' }))
+    seedFlow({ state: 'reviewing', rounds: 2 })
+
+    const flow = buildWebState({ liveTmuxTarget: () => true, language: 'en' }).runs[0]!.flow
+    expect(flow).toMatchObject({
+      status: 'reviewing',
+      rounds: 2,
+      max_rounds: 6,
+      label: 'flow: review (2/6)',
+      attention: null,
+      attention_label: null,
+    })
+  })
+
+  it('carries no badge for a run without a flow', () => {
+    writeRun(makeRun('r1'))
+    writeAgent(makeAgent('planner', 'r1', { role: 'root' }))
+    expect(buildWebState({ liveTmuxTarget: () => true }).runs[0]!.flow).toBeNull()
+  })
+
+  it('marks escalated and an overdue review as attention, in the requested language', () => {
+    writeRun(makeRun('r1'))
+    writeAgent(makeAgent('planner', 'r1', { role: 'root' }))
+    seedFlow({ state: 'escalated', rounds: 6 })
+
+    const escalated = buildWebState({ liveTmuxTarget: () => true, language: 'en' }).runs[0]!.flow!
+    expect(escalated.attention).toBe('escalated')
+    // The label now says what the reader has to do, not which state the file is in; the tone carries the colour.
+    expect(escalated.label).toBe('flow: needs attention')
+    expect(escalated.tone).toBe('attention')
+    expect(escalated.attention_label).toBe('rounds spent')
+
+    const russian = buildWebState({ liveTmuxTarget: () => true, language: 'ru' }).runs[0]!.flow!
+    expect(russian.label).toBe('поток: нужно внимание')
+    expect(russian.attention_label).toBe('раунды израсходованы')
+
+    seedFlow({ state: 'reviewing', rounds: 1, review_started_at: Date.now() - 1_000_000 })
+    const overdue = buildWebState({ liveTmuxTarget: () => true, language: 'en' }).runs[0]!.flow!
+    expect(overdue.attention).toBe('review_timeout')
+    expect(overdue.review_overdue).toBe(true)
+    expect(overdue.attention_label).toBe('review timed out')
+  })
+
+  it('is derived on every snapshot and never written into the run record', () => {
+    writeRun(makeRun('r1'))
+    writeAgent(makeAgent('planner', 'r1', { role: 'root' }))
+    const runPath = join(tmpDir, 'runs', 'r1', 'run.json')
+    const before = readFileSync(runPath, 'utf8')
+
+    seedFlow({ state: 'escalated', rounds: 6 })
+    expect(buildWebState({ liveTmuxTarget: () => true }).runs[0]!.flow!.attention).toBe('escalated')
+
+    // The condition goes away; the very next snapshot reflects it without any cleanup step.
+    seedFlow({ state: 'done', rounds: 6 })
+    const after = buildWebState({ liveTmuxTarget: () => true }).runs[0]!.flow!
+    expect(after.label).toBe('flow: closed')
+    expect(after.tone).toBe('neutral')
+    expect(after.attention).toBeNull()
+
+    // And nothing was written into the lifecycle record on the way.
+    expect(readFileSync(runPath, 'utf8')).toBe(before)
   })
 })

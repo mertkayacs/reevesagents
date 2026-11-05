@@ -199,7 +199,7 @@ describe('agent-run runtime', () => {
       { args: ['select-window', '-t', `${result.run.tmux_session}:reeves`] },
       { args: ['select-window', '-t', `${terminal.tmux_session}:${terminal.tmux_window_id}`] },
       { args: ['capture-pane', '-p', '-e', '-S', '-5', '-t', terminal.tmux_pane_id] },
-      { args: ['paste-buffer', '-b', helloBuffer, '-t', terminal.tmux_pane_id] },
+      { args: ['paste-buffer', '-p', '-b', helloBuffer, '-t', terminal.tmux_pane_id] },
       { args: ['delete-buffer', '-b', helloBuffer] },
       { args: ['send-keys', '-t', terminal.tmux_pane_id, 'Enter'] },
       { args: ['send-keys', '-t', terminal.tmux_pane_id, 'C-c'] },

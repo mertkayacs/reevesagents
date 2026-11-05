@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -56,5 +56,31 @@ describe('config', () => {
     const { saveConfig, defaultConfig, configExists } = await import('../src/core/config.js')
     saveConfig(defaultConfig())
     expect(configExists()).toBe(true)
+  })
+
+  it('ignores a pre-block-68 flow_tick_ms and warns exactly once (block 68)', async () => {
+    // The setting is gone; the key in an existing config is not an error and not a setting — it is ignored, and the
+    // operator is told once, because a file that is silently ignored is a file that keeps misleading its owner.
+    writeFileSync(cfgPath, JSON.stringify({ version: 2, global: { flow_tick_ms: 60000, peek_lines: 7 } }), 'utf-8')
+    const writes: string[] = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk: unknown) => {
+      writes.push(String(chunk))
+      return true
+    }) as never)
+    try {
+      const { loadConfig } = await import('../src/core/config.js')
+      const loaded = loadConfig()
+      // The rest of the file still loads, and the removed key is not part of the config any more.
+      expect(loaded.global.peek_lines).toBe(7)
+      expect('flow_tick_ms' in loaded.global).toBe(false)
+
+      loadConfig()
+      loadConfig()
+      const warned = writes.filter(line => line.includes('flow_tick_ms is ignored'))
+      expect(warned).toHaveLength(1)
+      expect(warned[0]).toContain('flow_tick_ms is ignored: the flow driver is the external ticker (reeves-flow-tick.timer / cron)')
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
