@@ -205,7 +205,7 @@ human is highlighted with the same warning colour as a stale run.
   `dispatch_unresolved` for a human to inspect. `flow tick --all` sends at most one prompt per
   pass and only observes the remaining flows.
 - **A flow is advanced by one external driver:** `reeves-flow-tick.timer` (or a cron entry) running
-  `reevesagents flow tick --all` every minute. That pass is the only thing that advances a flow — an open
+  `reevesagents flow tick --all` every minute. Manual `flow tick --run <id>` and MCP `flow_step` calls can also advance a flow. An open
   Web UI dashboard and the TUI only report what the driver last did, and `GET /api/state` neither ticks nor
   sends. `flow status` says `tick last <N>s ago · driver systemd:reeves-flow-tick.timer`, or
   `tick none recorded` when nothing has ever ticked the machine. There is no `flow_tick_ms` setting any more:
@@ -302,16 +302,33 @@ Prompts are English by decision (2026-11-01). The machine tokens — `VERDICT: A
 `BLOCKER|MAJOR|MINOR`, `file:line`, `no findings` — are part of the contract and are never translated, in any locale;
 the parser still accepts the older `ВЕРДИКТ:` spelling so files and panes written before the canon keep working.
 
-### The plan drives the flow by itself
+### State and recovery
 
-Once a plan is imported and a brief is attached to an item, nobody has to type `flow tick`: the external driver —
+Flow state is stored under `<registry>/flows/<run-id>.json`, with the plan and review notes
+under `<registry>/flows/<run-id>/`. The registry defaults to `~/.reeves`; `REEVES_REGISTRY`
+selects a different directory. Keep the scheduler and interactive commands on the same registry.
+
+Before upgrading or restoring state, stop the external scheduler and any outstanding manual or
+MCP steps, then back up the registry and the repository. Invalid JSON or an unsupported schema
+is reported as an error rather than silently resetting the flow. Restore a known-good backup
+with all writers stopped; do not delete claims to force an uncertain dispatch to repeat.
+
+For a held flow, inspect `flow status`, `flow logs`, and `flow incidents list` first. Answer an
+agent question in its CLI, then tick again once the pane is ready. For ambiguous delivery,
+inspect the target pane and commit history before retrying. `flow release-round` is only for a
+paused round that has not started review; it is not a general reset. `flow stop` closes the
+pipeline, while `flow start --replace` explicitly replaces an escalated or done flow.
+
+### Scheduled plan execution
+
+Once a plan is imported, a brief is attached, and an external scheduler is configured, the driver —
 `reeves-flow-tick.timer` (or a cron entry) running `reevesagents flow tick --all` — passes over every live flow on its
 own interval and advances it one step at a time. Nothing inside the product drives a flow: the Web UI dashboard and the
 TUI only render the driver's receipt (`tick last 12s ago · driver systemd:reeves-flow-tick.timer`), and the claim
 protocol makes a hand-typed `flow tick --run <id>` meet a scheduled pass harmlessly — one of them sees the other's
 claim and does nothing instead of pasting the prompt twice.
 
-A fresh flow starts by itself: an imported plan with a ready item is dispatched on the **first** tick, not after
+A fresh flow can dispatch on its first tick: an imported plan with a ready item is dispatched on the **first** tick, not after
 somebody else's ACCEPT. The head check still wins when the head has moved — a new commit is reviewed before the plan
 takes the next item — and a queued block (`flow add-spec`) is sent the same way. `flow plan next` only reads: **it
 never pastes and never queues**. The tick dispatches, and the command says so (`ready for dispatch`, then `nothing was

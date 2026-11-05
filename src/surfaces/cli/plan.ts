@@ -212,7 +212,7 @@ export function registerPlanCommands(flow: Command): void {
 
   plan
     .command('next')
-    .description('the item the plan wants next, and why (or why not): the only automatic path to work')
+    .description('show the next plan item and why it is ready or blocked; never queues or sends')
     .option('--run <id>', 'run id (a unique prefix is accepted)')
     .option('--dry-run', 'accepted for compatibility; this command never writes')
     .option('--json', 'output JSON')

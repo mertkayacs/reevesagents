@@ -1,13 +1,13 @@
 # The plan as an object: model, sync and surfaces
 
-Status: **design** (block 11). Nothing in this document is implemented yet — the code arrives in blocks
-12–17, listed in §10.
+Status: implemented in the flow-engine feature. This document records the plan model,
+its invariants, and the implementation history; the rollout checklist in §10 is historical.
+See [the user guide](GUIDE.md) for current commands.
 
-The flow engine today knows two things about work: a queue of block specs and a round counter
-(`src/core/flow.ts:151-152`, `:140`). That answers "what is the dev doing right now", not "how much of the
-project is left", and it gives the owner no way to drive a project by its plan. This document turns the
-project's own `docs/implementation-plan.md` into an object the engine can reason about: the same document
-the agents work from, mirrored in state, with statuses that only ACCEPT can move.
+The engine mirrors a repository plan document in persistent state, tracks attached briefs,
+and exposes progress and owner decisions. Initial import can seed completion from checked
+items. Later imports do not close existing items: reviewer acceptance or an explicit
+`flow plan set` transition controls completion.
 
 ## 0. Decisions in three lines
 
@@ -15,10 +15,10 @@ the agents work from, mirrored in state, with statuses that only ACCEPT can move
    flow state file — the state stays small and readable, and the plan carries its own `schema_version`.
 2. **An item gets its brief by explicit attach** (`flow plan attach --item <id> --spec <file>`), which
    validates the spec with the existing `BlockSpec` validator and stores a *snapshot* of the record; no
-   brief means `needs_brief`, and the tick escalates instead of inventing scope.
-3. **`done` is only ever set by an ACCEPT of the commit that closed the item, or by an explicit human
+   brief means `needs_brief`: the picker can select another ready item, and waits when none is ready.
+3. **After initial import, `done` is set by an ACCEPT of the commit that closed the item, or by an explicit human
    command** (`flow plan set --run <id> --item <id> --status done --yes --note <why>`); a partial result that satisfies some
-   requirements is `in_work`, never `done`.
+   requirements is `in_work`, never `done`. Initial import can seed `done` from checked document items.
 
 ## 1. Inventory: what the plans actually look like
 
@@ -373,7 +373,7 @@ the engine already requires before it closes a flow — no second, weaker gate.
   same holds one level down — only `ENOENT` means "there is no plan"; a permission or I/O error while checking
   the file is reported, never read as absence.
 
-`flow plan next` is the **only** automatic way an item becomes work:
+The tick uses the plan picker to select work; `flow plan next` reports that selection without queuing or dispatching:
 
 1. skip `done`, `skipped`, `missing`;
 2. take the first item in document order with `status: queued` (brief attached);
@@ -384,7 +384,7 @@ the engine already requires before it closes a flow — no second, weaker gate.
    picker stops on it rather than routing around it;
 4. one active item per flow: if any item is `in_work`/`reviewing`, `next` returns `busy` and does nothing.
 
-`--dry-run` prints the item and the rendered prompt without queuing or sending.
+For `flow plan next`, `--dry-run` is accepted for compatibility. Both forms report the next item and its status without rendering a prompt, queuing, or sending.
 
 ### 5.1 Who ticks, and what a blocker looks like
 
@@ -392,6 +392,7 @@ The plan decides *what* moves; the external driver decides *when* (`docs/flows-d
 called from exactly one place: the external pass, `flow tick --all`, run by `reeves-flow-tick.timer` (or cron). The Web
 UI's SSE hub and `GET /api/state` do **not** tick (an API poll must not paste into a pane, and a browser tab is not a
 driver), and neither does the TUI: both only report the receipt the last real pass left in `~/.reeves/tick-status.json`.
+Explicit `flow tick --run <id>` and MCP `flow_step` calls can also advance an individual flow.
 The engine still holds no timer, and there is no `flow_tick_ms` setting any more (block 68).
 
 A blocker is a **view** value, never a field written into `task_status`: `flowBadge()` takes the plan's first

@@ -1,6 +1,8 @@
 # Notification log and agent pulse badge — design
 
-Status: design only. No production code is changed by this document.
+Status: implemented in the flow-engine feature, including notification history, pulse badges,
+and the flow review-notes channel (§11). This document records the design and its revisions.
+Historical inventories below describe the upstream 2.1.0 baseline, not the current feature branch.
 
 Revision 4 (base refresh + flow integration): the branch merged `upstream/master` (`99c2d80`,
 version 2.1.0) and every `file:line` anchor in this document was re-derived against the merge commit —
@@ -47,10 +49,8 @@ $ wc -c src/surfaces/webui/client/app.js src/surfaces/webui/client/app.css
  45911 src/surfaces/webui/client/app.css
 ```
 
-Windows toasts are currently sent by the external bash supervisor, not by the product
-(`~/.hermes/reeves-handoff/notify_toast.sh`, invoked from `loop_supervisor.sh:20-21` via
-`powershell.exe`). The product therefore has to gain two things it does not have: an ingest
-endpoint and a place to keep history.
+External supervisors may provide desktop notifications. Their scripts and configuration are
+outside this package; the proposed product integration uses an ingest endpoint and stored history.
 
 ## 1. Inventory of what exists
 

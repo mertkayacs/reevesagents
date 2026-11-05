@@ -1,14 +1,12 @@
-# Flow engine — design draft (block 01 recon)
+# Flow engine — architecture and design history
 
-**Status:** decisions resolved (see §7) — block 01 closed, implementation starts in block 02.
-No code is written against this document yet.
-**Scope:** how to build the `flow` pipeline (dev → review → fix) *inside* the existing
+**Status:** implemented in the flow-engine feature. Historical block references record design and regression decisions; see [the user guide](GUIDE.md) for current operation.
+**Scope:** architecture of the `flow` pipeline (dev → review → fix) *inside* the existing
 ReevesAgents architecture instead of beside it.
-**Branch:** `feature/flow-engine`, worktree `~/projects/reevesagents-flow`.
 
-Every claim below is a reference into this tree at `origin/master` + this branch's
-uncommitted docs work. Line numbers are exact; if a file moves, the reference is stale
-and the design must be re-checked, not trusted.
+The initial inventory in §1 describes the pre-feature baseline. Historical line-number
+references and rollout notes are retained for context; current behavior is defined by
+`src/core/flow*.ts`, `src/core/plan*.ts`, their tests, and the user guide.
 
 ---
 
@@ -56,7 +54,7 @@ extended rather than re-invented:
 | `src/core/verdict.ts` | `parseVerdict(paneText)` → `{verdict, notes, count}` | Pure, unit-testable, no tmux |
 | `src/core/flow.ts` | `FlowState`, `FlowDefinition`, `tickFlow(flow, ports)` — a pure step | The whole state machine is testable without tmux, git or a clock |
 | `src/core/flow-store.ts` | `~/.reeves/flows/<id>.json` read/list/save/delete, atomic, versioned | Own file set and normalizer; it adds **no** second lock — claim/settle use the existing `withRunsLock` (§2.4) |
-| `src/core/flow-runner.ts` | `FlowPorts` implemented over `runtime.ts` + git, `sweepFlows()`, `sweepFlowsThrottled()` | The only place that knows both the engine and the runtime |
+| `src/core/flow-runner.ts` | `FlowPorts` implemented over `runtime.ts` + git, `stepFlow()`; the external pass uses `tickAllFlows()` in `flow-ticker.ts` | The only place that knows both the engine and the runtime |
 | `src/core/spec.ts` | Block-spec model and validation, plus the deterministic dispatch-prompt renderer | A spec is data the owner authors; it is validated once at add time, never re-parsed at dispatch |
 
 ### 2.2 One required change in the existing runtime
@@ -89,9 +87,8 @@ The gate is **fail-closed**. `paneBusy(agentId)` returns `busy | idle | unknown`
 is treated as busy: `sendWhenIdle` refuses and reports `busy_unknown`. A provider whose busy
 indicator has not been verified on a live pane cannot be declared idle from a heuristic, and a
 gate that silently answers "free" for an unknown provider is worse than no gate — it looks like
-protection. v1 therefore ships an allow-list of providers with a verified marker (the same shape
-as `DETECTORS` in `src/core/attention.ts:190`); anything else needs an explicit opt-in
-(`flow start --assume-idle`) and the flow records that it runs unguarded. The pane tail is
+protection. Provider detection must positively establish an idle pane. Unsupported or ambiguous panes
+hold the flow; there is no `--assume-idle` bypass. The pane tail is
 re-read immediately before the paste, not only at the start of the tick.
 
 **What "free" is read from (block 73).** The glyph is one way to a composer, not the only one. On 2026-11-03 a live codex
@@ -135,12 +132,13 @@ not found instead of a bare `review_pane_unknown`.
 ### 2.3 Where the step runs
 
 The engine is a pure function (`flowTick`) wrapped by `stepFlow`, and **nothing in `src/core` starts a timer**.
-There is exactly one driver, and it is external to the product (block 68):
+Automatic progression uses an external scheduler. Manual CLI ticks and explicit MCP steps also advance flows; none of the viewing surfaces starts a loop:
 
 | Tick site | Reference | State |
 | --- | --- | --- |
-| External scheduler | `reeves-flow-tick.timer` (or a cron entry) running `node dist/cli.js flow tick --all`; it names itself through `REEVES_TICK_DRIVER` (`systemd:reeves-flow-tick.timer`, `cron:…`) | **the driver**: one pass per interval, the only thing that advances a flow |
-| CLI | `reevesagents flow tick --run <id>` / `flow tick --all` | **shipped**: the same pass a schedule runs, and the only path that sends |
+| External scheduler | `reeves-flow-tick.timer` (or a cron entry) running `node dist/cli.js flow tick --all`; it names itself through `REEVES_TICK_DRIVER` (`systemd:reeves-flow-tick.timer`, `cron:…`) | **automatic driver**: one pass per interval |
+| CLI | `reevesagents flow tick --run <id>` / `flow tick --all` | **shipped**: explicit single-run or all-flow steps |
+| MCP | `flow_step { run_id, dry_run? }` | **shipped**: one explicit step, no background loop |
 | Web UI SSE hub and `GET /api/state` | `src/surfaces/webui/server.ts` | **never ticks**: the frame and the route report the driver's receipt (`tick`) and nothing else |
 | TUI flow section | `flowSectionLines` (`src/core/flow-view.ts`) | **never ticks**: it renders the same receipt |
 
@@ -533,7 +531,7 @@ once — strictly — for a rewrite (`review_notes_invalid_retry`); every later 
 `the notes file for <head> is not usable: <reason>`, past the deadline included, instead of escalating on an answer that already
 exists.
 
-**An answered review never times out (block 82).** The live `salon-dashboard` run escalated `review_timeout` six times on reviews
+**An answered review never times out (block 82).** A regression caused `review_timeout` on reviews
 whose verdict had been applied: the close was refused (the head had already closed another item), the refusal left the flow in
 `reviewing` with the review clock still armed, and fifteen minutes later the ticker escalated a review nobody was waiting for — in
 one repeat eleven seconds before the dev's own commit arrived. The refusal now spends the verdict completely: the flow returns to
@@ -542,8 +540,8 @@ refuses to time out a flow whose current head has already been answered (`claim.
 claim.head`) — the state says it, so the safety net is a check and not a guess — which is what keeps a resumed run from re-arming a
 deadline on the same head.
 
-**A refused close refuses the close, not the binding (block 81).** The live `salon-dashboard` run dispatched T2.3.1's brief, then
-refused an ACCEPT on a head that had already closed T2.2.6 — and the refusal also cleared `active_plan_item` and put T2.3.1 back in
+**A refused close refuses the close, not the binding (block 81).** A regression dispatched one item's brief, then
+refused an ACCEPT on a head that had already closed another item — and the refusal also cleared `active_plan_item` and put the active item back in
 the queue. The dev kept working on the brief while `plan.json` held `queued, rounds 0`: every fix round went uncounted, the per-item
 cap never fired, and the panel printed `round 7 of 6`. So the refusal keeps the binding of the item the **claim** names (it was just
 dispatched and is being worked on) and puts back only a stale one — a refusal that is already history re-queues its item and says
@@ -1422,7 +1420,7 @@ code before acceptance; all four were accepted and are fixed in this revision.
 | D7 conflated archiving with deletion: `delete-run` does **not** delete a history record | **Correct.** `src/surfaces/cli/history.ts:19` archives; `delete_history` (`src/surfaces/mcp/server.ts:465`) and the panel (`RunHistory.tsx:132`) delete | §3.3 rewritten with every path and its reference; cascade stays in `deleteRunHistory` (`runs.ts:367`) |
 | `max_rounds` resets per HEAD, so a normal cycle never escalates | **Correct**, and it was the weakest part of the draft | Cumulative `rounds_total` + `reviews_this_head`, resume makes a new budget explicit (§3.1) |
 | Holding `withRunsLock` across a send self-deadlocks (`sendText` → `updateAgent` takes the same non-reentrant lock) and a crash between send and save loses or duplicates the dispatch | **Correct and serious** | Two-phase claim/settle with `pending` + `op_id` and observation-based recovery (§2.4) |
-| The busy gate is permissive for a provider with no marker | **Correct** | Fail-closed tri-state `busy / idle / unknown`, allow-list, explicit `--assume-idle` opt-in (§2.2) |
+| The busy gate is permissive for a provider with no marker | **Correct** | Fail-closed tri-state `busy / idle / unknown`, verified idle detection, no bypass (§2.2) |
 
 Non-blocking items accepted: a formal state automaton (§3.4), a recovery/visibility policy for
 a corrupt flow file (§3.1), a definition of "one active flow" (§3.1), `report` described as a
