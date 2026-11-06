@@ -63,7 +63,7 @@ importers:
         specifier: 10.13.0
         version: 10.13.0
       happy-dom:
-        specifier: ^21.0.4
+        specifier: 21.0.4
         version: 21.0.4
       ink-testing-library:
         specifier: 4.0.0
