@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.0](https://github.com/mertkayacs/reevesagents/compare/v2.1.0...v2.2.0) (2026-11-07)
+
+
+### Features
+
+* **flow:** add persistent dev-review-fix workflows and plan tracking ([#187](https://github.com/mertkayacs/reevesagents/issues/187)) ([c8dea20](https://github.com/mertkayacs/reevesagents/commit/c8dea20a06cd879396b9d4b36a330726cb457906))
+
+
+### Bug Fixes
+
+* **core:** preserve unknown tmux probe results ([#191](https://github.com/mertkayacs/reevesagents/issues/191)) ([a611576](https://github.com/mertkayacs/reevesagents/commit/a611576d6bcf50940bf4279f614b47f73b853f62))
+
 ## [2.1.0](https://github.com/mertkayacs/reevesagents/compare/v2.0.0...v2.1.0) (2026-10-25)
 
 
