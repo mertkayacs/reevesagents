@@ -245,7 +245,7 @@ Die Agentensteuerung ist ein optionaler MCP-Server. Häng ihn nur an eine CLI,
 der du die Steuerung lokaler Tools anvertraust:
 
 ```sh
-reevesagents attach claude
+reevesagents attach cc
 reevesagents hosts
 ```
 

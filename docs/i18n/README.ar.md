@@ -245,7 +245,7 @@ reevesagents doctor
 تشغيل الأدوات المحلية:
 
 ```sh
-reevesagents attach claude
+reevesagents attach cc
 reevesagents hosts
 ```
 

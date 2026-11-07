@@ -107,7 +107,7 @@ al momento:
 Esta es la característica principal, y permanece desactivada hasta que la
 actives.
 
-- Actívala para tu CLI con `reevesagents attach claude`, o ejecuta un
+- Actívala para tu CLI con `reevesagents attach cc`, o ejecuta un
   `reevesagents attach` a secas para conectar todas las CLI instaladas que
   puedan alojarlo. La pantalla **Agent control** de la TUI y la Web UI hace
   exactamente lo mismo.
@@ -128,7 +128,7 @@ agente Claude Code en otra, y luego observar y dirigir ambos.
 - Los trabajadores no reciben estas herramientas por defecto, así que un
   trabajador no puede generar más agentes. Para que un trabajador dirija sus
   propios subagentes, adjunta el MCP también a la CLI de ese trabajador.
-- Para desconectarse más tarde: `reevesagents detach claude`.
+- Para desconectarse más tarde: `reevesagents detach cc`.
 
 ## Tareas cotidianas
 

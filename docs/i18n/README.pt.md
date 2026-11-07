@@ -245,7 +245,7 @@ O Agent Control é um servidor MCP opcional. Associe-o apenas a uma CLI em que
 confie para conduzir ferramentas locais:
 
 ```sh
-reevesagents attach claude
+reevesagents attach cc
 reevesagents hosts
 ```
 

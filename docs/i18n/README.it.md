@@ -244,7 +244,7 @@ Controllo agenti è un server MCP opzionale. Collegalo solo a una CLI di cui ti 
 abbastanza da lasciarle usare strumenti locali:
 
 ```sh
-reevesagents attach claude
+reevesagents attach cc
 reevesagents hosts
 ```
 

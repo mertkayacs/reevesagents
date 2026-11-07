@@ -68,7 +68,7 @@ Aynı run'lara beş ayrı yüzeyden ulaşırsınız. O an hangisi işinize geliy
 
 Temel özellik bu ve siz açana kadar kapalı durur.
 
-- Kendi CLI'niz için `reevesagents attach claude` ile açın. Barındırabildiği her kurulu CLI'yi tek seferde bağlamak isterseniz argümansız bir `reevesagents attach` da yeter. TUI ve Web UI'daki **Agent Kontrol** ekranı aynı işi görür.
+- Kendi CLI'niz için `reevesagents attach cc` ile açın. Barındırabildiği her kurulu CLI'yi tek seferde bağlamak isterseniz argümansız bir `reevesagents attach` da yeter. TUI ve Web UI'daki **Agent Kontrol** ekranı aynı işi görür.
 - `reevesagents hosts` durumu önünüze serer: makinedeki her CLI ve bunlardan hangilerinin bağlı olduğu.
 - Sonra o CLI'yi bir kez yeniden başlatın, çünkü araçlar yalnızca oturum başında yüklenir (bu düpedüz MCP: bir agent aracının komutlarını bir diğerine açmasının standart yolu).
 - O noktadan sonra agent'ınız yeni bir agent'ı göreve koyar, içine yazar, ne yaptığını okur ve her ne istiyorsa onaylar ya da reddeder.
@@ -77,7 +77,7 @@ Somut bir örnek: Claude Code'a bağlanın ve yeniden başlatın. Artık tek bir
 
 - Bunu bugün barındırabilen CLI'ler: claude, codex, kimi, qwen, opencode, hermes. OpenCode elle bağlanır, çünkü kendi ekleme adımı etkileşimlidir.
 - Worker'lar bu araçları varsayılan olarak almaz, dolayısıyla bir worker kendi başına yeni agent açamaz. Bir worker'ın kendi alt agent'larını yönetmesini istiyorsanız MCP'yi o worker'ın CLI'sine de bağlayın.
-- Sonradan bağlantıyı kesmek için: `reevesagents detach claude`.
+- Sonradan bağlantıyı kesmek için: `reevesagents detach cc`.
 
 ## Gündelik görevler
 

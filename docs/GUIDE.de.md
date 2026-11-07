@@ -107,7 +107,7 @@ Du erreichst dieselben Durchläufe über fünf Oberflächen. Nimm die, die gerad
 
 Das ist die Kernfunktion, und sie bleibt aus, bis du sie einschaltest.
 
-- Schalte sie für deine CLI mit `reevesagents attach claude` ein, oder verbinde mit einem
+- Schalte sie für deine CLI mit `reevesagents attach cc` ein, oder verbinde mit einem
   bloßen `reevesagents attach` gleich jede installierte CLI, die den Server hosten kann.
   Der Bildschirm **Agentensteuerung** in der TUI und Web UI tut dasselbe.
 - `reevesagents hosts` zeigt dir, wo du stehst: jede CLI auf der Maschine, und welche
@@ -129,7 +129,7 @@ sie.
 - Worker bekommen diese Tools standardmäßig nicht, ein Worker kann also keine weiteren
   Agenten starten. Soll ein Worker eigene Sub-Agenten steuern, hänge den MCP auch an
   seine CLI an.
-- Zum späteren Trennen: `reevesagents detach claude`.
+- Zum späteren Trennen: `reevesagents detach cc`.
 
 ## Alltägliche Aufgaben
 

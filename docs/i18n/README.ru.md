@@ -247,7 +247,7 @@ Agent Control: опциональный MCP-сервер. Подключайте
 которому доверяете управление локальными инструментами:
 
 ```sh
-reevesagents attach claude
+reevesagents attach cc
 reevesagents hosts
 ```
 

@@ -226,7 +226,7 @@ TUI 和 Web UI 驱动的是同一批本地运行：
 Agent Control 是一个可选的 MCP 服务器。只把它附加到你放心交出本地工具控制权的 CLI 上：
 
 ```sh
-reevesagents attach claude
+reevesagents attach cc
 reevesagents hosts
 ```
 

@@ -102,7 +102,7 @@ You reach the same runs through five surfaces. Pick whichever fits the moment:
 
 This is the core feature, and it stays off until you turn it on.
 
-- Turn it on for your CLI with `reevesagents attach claude`, or run a bare
+- Turn it on for your CLI with `reevesagents attach cc`, or run a bare
   `reevesagents attach` to connect every installed CLI it can host. The
   **Agent control** screen in the TUI and Web UI does the same thing.
 - `reevesagents hosts` shows where you stand: every CLI on the machine, and
@@ -117,12 +117,12 @@ A worked example: attach to Claude Code, restart it, and from inside one Claude
 Code session you can spawn a Codex agent on one issue and a second Claude Code
 agent on another, then watch and steer both.
 
-- CLIs that can host this today: claude, codex, kimi, qwen, opencode, hermes.
+- CLIs that can host this today: cc (Claude Code), codex, kimi, qwen, opencode, hermes.
   OpenCode is attached by hand, since its own add step is interactive.
 - Workers do not get these tools by default, so a worker cannot spawn more
   agents. To let a worker drive its own sub-agents, attach the MCP to that
   worker's CLI too.
-- To disconnect later: `reevesagents detach claude`.
+- To disconnect later: `reevesagents detach cc`.
 
 ## Everyday tasks
 

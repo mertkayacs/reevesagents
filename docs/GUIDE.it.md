@@ -68,7 +68,7 @@ Agli stessi run arrivi da cinque superfici. Scegli quella che si adatta al momen
 
 È la funzione centrale, e resta spenta finché non sei tu ad accenderla.
 
-- Accendila per la tua CLI con `reevesagents attach claude`, oppure lancia `reevesagents attach` da solo per collegare ogni CLI installata in grado di ospitarla. La schermata **Controllo agenti** nella TUI e nella Web UI fa la stessa identica cosa.
+- Accendila per la tua CLI con `reevesagents attach cc`, oppure lancia `reevesagents attach` da solo per collegare ogni CLI installata in grado di ospitarla. La schermata **Controllo agenti** nella TUI e nella Web UI fa la stessa identica cosa.
 - `reevesagents hosts` ti dice a che punto sei: tutte le CLI presenti sulla macchina, e quali di loro sono collegate.
 - Poi riavvia quella CLI una volta, perché gli strumenti vengono caricati solo all'avvio della sessione (è MCP puro e semplice, il modo standard con cui uno strumento di agente espone comandi a un altro).
 - Da lì in poi il tuo agente può mettere un nuovo agente su un compito, scriverci dentro, leggere cosa sta facendo e approvare o negare qualunque cosa chieda.
@@ -77,7 +77,7 @@ Un esempio concreto: collega Claude Code, riavvialo, e da dentro una sola sessio
 
 - CLI che oggi possono ospitarlo: claude, codex, kimi, qwen, opencode, hermes. OpenCode si collega a mano, perché il suo passaggio di aggiunta è interattivo.
 - I worker questi strumenti di default non li ricevono, quindi un worker non può generare altri agenti. Se vuoi che uno guidi dei sub-agenti suoi, collega l'MCP anche alla sua CLI.
-- Per scollegarti più avanti: `reevesagents detach claude`.
+- Per scollegarti più avanti: `reevesagents detach cc`.
 
 ## Attività quotidiane
 

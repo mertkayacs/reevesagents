@@ -244,7 +244,7 @@ Agent Kontrolü isteğe bağlı bir MCP sunucusudur. Onu yalnızca yerel araçla
 kullanmasına güvendiğiniz bir CLI'ye bağlayın:
 
 ```sh
-reevesagents attach claude
+reevesagents attach cc
 reevesagents hosts
 ```
 

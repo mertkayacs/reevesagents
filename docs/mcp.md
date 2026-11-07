@@ -9,7 +9,7 @@ that CLI to get ReevesAgents tools.
 ## Enable It
 
 ```sh
-reevesagents attach claude
+reevesagents attach cc
 reevesagents hosts
 ```
 
@@ -20,7 +20,7 @@ ReevesAgents can configure.
 To disconnect one host:
 
 ```sh
-reevesagents detach claude
+reevesagents detach cc
 ```
 
 The TUI and Web UI expose the same attach, detach, and status actions from the

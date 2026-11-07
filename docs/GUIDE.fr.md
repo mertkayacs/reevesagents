@@ -114,7 +114,7 @@ sur le moment :
 C'est la fonctionnalité centrale, et elle reste désactivée tant que vous ne
 l'activez pas.
 
-- Activez-la pour votre CLI avec `reevesagents attach claude`, ou lancez un
+- Activez-la pour votre CLI avec `reevesagents attach cc`, ou lancez un
   simple `reevesagents attach` pour connecter toutes les CLI installées capables
   de l'héberger. L'écran **Contrôle d'agent** de la TUI et de la Web UI fait
   exactement la même chose.
@@ -136,7 +136,7 @@ agent Claude Code sur une autre, puis observer et diriger les deux.
 - Les workers ne reçoivent pas ces outils par défaut ; un worker ne peut donc pas
   lancer d'autres agents. Pour qu'un worker pilote ses propres sous-agents,
   attachez aussi le MCP à la CLI de ce worker.
-- Pour vous déconnecter plus tard : `reevesagents detach claude`.
+- Pour vous déconnecter plus tard : `reevesagents detach cc`.
 
 ## Tâches quotidiennes
 

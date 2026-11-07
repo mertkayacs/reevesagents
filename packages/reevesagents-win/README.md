@@ -17,7 +17,7 @@ Needs Node 22.12+ and at least one provider CLI installed and signed in.
 Connect it to a host CLI, then that CLI gains the tools to spawn and steer other agents:
 
 ```
-reevesagents-win attach claude    # or codex, kimi, qwen, hermes
+reevesagents-win attach cc    # or codex, kimi, qwen, hermes
 ```
 
 Start a new session of the host CLI so it loads the tools, then ask the agent to spawn and drive others. Check your setup any time:

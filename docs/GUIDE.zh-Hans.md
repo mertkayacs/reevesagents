@@ -68,7 +68,7 @@ reevesagents add codex:worker
 
 这是核心特性，在你亲手开启之前一直是关的。
 
-- 用 `reevesagents attach claude` 给你的 CLI 开启，或者直接跑一句不带参数的 `reevesagents attach`，把它能托管的所有已安装 CLI 一口气接上。TUI 和 Web UI 里的**智能体控制**界面干的是同一件事。
+- 用 `reevesagents attach cc` 给你的 CLI 开启，或者直接跑一句不带参数的 `reevesagents attach`，把它能托管的所有已安装 CLI 一口气接上。TUI 和 Web UI 里的**智能体控制**界面干的是同一件事。
 - `reevesagents hosts` 让你看清现状：机器上有哪些 CLI，其中哪些已经接上了。
 - 然后把那个 CLI 重启一次，因为工具只在会话启动时才会被加载（这就是普通的 MCP，一个智能体工具向另一个公开命令的标准方式）。
 - 从这一刻起，你的智能体就能把新智能体放到任务上、往它里面打字、读它正在做什么，它请求什么就批准或拒绝什么。
@@ -77,7 +77,7 @@ reevesagents add codex:worker
 
 - 目前能托管它的 CLI：claude、codex、kimi、qwen、opencode、hermes。OpenCode 要手动附加，因为它自己的添加步骤是交互式的。
 - 工作者默认拿不到这些工具，所以工作者没法再生成智能体。想让某个工作者驱动自己的子智能体，把 MCP 也附加到那个工作者的 CLI 上。
-- 以后想断开：`reevesagents detach claude`。
+- 以后想断开：`reevesagents detach cc`。
 
 ## 日常任务
 

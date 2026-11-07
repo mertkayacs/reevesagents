@@ -108,7 +108,7 @@ momento:
 
 Esta é a funcionalidade central, e fica desligada até ser você a ligá-la.
 
-- Ligue-a com `reevesagents attach claude`, ou corra `reevesagents attach` sem
+- Ligue-a com `reevesagents attach cc`, ou corra `reevesagents attach` sem
   argumentos para ligar todas as CLIs instaladas que a conseguem alojar. O
   ecrã **Agent control** da TUI e da Web UI faz exatamente o mesmo.
 - `reevesagents hosts` mostra o ponto da situação: todas as CLIs da máquina e
@@ -129,7 +129,7 @@ um segundo agente Claude Code noutra, e depois observar e orientar ambos.
   trabalhador não consegue criar mais agentes. Para deixar um trabalhador
   conduzir os seus próprios subagentes, ligue o MCP também à CLI desse
   trabalhador.
-- Para desligar mais tarde: `reevesagents detach claude`.
+- Para desligar mais tarde: `reevesagents detach cc`.
 
 ## Tarefas do dia a dia
 
