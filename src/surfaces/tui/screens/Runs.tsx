@@ -17,6 +17,7 @@ import { glyphs } from '../utils/glyphs.js'
 import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from '../../../utils/display.js'
 import { autoCleanupRuns, computeRunStatus, listAgents, listRuns, runHasLiveTmuxTarget } from '../../../core/runs.js'
 import { sweepAgentsThrottled, sweepOrphanSessionsThrottled } from '../../../core/reaper.js'
+import { sweepAttentionThrottled } from '../../../core/attention.js'
 import type { FlowBadge } from '../../../core/flow-view.js'
 import { listFlowBadges, sameFlowBadges } from '../../../core/flow-view.js'
 import { flowAttentionText, flowBadgeText } from '../../../core/flow-label.js'
@@ -91,6 +92,9 @@ export function Runs() {
     // stale runs. Throttled internally, so this fast tick stays cheap.
     sweepAgentsThrottled()
     sweepOrphanSessionsThrottled()
+    // Attention is dashboard state, not Web-UI state: the sweep has to run even when the
+    // browser panel was never opened (the Web UI is started on demand). Throttled too.
+    sweepAttentionThrottled()
     autoCleanupRuns()
     const next = listRuns()
     setRuns(prev => {
