@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "ReevesAgents: Local tmux workspace for AI coding CLIs"
-version: 1.8.2
-date-released: 2026-10-10
+version: 2.1.0
+date-released: 2026-10-25
 authors:
   - family-names: Kaya
     given-names: Mert
