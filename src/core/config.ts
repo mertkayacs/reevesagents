@@ -19,6 +19,13 @@ const DEFAULT_GLOBAL: GlobalConfig = {
   default_permissions: 'ask',
   language: DEFAULT_LANGUAGE,
   web_theme: 'dark',
+  // Flow engine thresholds (block 10). Both are product policy, not per-flow tuning: a review that
+  // arrives in under `review_min_seconds` with no findings is not a review, and the dispatch window has
+  // to outlast a provider's slow first turn.
+  agent_pulse_ms: 5000,
+  review_min_seconds: 30,
+  review_evidence_retries: 1,
+  dispatch_confirm_seconds: 90,
 }
 
 export function configPath(): string {
@@ -63,15 +70,38 @@ function mergeDefaults(raw: unknown): Config {
     if (g.default_permissions === 'skip' || g.default_permissions === 'ask') merged.global.default_permissions = g.default_permissions as Permissions
     if (isLanguageCode(g.language)) merged.global.language = g.language
     if (g.web_theme === 'dark' || g.web_theme === 'light') merged.global.web_theme = g.web_theme
+    // `0` is meaningful for the minimum review time: it disables the *time* check while the notes check
+    // stays in force, so this is nonneg-int rather than posint.
+    // `0` disables the pulse, so this is nonneg-int rather than posint; a fraction is not a duration anyone meant.
+    if (typeof g.agent_pulse_ms === 'number' && Number.isInteger(g.agent_pulse_ms) && g.agent_pulse_ms >= 0) merged.global.agent_pulse_ms = g.agent_pulse_ms
+    if (typeof g.review_min_seconds === 'number' && g.review_min_seconds >= 0) merged.global.review_min_seconds = g.review_min_seconds
+    if (typeof g.review_evidence_retries === 'number' && g.review_evidence_retries > 0) merged.global.review_evidence_retries = g.review_evidence_retries
+    if (typeof g.dispatch_confirm_seconds === 'number' && g.dispatch_confirm_seconds > 0) merged.global.dispatch_confirm_seconds = g.dispatch_confirm_seconds
   }
 
   return merged
 }
 
+// A config written before block 68 still carries `flow_tick_ms`. It is not a setting any more — the flow driver is the
+// external ticker — so the key is ignored rather than honoured or refused, and the operator is told once per process.
+const OBSOLETE_TICK_KEY = 'flow_tick_ms'
+let warnedObsoleteTickKey = false
+
+function warnObsoleteSettings(raw: unknown): void {
+  if (warnedObsoleteTickKey) return
+  const settings = (raw as { global?: unknown } | null)?.global
+  if (typeof settings !== 'object' || settings === null) return
+  if (!(OBSOLETE_TICK_KEY in (settings as Record<string, unknown>))) return
+  warnedObsoleteTickKey = true
+  process.stderr.write(`${OBSOLETE_TICK_KEY} is ignored: the flow driver is the external ticker (reeves-flow-tick.timer / cron)\n`)
+}
+
 export function loadConfig(): Config {
   try {
     const content = readFileSync(configPath(), 'utf-8')
-    return mergeDefaults(JSON.parse(content))
+    const raw: unknown = JSON.parse(content)
+    warnObsoleteSettings(raw)
+    return mergeDefaults(raw)
   } catch {
     return defaultConfig()
   }
@@ -114,6 +144,10 @@ export const CONFIG_FIELDS: readonly ConfigFieldSpec[] = [
   { key: 'max_lifetime_ms', kind: 'nonneg-int', label: 'max agent lifetime (ms)' },
   { key: 'default_permissions', kind: 'permissions', label: 'default permissions' },
   { key: 'language', kind: 'language', label: 'language' },
+  { key: 'review_min_seconds', kind: 'nonneg-int', label: 'review min seconds' },
+  { key: 'review_evidence_retries', kind: 'posint', label: 'review evidence retries' },
+  { key: 'dispatch_confirm_seconds', kind: 'posint', label: 'dispatch confirm (s)' },
+  { key: 'agent_pulse_ms', kind: 'nonneg-int', label: 'agent pulse (ms)' },
 ]
 
 function configFieldSpec(key: string): ConfigFieldSpec {

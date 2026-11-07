@@ -4,7 +4,7 @@
   "description": "Local tmux-first workspace manager for AI CLI agents",
   "mcpName": "io.github.mertkayacs/reevesagents",
   "type": "module",
-  "packageManager": "pnpm@10.34.7",
+  "packageManager": "pnpm@10.34.9",
   "bin": {
     "reevesagents": "dist/cli.js"
   },
@@ -50,12 +50,12 @@
   },
   "pnpm": {
     "overrides": {
-      "@hono/node-server": "2.1.5",
+      "@hono/node-server": "2.1.6",
       "body-parser": "2.4.0",
       "brace-expansion": "5.0.12",
       "esbuild": "0.28.2",
       "fast-uri": "3.1.9",
-      "hono": "4.13.14",
+      "hono": "4.13.16",
       "ip-address": "10.7.5",
       "qs": "6.16.1",
       "source-map-js": "1.2.2"
@@ -70,6 +70,7 @@
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "eslint": "10.13.0",
+    "happy-dom": "21.0.4",
     "ink-testing-library": "4.0.0",
     "tsup": "8.5.1",
     "typescript": "6.0.3",

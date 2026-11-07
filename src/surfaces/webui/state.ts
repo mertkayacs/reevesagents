@@ -14,10 +14,43 @@ import { PROVIDERS, detectAvailable, providerSupportsAuthMode, providerSupportsE
 import { modelValuesForProvider } from '../../core/model-catalog.js'
 import { providerColor, providerDisplayName } from '../../utils/display.js'
 import { listRunApprovals, type ApprovalRisk } from '../../core/approvals.js'
-import type { AttentionReason, Provider, RunRecord, RunViewStatus, TaskStatus } from '../../core/types.js'
+import type { FlowAttention, FlowBadge } from '../../core/flow-view.js'
+import { readFlowBadge } from '../../core/flow-view.js'
+import { flowIncidentAgeMs, listFlowIncidents } from '../../core/flow-incidents.js'
+import type { FlowIncident } from '../../core/flow-incidents.js'
+import { flowAttentionText, flowBadgeView, type FlowTranslate } from '../../core/flow-label.js'
+import { loadConfig } from '../../core/config.js'
+import { translate } from '../../i18n/catalog.js'
+import type { AttentionReason, LanguageCode, Provider, RunRecord, RunViewStatus, TaskStatus } from '../../core/types.js'
 
 export interface WebStateOptions {
   liveTmuxTarget?: (_run: RunRecord) => boolean
+  // Rendered here, not in the browser: the label is formatted by the same helper the TUI uses, so
+  // the client never holds a second copy of "flow: review (2/6)".
+  language?: LanguageCode
+  // The clock the review deadline is measured against.
+  now?: number
+  // How long a badge counts as news (`agent_pulse_ms`); 0 turns the pulse off.
+  agent_pulse_ms?: number
+}
+
+// The flow badge as a surface shows it. `label` and `attention_label` arrive pre-rendered from
+// core/flow-label.ts; the client only displays them.
+export interface WebRunFlow {
+  status: string
+  rounds: number
+  max_rounds: number
+  label: string
+  attention: FlowAttention | null
+  attention_label: string | null
+  review_overdue: boolean
+  // The plan indicator: tone drives the colour, `label` its text, `pulse` whether it is still news. `plan` and
+  // `done_kind` are here so a host can explain the badge without re-reading the flow file.
+  tone: 'progress' | 'done' | 'attention' | 'paused' | 'neutral'
+  pulse: boolean
+  plan: { done: number, total: number } | null
+  done_kind: 'plan_complete' | 'closed_no_plan' | 'stopped' | null
+  detail: string | null
 }
 
 export interface WebAttention {
@@ -55,6 +88,9 @@ export interface WebRun {
   canStop: boolean
   canDelete: boolean
   terminals: WebTerminal[]
+  // Derived from the flow file on every snapshot, never stored on the run record.
+  flow: WebRunFlow | null
+  incidents: Array<Pick<FlowIncident, 'id' | 'spec_id' | 'kind' | 'severity' | 'owner' | 'status' | 'first_seen' | 'last_seen' | 'count' | 'note'> & { age_ms: number }>
 }
 
 export interface WebRunHistory {
@@ -107,7 +143,40 @@ function monogram(nickname: string, provider: string): string {
   return (alnum.slice(0, 2) || provider.slice(0, 2)).toUpperCase()
 }
 
+function webFlow(badge: FlowBadge, t: FlowTranslate, options: { now?: number, pulseMs?: number } = {}): WebRunFlow {
+  // "Still news" is an expiry, not a state: a badge that pulses for ever is ignored within a day. The flow file's own
+  // `updated_at` is the clock — no extra timer, and a restart does not restart the pulse.
+  const pulseMs = options.pulseMs ?? 15 * 60 * 1000
+  // `pulseMs > 0` first, before any comparison: with `0` the difference is `age < 0`, which a clock skew (an `updated_at`
+  // in the future) would turn into "fresh" and start a pulse the operator switched off (block 28, MINOR).
+  const fresh = pulseMs > 0 && badge.updated_at > 0
+    && (options.now ?? Date.now()) - badge.updated_at < pulseMs
+  const view = flowBadgeView(t, badge, { fresh })
+  const doneKind = badge.status !== 'done'
+    ? null
+    : badge.plan_progress !== null && badge.plan_progress.done >= badge.plan_progress.total
+      ? 'plan_complete' as const
+      : badge.close_reason === 'stopped by the operator' ? 'stopped' as const : 'closed_no_plan' as const
+  return {
+    status: badge.status,
+    rounds: badge.rounds,
+    max_rounds: badge.max_rounds,
+    label: view.label,
+    attention: badge.attention,
+    attention_label: flowAttentionText(t, badge),
+    review_overdue: badge.review_overdue,
+    tone: view.tone,
+    pulse: view.pulse,
+    plan: badge.plan_progress,
+    done_kind: doneKind,
+    detail: view.detail,
+  }
+}
+
 export function buildWebState(options: WebStateOptions = {}): WebState {
+  const language = options.language ?? loadConfig().global.language
+  const t: FlowTranslate = (key, values) => translate(language, key, values)
+  const now = options.now ?? Date.now()
   const agentIndex = new Map<string, { nickname: string; provider: Provider }>()
   const runNameById = new Map<string, string>()
   const pendingApprovals = listRunApprovals(undefined, 'pending')
@@ -120,6 +189,22 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
     runNameById.set(run.id, run.name)
     const live = options.liveTmuxTarget ? options.liveTmuxTarget(run) : runHasLiveTmuxTarget(run)
     const runStatus = computeRunStatus(run, live)
+    // Read once per run per snapshot: the flow file is small and this is the only place the web
+    // view learns about it.
+    const flow = readFlowBadge(run.id, now)
+    const incidents = listFlowIncidents(run.id, { open_only: true, now }).map(row => ({
+      id: row.id,
+      spec_id: row.spec_id,
+      kind: row.kind,
+      severity: row.severity,
+      owner: row.owner,
+      status: row.status,
+      first_seen: row.first_seen,
+      last_seen: row.last_seen,
+      count: row.count,
+      note: row.note,
+      age_ms: flowIncidentAgeMs(row, now),
+    }))
     const terminals = listAgents(run.id).map<WebTerminal>(agent => {
       agentIndex.set(agent.id, { nickname: agent.nickname, provider: agent.provider })
       const status = agent.ended_at ? 'ended' : agent.task_status
@@ -169,6 +254,8 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       canStop: run.status === 'running' && !run.ended_at,
       canDelete: run.status === 'ended' || run.ended_at !== null,
       terminals,
+      flow: flow ? webFlow(flow, t, { now, pulseMs: options.agent_pulse_ms }) : null,
+      incidents,
     }
   })
   const history = listRunHistory().map<WebRunHistory>(record => ({

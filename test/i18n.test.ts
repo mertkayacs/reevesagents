@@ -3,6 +3,24 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LANGUAGE_OPTIONS } from '../src/i18n/languages.js'
 import { translate, translatePhrase, type TranslationKey } from '../src/i18n/catalog.js'
+import { en } from '../src/i18n/locales/en.js'
+import { de } from '../src/i18n/locales/de.js'
+import { fr } from '../src/i18n/locales/fr.js'
+import { es } from '../src/i18n/locales/es.js'
+import { pt } from '../src/i18n/locales/pt.js'
+// Aliased: the Italian locale module is named `it`, which is also the vitest case function.
+import { it as itLocale } from '../src/i18n/locales/it.js'
+import { tr } from '../src/i18n/locales/tr.js'
+import { ru } from '../src/i18n/locales/ru.js'
+import { zhHans } from '../src/i18n/locales/zh-Hans.js'
+import { ar } from '../src/i18n/locales/ar.js'
+
+// Every non-English locale, keyed by language code. Imported directly (not through the catalog) so
+// a missing translation cannot hide behind the English fallback.
+const LOCALE_KEYS: Record<string, Record<string, string>> = {
+  de: de.keys, fr: fr.keys, es: es.keys, pt: pt.keys, it: itLocale.keys,
+  tr: tr.keys, ru: ru.keys, 'zh-Hans': zhHans.keys, ar: ar.keys,
+}
 
 describe('i18n language catalog', () => {
   it('includes the requested languages in first-run order', () => {
@@ -56,5 +74,80 @@ describe('i18n language catalog', () => {
     }
     expect(translate('tr', 'web.noLiveTmuxTarget')).toBe('run tmux oturumu kullanılamıyor')
     expect(translate('de', 'web.openAgent')).toBe('Öffnen')
+  })
+})
+
+// The Insights dialog keys (Plan + Logs tabs): a locale that only has the English source would silently show
+// English inside a translated UI, so the parity check covers them the same way it covers `flow.*`.
+const INSIGHTS_KEYS = [
+  'web.logs', 'web.insightsTitle', 'web.insightsSubtitle', 'web.tabPlan', 'web.tabLogs', 'web.logsAllRuns',
+  'web.planFilterAll', 'web.planFilterOpen', 'web.planFilterWaiting', 'web.planWaitingTitle', 'web.planNeedsBrief',
+  'web.planBlockedOwner', 'web.planEmptyTitle', 'web.planEmptyBody', 'web.logsEmptyTitle', 'web.logsEmptyBody',
+  'web.logsMarkRead', 'web.logsMarkedRead', 'web.logsRun', 'web.logsUnreadOnly', 'web.planStatus', 'web.planCommit',
+  'web.planRounds', 'web.planNotes', 'web.planBrief', 'web.planStatus_pending', 'web.planStatus_needs_brief',
+  'web.planStatus_queued', 'web.planStatus_in_work', 'web.planStatus_reviewing', 'web.planStatus_done',
+  'web.planStatus_blocked_owner', 'web.planStatus_skipped', 'web.planStatus_missing', 'web.planMissingSince',
+  'web.ticksNow', 'web.ticksNext', 'web.ticksNone', 'web.ticksWaiting',
+]
+
+describe('insights dialog key parity', () => {
+  // A locale may spell a word exactly as English does ("Plan", "Run", "Status"); listed per key so the rule stays
+  // strict everywhere else. German/French/Italian/Portuguese/Spanish happen to share these three.
+  const SAME_AS_ENGLISH = new Set<string>([
+    'de.web.tabPlan', 'es.web.tabPlan', 'fr.web.tabPlan', 'it.web.tabPlan', 'pt.web.tabPlan',
+    'de.web.logsRun', 'es.web.logsRun', 'fr.web.logsRun', 'it.web.logsRun', 'pt.web.logsRun',
+    'de.web.planStatus_reviewing', 'es.web.planStatus_reviewing', 'fr.web.planStatus_reviewing',
+    'it.web.planStatus_reviewing', 'pt.web.planStatus_reviewing',
+    // "Plan" is the same word in several languages and is kept as the product's own name.
+    'de.web.tabPlan', 'es.web.tabPlan', 'fr.web.tabPlan', 'it.web.tabPlan', 'pt.web.tabPlan', 'tr.web.tabPlan',
+  ])
+
+  it('defines every Insights key in all ten locales, and none of them is the English source', () => {
+    expect(INSIGHTS_KEYS.length).toBeGreaterThanOrEqual(30)
+    for (const key of INSIGHTS_KEYS) {
+      expect((en as Record<string, string>)[key], `en is missing ${key}`).toBeTruthy()
+    }
+    for (const [code, keys] of Object.entries(LOCALE_KEYS)) {
+      for (const key of INSIGHTS_KEYS) {
+        expect(keys[key], `${code} is missing ${key}`).toBeTruthy()
+        // Two locales legitimately spell a short word as English does; the rest must differ.
+        if (SAME_AS_ENGLISH.has(`${code}.${key}`)) continue
+        expect(keys[key], `${code}.${key} still holds the English source`).not.toBe((en as Record<string, string>)[key])
+      }
+    }
+  })
+})
+
+describe('i18n key parity', () => {
+  // A locale may legitimately spell a word exactly as English does; it is listed here with the
+  // reason instead of weakening the rule for every key.
+  const SAME_AS_ENGLISH = new Set(['fr.flow.meta.attention'])
+
+  it('defines every flow key in all nine translated locales', () => {
+    const flowKeys = Object.keys(en).filter(key => key.startsWith('flow.'))
+    // Guard the guard: an empty list would make the loop below pass without checking anything.
+    expect(flowKeys.length).toBeGreaterThanOrEqual(11)
+
+    for (const [code, keys] of Object.entries(LOCALE_KEYS)) {
+      for (const key of flowKeys) {
+        expect(keys[key], `${code} is missing ${key}`).toBeTruthy()
+        if (SAME_AS_ENGLISH.has(`${code}.${key}`)) continue
+        expect(keys[key], `${code}.${key} still holds the English source`).not.toBe(
+          (en as Record<string, string>)[key],
+        )
+      }
+    }
+  })
+
+  it('keeps every placeholder a flow badge relies on', () => {
+    for (const option of LANGUAGE_OPTIONS) {
+      const badge = translate(option.code, 'flow.badge.rounds', { status: 'review', rounds: 2, max: 6 })
+      expect(badge).toContain('review')
+      expect(badge).toContain('2')
+      expect(badge).toContain('6')
+      expect(badge).not.toContain('{{')
+      // The bare form drops the ratio, not the language.
+      expect(translate(option.code, 'flow.badge.status', { status: 'review' })).toContain('review')
+    }
   })
 })

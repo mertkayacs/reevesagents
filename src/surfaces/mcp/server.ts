@@ -10,6 +10,14 @@
 // run_id reuses one run created on the first spawn, so a chain of spawns lands
 // together.
 //
+// The flow tools are deliberate and explicit: `flow_start` attaches a pipeline to a run,
+// `flow_status` describes it, `flow_add_spec` queues a block, `flow_control` pauses, resumes, stops, queues
+// or drops a block the engine never sent, and `flow_step` runs **one** engine step when the host asks for it. Nothing here starts
+// a timer or a loop of its own, so the server keeps its "no implicit loops" contract: the flow
+// engine owns the loop, and a step is a call the host makes. `flow_step` sends at most one guarded
+// prompt and shares the CLI's claim protocol, so an MCP step, a cron tick and a manual tick can
+// never paste the same text twice.
+//
 // Each tool is one entry in TOOLS, colocating its schema and its handler so the
 // advertised list and the dispatch can never drift. MCP_TOOLS is derived from it.
 
@@ -37,6 +45,20 @@ import {
   stopRun,
   type AllowedKey,
 } from '../../core/runtime.js'
+import { resolveFlowRunId, flowQueueSummary, flowStatusPayload } from '../../core/flow-view.js'
+import { flowPath, readFlow, saveFlow } from '../../core/flow-store.js'
+import { queueSpecFile } from '../../core/flow-queue.js'
+import { startFlow } from '../../core/flow-start.js'
+import { addFlowSpecs, dropFlowSpec, pauseFlow, resumeFlow, stopFlow } from '../../core/flow-control.js'
+import { stepFlow } from '../../core/flow-runner.js'
+import { ackFlowIncident, claimFlowIncident, flowIncidentAgeMs, listFlowIncidents, resolveFlowIncident } from '../../core/flow-incidents.js'
+import {
+  createPlan, ensurePlanSummary, importInto, mutatePlan, planExists, planItemView, planPath, readPlan,
+  resolveRepositoryPath,
+} from '../../core/plan.js'
+import { readFileSync } from 'node:fs'
+import { shortHomePath } from '../../utils/paths.js'
+import { redactSecrets } from '../../core/redact.js'
 import { detectHostProvider } from './host.js'
 import {
   archiveAndRemoveRun,
@@ -47,6 +69,7 @@ import {
   listRunHistory,
   listRuns,
   readRun,
+  withRunsLock,
 } from '../../core/runs.js'
 import { detectAvailable, isProvider, coerceExtraArgs } from '../../core/providers.js'
 import { PROVIDER_DEFS } from '../../core/provider-registry.js'
@@ -89,8 +112,35 @@ function fail(message: string) {
 
 type ToolResult = ReturnType<typeof ok> | ReturnType<typeof fail>
 
+// The plan document is read from disk and stored with a repository-relative path: an absolute home path in
+// the state would leak into every payload (§4.1 of docs/flows-design.md).
+// The plan document lives in the project, which is the run's working directory — the server's own cwd is
+// whatever the host launched it from.
+function runWorkingDir(runId: string): string {
+  try {
+    return readRun(runId).working_dir
+  } catch {
+    return process.cwd()
+  }
+}
+
+function readPlanDocument(path: string): string {
+  try {
+    return readFileSync(path, 'utf-8')
+  } catch {
+    throw new Error(`cannot read ${shortHomePath(path)}`)
+  }
+}
+
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
+}
+
+// A numeric argument a host may send as a number or as a string; anything that is not a positive
+// number is left undefined so the engine's own default applies.
+function asPositiveNumber(value: unknown): number | undefined {
+  const parsed = typeof value === 'string' ? Number(value) : value
+  return typeof parsed === 'number' && Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
 function parseProvider(value: unknown): Provider {
@@ -493,9 +543,16 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'reap',
-    description: 'Sweep for zombie agents and orphan tmux sessions: ends any agent whose tmux window has died or that is older than max_lifetime_ms when that is set above 0 (see get_config), and kills reeves-*/reevesweb_* sessions no live record owns. Returns each reaped agent with the reason (window-gone or lifetime-exceeded) and its age, plus the killed orphan session names. This runs on its own in the background; call it to force an immediate sweep, e.g. after a crash or before relying on list.',
+    description: 'Sweep for zombie agents and orphan tmux sessions: ends any agent whose tmux window has died or that is older than max_lifetime_ms when that is set above 0 (see get_config), and kills reeves-*/reevesweb_* sessions no live record owns. Returns each reaped agent with the reason (window-gone or lifetime-exceeded) and its age, plus the killed orphan session names. When this state dir owns no runs at all but the tmux server carries reeves sessions, the orphan sweep is skipped (orphan_sweep_skipped = "foreign-registry") instead of treating another registry live fleet as orphans. This runs on its own in the background; call it to force an immediate sweep, e.g. after a crash or before relying on list.',
     inputSchema: { type: 'object', properties: {} },
-    handler: () => ok({ ...sweepAgents(), killed_sessions: sweepOrphanSessions({ ignoreGrace: true }).killed }),
+    handler: () => {
+      const orphans = sweepOrphanSessions({ ignoreGrace: true })
+      return ok({
+        ...sweepAgents(),
+        killed_sessions: orphans.killed,
+        orphan_sweep_skipped: orphans.skipped ?? null,
+      })
+    },
   },
   {
     name: 'get_config',
@@ -624,6 +681,299 @@ const TOOLS: ToolDef[] = [
       },
     },
     handler: (a) => ok(a.status === true ? skillsStatus() : installSkills()),
+  },
+  {
+    name: 'flow_start',
+    description: 'Attach a dev -> review -> fix flow to an existing run: the dev agent commits, the review agent reviews it, and the engine moves the loop. Both agents must already belong to that run; `repo` defaults to the run working directory. Writes one flow file and sends nothing — a flow only moves when someone ticks it, which this server never does on its own. Refuses a second flow on the same run, and refuses to replace an active one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it. A flow is keyed by run id.' },
+        dev: { type: 'string', description: 'Dev agent id or nickname inside that run.' },
+        review: { type: 'string', description: 'Review agent id or nickname inside that run; must differ from dev.' },
+        repo: { type: 'string', description: 'Project directory the flow watches; defaults to the run working directory.' },
+        max_rounds: { type: 'number', description: 'Fix rounds the flow may spend before it escalates (default 6).' },
+        review_timeout_sec: { type: 'number', description: 'Seconds a requested review may stay unanswered before it escalates (default 900).' },
+        dev_timeout_sec: { type: 'number', description: 'Seconds an idle dev may hold a plan item before a retry (default 900).' },
+        dev_stall_max_attempts: { type: 'number', description: 'Re-nudges before an idle plan item escalates (default 2).' },
+        replace: { type: 'boolean', description: 'Start over on a run whose flow is closed (escalated or done). An active flow is never replaced.' },
+      },
+      required: ['run_id', 'dev', 'review'],
+    },
+    handler: (a) => {
+      const started = startFlow({
+        run_id: asString(a.run_id),
+        dev: asString(a.dev),
+        review: asString(a.review),
+        repo: asString(a.repo) || undefined,
+        max_rounds: asPositiveNumber(a.max_rounds),
+        review_timeout_sec: asPositiveNumber(a.review_timeout_sec),
+        dev_timeout_sec: asPositiveNumber(a.dev_timeout_sec),
+        dev_stall_max_attempts: asPositiveNumber(a.dev_stall_max_attempts),
+        replace: a.replace === true,
+      })
+      return ok(flowStatusPayload(started.state, started.path))
+    },
+  },
+  {
+    name: 'flow_status',
+    description: 'Read the dev -> review -> fix pipeline attached to one run: its state, the round budget, the commit under review, the last verdict, the review deadline and the last decision. Read-only: it does not tick the flow and sends nothing to an agent.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it. A flow is keyed by run id.' },
+      },
+      required: ['run_id'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      return ok(flowStatusPayload(readFlow(runId), flowPath(runId)))
+    },
+  },
+  {
+    name: 'flow_incidents',
+    description: 'List and route durable flow incidents. `claim` assigns responsibility to the orchestrator, `ack` records that the orchestrator has taken responsibility without resolving the incident, and `resolve` requires a note. No action sends text or keys to an agent pane.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix.' },
+        action: { type: 'string', enum: ['list', 'claim', 'ack', 'resolve'] },
+        incident_id: { type: 'string', description: 'Incident id or unique prefix for claim, ack, or resolve.' },
+        note: { type: 'string', description: 'Required explanation when resolving an incident.' },
+      },
+      required: ['run_id', 'action'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const action = asString(a.action)
+      if (action === 'list') {
+        const now = Date.now()
+        return ok({ run_id: runId, incidents: listFlowIncidents(runId, { open_only: true, now }).map(row => ({ ...row, age_ms: flowIncidentAgeMs(row, now) })) })
+      }
+      const incidentId = asString(a.incident_id)
+      if (!incidentId) throw new Error(`${action} needs an incident_id`)
+      if (action === 'claim') return ok(claimFlowIncident(runId, incidentId))
+      if (action === 'ack') return ok(ackFlowIncident(runId, incidentId))
+      if (action === 'resolve') return ok(resolveFlowIncident(runId, incidentId, asString(a.note)))
+      throw new Error(`unknown incident action ${JSON.stringify(action)}; expected list, claim, ack or resolve`)
+    },
+  },
+  {
+    name: 'flow_add_spec',
+    description: 'Queue a block spec file on the flow of one run: the next block the dev will receive. The file must already exist; a relative path resolves inside the flow project directory and may not leave it, an absolute path is taken as written. Refuses an unreadable or empty file, a spec without requirements or checks, and a block id already queued or dispatched. Queueing dispatches nothing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        path: { type: 'string', description: 'Spec file: a JSON block spec, or a markdown brief (queued as an unstructured block).' },
+      },
+      required: ['run_id', 'path'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const specPath = asString(a.path)
+      // Read-modify-write inside the existing runs lock: short, no runtime call, and the store has
+      // no lock of its own by design (§2.4).
+      return withRunsLock(() => {
+        const queued = queueSpecFile(readFlow(runId), specPath)
+        saveFlow(queued.state)
+        return ok({
+          run_id: runId,
+          block: {
+            id: queued.spec.id,
+            // The title is user text: the answer is a transcript, so it is redacted here too.
+            title: redactSecrets(queued.spec.title),
+            unstructured: queued.spec.unstructured === true,
+            source_path: shortHomePath(queued.spec.source_path ?? ''),
+          },
+          queue: flowQueueSummary(queued.state),
+        })
+      })
+    },
+  },
+  {
+    name: 'flow_plan',
+    description: 'Read the plan imported from the project document: progress, the items that wait for a human, the next item, and — with `item_id` — one item with the commit that closed it, its rounds and its brief. Read-only: it imports nothing and ticks nothing. Answers `{error}` when no plan was imported for the run.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        item_id: { type: 'string', description: 'Optional plan item id, e.g. P1.7.1, to read one item instead of the whole plan.' },
+      },
+      required: ['run_id'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      if (!planExists(runId)) return fail(`no plan for run ${runId}: import the project document first`)
+      ensurePlanSummary(runId)
+      const plan = readPlan(runId)
+      const itemId = asString(a.item_id)
+      if (itemId) {
+        const item = plan.items.find(entry => entry.id === itemId)
+        if (!item) return fail(`no plan item ${itemId} in run ${runId}`)
+        // The view, not the record: a payload never carries the brief body (§11.3 of the notification design).
+        return ok({ run_id: runId, item: planItemView(item), conflicts: plan.conflicts.filter(entry => entry.item_id === itemId) })
+      }
+      const done = plan.items.filter(item => item.status === 'done').length
+      const next = plan.items.find(item => item.missing_since === null && item.status !== 'done' && item.status !== 'skipped')
+      return ok({
+        run_id: runId,
+        source_path: plan.source_path,
+        imported_at: plan.imported_at,
+        source_hash: plan.source_hash,
+        progress: { done, total: plan.items.length },
+        waiting: {
+          needs_brief: plan.items.filter(item => item.status === 'needs_brief').map(item => item.id),
+          blocked_owner: plan.items.filter(item => item.status === 'blocked_owner').map(item => item.id),
+          missing: plan.items.filter(item => item.missing_since !== null).map(item => item.id),
+          conflicts: plan.conflicts.length,
+        },
+        next: next ? { id: next.id, title: next.title, status: next.status, spec_path: next.spec_path } : null,
+        // The items themselves, without the brief bodies: a payload is a transcript, the file is the record.
+        items: plan.items.map(planItemView),
+      })
+    },
+  },
+  {
+    name: 'flow_plan_import',
+    description: 'Import (or re-import) the project plan document into a flow. Adds new items, retires the ones the document dropped, retitles, and never demotes a closed item: a document that disagrees with the record produces an entry in `conflicts` instead. `dry_run: true` parses and reports without writing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        file: { type: 'string', description: 'The plan document, e.g. docs/implementation-plan.md.' },
+        dry_run: { type: 'boolean', description: 'Parse and report; write nothing.' },
+      },
+      required: ['run_id', 'file'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const file = asString(a.file)
+      // A path outside the repository is refused, not shortened: `~/…` in `source_path` would name the
+      // operator's home in every later payload, and a shortened path cannot be re-imported.
+      const root = runWorkingDir(runId)
+      // Real-path containment: a symlink inside the project that points outside it is refused, and the path
+      // read here is the one that was checked.
+      const target = resolveRepositoryPath(file, root)
+      const sourcePath = target.relative
+      const text = readPlanDocument(target.absolute)
+      const dryRun = a.dry_run === true
+      const result = dryRun
+        ? (planExists(runId)
+          ? importInto(readPlan(runId), { run_id: runId, source_path: sourcePath, text, now: Date.now() })
+          : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() }))
+        : mutatePlan(runId, current => {
+          const imported = current
+            ? importInto(current, { run_id: runId, source_path: sourcePath, text, now: Date.now() })
+            : createPlan({ run_id: runId, source_path: sourcePath, text, now: Date.now() })
+          return { plan: imported.unchanged ? null : imported.plan, value: imported }
+        })
+      return ok({
+        run_id: runId,
+        dry_run: a.dry_run === true,
+        unchanged: result.unchanged,
+        added: result.added,
+        missing: result.missing,
+        conflicts: result.conflicts,
+        source_hash: result.source_hash,
+        total: result.plan.items.length,
+        path: shortHomePath(planPath(runId)),
+      })
+    },
+  },
+  {
+    name: 'flow_step',
+    description: 'Run ONE engine step on a flow: observe, decide, claim, send and settle — the `flow tick` equivalent. It sends at most one guarded prompt, and only into a pane that is positively idle; an unsettled claim from another process makes it hold instead of pasting. Answers `changed: false` with the reason when it decided to do nothing, which makes polling it cheap. Nothing here starts a timer or a loop: one call is one step, and the flow engine owns every rule (rounds, timeout, escalation, pane guard).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        dry_run: { type: 'boolean', description: 'Print the decision; send nothing and write nothing.' },
+      },
+      required: ['run_id'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const result = stepFlow(runId, { dryRun: a.dry_run === true })
+      return ok({
+        run_id: runId,
+        // What the host needs to decide whether to call again: nothing happened, it worked, a pane
+        // refused (retry later), a paste landed without its submit (a human looks), or another
+        // process owns the state right now.
+        changed: result.status === 'applied',
+        status: result.status,
+        decision: result.decision.kind,
+        reason: result.decision.reason,
+        dry_run: a.dry_run === true,
+        send: result.send
+          ? { sent: result.send.sent, reason: result.send.sent ? null : result.send.reason }
+          : null,
+        flow: flowStatusPayload(result.state, result.path),
+      })
+    },
+  },
+  {
+    name: 'flow_control',
+    description: 'Drive a flow with one explicit action: `pause` parks it (a paused flow is never ticked and sends nothing), `resume` returns it to the state it was paused from or grants an escalated flow a fresh round budget, `stop` closes it for good and requires `confirm: true`, `add_spec` queues one block file (`file` for a structured JSON spec, `markdown` for an explicit unstructured ingest), `drop_spec` removes a queued block the engine never sent (`spec_id`, optional `reason`) and also requires `confirm: true`. Every action answers with the same payload `flow_status` returns; a refused action answers with the reason and its code (`not_found`, `already_dispatched`, `dispatch_pending`, `flow_closed`), never with a fake success.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Run id, or a unique prefix of it.' },
+        action: { type: 'string', enum: ['pause', 'resume', 'stop', 'add_spec', 'drop_spec'], description: 'What to do with the flow.' },
+        file: { type: 'string', description: 'add_spec: JSON block spec path (requirements and checks are mandatory).' },
+        markdown: { type: 'string', description: 'add_spec: file to ingest as an unstructured markdown block. An explicit downgrade.' },
+        spec_id: { type: 'string', description: 'drop_spec: the queued block id to remove, as `flow_status` lists it in `queue`.' },
+        reason: { type: 'string', description: 'drop_spec: why it is being dropped; journalled as `spec_dropped <id>: <reason>`.' },
+        confirm: { type: 'boolean', description: 'stop and drop_spec: must be true, because neither can be undone.' },
+      },
+      required: ['run_id', 'action'],
+    },
+    handler: (a) => {
+      const runId = resolveFlowRunId(asString(a.run_id))
+      const action = asString(a.action)
+      if (action === 'pause') {
+        const paused = pauseFlow(runId)
+        return ok(flowStatusPayload(paused.state, paused.path))
+      }
+      if (action === 'resume') {
+        const resumed = resumeFlow(runId)
+        return ok(flowStatusPayload(resumed.state, resumed.path))
+      }
+      if (action === 'stop') {
+        if (a.confirm !== true) throw new Error('stop closes the flow for good; pass confirm: true')
+        const stopped = stopFlow(runId)
+        return ok(flowStatusPayload(stopped.state, stopped.path))
+      }
+      if (action === 'add_spec') {
+        const file = asString(a.file)
+        const markdown = asString(a.markdown)
+        if (!file && !markdown) throw new Error('add_spec needs a `file` (JSON spec) or a `markdown` path')
+        if (file && markdown) throw new Error('add_spec takes one file per call: `file` or `markdown`, not both')
+        const added = addFlowSpecs({
+          run_id: runId,
+          files: file ? [file] : [],
+          markdown: markdown ? [markdown] : [],
+        })
+        return ok({
+          run_id: runId,
+          queued: added.queued.map(spec => ({
+            id: spec.id,
+            title: redactSecrets(spec.title),
+            unstructured: spec.unstructured === true,
+          })),
+          flow: flowStatusPayload(added.state, added.path),
+        })
+      }
+      if (action === 'drop_spec') {
+        // Same confirmation rule as `stop`: the block leaves the queue and nothing brings it back.
+        if (a.confirm !== true) throw new Error('drop_spec removes a queued block; pass confirm: true')
+        const specId = asString(a.spec_id)
+        if (!specId) throw new Error('drop_spec needs a `spec_id` — the id `flow_status` lists in `queue`')
+        const dropped = dropFlowSpec({ run_id: runId, id: specId, reason: asString(a.reason) || undefined })
+        return ok(flowStatusPayload(dropped.state, dropped.path))
+      }
+      throw new Error(`unknown action ${JSON.stringify(action)}; expected pause, resume, stop, add_spec or drop_spec`)
+    },
   },
 ]
 

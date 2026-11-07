@@ -1,9 +1,30 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// A test seam at the module boundary, not in the product: the route keeps calling `pauseFlow`/`resumeFlow`, and a test can make that call
+// lose the race the way a second tab would — the pre-check has already passed, and the engine finds a different state under its lock.
+const race = vi.hoisted(() => ({ beforePause: null as null | ((_runId: string) => void), beforeResume: null as null | ((_runId: string) => void) }))
+vi.mock('../../src/core/flow-control.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../src/core/flow-control.js')>()
+  return {
+    ...actual,
+    // The seam runs *after* the route's pre-check and *before* the engine reads the state, so the state really changes in between — that
+    // is the race, not an injected error that merely looks like one (block 57, MINOR).
+    pauseFlow: (runId: string, options?: never) => {
+      race.beforePause?.(runId)
+      return actual.pauseFlow(runId, options)
+    },
+    resumeFlow: (runId: string, options?: never) => {
+      race.beforeResume?.(runId)
+      return actual.resumeFlow(runId, options)
+    },
+  }
+})
 import { request } from 'node:http'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { startWebServer, type WebServerHandle } from '../../src/surfaces/webui/server.js'
+import { startWebServer, flowControlRefusal, type WebServerHandle } from '../../src/surfaces/webui/server.js'
+
 import {
   listAgents,
   listRunHistory,
@@ -13,6 +34,8 @@ import {
   writeRun,
 } from '../../src/core/runs.js'
 import { loadConfig } from '../../src/core/config.js'
+import { createFlowState } from '../../src/core/flow.js'
+import { readFlow, saveFlow } from '../../src/core/flow-store.js'
 import type { AgentRecord, Provider, RunRecord } from '../../src/core/types.js'
 
 let tmpDir: string
@@ -682,5 +705,139 @@ describe('config and presets web actions', () => {
     const badEffort = await post(handle.port, '/api/terminals', { provider: 'claude-code', model: '', effort: 'turbo' })
     expect(badEffort.status).toBe(400)
     expect(JSON.parse(badEffort.body).error).toMatch(/unknown effort/)
+  })
+})
+
+describe('POST /api/flow/pause and /api/flow/resume', () => {
+  function seedFlow(state: 'idle' | 'done' = 'idle'): void {
+    writeRun({
+      id: 'run-1', name: 'demo', status: 'running', tmux_session: 'reeves-demo', reeves_window_id: '@0',
+      reeves_pane_id: '%0', root_agent_id: 'dev-1', working_dir: tmpDir, preset_name: null,
+      started_at: '2026-11-01T00:00:00.000Z', ended_at: null,
+    })
+    for (const [id, nickname] of [['dev-1', 'dev'], ['rev-1', 'rev']] as const) {
+      writeAgent({
+        id, run_id: 'run-1', nickname, provider: 'codex', model: '', role: 'worker', working_dir: tmpDir,
+        task: 't', task_status: 'working', task_note: '', tmux_session: 'reeves-demo', tmux_window_id: '@1',
+        tmux_pane_id: '%1', rc_enabled: false, permissions: 'ask', inbox: [], last_seen: 1,
+        started_at: '2026-11-01T00:00:01.000Z', ended_at: null,
+      })
+    }
+    const flow = createFlowState({
+      run_id: 'run-1', repo: tmpDir, roles: { dev: 'dev-1', review: 'rev-1' }, max_rounds: 3, at: '2026-11-01T00:00:02.000Z',
+    })
+    saveFlow({ ...flow, state, claim: { head: 'a'.repeat(40), verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null } })
+  }
+
+  it('pauses a running flow and resumes it back to where it was', async () => {
+    seedFlow()
+    const handle = await start()
+
+    const paused = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
+    expect(paused.status).toBe(200)
+    expect(JSON.parse(paused.body).flow.state).toBe('paused')
+    expect(readFlow('run-1').state).toBe('paused')
+
+    const resumed = await post(handle.port, '/api/flow/resume', { run_id: 'run-1' })
+    expect(resumed.status).toBe(200)
+    expect(JSON.parse(resumed.body).flow.state).toBe('idle')
+  })
+
+  it('refuses to pause a finished flow, and says why', async () => {
+    seedFlow('done')
+    const handle = await start()
+
+    const refused = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
+    expect(refused.status).toBe(409)
+    expect(JSON.parse(refused.body).error).toBe('not_pausable')
+    // A finished flow stays finished.
+    expect(readFlow('run-1').state).toBe('done')
+  })
+
+  it('refuses a second pause and an unknown run', async () => {
+    seedFlow()
+    const handle = await start()
+
+    expect((await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })).status).toBe(200)
+    const again = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
+    expect(again.status).toBe(409)
+    expect(JSON.parse(again.body).error).toBe('already_paused')
+
+    const missing = await post(handle.port, '/api/flow/pause', { run_id: 'no-such-run' })
+    expect(missing.status).toBe(404)
+    // A stable code, not a sentence: the client branches on `error`, never on the prose.
+    expect(JSON.parse(missing.body).error).toBe('not_found')
+
+    // Resuming something that is not parked is the same class: a stale button, reported as a code.
+    const idle = await post(handle.port, '/api/flow/resume', { run_id: 'run-1' })
+    expect(idle.status).toBe(200)
+  })
+
+  it('answers a race that finds the flow already parked with the code, not the prose', async () => {
+    // The route reads the state, then calls `pauseFlow`, which re-reads it under the lock. A second tab (or a double click) that wins the
+    // race makes the engine refuse with `flow for run … is already paused; …` — a sentence the pre-check never produces. It used to fall
+    // through to a 400 with that sentence as the body; it must answer `409 already_paused` (block 55, MAJOR).
+    seedFlow()
+    const handle = await start()
+
+    // Another tab parks the flow in the window between the pre-check and the call. The engine itself raises `is already paused` — no
+    // error is injected, and the assertion is about the body the route builds from that real refusal.
+    race.beforePause = runId => { saveFlow({ ...readFlow(runId), state: 'paused', paused_from: 'idle' }) }
+    try {
+      const raced = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
+      expect(raced.status).toBe(409)
+      expect(JSON.parse(raced.body).error).toBe('already_paused')
+      expect(JSON.parse(raced.body).state).toBe('paused')
+      expect(readFlow('run-1').state).toBe('paused')
+    } finally {
+      race.beforePause = null
+    }
+  })
+
+  it('maps a transition that lost the race to the same stable code', async () => {
+    // Same class, different refusal: the state was closed between the pre-check and the call.
+    seedFlow()
+    const handle = await start()
+
+    race.beforePause = runId => { saveFlow({ ...readFlow(runId), state: 'done', close_reason: 'stopped by the operator' }) }
+    try {
+      const raced = await post(handle.port, '/api/flow/pause', { run_id: 'run-1' })
+      expect(raced.status).toBe(409)
+      expect(JSON.parse(raced.body).error).toBe('not_pausable')
+      expect(JSON.parse(raced.body).state).toBe('done')
+    } finally {
+      race.beforePause = null
+    }
+  })
+
+  it('names every refusal in one vocabulary', async () => {
+    // The mapping itself, so a new message shape cannot quietly become a 400 again.
+    expect(flowControlRefusal('no flow for run x')).toEqual({ code: 'not_found' })
+    expect(flowControlRefusal('flow for run x is already paused; `flow resume` puts it back to work')).toEqual({ code: 'already_paused', state: 'paused' })
+    expect(flowControlRefusal('cannot pause a flow in state done')).toEqual({ code: 'not_pausable', state: 'done' })
+    expect(flowControlRefusal('cannot resume into state done')).toEqual({ code: 'not_paused', state: 'paused' })
+    expect(flowControlRefusal('cannot resume a flow in state idle (only a paused or escalated flow can be resumed)')).toEqual({ code: 'not_paused', state: 'idle' })
+    expect(flowControlRefusal('something else entirely')).toEqual({ code: null })
+  })
+
+  it('rejects a POST without an Origin header', async () => {
+    seedFlow()
+    const handle = await start()
+
+    const response = await new Promise<number | undefined>((resolve, reject) => {
+      const payload = JSON.stringify({ run_id: 'run-1' })
+      const req = request(
+        {
+          host: '127.0.0.1', port: handle.port, path: '/api/flow/pause', method: 'POST', agent: false,
+          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) },
+        },
+        res => { res.resume(); resolve(res.statusCode) },
+      )
+      req.on('error', reject)
+      req.end(payload)
+    })
+
+    expect(response).toBe(403)
+    expect(readFlow('run-1').state).toBe('idle')
   })
 })

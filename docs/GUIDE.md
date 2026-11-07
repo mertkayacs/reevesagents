@@ -136,6 +136,466 @@ agent on another, then watch and steer both.
 - `stop` and `kill` end work, and the `delete` commands remove ended records.
   All of them refuse to run without `--yes`.
 
+## Running a dev -> review -> fix flow
+
+A flow attaches the dev -> review -> fix loop to one run and keeps its state in
+`~/.reeves/flows/<run-id>.json`. The run row in the TUI and the run card in the Web
+UI show a badge (`flow: review (2/6)`, `flow: escalated`), and a flow that needs a
+human is highlighted with the same warning colour as a stale run.
+
+- `reevesagents flow start --run <run> --dev <agent> --review <agent>` — attach a
+  flow to an existing run. Both agents must already belong to that run, and `--repo`
+  defaults to the run's working directory. Add `--spec <file…>` to queue the blocks
+  the dev receives after the first ACCEPT. A run carries one flow: an active one is
+  never replaced, and `--replace` only restarts a closed (escalated or done) one.
+- `reevesagents flow status --run <run>` — state, round budget, the commit under
+  review, the last verdict and the last decision. Add `--json` for scripts.
+- `reevesagents flow tick --run <run> --dry-run` — print what the engine would do
+  next without sending anything or writing the flow file. Drop `--dry-run` to
+  apply it; the engine then pastes through its idle check and refuses a pane that
+  is not positively free.
+- `reevesagents flow add-spec --run <run> --file <spec.json…>` — queue more work after
+  the flow started. A structured spec must carry `requirements` and `checks`; a block
+  without them is refused. `--markdown <file…>` queues a brief as an *unstructured*
+  block on purpose: the CLI warns, and `flow status` shows it, because the reviewer has
+  no acceptance criteria to check.
+- `reevesagents flow drop-spec --run <run> --id <spec> --yes` — drop a block the flow has
+  not sent yet, for example when the work was already done outside the engine. `flow status`
+  prints the waiting ids (`queue 2 pending · block_63, block_64`), and that id is what `--id`
+  takes; `--reason <text>` is journalled with it. A block the flow already dispatched cannot be
+  dropped — the send is a fact, not a queue entry — and the command refuses without `--yes`.
+  With an imported plan the plan owns the queue (the tick dispatches plan items), so retire an item
+  with `flow plan set --item <id> --status skipped` instead; `drop-spec` only edits the hand-queued
+  blocks that `flow status` lists.
+- `reevesagents flow pause --run <run>` / `reevesagents flow resume --run <run>` —
+  park the flow and put it back. A paused flow is never ticked and never sends, and it
+  keeps no half-finished dispatch. `resume` returns it to the state it was paused from;
+  on an escalated flow it grants a fresh round budget.
+- `reevesagents flow stop --run <run> --yes` — close the flow for good. Nothing is sent
+  afterwards, and the file is kept so `flow status`/`flow logs` still explain what
+  happened. Without `--yes` the command refuses.
+- `reevesagents flow notes --run <run> [--head <sha>] [-r <N>] [--json]` — the reviewer's findings
+  for one round, read from the notes file the engine published. Defaults: the commit under review and
+  the newest round that has notes. A round that was answered only in the reviewer's pane has no file —
+  that prints "no notes" and exits 0; a round that never happened is an error and names the rounds that
+  exist. The file itself lives at `~/.reeves/flows/<run-id>/notes/<head>-r<N>.md`; secrets and
+  absolute paths are already removed from it, and they are removed again on the way out.
+- `reevesagents flow logs --run <run> [-n 20] [--json]` — the flow's own journal:
+  transitions, dispatches, verdicts, refusals and escalations, newest last. It never
+  holds a prompt body. An entry that consumed a review round points at it — `→ notes/<head>-r2.md ·
+  2 MAJOR, 1 MINOR` — so the journal says where the findings are without carrying them.
+- `reevesagents flow incidents list --run <run>` — show durable open incidents and their owner,
+  severity, age, count and evidence. `claim --run <run> --incident <id>` assigns it to the
+  orchestrator; `ack` records that the orchestrator has taken responsibility. An ACK does not
+  resolve the incident. Use `resolve --run <run> --incident <id> --note <what changed>` only
+  when the condition is addressed. Warnings route to the orchestrator; blockers first give the
+  orchestrator ten minutes to ACK, then create a human approval if still unacknowledged. Open
+  incidents also appear in `flow status` and on the run's attention surfaces.
+- **When an agent asks a question:** `flow status` prints `agent question <agent>: <text>` and
+  the affected plan item waits for a human. Read the question in the pane, answer there using the
+  normal CLI or UI interaction, and let the next tick observe the agent return to work. The flow
+  never sends keys to answer for you. If the question remains unanswered for 20 minutes, it
+  escalates once as `question_unanswered`.
+- **When a send is interrupted:** `flow logs` records `submit_retry` when an Enter had to be
+  repeated within a send, and `dispatch_retry_enter` for an Enter-only retry on a later tick.
+  An interrupted tick leaves a persisted paste record; after the claim expires, the next tick may
+  press one Enter only if the matching pane still proves the prompt is there. It does not paste
+  that prompt again. If Enter cannot be confirmed, `dispatch_unconfirmed` is shown; an expired
+  claim whose delivery is ambiguous becomes
+  `dispatch_unresolved` for a human to inspect. `flow tick --all` sends at most one prompt per
+  pass and only observes the remaining flows.
+- **A flow is advanced by one external driver:** `reeves-flow-tick.timer` (or a cron entry) running
+  `reevesagents flow tick --all` every minute. Manual `flow tick --run <id>` and MCP `flow_step` calls can also advance a flow. An open
+  Web UI dashboard and the TUI only report what the driver last did, and `GET /api/state` neither ticks nor
+  sends. `flow status` says `tick last <N>s ago · driver systemd:reeves-flow-tick.timer`, or
+  `tick none recorded` when nothing has ever ticked the machine. There is no `flow_tick_ms` setting any more:
+  the driver is the schedule, not a config key.
+- Two ticks at the same time are safe: the first writes the dispatch it is about to
+  send into the flow file, and the second finds that claim and sends nothing. If a
+  tick dies mid-send, the next pass checks the pane after two minutes: it submits a
+  confirmed prompt with one Enter, releases a confirmed empty composer, and asks a
+  human to inspect ambiguous delivery. It never pastes the same prompt twice.
+- A `flow tick --all` pass sends at most one prompt. It observes the remaining flows
+  without sending, so a large registry cannot run the service past its start timeout.
+  The packaged CLI does not install a systemd unit, so it does not prescribe a
+  `TimeoutStartSec` value. The one-send limit applies to systemd and cron drivers.
+- `pause` and `stop` also win against a tick that is already preparing a send: the
+  runner holds the dispatch gate for the whole act (check, paste, settle) and the
+  control commands take the same gate, so a flow you stopped does not receive one
+  last prompt (`flow tick` reports `cancelled`). If a prompt is being typed at that
+  moment the command waits for it and, past 15 seconds, answers "a dispatch is in
+  flight — try again in a moment" without changing anything.
+- **When a flow stops on its own, the journal says why** (`reevesagents flow logs --run <id>`):
+  `flow status` also prints the current hold (`hold tree_dirty since …`), so "standing and silent" is no
+  longer a diagnosis: the reason the engine is waiting — a dirty tree, no new commit, a busy dev pane, a
+  paused or orphaned flow — is in the state, and `flow status --json` carries it as `hold`.
+  `review_unsubstantiated` — the reviewer answered too fast or without recording a finding; the engine
+  re-asked once with a stricter prompt and then escalated, so look at the reviewer's agent: `flow notes`
+  shows what it actually wrote, and a second `flow tick` after a `flow resume` retries the round.
+  `composer_dirty` — the pane's input box already held text that was not the flow's; nothing was pasted,
+  the flow is escalated, and a human has to clear or send that text before resuming.
+  `target_not_ready` — the pane has not drawn its composer yet (a fresh agent, a modal, a login screen);
+  nothing was pasted and the round was not spent, so the next `flow tick` retries.
+  `dispatch_unconfirmed` / `dispatch_retry_enter` — the text reached the pane but the Enter did not visibly
+  start a turn. When the composer **still holds the prompt**, no round was started: the engine journalled
+  `dispatch_retry_enter` and the next tick presses Enter only (up to three attempts, then the flow escalates
+  with `review_dispatch_unconfirmed` so a human can submit it). When the composer is empty and nothing started,
+  the round runs anyway and the answer arrives on a later tick. A *refused* dispatch is different — nothing
+  was pasted, so the next `flow tick` retries the same answer.
+- A flow whose run was stopped, deleted or swept is parked as `orphaned`: `flow status`
+  prints the reason, nothing is ticked, and `flow stop` is how you close it. Deleting
+  the run's history record deletes the flow file too — that is the only automatic
+  deletion.
+
+### What you see in the Web UI
+
+The **Logs** button in the header (right after About) opens a dialog with two tabs:
+
+- **Plan** — the selected run's plan: a `done/total` bar, a *waiting for you* block (items without a brief, blocked
+  items), the items in document order with status badges, and a click on any item shows its commit, rounds, review
+  notes reference and brief path. Filters: all / open / waiting. A run without a plan shows "No plan yet".
+- **Logs** — the notification journal: time, run, agent and what was reported, with a run filter and "unread only",
+  plus *Mark all read*. It refreshes itself from the live stream, so there is nothing to reload.
+
+The card of the agent that has unread news pulses — not the whole sidebar: a run-level event pulses the run's cards.
+The length is `agent_pulse_ms` (`0` turns it off), it counts down from the event's own timestamp, and it stops when you
+mark the log read. On a narrow window the log rows collapse to time and message.
+
+### The notification journal
+
+Every run that starts, every approval that waits for you, every flow that escalates and every plan item that
+closes or blocks is written to `~/.reeves/notifications.jsonl` (append-only, `0600`, rotated at 2000 events or
+2 MiB and trimmed to the newest 1500 / 1.5 MiB). Read it without a browser:
+
+- `reevesagents notifications list [--run <id>] [--unread] [--limit N] [--json]` — newest first; `*` marks unread.
+- `reevesagents notifications read [--seq N]` — move the watermark (monotonic; it never goes back).
+
+`kind` says what happened (`run.created`, `run.stopped`, `run.archived`, `agent.needs_human`, `agent.failed`,
+`agent.finished`, `probe.failed`, `flow.escalated`, `flow.review_timeout`, `plan.item_done`, `plan.item_blocked`,
+`plan.item_needs_brief`, `external`) and `severity` says whether it needs you now: `error` — something failed, `warn` — a human is
+required, `info` — progress. The two flow kinds and the three plan kinds are product-only: the ingest route refuses
+them, and it always stores an ingested event as `source: external`, so a supervisor cannot fake "a human is
+required".
+
+The journal is readable today from the CLI above and from `GET /api/notifications` / `GET /api/state` (which
+carries `{latest_seq, unread, latest_ts}`). The Web UI's Logs dialog and the agent-card pulse are block 15 and are
+not in this branch yet; `agent_pulse_ms` is the setting that dialog will use (`0` turns the pulse off), and until
+then it is a stored preference with no consumer.
+
+### When the flow escalates
+
+An escalation is never silent: the tick raises **an approval** (`flow escalated: <reason> (P1.7.2) — continue with a
+fresh budget, or stop the flow`), so it appears where your other approvals appear — in the TUI's Approvals screen and
+in the Web UI.
+
+- **Approve** puts the item back in the queue (`queued`), zeroes the flow's round counter and returns it to `idle`:
+  the next tick picks the item up again.
+- **Deny** closes the flow as `done` with a `close_reason` that carries the escalation reason and your note; the item
+  is closed as `skipped`. Nothing else is sent.
+
+One escalation, one approval: a ticker that sees the same escalated flow again does not create a second ticket. A new
+episode (after a `flow resume`, then another escalation) is a new decision.
+
+### Machine tokens are not translated
+
+Prompts are English by decision (2026-11-01). The machine tokens — `VERDICT: ACCEPT|CHANGES_REQUESTED`,
+`BLOCKER|MAJOR|MINOR`, `file:line`, `no findings` — are part of the contract and are never translated, in any locale;
+the parser still accepts the older `ВЕРДИКТ:` spelling so files and panes written before the canon keep working.
+
+### State and recovery
+
+Flow state is stored under `<registry>/flows/<run-id>.json`, with the plan and review notes
+under `<registry>/flows/<run-id>/`. The registry defaults to `~/.reeves`; `REEVES_REGISTRY`
+selects a different directory. Keep the scheduler and interactive commands on the same registry.
+
+Before upgrading or restoring state, stop the external scheduler and any outstanding manual or
+MCP steps, then back up the registry and the repository. Invalid JSON or an unsupported schema
+is reported as an error rather than silently resetting the flow. Restore a known-good backup
+with all writers stopped; do not delete claims to force an uncertain dispatch to repeat.
+
+For a held flow, inspect `flow status`, `flow logs`, and `flow incidents list` first. Answer an
+agent question in its CLI, then tick again once the pane is ready. For ambiguous delivery,
+inspect the target pane and commit history before retrying. `flow release-round` is only for a
+paused round that has not started review; it is not a general reset. `flow stop` closes the
+pipeline, while `flow start --replace` explicitly replaces an escalated or done flow.
+
+### Scheduled plan execution
+
+Once a plan is imported, a brief is attached, and an external scheduler is configured, the driver —
+`reeves-flow-tick.timer` (or a cron entry) running `reevesagents flow tick --all` — passes over every live flow on its
+own interval and advances it one step at a time. Nothing inside the product drives a flow: the Web UI dashboard and the
+TUI only render the driver's receipt (`tick last 12s ago · driver systemd:reeves-flow-tick.timer`), and the claim
+protocol makes a hand-typed `flow tick --run <id>` meet a scheduled pass harmlessly — one of them sees the other's
+claim and does nothing instead of pasting the prompt twice.
+
+A fresh flow can dispatch on its first tick: an imported plan with a ready item is dispatched on the **first** tick, not after
+somebody else's ACCEPT. The head check still wins when the head has moved — a new commit is reviewed before the plan
+takes the next item — and a queued block (`flow add-spec`) is sent the same way. `flow plan next` only reads: **it
+never pastes and never queues**. The tick dispatches, and the command says so (`ready for dispatch`, then `nothing was
+sent by this command`).
+
+What happens without you is one of three things, and only the first is "progress":
+
+- **the plan moves** — the ticker takes the next item that has a brief, dispatches it, and closes it on an
+  accepted review. A reviewer asking for changes is normal work, not a stop.
+- **the plan waits** — nothing can be taken. An item without a brief is skipped, not obeyed: the picker takes the
+  next one that has a brief, so a single missing brief does not stop the plan. The flow waits only when no
+  remaining item can move — every open item lacks a brief, or the head is `blocked_owner` (a human already decided
+  to hold it), or the remaining items are `missing` from the document (they exist in the mirror but the file no
+  longer lists them). `flow status` names them (`waiting: P1.7.2 (needs a brief)`) and the run badge says
+  `plan: waiting for a brief (P1.7.2)`. The flow holds, stays in a working state, and does not escalate. To
+  continue: attach the brief (`flow plan attach`) or decide the item (`flow plan set --item <id> --status
+  queued|skipped`) — the next tick picks it up.
+- **the flow escalates** — this is not a plan stop but a pipeline one: the reviewer did not answer within
+  `review_timeout_sec`, the round budgets ran out (`rounds_exhausted` / `total_rounds_exhausted`), or the
+  reviewer kept answering without evidence (`review_unsubstantiated`). `flow status` shows `escalated` and the
+  reason, and `flow resume` gives it a fresh budget once the cause is dealt with.
+
+The plan is **done** when every item is `done` or `skipped` — that is the only automatic close.
+
+There is no switch to turn off: the driver is the schedule. `systemctl --user disable --now reeves-flow-tick.timer`
+(or removing the cron entry) is what stops automatic runs, and `flow status` then shows the last pass going stale
+(`tick last 900s ago · driver …`) or `tick none recorded` once its file is gone.
+
+### Three things a flow assumes about your repository
+
+- **The project must be a git repository with at least one commit.** `flow start` refuses a directory without a HEAD
+  (`cannot read HEAD in <dir> (is it a git repository with a commit?)`), and a tick that cannot read one stops on
+  `head_unknown`. This is a contract, not a limitation: a verdict, a notes file and an item closed as `done` are all
+  bound to a **commit**, so without commits there is nothing to review and nothing to prove.
+- **Any commit in that repository is treated as work.** The tick compares the repository HEAD with the commit it has
+  already accounted for; a moved head means "the dev made progress" and the flow asks for a review of that commit — no
+  matter who made it. So put the plan, the briefs and any other documentation into a commit **before** `flow start`
+  (or while the flow is paused / stopped), otherwise the flow politely reviews your plan instead of your code. This is
+  not a guess: it happened on the sandbox, where a plan committed mid-flow sent the reviewer after the document.
+- **Briefs live inside the repository.** `flow plan attach` refuses a path outside the project (`… is outside the
+  repository`) because the brief travels with the code it describes, and the mirror stores it as a repository-relative
+  path. The recommended place is `docs/briefs/<item-id>.md` (or `.json`), next to the plan document.
+
+The reviewer receives the brief of the item it is reviewing, so a verdict is about conformance to that brief: if the brief asks for an
+empty file, an empty file is an ACCEPT, not a defect.
+
+### When the plan is stuck in `in_work` with no review coming
+
+A round can be lost: the item says `in_work`, the dev's commit is there, and no review was ever requested — the flow's own bookkeeping moved
+on without the step it owed (a `resume` that anchored over a work commit did exactly that on 2026-11-02). The tick then answers
+`head_unchanged` for ever, and `flow plan set` refuses to touch the row because the engine still holds it.
+
+The way out is three commands, in this order:
+
+```bash
+flow pause --run <id>                                   # a human is intervening
+flow plan --run <id>                                    # shows the row: in_work, and the round it believes in
+flow release-round --run <id> --reason "the commit was never reviewed"   # --reason is required
+flow resume --run <id>
+flow tick --run <id>                                    # dispatches the item again
+```
+
+`flow release-round` frees the round only when it really is lost: the flow is `paused`, an item is in flight, and **no review was
+requested** (`review_started_at` and `pending` both empty). It puts the row back in `queued` and writes `round_released <item>: <reason>`
+to the journal, so the release is visible after the fact. On a live round it refuses — closing an item without the review it is waiting for
+is the one thing a human must not do.
+
+While a flow is `paused` **or `stopped`**, `flow plan set` also reaches the two statuses the engine normally owns: `in_work` and
+`reviewing` may be put back in the queue, parked for the owner, closed or skipped. That is what pausing is for, and a `stopped` flow is the
+same case taken further — `flow stop` closes the flow as `done`, so no ticker will ever finish the round it was holding, and the row is
+the operator's. With a live round on a running or paused flow the refusal stands: the engine is still waiting for that verdict.
+
+If you press **Pause** on a plan that is already finished, the dialog says so in words ("the plan is finished — there is nothing left to
+pause") rather than showing the route's code; the line names the run it belongs to, goes away after a few seconds on its own, and is gone
+the moment you open another run's plan.
+
+`--reason` is required: the journal is the only place the claim "the engine lost this round" survives, and an entry without a why cannot be
+told from a bug.
+
+### Pausing the plan and picking it up again
+
+A plan can be parked without closing it. From the CLI: `flow pause --run <id>` — the tick then sends nothing (no brief, no review
+request), the state, the round and the item in flight are kept. `flow resume --run <id>` returns to exactly where it stopped and
+continues on the next tick; a verdict the flow already had is carried out after the resume, not thrown away.
+
+From the Web UI: open the plan with the chip's icon and press **Pause** in the dialog's header; the same button then reads
+**Resume**. The card shows a small pause glyph next to the plan icon while the flow is parked, and the chip reads `flow: paused
+(1/3)`. A finished flow cannot be paused (`not_pausable`), and a second pause answers `already_paused`.
+
+### Reading the plan indicator on a run card
+
+The chip itself is not clickable — it only reports the state. The small **Plan** icon beside it opens that run's plan (the
+icon is drawn only when the run has one); Esc or Close brings you back to it. The **Logs** button opens the notification
+journal on its own.
+
+What the tests cover for that last step and what they do not: the automated test closes a real `<dialog>` and checks that the
+focus comes back to the icon (or to the run's card, or to Logs, if the card is gone). It does **not** check that Escape is what
+closes the dialog — the test dispatches `cancel` and calls `close()` itself, because happy-dom leaves a `<dialog>` open when it
+receives an Escape keydown (measured). That first hop, Esc → close, is therefore a manual check in a real browser: open the plan
+with the icon, press Esc, confirm the dialog closes and the focus sits on the icon.
+
+Under the run name: **`flow: plan 1/3`** in amber means the flow is walking its plan and needs nobody; **`flow: done 3/3`**
+in green means the plan finished and the work is ready to look at; **`flow: needs attention`** in red means something waits
+for you — an escalation, a review past its deadline, an item without a brief, an item its owner blocked, or a dispatch that
+was not confirmed (the tooltip names which). **`flow: paused (1/3)`** and **`flow: closed`** are neutral. Green and red
+breathe only while the state is new (`agent_pulse_ms`), and a page with reduced motion shows the colour and the words
+without animation.
+
+### The plan does not get stuck on a finished item
+
+When an item is closed, the flow forgets it in the same write. If an old state still names a finished item as "in flight",
+the next tick says so once in the log (`stale_active_item_cleared`) and starts the next item that has a brief, instead of
+waiting for a commit nobody owes.
+
+### A recorded verdict is carried out once, from the state
+
+When the flow holds a verdict it has not acted on (`claim.verdict` set, `claim.verdict_applied: false`), the next tick
+carries it out — the fix goes to the dev, or the accepted item is closed and the next one taken — even if nothing on the
+pane or in the notes still shows that answer. `flow status` prints the pair, so "the reviewer answered and the flow has
+not used it yet" is visible instead of being guessed.
+
+### One ticker at a time (manual runs and tests)
+
+The claim protocol makes two tickers safe, but they still race for the same flow: one takes the claim, the other answers
+`locked` or `dispatch_pending`, and a manual run sees a stuck round instead of progress. When you tick by hand — or drive a
+flow from a test harness — there is still exactly one driver to worry about, and it is the external one:
+
+- stop the schedule while you tick by hand (`systemctl --user stop reeves-flow-tick.timer`, or remove the cron entry),
+  then start it again — a dashboard cannot interfere, because no surface inside the product ticks;
+- one `flow tick --run <id>` at a time per flow: the second one is not an error, it simply decides nothing;
+- after such a run put the schedule back — a machine that never ticks looks like a broken flow, and `flow status`
+  shows it (`tick last 900s ago · driver …`).
+
+### When a claim is answered by something other than its sender
+
+A claim (`pending`) normally settles when the send reports back. If the work happens anyway — the reviewer writes
+`notes/inbox/<head>-r<N>.md`, or the pane's verdict counter grows — the next tick settles the claim from what it observes
+(`settled_by_observation` in `flow logs`) instead of waiting out `PENDING_TTL_SEC` and escalating a round that is already
+answered. A valid notes file carrying `VERDICT:` is evidence in itself (`notes_accept_verified`); a bare verdict in a pane
+still needs time and a finding.
+
+### Order matters: the plan and its briefs are committed before `flow start`
+
+The engine treats **any** commit as progress: a moved HEAD is reviewed. Documents about the work are not the work, so
+the plan and its briefs belong in a commit **before** `flow start` — or, if they change mid-flight, while the flow is
+parked:
+
+```bash
+flow pause       --run <id>          # stop handing out work
+$EDITOR docs/implementation-plan.md  # and docs/briefs/<item>.md
+git commit -am 'docs: plan'
+flow plan import --run <id> --file docs/implementation-plan.md
+flow plan attach --run <id> --item P1.7.1 --spec docs/briefs/P1.7.1.md
+flow resume      --run <id>          # the new HEAD becomes the baseline
+```
+
+Two rules make that safe. `flow plan import` and `flow plan attach` move the flow's baseline to the current HEAD
+(`plan_documents_anchored`), because they change documents, not code. `flow resume` re-anchors on the current HEAD as
+well: everything committed while the flow was parked is "already accounted for" and earns no review. And if a commit
+that touches **only** the plan or `docs/briefs/` slips in while the flow runs, the tick re-anchors on it
+(`documentation commit …: baseline moved, nothing to review`) instead of sending a reviewer after a document.
+
+### The flow's own placeholders (why an empty Hermes pane is safe)
+
+The engine pastes into a pane only when the composer is empty. "Empty" means **the provider's hint**, not "no
+characters": Hermes draws a rotating invitation (`Спросите о чём угодно или введите / для команд…`, `Ask anything, or
+type / for commands…`), Codex draws `Ask Codex to do anything`. A hint is recognised in every locale the TUI ships, and
+structurally too — an invitation to use commands ends in an ellipsis and names `/` — so a reworded hint does not need a
+release. Anything else in the box is somebody's unsent text: the flow refuses (`composer_dirty`) instead of pasting
+over it. If you ever see `composer_dirty` on a pane that looks empty, the hint was not recognised: send the pane
+capture with `docs/GUIDE.md`'s troubleshooting note and it becomes a test case.
+
+### A verdict that arrived at the wrong moment is not lost
+
+If a review answer is collected while the flow is momentarily `idle` (a resumed flow, a round that ended in the same
+tick), the next tick does not answer `head_unchanged`: it takes the verdict it already has. `CHANGES_REQUESTED` sends
+the fix to the dev, an `ACCEPT` closes the plan item and takes the next one. It happens once per commit — the marker is
+`verdict_handled_for` — so you will not see the same fix twice, and a new commit earns a new verdict.
+
+### When the flow says `dispatch_unconfirmed`
+
+`dispatch_unconfirmed` means the prompt reached the pane but nothing proved that the agent started on it: the busy
+hint never appeared inside `dispatch_confirm_seconds` (default 90 s), even after the one extra Enter the engine is
+allowed to press while the composer still holds its text. `flow status` says so out loud
+(`dispatch unconfirmed — <reason>`), and the run's flow chip turns into the attention tone.
+
+1. **If it says `dispatch_retry_enter attempt N/3`** the prompt is still in the composer and no round was started: the
+   engine presses Enter on the next tick by itself (nothing is pasted again, and it recognises the prompt across
+   processes — each tick is its own process, so the flow records the paste in its state, with the freshness window still
+   enforced). After the third attempt the flow escalates with `review_dispatch_unconfirmed` — press Enter once in that
+   pane, then `flow resume`.
+2. **If the composer is empty** the dispatch simply confirmed late or the provider swallowed the submit: the round has
+   already started, the clock is running, and the answer arrives on a later tick. `flow status` shows
+   `review: waiting` with the deadline.
+3. **Only then decide.** If the agent is idle with an empty composer and no notes file appeared by the deadline, the
+   round times out and the flow escalates with `review_timeout`; `flow resume` gives it a fresh budget once you know
+   why (a provider that was not ready, a wrong pane, a login screen).
+4. **Never paste twice.** A second paste of the same prompt is how a queued Enter ends up answering something nobody
+   asked for, so the engine refuses it by design and so should you.
+
+A `CHANGES_REQUESTED` is acted on only when it comes from the reviewer's notes file (`notes/inbox/<head>-r<N>.md`): a
+verdict read out of the pane's scrollback belongs to whatever commit was on screen when it was written, and the engine
+will hold (`awaiting_verdict`) rather than send the dev a fix for a review nobody made of that commit. A pane `ACCEPT`
+is still accepted — it closes work, it cannot invent it.
+
+`pane_changed` is a different message: the paste landed but the pane stopped looking idle before the Enter, and the
+composer no longer held the engine's text. Nothing was submitted; the next tick retries when the pane is free.
+
+### The plan as an object
+
+**How a project runs on its plan:** `flow plan import` once (and again after the document changes) →
+`flow plan attach` a brief for each item you want done → let the timers run (or `flow plan next` to see what comes next:
+ACCEPT the engine takes the next item by itself) → review, ACCEPT, and the item closes with the commit that
+closed it. `flow plan` shows `done/total`, what waits for you, and which item is next; `flow status` shows the
+same one-line summary, and each item's row carries its commit, its rounds and a reference to the review notes of
+the round that closed it.
+
+A plan file that exists but cannot be read stops the tick with an error naming it: the flow will not fall back to
+"there is no plan", because that is how a flow closes with items still open.
+
+Two budgets: `--max-rounds` is the budget of **one item** (how many fix rounds it may spend before it blocks as
+`blocked_owner` with `rounds_exhausted`), and `--max-total-rounds` (default `4 × max-rounds`, at most 100) is the
+flow's fuse. A flow without a plan ignores the fuse and keeps the old meaning of `--max-rounds`.
+
+`reevesagents flow plan …` mirrors the project's own plan document (the `- [ ]` / `- [x]` list in
+`docs/implementation-plan.md`) into `~/.reeves/flows/<run-id>/plan.json`, so the flow knows what is done and
+what is left. The design is `docs/plan-model-design.md`; two rules matter when you use it:
+
+- the document decides **which items exist**, the mirror decides **what happened to them**. Editing the
+  document cannot close an item, and a closed item is never reopened by a tick — the disagreement is
+  reported as a *conflict* instead.
+- `done` means an ACCEPT of the commit that closed the item, or an explicit `flow plan set … --status done
+  --yes --note <why>`. A `[x]` you type yourself is not evidence.
+- the close is written back: the engine ticks that one line (`- [ ]` → `- [x]`, nothing else) and commits it
+  as `chore(flow): mark <ID> done in the plan`. The commit is docs-only, so it asks for no review; a dirty tree
+  defers the tick and the next clean pass writes it, and a document the engine cannot write is journalled
+  (`plan_mark_failed`) without undoing the close.
+
+- `reevesagents flow plan import --run <run> --file docs/implementation-plan.md [--dry-run]` — import or
+  re-import the document. The path is resolved against the run's project directory (so it works from any
+  cwd) and must stay inside it: a file from your home directory is refused rather than stored as `~/…`. New items
+  are added as `pending`, items the document dropped are kept and marked `missing` (never deleted), and a document
+  that disagrees with the record adds a conflict. An unchanged file changes nothing. Exit code 3 means conflicts.
+- `reevesagents flow plan --run <run> [--json]` — progress (`12/23 done`), the buckets that wait for you
+  (`needs_brief`, `blocked_owner`, `missing`, conflicts) and the next item in document order.
+- `reevesagents flow plan attach --run <run> --item P1.7.1 --spec docs/briefs/P1.7.1.json [--queue]` —
+  attach the brief. It is validated by the same `BlockSpec` validator as `add-spec`, its `id` must equal the
+  item id (a markdown brief takes the item id instead, because a heading slug cannot equal `P1.7.1`), and it
+  is stored as a *snapshot*: the dispatch stays reproducible, and an edited brief is refused
+  rather than silently picked up. Without `--queue` the item becomes `queued` in the plan only — run
+  the next tick (block 13/19) to put it on the flow: nothing else has to be run.
+- `reevesagents flow plan status --item P1.7.1 [--run <run>] [--json]` — one item: status, the commit that
+  closed it, its rounds, its notes reference and its brief.
+- `reevesagents flow plan next --run <run> [--json]` — the item the plan wants next, and why. It reads only
+  (block 19): the tick dispatches. It takes the first item in document order that has a brief and sends its block;
+  an item without a brief is reported ("waiting for a brief"), never dispatched and never invented; one
+  task per flow, so an item already in flight stops the picker.
+- `reevesagents flow plan set --run <run> --item P1.7.1 --status <status> [--yes] [--note <text>]` — move an
+  item by hand. `done` and `skipped` need `--yes`, and a `done` without an accepted commit also needs a
+  `--note`; the manual close is recorded in the plan's conflicts so `flow plan` shows how it was closed.
+  The command follows the human status table: it may triage (`pending`, `needs_brief`, `queued`,
+  `blocked_owner`) and close (`done`, `skipped`), but it may not touch an item whose round is running
+  (`in_work`, `reviewing` — `pause`/`stop` the flow instead), and a closed item cannot be reopened. A wrong
+  close is fixed in the document and re-imported, where it shows up as a conflict instead of silently
+  rewriting history.
+
+
 ## Keeping cost down
 
 - Put a cheap or free model in front as the router, and let it wake the

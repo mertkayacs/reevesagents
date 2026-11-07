@@ -12,6 +12,14 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './guards.js'
 import { buildWebState, listWebProviders } from './state.js'
+import { planExists, planItemView, planProgress, readPlan } from '../../core/plan.js'
+import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
+import { pauseFlow, resumeFlow } from '../../core/flow-control.js'
+import { flowPath, readFlow } from '../../core/flow-store.js'
+import { readTickStatus, systemdTimerState } from '../../core/tick-status.js'
+import {
+  NotificationError, appendNotification, markNotificationsRead, notificationSummary, readNotifications,
+} from '../../core/notifications.js'
 import { placeholderPage } from './client-shell.js'
 import { attachTerminalBridge } from './bridge.js'
 import { startRun, startRunFromPreset, spawnWorker, killAgent, stopRun } from '../../core/runtime.js'
@@ -59,6 +67,10 @@ const DEFAULT_WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), 'web')
 const STATIC_ROUTES: Record<string, { file: string; type: string }> = {
   '/app.css': { file: 'app.css', type: 'text/css; charset=utf-8' },
   '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
+  '/tick-line.js': { file: 'tick-line.js', type: 'text/javascript; charset=utf-8' },
+  '/insights-core.js': { file: 'insights-core.js', type: 'text/javascript; charset=utf-8' },
+  '/plan-controller.js': { file: 'plan-controller.js', type: 'text/javascript; charset=utf-8' },
+  '/plan-error.js': { file: 'plan-error.js', type: 'text/javascript; charset=utf-8' },
   '/xterm.css': { file: 'xterm.css', type: 'text/css; charset=utf-8' },
   '/xterm.js': { file: 'xterm.js', type: 'text/javascript; charset=utf-8' },
   '/addon-fit.js': { file: 'addon-fit.js', type: 'text/javascript; charset=utf-8' },
@@ -84,6 +96,48 @@ interface RequestContext {
   webRoot: string
   cache: Map<string, Buffer>
   sse: SseHub
+}
+
+// The ingest route is a local surface, but "local" is not "trusted": a runaway supervisor loop must not fill the
+// journal, so a simple per-peer window applies. 60 events per 10 s is far above any real fleet and far below
+// "flood".
+const INGEST_WINDOW_MS = 10_000
+const INGEST_MAX_PER_WINDOW = 60
+const ingestWindows = new Map<string, { start: number, count: number }>()
+
+function ingestAllowed(peer: string | undefined): boolean {
+  const key = peer ?? 'unknown'
+  const now = Date.now()
+  const window = ingestWindows.get(key)
+  if (!window || now - window.start > INGEST_WINDOW_MS) {
+    ingestWindows.set(key, { start: now, count: 1 })
+    return true
+  }
+  if (window.count >= INGEST_MAX_PER_WINDOW) return false
+  window.count += 1
+  return true
+}
+
+// The summary plus the one setting the client needs to draw the pulse. `0` disables it, and the client draws nothing.
+function withPulse<T extends object>(summary: T): T & { agent_pulse_ms: number } {
+  return { ...summary, agent_pulse_ms: loadConfig().global.agent_pulse_ms }
+}
+
+// Map a refused pause/resume to the code a client branches on. Two different layers can refuse: the route's own pre-check, and the
+// engine under the lock — which may find a state the pre-check did not see (`already paused`, `cannot resume into state …`, or the
+// transition table's `cannot pause a flow in state done`). All of them must answer the same vocabulary; a sentence in a 400 is not an
+// answer a button can act on (block 55, MAJOR).
+export function flowControlRefusal(message: string): { code: 'not_found' | 'already_paused' | 'not_paused' | 'not_pausable' | null, state?: string } {
+  if (/no flow for run|not found/i.test(message) && !/cannot /.test(message)) return { code: 'not_found' }
+  if (/is already paused/i.test(message)) return { code: 'already_paused', state: 'paused' }
+  const resumeInto = /cannot resume into state (\w+)/.exec(message)
+  if (resumeInto) return { code: 'not_paused', state: 'paused' }
+  const transition = /cannot (pause|resume) a flow in state (\w+)/.exec(message)
+  if (transition) {
+    const [, action, state] = transition
+    return { code: action === 'pause' ? 'not_pausable' : 'not_paused', state: state! }
+  }
+  return { code: null }
 }
 
 function errMessage(err: unknown): string {
@@ -147,6 +201,58 @@ interface SseHub {
   close: () => void
 }
 
+// The driver's state as the panel shows it: the receipt the last real pass left, plus — when the machine has one — the
+// systemd timer's own answer. Every field is a *fact with a timestamp*, never a countdown: a frame carries nothing that
+// changes by itself, so `payload === last` can still say "nothing happened" (block 71). `active`/`next_at` are optional
+// on purpose: macOS, a container, or a cron-driven machine has no timer, and none of them should see an error for it.
+export interface WebTick {
+  driver: string
+  // When the last real pass ran (ISO).
+  at: string
+  // When the next one is due (epoch ms), fixed at the moment the timer was probed — the probe is cached, so the deadline
+  // does not drift frame after frame. Absent when the machine has no timer or systemd has no next elapse to give.
+  next_at?: number
+  advanced: number
+  held: number
+  skipped: number
+  active?: boolean
+}
+
+// A frame is built every 1.5 s and `systemctl --user show` is a D-Bus round trip: one probe per minute is enough to
+// notice a timer that was installed, stopped or restarted, and it keeps the dashboard's own cost flat.
+const SYSTEMD_PROBE_MS = 60_000
+let timerProbe: { at: number, state: { active: boolean, next_at?: number } | null } | null = null
+
+function timerStateCached(now: number): { active: boolean, next_at?: number } | null {
+  if (timerProbe && now - timerProbe.at < SYSTEMD_PROBE_MS) return timerProbe.state
+  const state = systemdTimerState({ now })
+  timerProbe = { at: now, state }
+  return state
+}
+
+// No countdowns here, and never again: "seconds ago" and "seconds left" change on their own, so every frame differed
+// from the last one, `payload === last` never matched, and the whole sidebar was rebuilt every 1.5 s (block 71). The
+// marks below are stable between receipts; the panel subtracts its own clock.
+export function flowTickPayload(now: number = Date.now()): WebTick | null {
+  // `null` is the honest answer for a machine whose flows are ticked by hand: no driver has ever recorded a pass, and
+  // inventing one would be the same class of lie as the removed setting.
+  const status = readTickStatus()
+  if (!status) return null
+  const payload: WebTick = {
+    driver: status.driver,
+    at: status.at,
+    advanced: status.advanced,
+    held: status.held,
+    skipped: status.skipped,
+  }
+  const timer = timerStateCached(now)
+  if (timer) {
+    payload.active = timer.active
+    if (timer.next_at !== undefined) payload.next_at = timer.next_at
+  }
+  return payload
+}
+
 // Pushes the run/terminal state to connected browsers. The poller starts when the
 // first client connects and stops when the last disconnects: connection-scoped, not
 // a daemon. fs.watch is avoided because recursive watch is unreliable across platforms.
@@ -155,26 +261,46 @@ function createSseHub(): SseHub {
   let timer: ReturnType<typeof setInterval> | null = null
   let last = ''
 
-  const snapshot = (): string => {
+  // The state a frame carries, and its comparison key. The key is the payload without the clock: `now` is added when a
+  // frame is actually written, because the panel needs the server's clock to correct its own and a clock inside the
+  // compared payload would make every poll a "change" (block 71).
+  const snapshot = (): { state: Record<string, unknown>, key: string } => {
     // Web-only users get the same zombie/orphan reaping and stale cleanup the TUI
     // tick performs; both sweeps are throttled internally, so this stays cheap.
     sweepAgentsThrottled()
     sweepOrphanSessionsThrottled()
     autoCleanupRuns()
-    return JSON.stringify(buildWebState())
+    // No flow tick here, and none below in `start()`: the flow driver is exactly one external scheduler, and a
+    // dashboard that advanced flows itself was a second driver — it died with the browser tab, it raced the timer's
+    // dispatch, and every surface then described a setting instead of the driver (block 68). The frame reports the
+    // driver's own receipt and nothing more.
+    // The journal summary rides along with the state frame: a badge that needs a second request would be a badge
+    // that lags the screen it belongs to.
+    // `agent_pulse_ms` travels into the state build, not only into the journal summary: the plan badge pulses on the same
+    // clock, and a call without it made every card fall back to fifteen minutes (block 27, MINOR).
+    const state = {
+      ...buildWebState({ agent_pulse_ms: loadConfig().global.agent_pulse_ms }),
+      tick: flowTickPayload(),
+      notifications: withPulse(notificationSummary()),
+    }
+    return { state, key: JSON.stringify(state) }
   }
+  // The frame as it goes on the wire: the compared state plus the server clock at that moment. Every frame the client
+  // receives therefore carries `now`, which is what keeps its locally computed countdown honest (block 71).
+  const frame = (state: Record<string, unknown>): string => JSON.stringify({ ...state, now: Date.now() })
   const write = (res: ServerResponse, payload: string): void => {
     try { res.write(`data: ${payload}\n\n`) } catch { /* client gone; close handler will drop it */ }
   }
   const tick = (): void => {
-    const payload = snapshot()
-    if (payload === last) return
-    last = payload
+    const { state, key } = snapshot()
+    if (key === last) return
+    last = key
+    const payload = frame(state)
     for (const res of clients) write(res, payload)
   }
   const start = (): void => {
     if (timer) return
-    last = snapshot()
+    last = snapshot().key
     timer = setInterval(tick, POLL_MS)
     timer.unref()
   }
@@ -190,7 +316,7 @@ function createSseHub(): SseHub {
         'connection': 'keep-alive',
         'x-content-type-options': 'nosniff',
       })
-      write(res, snapshot())
+      write(res, frame(snapshot().state))
       clients.add(res)
       start()
       res.on('close', () => {
@@ -422,10 +548,14 @@ function resolveApprovalAction(id: string, body: Record<string, unknown>): unkno
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: RequestContext): Promise<void> {
   if (!isAllowedHostHeader(req.headers.host)) {
+    // Drain before answering: a refusal that leaves the request body unread makes Node tear the socket down, and
+    // the caller then sees a reset instead of the 403 it needs (a curl probe reports `000`, undici throws).
+    try { req.resume() } catch { /* the stream is already gone */ }
     send(res, 403, 'forbidden host', 'text/plain; charset=utf-8')
     return
   }
   if (isStateChangingMethod(req.method) && !isAllowedOrigin(req.headers.origin, ctx.port())) {
+    try { req.resume() } catch { /* the stream is already gone */ }
     send(res, 403, 'forbidden origin', 'text/plain; charset=utf-8')
     return
   }
@@ -447,10 +577,17 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     sweepOrphanSessionsThrottled()
     autoCleanupRuns()
     sendJson(res, 200, {
-      ...buildWebState(),
+      ...buildWebState({ agent_pulse_ms: loadConfig().global.agent_pulse_ms }),
+      tick: flowTickPayload(),
+      // The server's clock, once: the panel needs it to turn the marks in `tick` into seconds, and a clock inside the
+      // stream would make every frame differ — which is the defect this block removes (block 71).
+      now: Date.now(),
       providers: listWebProviders(),
       language: webLanguagePayload(),
       web_theme: loadConfig().global.web_theme,
+      // One compact summary, so the Logs button can show a badge without loading the journal. The pulse length
+      // travels with it: the client cannot read the config, and a summary without it made every card compute 0 ms.
+      notifications: withPulse(notificationSummary()),
       version: REEVESAGENTS_VERSION,
     })
     return
@@ -482,6 +619,167 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
   if (method === 'GET' && path === '/api/presets') {
     try {
       sendJson(res, 200, presetsPayload())
+    } catch (err) {
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/plan') {
+    // Read-only plan payload for the Plan tab: the same fields the CLI's `flow plan --json` shows, without the
+    // brief bodies (a payload is a transcript, the file is the record).
+    const query = new Map<string, string>()
+    for (const pair of ((req.url ?? '').split('?')[1] ?? '').split('&')) {
+      if (!pair) continue
+      const [rawKey, rawValue = ''] = pair.split('=')
+      query.set(decodeURIComponent(rawKey ?? ''), decodeURIComponent(rawValue))
+    }
+    const runId = query.get('run') ?? ''
+    if (!runId) {
+      sendJson(res, 400, { error: 'run is required' })
+      return
+    }
+    try {
+      const resolved = resolveFlowRunId(runId)
+      if (!planExists(resolved)) {
+        sendJson(res, 200, { run_id: resolved, plan: null })
+        return
+      }
+      const plan = readPlan(resolved)
+      sendJson(res, 200, {
+        run_id: resolved,
+        plan: {
+          source_path: plan.source_path,
+          imported_at: plan.imported_at,
+          progress: planProgress(plan),
+          items: plan.items.map(planItemView),
+          conflicts: plan.conflicts,
+        },
+      })
+    } catch (err) {
+      sendJson(res, 404, { error: errMessage(err) })
+    }
+    return
+  }
+  // The plan's play/pause. It is the same operator operation the CLI has (`flow pause` / `flow resume`), so the buttons in the UI
+  // cannot drift from the command line: the transition table, the parked state and the re-anchoring on resume are the engine's.
+  if (method === 'POST' && (path === '/api/flow/pause' || path === '/api/flow/resume')) {
+    const pausing = path === '/api/flow/pause'
+    try {
+      const body = await readJsonBody(req)
+      const requested = typeof body.run_id === 'string' ? body.run_id : ''
+      if (!requested) {
+        sendJson(res, 400, { error: 'run_id is required' })
+        return
+      }
+      let runId: string
+      try {
+        runId = resolveFlowRunId(requested)
+      } catch {
+        // A stable code, not a sentence: a client must not have to parse prose to know what happened.
+        sendJson(res, 404, { error: 'not_found' })
+        return
+      }
+      const before = readFlow(runId)
+      // `done` is terminal: a finished plan has nothing to pause, and saying so is better than pretending it worked.
+      if (pausing && before.state === 'done') {
+        sendJson(res, 409, { error: 'not_pausable', state: before.state })
+        return
+      }
+      if (pausing && before.state === 'paused') {
+        sendJson(res, 409, { error: 'already_paused', state: before.state })
+        return
+      }
+      if (!pausing && before.state !== 'paused') {
+        // Resuming a flow that is not parked is not an error the caller can fix by retrying: it is a stale button, and the code says so.
+        sendJson(res, 409, { error: 'not_paused', state: before.state })
+        return
+      }
+      const result = pausing ? pauseFlow(runId) : resumeFlow(runId)
+      sendJson(res, 200, { run_id: runId, flow: flowStatusPayload(result.state, flowPath(runId)) })
+    } catch (err) {
+      // The pre-check above reads the state and the call re-reads it under the lock, so the state can change in between — another tab
+      // presses Pause, a ticker escalates, the operator stops the flow. The transition table then refuses with a sentence like
+      // `cannot pause a flow in state done`, and a client had to parse that prose out of a 400. Every refusal is mapped back to the same
+      // stable codes the pre-check uses, so the answer means the same thing whichever check caught it (block 53).
+      const refusal = flowControlRefusal(errMessage(err))
+      if (refusal.code === 'not_found') {
+        sendJson(res, 404, { error: 'not_found' })
+        return
+      }
+      if (refusal.code) {
+        sendJson(res, 409, { error: refusal.code, ...(refusal.state ? { state: refusal.state } : {}) })
+        return
+      }
+      sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'GET' && path === '/api/notifications') {
+    // The query is parsed by hand: `URLSearchParams` has no global in this lint config, and the surface is three
+    // parameters wide.
+    const query = new Map<string, string>()
+    for (const pair of ((req.url ?? '').split('?')[1] ?? '').split('&')) {
+      if (!pair) continue
+      const [rawKey, rawValue = ''] = pair.split('=')
+      query.set(decodeURIComponent(rawKey ?? ''), decodeURIComponent(rawValue))
+    }
+    const limit = Number.parseInt(query.get('limit') ?? '', 10)
+    const since = Number.parseInt(query.get('since') ?? '', 10)
+    try {
+      sendJson(res, 200, readNotifications({
+        limit: Number.isFinite(limit) ? limit : undefined,
+        run: query.get('run') ?? undefined,
+        since: Number.isFinite(since) ? since : undefined,
+        unread: query.get('unread') === '1' || query.get('unread') === 'true',
+      }))
+    } catch (err) {
+      sendJson(res, 500, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/notifications') {
+    // Ingest is for the supervisor on this machine: loopback peer and a same-origin header, both required. The
+    // origin guard above already rejects a foreign Origin on a state-changing method; the peer check is what
+    // stops a container or a forwarded request from writing history.
+    const peer = req.socket.remoteAddress ?? ''
+    const loopback = peer === '127.0.0.1' || peer === '::1' || peer === '::ffff:127.0.0.1'
+    if (!loopback) {
+      sendJson(res, 403, { error: 'notifications are accepted from loopback only' })
+      return
+    }
+    if (!req.headers.origin) {
+      sendJson(res, 403, { error: 'an Origin header is required' })
+      return
+    }
+    if (!ingestAllowed(peer)) {
+      // Same reason as the other refusals: an unread body turns the answer into a reset.
+      try { req.resume() } catch { /* the stream is already gone */ }
+      sendJson(res, 429, { error: 'too many notifications; slow down' })
+      return
+    }
+    try {
+      const body = await readJsonBody(req)
+      // `source` is decided here, never by the caller: this route is the *external* ingest path, and a body that
+      // could claim `product` would let a loopback client forge `flow.escalated` (a "a human is required" state)
+      // simply by saying it comes from the product.
+      const created = appendNotification({ ...body, source: 'external' })
+      sendJson(res, 201, created)
+    } catch (err) {
+      // Drain what is left of the body before answering: the client may still be writing, and a `res.end()` on a
+      // paused request tears the socket down (the caller then sees a reset instead of the status it needs).
+      try { req.resume() } catch { /* the stream is already gone */ }
+      // A body over the limit and a schema violation are both `400`; an unavailable store is `503`.
+      if (err instanceof NotificationError && err.code === 'refused') sendJson(res, 400, { error: err.message })
+      else if (err instanceof NotificationError && err.code === 'unavailable') sendJson(res, 503, { error: err.message })
+      else sendJson(res, 400, { error: errMessage(err) })
+    }
+    return
+  }
+  if (method === 'POST' && path === '/api/notifications/read') {
+    try {
+      const body = await readJsonBody(req)
+      const seq = typeof body.seq === 'number' ? body.seq : undefined
+      sendJson(res, 200, markNotificationsRead(seq))
     } catch (err) {
       sendJson(res, 400, { error: errMessage(err) })
     }

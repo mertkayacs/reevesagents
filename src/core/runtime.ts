@@ -31,16 +31,22 @@ import {
   writeAgent,
   writeRun,
 } from './runs.js'
+import { emitNotification } from './notifications.js'
 import { loadConfig } from './config.js'
 import { loadPreset } from './store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { paneInSession, realDriver, sessionInGroup, STALE_WINDOW_ERROR, VIEWER_SESSION_PATTERN, windowInSession, type RuntimeDriver } from './tmux.js'
 import { reapPaneProcess } from './process.js'
+import {
+  BUSY_SCAN_LINES, CONFIRM_MIN_GAP_MS, composerText, countWorkLines, detectPaneReady, inspectPane, paneInCopyMode,
+  type PaneBusyState, type PaneInspection,
+} from './activity.js'
 import { redactSecrets } from './redact.js'
 import { providerDisplayName } from '../utils/display.js'
 
 export type { RuntimeDriver } from './tmux.js'
+export type { PaneBusyState } from './activity.js'
 
 export interface AgentLaunchConfig {
   nickname?: string
@@ -143,11 +149,23 @@ function paneLooksReady(output: string, previousOutput: string): boolean {
   return !!previousOutput && current === normalizePaneOutput(previousOutput)
 }
 
+// The prompt leaves as one line. A multi-line bracketed paste arrives as a single block and the provider's first Enter *closes*
+// the paste instead of submitting it: on 2026-11-03 a fix dispatch left its prompt in the hermes composer, the engine's one Enter
+// was swallowed, and the run recorded `dispatch_refused pane_changed` (block 75). Briefs, review notes and criteria live in files
+// — the prompt is a short pointer — so flattening costs nothing and removes the whole class.
+export function flattenPrompt(text: string): string {
+  return text.replace(/\r\n|\r|\n/g, ' ')
+}
+
 function pasteTextToPane(driver: RuntimeDriver, paneId: string, text: string): void {
   const bufferName = `reeves_${randomUUID().slice(0, 8)}`
-  driver.tmux(['load-buffer', '-b', bufferName, '-'], text)
+  driver.tmux(['load-buffer', '-b', bufferName, '-'], flattenPrompt(text))
   try {
-    driver.tmux(['paste-buffer', '-b', bufferName, '-t', paneId])
+    // `-p` is bracketed paste: tmux wraps the text in the escape sequences a modern composer understands as one paste.
+    // Without it every character arrives as a keystroke, the provider renders the whole prompt into its input box, and a
+    // single Enter does not submit it — the prompt sat in the codex composer until a human pressed Enter (block 69).
+    // tmux only emits the brackets for an application that enabled the mode, so a plain shell is unaffected.
+    driver.tmux(['paste-buffer', '-p', '-b', bufferName, '-t', paneId])
   } finally {
     try { driver.tmux(['delete-buffer', '-b', bufferName]) } catch { /* buffer already gone */ }
   }
@@ -362,6 +380,24 @@ function validateAgents(configs: AgentLaunchConfig[], available: Record<Provider
   for (const config of configs) requireProvider(config.provider, available)
 }
 
+// The three fields every run-scoped event needs, derived in one place: the project is a directory name, never a
+// path (§2.1 of the notification design).
+function basenameOf(dir: string): string {
+  const parts = dir.split(/[\\/]+/).filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : ''
+}
+
+function emitRunCreated(run: RunRecord): void {
+  emitNotification({
+    kind: 'run.created',
+    title: `run ${run.name || run.id} started`,
+    run_id: run.id,
+    run_name: run.name,
+    project: basenameOf(run.working_dir),
+    source: 'product',
+  })
+}
+
 export function startRun(request: StartRunRequest, options: RuntimeOptions = {}): { run: RunRecord, agents: AgentRecord[] } {
   const cfg = loadConfig()
   const driver = options.driver ?? realDriver
@@ -400,6 +436,7 @@ export function startRun(request: StartRunRequest, options: RuntimeOptions = {})
     const workerAgents = workers.map(worker => {
       return createAgentWindow(runId, tmuxSession, 'worker', worker, workingDir, readyDelayMs, driver)
     })
+    emitRunCreated(run)
     return { run, agents: [root, ...workerAgents] }
   } catch (err) {
     if (createdRunSession) {
@@ -519,6 +556,7 @@ export function startRunWithHead(
     }
     writeRun(run)
     const worker = createAgentWindow(runId, tmuxSession, 'worker', firstWorker, workingDir, readyDelayMs, driver)
+    emitRunCreated(run)
     return { run, agents: [head, worker] }
   } catch (err) {
     if (createdRunSession) {
@@ -578,6 +616,18 @@ export function openAgent(agentId: string, options: RuntimeOptions = {}): void {
   driver.tmux(['select-window', '-t', target])
 }
 
+// Raw capture of an agent's pane. The parsers (busy detection, verdict scanning) need the
+// text before redaction; anything that leaves the runtime for a human still goes through it.
+function capturePaneRaw(driver: RuntimeDriver, agent: AgentRecord, lines: number): string {
+  const target = agent.tmux_pane_id
+  let output = driver.tmux(['capture-pane', '-p', '-e', '-S', String(-lines), '-t', target])
+  if (!output.trim()) {
+    // A provider that renders on the alternate screen prints nothing on the primary one.
+    try { output = driver.tmux(['capture-pane', '-p', '-e', '-a', '-S', String(-lines), '-t', target]) } catch { /* no alternate screen */ }
+  }
+  return output
+}
+
 export function peekAgent(agentId: string, lines = 10, options: RuntimeOptions = {}): string {
   const driver = options.driver ?? realDriver
   // Coerce to a positive integer: a zero/negative/NaN count would otherwise read
@@ -587,14 +637,481 @@ export function peekAgent(agentId: string, lines = 10, options: RuntimeOptions =
     const agent = findAgent(agentId)
     if (agent.headless || !agent.tmux_pane_id) return '(headless agent - no output)'
     if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return ''
-    let output = driver.tmux(['capture-pane', '-p', '-e', '-S', String(-n), '-t', agent.tmux_pane_id])
-    if (!output.trim()) {
-      try { output = driver.tmux(['capture-pane', '-p', '-e', '-a', '-S', String(-n), '-t', agent.tmux_pane_id]) } catch { /* no alternate screen */ }
-    }
-    return redactSecrets(stripAnsi(output).trim())
+    return redactSecrets(stripAnsi(capturePaneRaw(driver, agent, n)).trim())
   } catch {
     return ''
   }
+}
+
+// The same capture without redaction, for parsers only (the verdict scan). Redaction replaces
+// secret-shaped strings in place, so a parser fed `peekAgent` can silently misread a line; the
+// flow engine therefore reads here and redacts whatever it stores. Never print this, never put it
+// in a payload: everything that leaves the process goes through `peekAgent`/`redactSecrets`.
+export function peekAgentRaw(agentId: string, lines = 10, options: RuntimeOptions = {}): string {
+  const driver = options.driver ?? realDriver
+  const n = Number.isFinite(lines) && lines > 0 ? Math.floor(lines) : 10
+  try {
+    const agent = findAgent(agentId)
+    if (agent.headless || !agent.tmux_pane_id) return ''
+    if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return ''
+    return stripAnsi(capturePaneRaw(driver, agent, n))
+  } catch {
+    return ''
+  }
+}
+
+// Why a pane was last read the way it was, per pane. The flow journals it when a pane has been `unknown` for long enough
+// to matter, so the operator reads `pane_state_unknown: footer_absent` instead of a bare `review_pane_unknown` (block 73).
+const paneReasonByPane = new Map<string, string>()
+// When each pane was last seen `busy`. A send refuses a pane that was busy inside the confirm window even if this frame
+// looks free: a transition is not an idle pane (block 73).
+const lastBusyAtByPane = new Map<string, number>()
+
+// Tests seed a fresh pane per case; an observation left over from a previous case would refuse the next send as
+// `recent_busy` for no reason. Nothing in the product calls this.
+export function resetPaneObservations(): void {
+  paneReasonByPane.clear()
+  lastBusyAtByPane.clear()
+}
+
+export function paneDiagnosis(agentId: string): string | null {
+  try {
+    const agent = findAgent(agentId)
+    return agent.tmux_pane_id ? paneReasonByPane.get(agent.tmux_pane_id) ?? null : null
+  } catch {
+    return null
+  }
+}
+
+// One look at a pane, with the fallback confirmed: a frame that is only idle in the placeholder sense (no glyph, the
+// placeholder where the composer belongs, the footer under it) is captured a second time, a second later, and only the
+// agreement of the two frames is an answer. Everything else — busy, unknown, the glyph — is decided by that one frame.
+interface PaneReading {
+  inspection: PaneInspection
+  // The frame the verdict was taken from: the fallback re-captures, and a caller that then reads the composer must read
+  // the same frame the verdict describes.
+  text: string
+}
+
+// Copy mode: the pane scrolls instead of typing and tmux eats the Enter, so the prompt sits in the box and never submits — which is
+// how a live dispatch sat in a dev's composer from 18:27 to 19:38 while the observation reported `unknown` (block 76). It is a
+// recoverable state, not an unreadable one: one `cancel` returns the pane to normal, and the same Enter then submits.
+export const COPY_MODE_CANCEL_MS = 300
+
+// Is the pane in tmux's own mode (copy mode today)? The badge the capture carries is a rendering, and `capture-pane` does not
+// include tmux's overlays, so on a live pane the question is put to tmux itself — the same `pane_in_mode` an operator checks.
+function paneInTmuxMode(agent: AgentRecord, driver: RuntimeDriver): boolean {
+  try {
+    const answer = String(driver.tmux(['display-message', '-p', '-t', agent.tmux_pane_id, '#{pane_in_mode}']))
+    return answer.trim() === '1'
+  } catch {
+    return false
+  }
+}
+
+function cancelCopyMode(agent: AgentRecord, driver: RuntimeDriver): boolean {
+  try {
+    driver.tmux(['send-keys', '-t', agent.tmux_pane_id, '-X', 'cancel'])
+  } catch {
+    return false
+  }
+  waitBlocking(driver, COPY_MODE_CANCEL_MS)
+  return true
+}
+
+function inspectAgentPane(agent: AgentRecord, paneText: string, driver: RuntimeDriver): PaneReading {
+  const settle = (inspection: PaneInspection, settledText: string): PaneReading => {
+    if (agent.tmux_pane_id) {
+      paneReasonByPane.set(agent.tmux_pane_id, inspection.reason)
+      if (inspection.reason === 'agent_question') {
+        paneReasonByPane.set(agent.tmux_pane_id, `agent_question: ${inspection.question ?? 'agent requested a choice'}`)
+      }
+      if (inspection.state === 'busy') lastBusyAtByPane.set(agent.tmux_pane_id, Date.now())
+    }
+    return { inspection, text: settledText }
+  }
+  const first = inspectPane(paneText, agent.provider, { now: Date.now() })
+  // A pane in copy mode is left in it before anything is concluded about it — the badge is tmux's state, not the provider's, so it
+  // is read before the busy hint: `unknown` stays only if the cancel did not take.
+  if ((paneInCopyMode(paneText) || paneInTmuxMode(agent, driver)) && cancelCopyMode(agent, driver)) {
+    const reread = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+    const after = inspectPane(reread, agent.provider, { now: Date.now() })
+    return settle(after, reread)
+  }
+  if (first.reason !== 'placeholder_pending') return settle(first, paneText)
+  // The confirmation: the same frame, a second later. A redraw between the two is exactly the transition that must not be
+  // read as free.
+  const waited = CONFIRM_MIN_GAP_MS + 100
+  waitBlocking(driver, waited)
+  const settledText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  // The wait above *is* the interval the confirmation is about. A test driver sleeps without moving the wall clock, so the
+  // logical now is the first sample plus the wait; on a real driver the clock has moved at least that far.
+  return settle(inspectPane(settledText, agent.provider, {
+    previous: first.sample,
+    now: Math.max(Date.now(), first.sample.at + waited),
+  }), settledText)
+}
+
+// Is this agent still working? Fail-closed: a pane we cannot observe, an agent with no pane,
+// and a provider without a verified busy marker all answer 'unknown', which every automated
+// write must treat as busy (see core/activity.ts).
+export function paneBusy(agentId: string, options: RuntimeOptions = {}): PaneBusyState {
+  const driver = options.driver ?? realDriver
+  try {
+    const agent = findAgent(agentId)
+    if (agent.headless || !agent.tmux_pane_id) return 'unknown'
+    if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) {
+      paneReasonByPane.set(agent.tmux_pane_id, 'stale_pane')
+      return 'unknown'
+    }
+    return inspectAgentPane(agent, capturePaneRaw(driver, agent, BUSY_SCAN_LINES), driver).inspection.state
+  } catch {
+    return 'unknown'
+  }
+}
+
+// A stall retry needs stronger evidence than a normal dispatch: inspecting must not cancel copy mode,
+// and only an idle pane with either an empty composer or this flow's recorded prompt is safe to nudge.
+export function paneReadyForNudge(
+  agentId: string,
+  expectedText?: string,
+  pasted?: { at: number } | null,
+  options: RuntimeOptions = {},
+): boolean | 'recorded_paste' {
+  const driver = options.driver ?? realDriver
+  try {
+    const agent = findAgent(agentId)
+    if (agent.headless || !agent.tmux_pane_id || !paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return false
+    let text = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+    if (paneInCopyMode(text) || paneInTmuxMode(agent, driver)) return false
+    const first = inspectPane(text, agent.provider, { now: Date.now() })
+    let inspection = first
+    if (first.reason === 'placeholder_pending') {
+      const waited = CONFIRM_MIN_GAP_MS + 100
+      waitBlocking(driver, waited)
+      text = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+      if (paneInCopyMode(text) || paneInTmuxMode(agent, driver)) return false
+      inspection = inspectPane(text, agent.provider, {
+        previous: first.sample,
+        now: Math.max(Date.now(), first.sample.at + waited),
+      })
+    }
+    if (inspection.state !== 'idle') return false
+    const composer = composerText(text, agent.provider)
+    if (composer === '') return true
+    if (!expectedText || !pasted) return false
+    return composerHoldsOurs(composer ?? '', expectedText, {
+      pastedAt: pasted.at,
+      now: Date.now(),
+      windowMs: DEFAULT_IDLE_SEND_TIMINGS.confirmMs,
+    }) ? 'recorded_paste' : false
+  } catch {
+    return false
+  }
+}
+
+export interface IdleSendTimings {
+  // A provider prompt appears seconds after the paste, so the confirm window is generous.
+  pasteSettleMs: number
+  submitWaitMs: number
+  // How long the pane may take to turn busy after the Enter, polled in `confirmPollMs` steps. The
+  // default comes from `dispatch_confirm_seconds` (90 s): a cold provider can take most of a minute to
+  // start its first turn, and the fixed six-second window used to call that a failed dispatch.
+  confirmMs?: number
+  confirmPollMs?: number
+}
+
+// How many Enters one send may press. A provider can swallow the first one after a paste (block 75), and a second is cheap while
+// the pane stays idle and the box stays ours; a third is the cap, after which the caller escalates instead of pressing blind.
+export const MAX_SUBMIT_ENTERS = 3
+
+export const DEFAULT_IDLE_SEND_TIMINGS: IdleSendTimings = {
+  pasteSettleMs: 9000,
+  submitWaitMs: 6000,
+  confirmMs: 90_000,
+  confirmPollMs: 1_000,
+}
+
+export type SendRefusal =
+  | 'busy' | 'unknown' | 'stale_pane' | 'headless' | 'pane_changed' | 'unconfirmed'
+  // The paste is still sitting in the composer and the Enter never started a turn: nothing was submitted, and the next
+  // attempt needs one keystroke, not a second paste (block 69).
+  | 'unconfirmed_paste'
+  // The composer is not initialised yet (no provider hint): nothing was pasted, retry later.
+  | 'target_not_ready'
+  // The composer already holds text that is not ours: pasting would stack onto it.
+  | 'composer_dirty'
+  // The pane looked free, but it was busy inside the confirm window: a frame mid-transition is not an idle pane (block 73).
+  | 'recent_busy'
+export type SendOutcome =
+  // `enter_retries` is how many repeat Enters a confirmed submit took (0 for the usual case): the caller journals one
+  // `submit_retry enter <n>` line per repeat so a swallowed Enter is visible in `flow logs` (block 75).
+  | { sent: true; enter_retries?: number }
+  // `pastedAt` rides along with `unconfirmed_paste`: it is the moment the pane was last read as holding our prompt, and
+  // the caller persists it so the *next* process can recognise its own collapsed marker (block 69, review round 2).
+  | { sent: false; reason: SendRefusal; pastedAt?: number; enter_retries?: number }
+
+export interface IdleSendOptions extends RuntimeOptions {
+  timings?: Partial<IdleSendTimings>
+  maxEnters?: number
+  refuseCopyMode?: boolean
+  // What the caller knows about a paste it already made into this pane, from a record that outlives this process (the
+  // flow's `dispatch_paste`). It makes a collapsed marker attributable on a retry tick, where the in-process map is empty
+  // by construction (block 69, review round 2).
+  pasted?: { at: number } | null
+}
+
+// Blocking wait that obeys the injected driver: the real driver sleeps for real, a test driver
+// resolves immediately (same convention as waitAfterPaste).
+function waitBlocking(driver: RuntimeDriver, ms: number): void {
+  if (ms <= 0) return
+  if (driver === realDriver) sleepSync(ms)
+  else driver.delay(() => {}, ms)
+}
+
+// The only write path an automated caller (the flow engine) may use: paste, one Enter, then
+// confirm that the pane went busy. It never writes into a pane it observed as busy or as
+// unknown, and it never sends a second Enter — a queued Enter answers whatever prompt appears
+// next, including an approval an operator was about to read. A dispatch it cannot confirm is
+// reported as 'unconfirmed' so the caller can record it and wait for a human.
+export function sendWhenIdle(agentId: string, text: string, options: IdleSendOptions = {}): SendOutcome {
+  const driver = options.driver ?? realDriver
+  const timings: IdleSendTimings = { ...DEFAULT_IDLE_SEND_TIMINGS, ...options.timings }
+  let agent: AgentRecord
+  try {
+    agent = findAgent(agentId)
+  } catch {
+    return { sent: false, reason: 'stale_pane' }
+  }
+  if (agent.headless || !agent.tmux_pane_id) return { sent: false, reason: 'headless' }
+  // A window that no longer belongs to the run is its own refusal: paneBusy would call it
+  // 'unknown', and "the window is gone" is the more useful thing to report.
+  if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return { sent: false, reason: 'stale_pane' }
+
+  // Copy mode eats Enter as a scroll, and the paste lands nowhere usable: cancel it first, then probe
+  // again. A pane that is still in copy mode after the cancel is not ready, so nothing is typed.
+  let paneText = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  if (options.refuseCopyMode === true && (paneInCopyMode(paneText) || paneInTmuxMode(agent, driver))) {
+    return { sent: false, reason: 'unknown' }
+  }
+
+  // A configurable window, not a fixed nap: a cold provider can spend most of a minute before its first
+  // turn shows a busy marker, and the flow calls that a failed dispatch. It is also the window in which a collapsed
+  // paste counts as ours, and the window in which a pane that was busy is still not free to type into.
+  const confirmMs = Math.max(timings.confirmMs ?? timings.submitWaitMs, 0)
+  const pollMs = Math.max(timings.confirmPollMs ?? 1000, 1)
+
+  // The gate, with the placeholder fallback confirmed by a second capture when that is what the frame needs (block 73).
+  const reading = inspectAgentPane(agent, paneText, driver)
+  paneText = reading.text
+  const gate = reading.inspection.state
+  if (gate === 'busy') return { sent: false, reason: 'busy' }
+  if (gate === 'unknown') return { sent: false, reason: 'unknown' }
+  // It looked free a second ago and was busy before that: the frame is a transition, not an idle pane.
+  const lastBusy = agent.tmux_pane_id ? lastBusyAtByPane.get(agent.tmux_pane_id) ?? 0 : 0
+  if (confirmMs > 0 && lastBusy > 0 && Date.now() - lastBusy <= confirmMs) return { sent: false, reason: 'recent_busy' }
+
+  // The input box exists — but is it *initialised*? A provider draws its composer hints only once it is
+  // ready; a fresh pane with none of them is `target_not_ready`, and pasting into it loses the prompt
+  // (incident of 2026-11-01). A provider with no verified hints keeps the older behaviour.
+  // What is already sitting in the composer? Empty means "paste". Our own text means a previous paste landed and only the
+  // submit is missing — one Enter, never a second paste. Anything else is somebody else's text: pasting again stacks onto
+  // it (nine copies of one prompt in one pane), so refuse. This is read *before* the readiness hint, because a composer
+  // holding our own text has no placeholder to hint with — the pane is ready, it is just waiting for the Enter.
+  const composer = composerText(paneText, agent.provider)
+  if (composer === null) return { sent: false, reason: 'unknown' }
+  const inProcess = lastPasteAtByPane.get(agent.tmux_pane_id) ?? null
+  const recorded = options.pasted?.at ?? null
+  const ownership: ComposerOwnership = {
+    // The newest stamp wins: this process's own paste, or the record the caller kept for it. The window below applies to
+    // both — a record that is older than `confirmMs` is not evidence any more (block 69, review round 3).
+    pastedAt: inProcess !== null && recorded !== null ? Math.max(inProcess, recorded) : (inProcess ?? recorded),
+    windowMs: confirmMs,
+  }
+  const alreadyOurs = composer !== '' && composerHoldsOurs(composer, text, ownership)
+  if (!alreadyOurs && detectPaneReady(paneText, agent.provider, { state: gate }) === 'not_ready') {
+    return { sent: false, reason: 'target_not_ready' }
+  }
+  if (composer !== '' && !alreadyOurs) return { sent: false, reason: 'composer_dirty' }
+
+  if (!alreadyOurs) {
+    try {
+      pasteTextToPane(driver, agent.tmux_pane_id, text)
+    } catch {
+      return { sent: false, reason: 'stale_pane' }
+    }
+  }
+  // The pane holds our paste as of now — either we have just put it there, or the composer still reads as ours. Recording
+  // it keeps the collapsed-paste marker attributable across a retry tick (block 69).
+  lastPasteAtByPane.set(agent.tmux_pane_id, Date.now())
+  // The window starts at the paste that just happened, not at the one before it: the marker the provider draws is the
+  // paste this call made.
+  ownership.pastedAt = lastPasteAtByPane.get(agent.tmux_pane_id) ?? null
+  ownership.now = Date.now()
+  // Best effort: the text is already pasted, so a bookkeeping failure must never abort the
+  // submit and leave the prompt sitting in the input box with nothing recorded.
+  if (!agent.ended_at && agent.task_status === 'queued') {
+    try {
+      updateAgent(agent.run_id, agent.id, { task_status: 'working' })
+    } catch {
+      // the record is repaired by the next send or status read
+    }
+  }
+
+  waitBlocking(driver, timings.pasteSettleMs)
+  // Re-check right before the Enter: during the settle window the agent can start working, or
+  // the screen can change to a modal, and submitting then would answer whatever prompt just
+  // appeared.
+  //
+  // But "the pane changed" is two different facts wearing one face, and only one of them may be submitted. A Codex
+  // pane that redraws while our paste settles reads as busy — the redraw *is* our paste — and the composer still holds
+  // exactly our text; one Enter is all that is missing, and refusing here is what left prompts sitting in the box
+  // (D2). A pane that really moved on (the agent started working, a modal appeared) no longer holds our text, or is
+  // no longer ready, and that is a refusal. So the decision is made on the composer, not on the busy probe.
+  const beforeEnter = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+  if (inspectPane(beforeEnter, agent.provider).state !== 'idle') {
+    // Only the composer decides: the busy probe is what the redraw trips, and it says nothing about whose text is in
+    // the box. Our exact text in it means the paste landed and the Enter is the only step missing.
+    const holdsOurs = composerHoldsOurs(composerText(beforeEnter, agent.provider) ?? '', text, ownership)
+    if (!holdsOurs) return { sent: false, reason: 'pane_changed' }
+  }
+  // The Enter, and up to two more while the pane keeps proving that it is idle and still holds exactly our prompt (block 75: a
+  // provider may swallow the first Enter after a paste — the prompt then sits in the box and nothing was submitted). Each repeat
+  // is decided on a **fresh** look, never on the one that came before it: a pane that reads `busy` is a turn already running and
+  // our keystroke would interrupt it, a pane that reads `unknown` is one we cannot see, and neither may receive a key.
+  let retries = 0
+  let after = ''
+  // The count rides along only when there was a repeat, so an ordinary send is still exactly `{ sent: true }` for every caller.
+  const sentOutcome = (): SendOutcome => (retries > 0 ? { sent: true, enter_retries: retries } : { sent: true })
+  const retried = (reason: SendRefusal): SendOutcome => ({
+    sent: false,
+    reason,
+    ...(retries > 0 ? { enter_retries: retries } : {}),
+  })
+  const pastedOutcome = (at: number): SendOutcome => ({ ...retried('unconfirmed_paste'), pastedAt: at } as SendOutcome)
+  const maxEnters = Math.max(1, Math.min(MAX_SUBMIT_ENTERS, Math.floor(options.maxEnters ?? MAX_SUBMIT_ENTERS)))
+  for (let enter = 1; enter <= maxEnters; enter += 1) {
+    if (enter > 1) {
+      // The repeat is decided where the ownership of the text is known: a fresh frame with no busy marker, and a box that still
+      // holds our prompt. `idle` is deliberately *not* required — a pane whose composer holds our text and shows no turn is the
+      // case this loop exists for, and demanding `idle` made it a dead end (block 76, replacing block 75's rule). Copy mode is
+      // left first, because tmux eats Enter there.
+      const reading = inspectAgentPane(agent, capturePaneRaw(driver, agent, BUSY_SCAN_LINES), driver)
+      after = reading.text
+      if (reading.inspection.state === 'busy') return retried('unconfirmed')
+      // A pane that is still in copy mode after the cancel cannot be submitted at all: tmux eats the key, so pressing it would only
+      // burn the retry budget.
+      if (paneInCopyMode(after) || paneInTmuxMode(agent, driver)) return retried('unconfirmed')
+      if (!composerHoldsOurs(composerText(after, agent.provider) ?? '', text, ownership)) {
+        return retried('unconfirmed')
+      }
+    }
+    try {
+      driver.tmux(['send-keys', '-t', agent.tmux_pane_id, 'Enter'])
+    } catch {
+      return retried('stale_pane')
+    }
+    if (waitForBusy(agent, options, driver, enter === 1 ? confirmMs : Math.min(confirmMs, 5000), pollMs)) {
+      return sentOutcome()
+    }
+    after = capturePaneRaw(driver, agent, BUSY_SCAN_LINES)
+    const stillOurs = composerHoldsOurs(composerText(after, agent.provider) ?? '', text, ownership)
+    // A confirmed submit does not have to announce itself as "busy". Two independent witnesses are enough: our text is out
+    // of the composer, and the pane's ledger grew (a tool line, a shell line, a file edit). Providers that never print a
+    // busy marker — or print it later than the window — used to look like a failed dispatch while the agent was already
+    // working on it (block 23, D9).
+    if (!stillOurs && countWorkLines(after) > countWorkLines(beforeEnter)) {
+      return sentOutcome()
+    }
+    // A running turn cannot take a keystroke, and a box that no longer holds our text is not ours to submit. Anything else — a
+    // pane the detector cannot classify, a draft, a modal — is judged by the composer, which is the fact that matters here.
+    if (inspectPane(after, agent.provider).state === 'busy' || !stillOurs) {
+      return retried('unconfirmed')
+    }
+    // Still idle, still ours: the Enter was swallowed. Count the repeat and try once more, up to the cap.
+    if (enter < maxEnters) retries += 1
+  }
+  // Three Enters and no turn. When the box still holds our paste the honest answer is `unconfirmed_paste`: no round exists, and
+  // the next attempt needs one Enter rather than a second paste (block 69). The paste stamp is refreshed because the composer was
+  // just read as ours, so the next tick's marker is not mistaken for a stranger's text.
+  if (composerHoldsOurs(composerText(after, agent.provider) ?? '', text, ownership)) {
+    const confirmedAt = Date.now()
+    lastPasteAtByPane.set(agent.tmux_pane_id, confirmedAt)
+    return pastedOutcome(confirmedAt)
+  }
+  return retried('unconfirmed')
+}
+
+// The window is measured in *simulated* time — the sum of the waits this function asked for — not on the
+// wall clock: an injected driver delays instantly, and a wall-clock deadline would spin for ninety real
+// seconds in every test (and in any caller that injects a driver for a dry run).
+function waitForBusy(
+  agent: AgentRecord,
+  options: RuntimeOptions,
+  driver: RuntimeDriver,
+  totalMs: number,
+  pollMs: number,
+): boolean {
+  let waited = 0
+  while (true) {
+    if (paneBusy(agent.id, options) === 'busy') return true
+    if (waited + pollMs > totalMs) return false
+    waitBlocking(driver, pollMs)
+    waited += pollMs
+  }
+}
+
+// Composer comparison ignores whitespace altogether: the same prompt re-drawn by the provider — and re-wrapped by the pane's
+// width, which inserts a space wherever it broke a word — must still read as ours, while a different text must not. A prompt is
+// long enough to wrap, and a wrap is not a difference in what was typed (block 75: the pre-Enter check called a pasted prompt
+// `pane_changed` for exactly this).
+function normalizeComposer(value: string): string {
+  return value.replace(/\s+/g, '')
+}
+
+// `[Pasted Content 1022 chars]` — codex folds a long paste into this marker instead of drawing the text.
+const PASTED_MARKER = /^\[Pasted (?:Content|text) \d+ (?:chars|lines)\]/i
+
+export interface ComposerOwnership {
+  // When this process last pasted into the pane — or, for a new process, the stamp the caller persisted (the flow's own
+  // `dispatch_paste`) — and how long such a paste counts as ours. A marker older than the window could be somebody
+  // else's, so the window is what makes the marker evidence rather than a guess: it bounds the in-process stamp and the
+  // recorded one alike (block 69, review round 3). The record only supplies a timestamp the dying process could not
+  // carry; it does not widen the window.
+  pastedAt?: number | null
+  now?: number
+  windowMs?: number
+}
+
+function withinPasteWindow(options: ComposerOwnership): boolean {
+  if (typeof options.pastedAt !== 'number') return false
+  if (!Number.isFinite(options.pastedAt)) return false
+  const windowMs = options.windowMs ?? 0
+  if (windowMs <= 0) return false
+  const age = (options.now ?? Date.now()) - options.pastedAt
+  return age >= 0 && age <= windowMs
+}
+
+// Does the composer hold the text we pasted? Exact equality is not enough, and the live codex pane showed why: a long
+// paste is rendered on one line and cut with an ellipsis (`› Review commit d60048c…`), and a very long one is folded
+// into `[Pasted Content 1020 chars]`. Both are our paste and nobody else's, so a visible prefix of what we typed (with
+// a floor, so a bare `› ` cannot match) and the paste placeholder both count.
+//
+// The placeholder is a *collapsed* paste, so it no longer carries the text and cannot be compared: it counts only while
+// a paste of ours into that pane is inside the freshness window (`windowMs`), whoever supplied the stamp — this process's
+// map, or the record a caller persisted. A marker nobody can account for, or one older than the window, stays somebody
+// else's text (block 69).
+export function composerHoldsOurs(composer: string, text: string, ownership: ComposerOwnership = {}): boolean {
+  // Two views of what the box shows: words with single spaces (what the marker regex speaks) and the same words with no spaces
+  // at all (what a re-wrapped prompt still matches).
+  const spaced = composer.replace(/\s+/g, ' ').trim()
+  const seen = normalizeComposer(composer)
+  const want = normalizeComposer(text)
+  if (seen === '' || want === '') return false
+  if (seen === want) return true
+  if (PASTED_MARKER.test(spaced) && withinPasteWindow(ownership)) return true
+  const visible = normalizeComposer(spaced.replace(/[\u2026.]+$/, ''))
+  return visible.length >= 32 && want.startsWith(visible)
 }
 
 export function sendText(agentId: string, text: string, options: RuntimeOptions = {}): void {
@@ -716,6 +1233,14 @@ export function stopRun(runId: string, options: RuntimeOptions = {}): RunRecord 
   }
   const endedRun: RunRecord = { ...run, status: 'ended', ended_at: endedAt }
   updateRun(run.id, { status: endedRun.status, ended_at: endedRun.ended_at })
+  emitNotification({
+    kind: 'run.stopped',
+    title: `run ${run.name || run.id} stopped`,
+    run_id: run.id,
+    run_name: run.name,
+    project: basenameOf(run.working_dir),
+    source: 'product',
+  })
   archiveAndRemoveRun(run.id, 'ended')
   return endedRun
 }

@@ -18,6 +18,10 @@ import { modelBadgeLabel, modelColor, providerColor, providerDisplayName } from 
 import { autoCleanupRuns, computeRunStatus, listAgents, listRuns, runHasLiveTmuxTarget } from '../../../core/runs.js'
 import { sweepAgentsThrottled, sweepOrphanSessionsThrottled } from '../../../core/reaper.js'
 import { sweepAttentionThrottled } from '../../../core/attention.js'
+import type { FlowBadge } from '../../../core/flow-view.js'
+import { listFlowBadges, sameFlowBadges } from '../../../core/flow-view.js'
+import { flowAttentionText, flowBadgeText } from '../../../core/flow-label.js'
+import { useLayoutColumns } from '../components/LayoutContext.js'
 import type { RunRecord } from '../../../core/types.js'
 
 const ACTIONS = ['NewRun', 'History', 'Main Menu', 'Quit'] as const
@@ -64,6 +68,7 @@ export function Runs() {
   const { t, language } = useLanguage()
   const { push, resetStack, setSelectedRunId } = useRouter()
   const { rows: termRows } = useWindowSize()
+  const columns = useLayoutColumns()
   const bodyRows = frameBodyRows(termRows, true, true)
   const compactBody = bodyRows <= 11
   const visibleRunCount = Math.max(1, compactBody ? bodyRows - 3 : Math.min(termRows - CHROME_ROWS, bodyRows - 9))
@@ -74,6 +79,13 @@ export function Runs() {
   })
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [runScroll, setRunScroll] = useState(0)
+  // Derived on every refresh from the flow files, never written back into a run record: a badge
+  // stored in a lifecycle field would outlive the condition that produced it.
+  // Read synchronously with the first run list: the board must never paint a run without its
+  // badge and then add it a tick later.
+  const [flowBadges, setFlowBadges] = useState<Map<string, FlowBadge>>(
+    () => listFlowBadges(listRuns().map(run => run.id), Date.now()),
+  )
 
   function refresh(): void {
     // Reap zombie agents (dead window or past max_lifetime_ms) before archiving
@@ -94,6 +106,8 @@ export function Runs() {
       return prev
     })
     setSelectedIdx(idx => normalizeSelectedIndex(idx, next.length))
+    const nextBadges = listFlowBadges(next.map(run => run.id), Date.now())
+    setFlowBadges(prev => (sameFlowBadges(prev, nextBadges) ? prev : nextBadges))
   }
 
   useEffect(() => {
@@ -102,6 +116,25 @@ export function Runs() {
   }, [])
 
   useEffect(() => { setSelectedIdx(idx => normalizeSelectedIndex(idx, runs.length)) }, [runs.length])
+
+  // The first tick of the interval is 2 s away; the board must not show an empty badge until then.
+  useEffect(() => {
+    const nextBadges = listFlowBadges(runs.map(run => run.id), Date.now())
+    setFlowBadges(prev => (sameFlowBadges(prev, nextBadges) ? prev : nextBadges))
+  }, [runs])
+
+  const attentionCount = [...flowBadges.values()].filter(badge => badge.attention !== null).length
+  // A badge that carries the round budget needs room; below this the bare state is shown so the
+  // row never wraps onto a second line at 80 columns.
+  const flowBadgeFor = (run: RunRecord) => {
+    const badge = flowBadges.get(run.id)
+    if (!badge) return null
+    return {
+      label: flowBadgeText(t, badge, { compact: columns < 96 }),
+      color: badge.attention ? colors.status.warn : colors.status.info,
+      attention: flowAttentionText(t, badge),
+    }
+  }
 
   const items: SelectableItem[] = [
     ...runs.map(run => ({ type: 'run' as const, run })),
@@ -192,6 +225,8 @@ export function Runs() {
       meta={[
         { label: 'running', value: String(runningCount) },
         { label: 'stale', value: String(staleCount) },
+        // Only when something is waiting: an "attention 0" counter is noise in a 80x24 header.
+        ...(attentionCount > 0 ? [{ label: t('flow.meta.attention'), value: String(attentionCount) }] : []),
       ]}
       tagline="Manage active runs and the agents inside them."
       statusContext={statusContext}
@@ -220,6 +255,7 @@ export function Runs() {
             const run = entry.run
             const agents = listAgents(run.id)
             const root = agents.find(a => a.role === 'root')
+            const flowBadge = flowBadgeFor(run)
             const badges = [
               { label: 'run', color: colors.accent.primary },
               ...(root
@@ -228,6 +264,7 @@ export function Runs() {
                   { label: modelBadgeLabel(root.model), color: modelColor(root.model, root.provider) },
                 ]
                 : []),
+              ...(flowBadge ? [{ label: flowBadge.label, color: flowBadge.color }] : []),
             ]
             return (
               <Row
@@ -266,6 +303,7 @@ export function Runs() {
               const absoluteIdx = runScroll + idx
               const agents = listAgents(run.id)
               const root = agents.find(a => a.role === 'root')
+              const flowBadge = flowBadgeFor(run)
               const badges = [
                 { label: 'run', color: colors.accent.primary },
                 ...(root
@@ -274,6 +312,7 @@ export function Runs() {
                     { label: modelBadgeLabel(root.model), color: modelColor(root.model, root.provider) },
                   ]
                   : []),
+                ...(flowBadge ? [{ label: flowBadge.label, color: flowBadge.color }] : []),
               ]
               return (
                 <Row
@@ -302,6 +341,9 @@ export function Runs() {
             items={[
               { glyph: glyphs.status.ok, label: 'running', color: colors.status.ok },
               { glyph: glyphs.status.warn, label: 'stale', color: colors.status.warn },
+              ...(attentionCount > 0
+                ? [{ glyph: glyphs.status.warn, label: t('flow.legend.attention'), color: colors.status.warn }]
+                : []),
             ]}
           />
 

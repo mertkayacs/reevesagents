@@ -200,6 +200,15 @@ No arguments launches the TUI.
 | `skills [action]` | Install, remove, or inspect the ReevesAgents skill. |
 | `mcp` | Start the MCP server over stdio. Host CLIs run this. |
 | `config [key] [value]` | Show or update editable settings. |
+| `flow start` | Attach a dev → review → fix workflow to existing agents in a run. |
+| `flow status` | Show progress, agent questions, open incidents, and the last tick receipt. |
+| `flow tick` / `flow tick-all` | Advance one flow or all flows; `--dry-run` observes without sending. Automatic progression requires an external scheduler. |
+| `flow plan import\|attach\|next\|status\|set` | Import a plan, attach briefs, inspect the next item or progress, and make explicit owner decisions. |
+| `flow add-spec` / `flow drop-spec` | Manage standalone queued work. |
+| `flow pause\|resume\|stop\|release-round` | Control the workflow or release an eligible unreviewed round. |
+| `flow logs` / `flow notes` | Inspect transitions and review findings. |
+| `flow incidents list\|claim\|ack\|resolve` | Inspect incidents, claim or acknowledge ownership, and resolve with a note. |
+| `notifications list` / `notifications read` | Inspect notification history and mark events read. |
 | `presets` | List saved run presets. |
 | `save-preset` | Save a live run as a preset. |
 | `start-preset` | Start a run from a preset. |

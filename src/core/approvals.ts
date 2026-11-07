@@ -2,6 +2,7 @@
 // and another agent (or a human) approves or denies it. Stored beside run state
 // under ~/.reeves/runs/<run-id>/approvals.
 
+import { unlinkSync } from 'node:fs'
 import {
   chmodSync,
   mkdirSync,
@@ -11,6 +12,8 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { emitNotification } from './notifications.js'
+import { applyEscalationDecision } from './flow-escalation.js'
 import { dirname, join } from 'node:path'
 import {
   findAgent,
@@ -138,6 +141,21 @@ function readApprovalUnlocked(runId: string, approvalId: string): RunApproval {
   }
 }
 
+// Run and project labels for the journal: a name, never a path.
+function runNameOf(runId: string): string {
+  try {
+    const run = listRuns().find(entry => entry.id === runId)
+    return run?.name.slice(0, 80) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function projectOf(dir: string): string {
+  const parts = dir.split(/[\\/]+/).filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1]!.slice(0, 64) : ''
+}
+
 export function createRunApproval(input: CreateRunApprovalInput): RunApproval {
   return withRunsLock(() => {
     const agent = findAgent(input.agent_id)
@@ -155,7 +173,39 @@ export function createRunApproval(input: CreateRunApprovalInput): RunApproval {
       resolved_at: null,
     }
     writeApprovalUnlocked(approval)
+    // The owner's actual pain: something is waiting for a human. The summary is already the redacted text the UI
+    // shows, so the journal carries the same words and no approval internals.
+    emitNotification({
+      kind: 'agent.needs_human',
+      title: `approval needed: ${agent.nickname}`,
+      detail: approval.summary,
+      run_id: agent.run_id,
+      run_name: runNameOf(agent.run_id),
+      project: projectOf(agent.working_dir),
+      agent_id: agent.id,
+      agent_nickname: agent.nickname,
+      source: 'product',
+    })
     return redactApproval(approval)
+  })
+}
+
+// Remove one approval record. Used only by the escalation raiser to drop *its own* duplicate when two tickers raced
+// into creating a ticket for the same episode — a foreign record is never deleted here.
+export function removeRunApproval(approvalId: string): boolean {
+  return withRunsLock(() => {
+    const approval = listRunApprovals().find(item => item.id === approvalId)
+    if (!approval) return false
+    // Only an undecided record may be removed, and the check happens under the same lock as the unlink: a ticket that
+    // a human resolved between the caller's snapshot and this call carries a decision, and deleting it would throw that
+    // decision away. A resolved duplicate is left alone — the operator sees a decided ticket, not a lost answer.
+    if (approval.status !== 'pending') return false
+    try {
+      unlinkSync(join(runApprovalsDir(approval.run_id), `${approval.id}.json`))
+      return true
+    } catch {
+      return false
+    }
   })
 }
 
@@ -190,11 +240,25 @@ export function listRunApprovals(runId?: string, status?: ApprovalStatus): RunAp
 }
 
 export function resolveRunApproval(approvalId: string, decision: 'approved' | 'denied', note = ''): RunApproval {
+  // "Was it pending?" is answered *inside* the lock: reading the status before it lets two concurrent resolves both see
+  // `pending`, and although only one of them writes the decision, both would then carry it into the flow.
+  const { approval: resolved, transitioned } = resolveRunApprovalUnlocked(approvalId, decision, note)
+  // A flow escalation carries the decision into the flow itself: approve resumes it with a fresh budget, deny closes it
+  // with a reason. Done after the lock is released — `applyEscalationDecision` takes the same runs lock.
+  if (transitioned) applyEscalationDecision(resolved, note)
+  return resolved
+}
+
+function resolveRunApprovalUnlocked(
+  approvalId: string,
+  decision: 'approved' | 'denied',
+  note: string,
+): { approval: RunApproval, transitioned: boolean } {
   return withRunsLock(() => {
     const approval = listRunApprovals().find(item => item.id === approvalId)
     if (!approval) throw new Error(`Approval not found: ${approvalId}`)
     // Decide once: a resolved approval is returned as-is, never re-decided.
-    if (approval.status !== 'pending') return approval
+    if (approval.status !== 'pending') return { approval, transitioned: false }
     const updated: RunApproval = {
       ...approval,
       status: decision,
@@ -202,6 +266,6 @@ export function resolveRunApproval(approvalId: string, decision: 'approved' | 'd
       resolved_at: nowIso(),
     }
     writeApprovalUnlocked(updated)
-    return redactApproval(updated)
+    return { approval: redactApproval(updated), transitioned: true }
   })
 }

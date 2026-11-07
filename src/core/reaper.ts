@@ -10,15 +10,17 @@
 // autoCleanupRuns knows nothing about.
 
 import { loadConfig } from './config.js'
+import { logDiagnostic } from './diagnostics.js'
 import { listAgents, listRuns, nowMs } from './runs.js'
+import type { RunRecord } from './types.js'
 import {
-  allWindowIds as tmuxAllWindowIds,
-  listSessions as tmuxListSessions,
+  tryAllWindowIds as tmuxTryAllWindowIds,
+  tryListSessions as tmuxTryListSessions,
   killSession as tmuxKillSession,
   sessionAttached as tmuxSessionAttached,
   RUN_SESSION_PATTERN,
   sessionInGroup,
-  targetExists as tmuxTargetExists,
+  tryTargetExists as tmuxTryTargetExists,
   tmuxAvailable,
   VIEWER_SESSION_PATTERN,
   type RuntimeDriver,
@@ -38,7 +40,10 @@ export interface ReapedAgent {
 
 export interface SweepOptions {
   driver?: RuntimeDriver
-  targetExists?: (_windowId: string, _session: string) => boolean
+  targetExists?: (_windowId: string, _session: string) => boolean | null
+  // Test seam: the server-wide window enumeration. `null` means "tmux could not answer";
+  // the sweep then stands down instead of reading it as "every window is gone".
+  windowIds?: () => Set<string> | null
   tmuxAvailable?: () => boolean
   now?: () => number
   maxLifetimeMs?: number
@@ -54,7 +59,7 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
   const haveTmux = options.targetExists ? true : (options.tmuxAvailable ?? tmuxAvailable)()
   if (!haveTmux) return { reaped: [] }
 
-  const targetExists = options.targetExists ?? tmuxTargetExists
+  const targetExists = options.targetExists ?? tmuxTryTargetExists
   const now = options.now ?? nowMs
   const maxLifetimeMs = options.maxLifetimeMs ?? loadConfig().global.max_lifetime_ms
 
@@ -63,20 +68,45 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
   // Batch path (no injected probe): one server-wide window enumeration instead
   // of a tmux spawn per agent per sweep. A miss is confirmed with a fresh probe
   // so a window born after the enumeration is never misjudged as gone.
-  const batchWindows = !options.targetExists && candidates.some(agent => agent.tmux_window_id)
-    ? tmuxAllWindowIds()
-    : null
+  //
+  // The enumeration is failure-aware on purpose: `null` means tmux could not answer, and
+  // acting on "no windows at all" would kill every live agent on one bad command. That is
+  // exactly how a whole fleet was archived while its sessions were still running. Stand
+  // down, leave a line in the diagnostics journal, and let the next tick retry.
+  // Providing both seams exercises the batch miss and its fresh confirmation in tests.
+  const needsBatch = candidates.some(agent => agent.tmux_window_id)
+    && (options.targetExists === undefined || options.windowIds !== undefined)
+  const batchWindows = needsBatch ? (options.windowIds ?? tmuxTryAllWindowIds)() : null
+  if (needsBatch && batchWindows === null) {
+    logDiagnostic('sweep-agents-skipped', {
+      reason: 'tmux-enumeration-failed',
+      candidates: candidates.length,
+    })
+    return { reaped: [] }
+  }
   const probe = batchWindows
-    ? (id: string, session: string): boolean => batchWindows.has(`${session}\0${id}`) || targetExists(id, session)
+    ? (id: string, session: string): boolean | null => batchWindows.has(`${session}\0${id}`) || targetExists(id, session)
     : targetExists
 
   const reaped: ReapedAgent[] = []
   for (const agent of candidates) {
     const ageMs = now() - new Date(agent.started_at).getTime()
     let reason: ReapReason | null = null
-    if (agent.tmux_window_id && !probe(agent.tmux_window_id, agent.tmux_session)) {
-      reason = 'window-gone'
-    } else if (maxLifetimeMs > 0 && ageMs > maxLifetimeMs) {
+    if (agent.tmux_window_id) {
+      const exists = probe(agent.tmux_window_id, agent.tmux_session)
+      if (exists === null) {
+        logDiagnostic('sweep-agent-skipped', {
+          reason: 'tmux-target-probe-failed',
+          run_id: agent.run_id,
+          agent_id: agent.id,
+          session: agent.tmux_session,
+          target: agent.tmux_window_id,
+        })
+        continue
+      }
+      if (!exists) reason = 'window-gone'
+    }
+    if (!reason && maxLifetimeMs > 0 && ageMs > maxLifetimeMs) {
       reason = 'lifetime-exceeded'
     }
     if (!reason) continue
@@ -92,6 +122,12 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
     } catch {
       // The agent or its run was archived out from under us mid-sweep; nothing to reap.
     }
+  }
+  if (reaped.length > 0) {
+    logDiagnostic('agents-reaped', {
+      count: reaped.length,
+      agents: reaped.map(item => `${item.nickname}:${item.reason}`),
+    })
   }
   return { reaped }
 }
@@ -109,28 +145,60 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
 // - Ownership is judged against this process's registry only (stateRoot()); two
 //   registries sharing one tmux server is unsupported — a sweep would see the
 //   other registry's sessions as orphans.
+// - So a registry that owns *nothing* while the server carries run sessions is
+//   treated as a foreign registry and the sweep refuses to run at all: that is the
+//   shape of a Web UI started with REEVES_REGISTRY pointing at a temp dir, a gate
+//   script, or a second profile sharing this tmux server. Skipping leaves a stale
+//   session behind (cheap, and the owning registry reaps it); guessing wrong kills
+//   every live run of another registry (an operator's whole fleet).
 export interface OrphanSweepOptions {
-  listSessions?: () => TmuxSessionInfo[]
+  // `null` means "tmux could not answer": the sweep then stands down rather than
+  // treating an unknown server as an empty one.
+  listSessions?: () => TmuxSessionInfo[] | null
   killSession?: (_session: string) => void
   sessionAttached?: (_session: string) => boolean
   tmuxAvailable?: () => boolean
   now?: () => number
+  // Which runs this registry owns. Defaults to the on-disk registry; injected by
+  // tests and by callers that already hold the list.
+  runs?: () => RunRecord[]
   // Manual sweeps (CLI/MCP reap) set this: the grace exists to protect runs
   // mid-start from *background* sweeps; an explicit user sweep may ignore it.
   ignoreGrace?: boolean
 }
 
+export type OrphanSweepSkip = 'foreign-registry'
+
 // Sessions younger than this are still being set up by their owning process.
 const ORPHAN_MIN_AGE_SEC = 60
 
-export function sweepOrphanSessions(options: OrphanSweepOptions = {}): { killed: string[] } {
+// A session name that only reeves itself produces: a run session or a web viewer.
+// Used to recognise "this tmux server carries somebody's fleet" without trusting
+// a registry we may not own.
+function isReevesOwnedName(name: string): boolean {
+  return RUN_SESSION_PATTERN.test(name) || VIEWER_SESSION_PATTERN.test(name)
+}
+
+export function sweepOrphanSessions(
+  options: OrphanSweepOptions = {},
+): { killed: string[], skipped?: OrphanSweepSkip } {
   const haveTmux = options.listSessions ? true : (options.tmuxAvailable ?? tmuxAvailable)()
   if (!haveTmux) return { killed: [] }
-  const sessions = (options.listSessions ?? tmuxListSessions)()
+  const sessions = (options.listSessions ?? tmuxTryListSessions)()
+  // Same rule as sweepAgents: no answer is not "no sessions".
+  if (sessions === null) {
+    logDiagnostic('orphan-sweep-skipped', { reason: 'tmux-enumeration-failed' })
+    return { killed: [] }
+  }
   const killSession = options.killSession ?? tmuxKillSession
   const sessionAttached = options.sessionAttached ?? tmuxSessionAttached
   const nowSec = ((options.now ?? nowMs)()) / 1000
-  const liveRunSessions = new Set(listRuns().map(run => run.tmux_session))
+  const runs = (options.runs ?? listRuns)()
+  const liveRunSessions = new Set(runs.map(run => run.tmux_session))
+  // Fail closed on a foreign registry before any kill decision is made.
+  if (runs.length === 0 && sessions.some(session => isReevesOwnedName(session.name))) {
+    return { killed: [], skipped: 'foreign-registry' }
+  }
   const killed: string[] = []
   for (const info of sessions) {
     if (info.attached) continue
@@ -150,6 +218,9 @@ export function sweepOrphanSessions(options: OrphanSweepOptions = {}): { killed:
     } catch {
       // session disappeared mid-sweep
     }
+  }
+  if (killed.length > 0) {
+    logDiagnostic('orphan-sessions-killed', { sessions: killed })
   }
   return { killed }
 }

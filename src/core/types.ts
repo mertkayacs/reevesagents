@@ -136,6 +136,14 @@ export interface GlobalConfig {
   default_permissions: Permissions  // default 'ask'
   language: LanguageCode            // default 'en'
   web_theme: 'dark' | 'light'        // Web UI appearance; default 'dark'
+  // Flow engine thresholds (block 10): a verdict that arrives faster than this with no findings is
+  // not evidence of a review, and the dispatch window must outlast a slow provider start.
+  // How often the Web UI may re-render an agent card's pulse, in ms; `0` disables the pulse (§7 of the
+  // notification design). A UI concern, but a shared setting, so the Windows app reads the same number.
+  agent_pulse_ms: number
+  review_min_seconds: number
+  review_evidence_retries: number
+  dispatch_confirm_seconds: number
 }
 
 export interface Config {

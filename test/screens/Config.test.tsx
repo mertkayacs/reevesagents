@@ -8,6 +8,12 @@ import * as RouterModule from '../../src/surfaces/tui/router.js'
 import { ToastProvider } from '../../src/surfaces/tui/contexts/ToastContext.js'
 
 vi.mock('../../src/surfaces/tui/router.js')
+// A tall terminal: the screen lists thirteen fields now, and the default test window clips the tail — which would
+// make the assertion about the *test's* height, not about the screen.
+vi.mock('ink', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('ink')>()),
+  useWindowSize: () => ({ columns: 120, rows: 60 }),
+}))
 
 let tmpDir: string
 
@@ -52,6 +58,7 @@ describe('Config screen', () => {
     expect(output).toContain('peek lines')
     expect(output).toContain('default permissions')
     expect(output).toContain('Back')
+    expect(output).toContain('agent pulse (ms)')
     expect(output).not.toContain('language')
   })
 })
