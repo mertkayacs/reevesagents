@@ -1,7 +1,7 @@
 // Anomaly journal for the safety sweeps.
 //
 // When a sweep stands down, kills something, or finds the tmux view unusable, the event
-// goes to `<state dir>/diagnostics.log` — one line per event, appended, never thrown.
+// goes to `<state dir>/diagnostics.log`: one line per event, appended, never thrown.
 //
 // Why a file and not stderr: these sweeps run inside the Ink TUI, the Web UI server, the
 // MCP server and the CLI at once. Writing to stderr corrupts the TUI and lands in a pipe
@@ -62,7 +62,7 @@ export function logDiagnostic(event: string, detail: DiagnosticDetail = {}): Dia
   }
 }
 
-// Read back the most recent entries, newest last. Used by tests and by `doctor`.
+// Read back the most recent entries, newest last. Used by tests and exported for direct journal inspection.
 export function readDiagnostics(limit = 50): DiagnosticEntry[] {
   try {
     const lines = readFileSync(diagnosticsPath(), 'utf8').split('\n').filter(Boolean)

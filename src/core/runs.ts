@@ -609,8 +609,8 @@ export function autoCleanupRuns(options: AutoCleanupOptions = {}): { removed: st
   const useBatch = haveTmux && !options.sessionExists && !options.targetExists && runs.length > 0
   const batchWindows = useBatch ? (options.windowIds ?? tmux.tryAllWindowIds)() : null
   const batchSessionList = useBatch ? (options.sessions ?? tmux.tryListSessions)() : null
-  // A failed enumeration is not "nothing is running": stand down and leave a trace, or the
-  // next tick — with a working tmux — would archive a fleet that was alive all along.
+  // A failed enumeration is not "nothing is running": stand down and leave a trace, or
+  // the next tick, with a working tmux, would archive a fleet that was alive all along.
   if (useBatch && (batchWindows === null || batchSessionList === null)) {
     logDiagnostic('run-cleanup-skipped', {
       reason: 'tmux-enumeration-failed',

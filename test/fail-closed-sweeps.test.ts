@@ -6,6 +6,7 @@ import type { RunRecord } from '../src/core/types.js'
 import { writeRun, writeAgent, autoCleanupRuns, listRuns, runHasLiveTmuxTarget } from '../src/core/runs.js'
 import { sweepAgents, sweepOrphanSessions } from '../src/core/reaper.js'
 import { diagnosticsPath, logDiagnostic, readDiagnostics } from '../src/core/diagnostics.js'
+import { spawnTmux, tryTargetExists } from '../src/core/tmux.js'
 
 // The failure these tests pin: a sweep that cannot read tmux used to get an empty
 // collection, read it as "every window/session is gone", and archive a live fleet. Each
@@ -68,6 +69,15 @@ function seedLiveRun(id = 'r1', session = 'reeves-live-a1b2c3d4'): void {
   })
 }
 
+function startTmuxSession(session: string): void {
+  const result = spawnTmux(['new-session', '-d', '-s', session], { stdio: 'ignore' })
+  expect(result.status).toBe(0)
+}
+
+function stopTmuxSession(session: string): void {
+  spawnTmux(['kill-session', '-t', `=${session}`], { stdio: 'ignore' })
+}
+
 describe('sweeps stand down when tmux cannot answer', () => {
   it('reaps nothing when the window enumeration failed', () => {
     seedLiveRun()
@@ -93,6 +103,23 @@ describe('sweeps stand down when tmux cannot answer', () => {
       maxLifetimeMs: 0,
     })
     expect(reaped.map(item => item.reason)).toEqual(['window-gone'])
+  })
+
+  it('skips an agent when the fresh target probe cannot answer', () => {
+    seedLiveRun()
+    const commands: string[] = []
+    let enumerated = false
+    const { reaped } = sweepAgents({
+      windowIds: () => { enumerated = true; return new Set<string>() },
+      targetExists: () => null,
+      driver: { tmux: args => { commands.push(args.join(' ')); return '' }, delay: fn => fn() },
+      maxLifetimeMs: 0,
+    })
+    expect(enumerated).toBe(true)
+    expect(reaped).toEqual([])
+    expect(commands).toEqual([])
+    const skipped = readDiagnostics().find(entry => entry.event === 'sweep-agent-skipped')
+    expect(skipped?.detail).toContain('tmux-target-probe-failed')
   })
 
   it('kills no session when the session enumeration failed', () => {
@@ -134,6 +161,41 @@ describe('an unanswered probe never counts as a dead target', () => {
     const run = listRuns()[0]
     expect(runHasLiveTmuxTarget(run, { targetExists: () => null })).toBe(true)
     expect(runHasLiveTmuxTarget(run, { targetExists: () => false })).toBe(false)
+  })
+})
+
+describe('target probe distinguishes absence from an unavailable server', () => {
+  const responsiveSession = `rv-responsive-${process.pid}`
+  const missingSession = 'reeves-missing-a1b2c3d4'
+
+  it('returns false for a missing session while the server answers', () => {
+    startTmuxSession(responsiveSession)
+    try {
+      expect(tryTargetExists('@999', responsiveSession)).toBe(false)
+      expect(tryTargetExists('@999', missingSession)).toBe(false)
+    } finally {
+      stopTmuxSession(responsiveSession)
+    }
+  })
+
+  it('archives a stale run whose session is confirmed absent', () => {
+    startTmuxSession(responsiveSession)
+    try {
+      seedLiveRun('stale', missingSession)
+      const { archived } = autoCleanupRuns()
+      expect(archived).toEqual(['stale'])
+      expect(listRuns()).toEqual([])
+    } finally {
+      stopTmuxSession(responsiveSession)
+    }
+  })
+
+  it('returns null and keeps the run when the server is unavailable', () => {
+    expect(tryTargetExists('@999', missingSession)).toBeNull()
+    seedLiveRun('unknown', missingSession)
+    const { archived } = autoCleanupRuns()
+    expect(archived).toEqual([])
+    expect(listRuns().map(run => run.id)).toEqual(['unknown'])
   })
 })
 
