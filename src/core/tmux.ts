@@ -125,8 +125,10 @@ export function trySessionExists(session: string): boolean | null {
     const result = spawnTmux(['has-session', '-t', exactSession(session)], { stdio: 'ignore' })
     if (result.status === 0) return true
     // has-session reports a real absence and a connection failure with the same code, so
-    // confirm the server is reachable before calling the session gone.
-    return tryListSessions() === null ? null : false
+    // confirm the server answer and exact membership before calling the session gone.
+    const sessions = tryListSessions()
+    if (sessions === null) return null
+    return sessions.some(info => info.name === session)
   } catch {
     return null
   }
@@ -148,7 +150,11 @@ export function tryTargetExists(target: string, session: string): boolean | null
       ? ['list-panes', '-s', '-t', exactSession(session), '-F', '#{pane_id}']
       : ['list-windows', '-t', exactSession(session), '-F', '#{window_id}']
     const result = spawnTmux(args, { encoding: 'utf8' })
-    if (result.status !== 0) return null
+    if (result.status !== 0) {
+      // A missing session and an unreachable server both make the target command fail.
+      // Confirm server reachability before treating the target as absent.
+      return trySessionExists(session) === false ? false : null
+    }
     const stdout = typeof result.stdout === 'string' ? result.stdout : ''
     return stdout.split('\n').some(line => line.trim() === target)
   } catch {

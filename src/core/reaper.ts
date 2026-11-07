@@ -20,7 +20,7 @@ import {
   sessionAttached as tmuxSessionAttached,
   RUN_SESSION_PATTERN,
   sessionInGroup,
-  targetExists as tmuxTargetExists,
+  tryTargetExists as tmuxTryTargetExists,
   tmuxAvailable,
   VIEWER_SESSION_PATTERN,
   type RuntimeDriver,
@@ -40,7 +40,7 @@ export interface ReapedAgent {
 
 export interface SweepOptions {
   driver?: RuntimeDriver
-  targetExists?: (_windowId: string, _session: string) => boolean
+  targetExists?: (_windowId: string, _session: string) => boolean | null
   // Test seam: the server-wide window enumeration. `null` means "tmux could not answer";
   // the sweep then stands down instead of reading it as "every window is gone".
   windowIds?: () => Set<string> | null
@@ -59,7 +59,7 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
   const haveTmux = options.targetExists ? true : (options.tmuxAvailable ?? tmuxAvailable)()
   if (!haveTmux) return { reaped: [] }
 
-  const targetExists = options.targetExists ?? tmuxTargetExists
+  const targetExists = options.targetExists ?? tmuxTryTargetExists
   const now = options.now ?? nowMs
   const maxLifetimeMs = options.maxLifetimeMs ?? loadConfig().global.max_lifetime_ms
 
@@ -70,10 +70,12 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
   // so a window born after the enumeration is never misjudged as gone.
   //
   // The enumeration is failure-aware on purpose: `null` means tmux could not answer, and
-  // acting on "no windows at all" would kill every live agent on one bad command — that is
+  // acting on "no windows at all" would kill every live agent on one bad command. That is
   // exactly how a whole fleet was archived while its sessions were still running. Stand
   // down, leave a line in the diagnostics journal, and let the next tick retry.
-  const needsBatch = !options.targetExists && candidates.some(agent => agent.tmux_window_id)
+  // Providing both seams exercises the batch miss and its fresh confirmation in tests.
+  const needsBatch = candidates.some(agent => agent.tmux_window_id)
+    && (options.targetExists === undefined || options.windowIds !== undefined)
   const batchWindows = needsBatch ? (options.windowIds ?? tmuxTryAllWindowIds)() : null
   if (needsBatch && batchWindows === null) {
     logDiagnostic('sweep-agents-skipped', {
@@ -83,16 +85,28 @@ export function sweepAgents(options: SweepOptions = {}): { reaped: ReapedAgent[]
     return { reaped: [] }
   }
   const probe = batchWindows
-    ? (id: string, session: string): boolean => batchWindows.has(`${session}\0${id}`) || targetExists(id, session)
+    ? (id: string, session: string): boolean | null => batchWindows.has(`${session}\0${id}`) || targetExists(id, session)
     : targetExists
 
   const reaped: ReapedAgent[] = []
   for (const agent of candidates) {
     const ageMs = now() - new Date(agent.started_at).getTime()
     let reason: ReapReason | null = null
-    if (agent.tmux_window_id && !probe(agent.tmux_window_id, agent.tmux_session)) {
-      reason = 'window-gone'
-    } else if (maxLifetimeMs > 0 && ageMs > maxLifetimeMs) {
+    if (agent.tmux_window_id) {
+      const exists = probe(agent.tmux_window_id, agent.tmux_session)
+      if (exists === null) {
+        logDiagnostic('sweep-agent-skipped', {
+          reason: 'tmux-target-probe-failed',
+          run_id: agent.run_id,
+          agent_id: agent.id,
+          session: agent.tmux_session,
+          target: agent.tmux_window_id,
+        })
+        continue
+      }
+      if (!exists) reason = 'window-gone'
+    }
+    if (!reason && maxLifetimeMs > 0 && ageMs > maxLifetimeMs) {
       reason = 'lifetime-exceeded'
     }
     if (!reason) continue
