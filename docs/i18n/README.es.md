@@ -64,6 +64,12 @@ GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI y otras CLIs de proveedor lado a
 lado en tmux. Puedes usarlo como una CLI, TUI o Web UI normal, o adjuntar su MCP
 opcional para que un agente pueda generar, leer, dirigir y detener al resto.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/reeves-blink.gif" width="86" alt="Reeves, el pato de píxeles que es la mascota de ReevesAgents">
+</p>
+
+<p align="center">Te presento a Reeves, nuestra mascota, un pato de píxeles. Guía a los patitos igual que un agente puede guiar a los demás.</p>
+
 El inicio de sesión de cada proveedor se queda en su propia CLI. ReevesAgents guarda su estado
 en unos pocos archivos JSON bajo `~/.reeves` y solo se ejecuta mientras lo usas tú o una CLI
 adjunta.

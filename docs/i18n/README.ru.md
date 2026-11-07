@@ -65,6 +65,12 @@ GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI и CLI других провайд�
 подключить опциональный MCP, и тогда один агент сможет запускать остальных,
 читать их вывод, направлять их и останавливать.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/reeves-blink.gif" width="86" alt="Reeves, пиксельная утка и маскот ReevesAgents">
+</p>
+
+<p align="center">Знакомьтесь, это Reeves, наш маскот, пиксельная утка. Он ведёт за собой утят так же, как один агент может вести остальных.</p>
+
 Вход в аккаунт каждого провайдера остаётся внутри его CLI. Своё состояние ReevesAgents хранит
 в нескольких простых JSON-файлах в `~/.reeves` и работает, только пока им пользуетесь вы или
 подключённый CLI.

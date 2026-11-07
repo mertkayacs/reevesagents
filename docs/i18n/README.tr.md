@@ -65,6 +65,12 @@ sıradan bir CLI/TUI/Web UI olarak kullanabilir ya da isteğe bağlı MCP'sini
 bağlayarak bir agent'ın geri kalanları başlatmasını, okumasını, yönlendirmesini
 ve durdurmasını sağlayabilirsiniz.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/reeves-blink.gif" width="86" alt="Reeves, ReevesAgents'ın piksel ördek maskotu">
+</p>
+
+<p align="center">Bu Reeves, piksel ördek maskotumuz. Yavru ördeklere önderlik eder, tıpkı bir agent'ın diğerlerine yol gösterebilmesi gibi.</p>
+
 Sağlayıcı girişi her sağlayıcı CLI'sinin kendi içinde kalır. ReevesAgents kendi durumunu
 `~/.reeves` altındaki birkaç düz JSON dosyasında tutar ve yalnızca siz ya da bağlı bir CLI
 onu kullanırken çalışır.

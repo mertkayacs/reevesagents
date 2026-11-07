@@ -65,6 +65,12 @@ Claude Code وCodex وOpenCode وHermes وKimi وDeepSeek وQwen وPi وAider
 MCP الاختياري الخاص به حتى يتمكن وكيل واحد من إنشاء البقية وقراءة مخرجاتهم
 وتوجيههم وإيقافهم.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/reeves-blink.gif" width="86" alt="Reeves، بطة بكسلية هي تميمة ReevesAgents">
+</p>
+
+<p align="center">هذا Reeves، تميمتنا على هيئة بطة بكسلية. يقود فراخ البط الصغيرة كما يستطيع وكيل واحد أن يقود بقية الوكلاء.</p>
+
 يبقى تسجيل الدخول إلى كل مزوّد داخل أداة CLI الخاصة به. ويحفظ ReevesAgents حالته
 في بضعة ملفات JSON صِرفة تحت `~/.reeves`، ولا يعمل إلا حين تستخدمه أنت أو أداة CLI
 مربوطة به.

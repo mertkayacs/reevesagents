@@ -38,6 +38,12 @@
 
 ReevesAgents is a free, open-source workspace for AI coding agents. It runs Claude Code, Codex, Kimi, OpenCode, Gemini CLI and 20 other coding CLIs side by side, each in its own tmux window, and gives you a terminal UI, a browser UI and a scriptable CLI over the same runs. Attach its MCP server to one CLI and that agent can spawn, read, steer and stop the others. Every CLI keeps its own login, and ReevesAgents keeps its state in a few JSON files under `~/.reeves`.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/reeves-blink.gif" width="86" alt="Reeves, the pixel duck mascot of ReevesAgents">
+</p>
+
+<p align="center">Meet Reeves, our pixel duck mascot. He leads the ducklings the way one agent can lead the rest.</p>
+
 ---
 
 ## Why ReevesAgents

@@ -65,6 +65,12 @@ fianco in tmux. Puoi usarlo come una normale CLI/TUI/Web UI, oppure collegare il
 suo MCP opt-in, così un agente può avviare, leggere, dirigere e fermare gli
 altri.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/reeves-blink.gif" width="86" alt="Reeves, l'anatra in pixel art che è la mascotte di ReevesAgents">
+</p>
+
+<p align="center">Ecco Reeves, la nostra mascotte, un'anatra in pixel art. Guida i paperotti come un agente può guidare gli altri.</p>
+
 L'accesso di ogni provider resta nella sua CLI. ReevesAgents tiene il proprio stato in pochi
 file JSON sotto `~/.reeves` e resta attivo solo mentre lo usi tu o una CLI collegata.
 

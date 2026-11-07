@@ -65,6 +65,12 @@ côte à côte dans tmux. Vous pouvez l'utiliser comme une CLI, une TUI ou une W
 UI classique, ou attacher son MCP optionnel pour qu'un agent puisse lancer,
 lire, diriger et arrêter les autres.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/reeves-blink.gif" width="86" alt="Reeves, la mascotte canard en pixel art de ReevesAgents">
+</p>
+
+<p align="center">Voici Reeves, notre mascotte, un canard en pixel art. Il mène les canetons comme un agent peut mener les autres.</p>
+
 La connexion au fournisseur reste dans chaque CLI. ReevesAgents garde son propre état dans
 quelques fichiers JSON sous `~/.reeves`, et il tourne seulement pendant que vous ou une CLI
 attachée l'utilisez.
