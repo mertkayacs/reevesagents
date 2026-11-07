@@ -71,6 +71,10 @@ um agente possa criar, ler, orientar e parar os restantes.
 
 <p align="center">Este é o Reeves, a nossa mascote, um pato em pixel art. Ele conduz os patinhos como um agente pode conduzir os outros.</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="Pixel art do Reeves, um pato amarelo, a andar à frente de três patinhos em turquesa, coral e lilás">
+</p>
+
 O início de sessão de cada fornecedor fica dentro da respetiva CLI. O ReevesAgents guarda o
 seu estado em alguns ficheiros JSON simples em `~/.reeves` e só está a correr enquanto o
 estiver a usar, diretamente ou através de uma CLI associada.

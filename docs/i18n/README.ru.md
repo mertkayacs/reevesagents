@@ -71,6 +71,10 @@ GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI и CLI других провайд�
 
 <p align="center">Знакомьтесь, это Reeves, наш маскот, пиксельная утка. Он ведёт за собой утят так же, как один агент может вести остальных.</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="Пиксельный рисунок: жёлтая утка Reeves идёт впереди трёх утят: бирюзового, кораллового и сиреневого">
+</p>
+
 Вход в аккаунт каждого провайдера остаётся внутри его CLI. Своё состояние ReevesAgents хранит
 в нескольких простых JSON-файлах в `~/.reeves` и работает, только пока им пользуетесь вы или
 подключённый CLI.

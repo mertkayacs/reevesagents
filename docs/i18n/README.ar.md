@@ -71,6 +71,10 @@ MCP الاختياري الخاص به حتى يتمكن وكيل واحد من 
 
 <p align="center">هذا Reeves، تميمتنا على هيئة بطة بكسلية. يقود فراخ البط الصغيرة كما يستطيع وكيل واحد أن يقود بقية الوكلاء.</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="رسم بكسلي لـ Reeves، بطة صفراء، تمشي أمام ثلاثة فراخ بط بألوان الفيروزي والمرجاني والأرجواني الفاتح">
+</p>
+
 يبقى تسجيل الدخول إلى كل مزوّد داخل أداة CLI الخاصة به. ويحفظ ReevesAgents حالته
 في بضعة ملفات JSON صِرفة تحت `~/.reeves`، ولا يعمل إلا حين تستخدمه أنت أو أداة CLI
 مربوطة به.

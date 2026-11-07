@@ -71,6 +71,10 @@ ve durdurmasını sağlayabilirsiniz.
 
 <p align="center">Bu Reeves, piksel ördek maskotumuz. Yavru ördeklere önderlik eder, tıpkı bir agent'ın diğerlerine yol gösterebilmesi gibi.</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="Piksel sanatı: sarı ördek Reeves, turkuaz, mercan ve leylak renkli üç yavru ördeğin önünde yürüyor">
+</p>
+
 Sağlayıcı girişi her sağlayıcı CLI'sinin kendi içinde kalır. ReevesAgents kendi durumunu
 `~/.reeves` altındaki birkaç düz JSON dosyasında tutar ve yalnızca siz ya da bağlı bir CLI
 onu kullanırken çalışır.

@@ -70,6 +70,10 @@ ein Agent die übrigen starten, auslesen, lenken und stoppen kann.
 
 <p align="center">Das ist Reeves, unser Maskottchen, eine Pixel-Ente. Er führt die Küken an, so wie ein Agent die anderen führen kann.</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="Pixelart: Reeves, eine gelbe Ente, geht vor drei Küken in Türkis, Korallenrot und Flieder">
+</p>
+
 Das Login bleibt in der jeweiligen Anbieter-CLI. ReevesAgents legt seinen eigenen Zustand
 in ein paar einfachen JSON-Dateien unter `~/.reeves` ab und läuft nur, solange du oder eine
 angehängte CLI es nutzt.

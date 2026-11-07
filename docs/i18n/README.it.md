@@ -71,6 +71,10 @@ altri.
 
 <p align="center">Ecco Reeves, la nostra mascotte, un'anatra in pixel art. Guida i paperotti come un agente può guidare gli altri.</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="Pixel art di Reeves, un'anatra gialla, che cammina davanti a tre paperotti turchese, corallo e lilla">
+</p>
+
 L'accesso di ogni provider resta nella sua CLI. ReevesAgents tiene il proprio stato in pochi
 file JSON sotto `~/.reeves` e resta attivo solo mentre lo usi tu o una CLI collegata.
 

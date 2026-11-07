@@ -44,6 +44,10 @@ ReevesAgents is a free, open-source workspace for AI coding agents. It runs Clau
 
 <p align="center">Meet Reeves, our pixel duck mascot. He leads the ducklings the way one agent can lead the rest.</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="Pixel art of Reeves, a yellow duck, walking ahead of three ducklings in teal, coral and lilac">
+</p>
+
 ---
 
 ## Why ReevesAgents

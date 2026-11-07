@@ -64,6 +64,10 @@ ReevesAgents 是一个面向 AI 编码 CLI 的本地工作区。它把 Claude Co
 
 <p align="center">这是 Reeves，我们的像素鸭吉祥物。正如一个智能体可以带领其他智能体，他带着小鸭子们走在前面。</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="像素画：黄色的鸭子 Reeves 走在三只小鸭前面，小鸭分别是青绿色、珊瑚色和淡紫色">
+</p>
+
 提供方的登录始终留在各自的 CLI 里。ReevesAgents 把自己的状态存成 `~/.reeves` 下几个普通的 JSON 文件，只在你或已附加的 CLI 使用它时运行。
 
 <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-hero.webp" width="720" alt="一块金框主面板通过细金线连接八块发光的玻璃面板，每块代表运行中的一个工具">

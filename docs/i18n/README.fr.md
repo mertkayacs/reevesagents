@@ -71,6 +71,10 @@ lire, diriger et arrêter les autres.
 
 <p align="center">Voici Reeves, notre mascotte, un canard en pixel art. Il mène les canetons comme un agent peut mener les autres.</p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="Pixel art : Reeves, un canard jaune, marche devant trois canetons turquoise, corail et lilas">
+</p>
+
 La connexion au fournisseur reste dans chaque CLI. ReevesAgents garde son propre état dans
 quelques fichiers JSON sous `~/.reeves`, et il tourne seulement pendant que vous ou une CLI
 attachée l'utilisez.
