@@ -124,6 +124,11 @@ You already use these CLIs, and you are already signed in to them. ReevesAgents 
 - The Web UI shows every run, a live terminal for the selected agent, approvals, presets and history, in a light or dark theme and ten languages.
 - A CLI with the MCP attached can ask for approval before a risky step, and you approve or deny it from the CLI or the Web UI.
 
+**Develop, review, fix**
+
+- `reevesagents flow start` attaches a flow to an existing run: a developer agent, a reviewer agent and the repository. Each `flow tick` moves it one step: the developer gets the next spec, the reviewer checks the commit, and the item is closed or sent back for a fix within the round budgets.
+- Specs wait in a queue (`flow add-spec`) or come from a plan imported from a document in the repository (`flow plan`). `status`, `notes`, `logs` and `incidents` show where each flow stands, what the reviewer found, the journal, and questions or failures that need attention. The TUI, the Web UI and the MCP tools show the same flows, and the MCP server runs a step only when asked.
+
 **Agent Control (MCP)**
 
 - `reevesagents attach` connects every installed host CLI, or one by its id: `cc`, `codex`, `kimi`, `qwen`, `hermes` or `opencode`. `hosts` shows the state and `detach <id>` removes it.
