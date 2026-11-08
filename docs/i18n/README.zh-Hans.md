@@ -58,16 +58,6 @@
 
 ReevesAgents 是一个面向 AI 编码 CLI 的本地工作区。它把 Claude Code、Codex、OpenCode、Hermes、Kimi、DeepSeek、Qwen、Pi、Aider、Gemini CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI、Rovo Dev CLI 等提供方 CLI 并排放在 tmux 里运行。你可以把它当作普通的 CLI、TUI 或 Web UI 来用，也可以附加它那个需要手动开启的 MCP，让一个智能体去生成、读取、操控和停止其余的智能体。
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/reeves-blink.gif" width="86" alt="Reeves，ReevesAgents 的像素鸭吉祥物">
-</p>
-
-<p align="center">这是 Reeves，我们的像素鸭吉祥物。正如一个智能体可以带领其他智能体，他带着小鸭子们走在前面。</p>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/ducklings@4x.png" width="360" alt="像素画：黄色的鸭子 Reeves 走在三只小鸭前面，小鸭分别是青绿色、珊瑚色和淡紫色">
-</p>
-
 提供方的登录始终留在各自的 CLI 里。ReevesAgents 把自己的状态存成 `~/.reeves` 下几个普通的 JSON 文件，只在你或已附加的 CLI 使用它时运行。
 
 <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/reevesagents-hero.webp" width="720" alt="一块金框主面板通过细金线连接八块发光的玻璃面板，每块代表运行中的一个工具">

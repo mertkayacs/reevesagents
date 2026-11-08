@@ -4,7 +4,7 @@ Reeves, the rubber duck that greets you in the ReevesAgents terminal UI, drawn o
 it lives in.
 
 The mark exists as two pixel masters. `favicon/favicon.svg` is the 16x16 drawing with a solid ink eye, made for
-browser tabs. `svg/reevesagents-mark.svg` is the 32x32 drawing with the mascot's white eye and pupil, made for 64 px
+browser tabs. `svg/reevesagents-mark.svg` is the 32x32 drawing with a white eye and pupil, made for 64 px
 and up. Everything else in the kit is built from these two grids.
 
 ![Kit overview](preview-final.png)
