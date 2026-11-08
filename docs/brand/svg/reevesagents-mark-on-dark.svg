@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" role="img" aria-label="ReevesAgents"><path d="M19 19 L51 19" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" stroke="#F5F2EB"/><path d="M19 19 L19 51" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" stroke="#F5F2EB"/><path d="M19 19 L47 47" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" stroke="#F5F2EB"/><circle cx="51" cy="19" r="5.5" fill="#F5F2EB"/><circle cx="19" cy="51" r="5.5" fill="#F5F2EB"/><circle cx="47" cy="47" r="5.5" fill="#F5F2EB"/><circle cx="19" cy="19" r="11" fill="#ED967C"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges">
+<title>ReevesAgents</title>
+<desc>Reeves for dark grounds (#0D1117, #1F2430)</desc>
+<path fill="#1A202C" fill-rule="evenodd" d="M9 7H11V9H9Z"/>
+<path fill="#FCC826" fill-rule="evenodd" d="M5 7H6V5H7V4H9V3H13V4H15V5H16V7H17V11H16V13H17V14H22V15H27V14H28V13H29V12H30V22H29V24H28V25H26V26H23V27H12V26H10V25H8V24H7V23H6V18H7V17H8V16H9V14H8V13H7V8H5ZM8 7V9H9V10H11V9H12V7H11V6H9V7Z"/>
+<path fill="#FA7415" fill-rule="evenodd" d="M2 9H4V8H7V13H2Z"/>
+<path fill="#FFFFFF" fill-rule="evenodd" d="M8 7H9V9H11V10H9V9H8ZM9 6H11V7H12V9H11V7H9Z"/>
+</svg>

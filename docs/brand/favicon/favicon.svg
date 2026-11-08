@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="64" height="64" role="img" aria-label="ReevesAgents"><rect width="512" height="512" rx="112" fill="#1A202C"/><g transform="translate(59.13 59.13) scale(6.1046)"><path d="M19 19 L51 19" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" stroke="#F5F2EB"/><path d="M19 19 L19 51" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" stroke="#F5F2EB"/><path d="M19 19 L47 47" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" stroke="#F5F2EB"/><circle cx="51" cy="19" r="5.5" fill="#F5F2EB"/><circle cx="19" cy="51" r="5.5" fill="#F5F2EB"/><circle cx="47" cy="47" r="5.5" fill="#F5F2EB"/><circle cx="19" cy="19" r="11" fill="#ED967C"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<title>ReevesAgents</title>
+<desc>Reeves at 16x16, the favicon master</desc>
+<path fill="#1A202C" fill-rule="evenodd" d="M0 6H1V8H5V10H4V11H3V13H4V14H14V15H4V14H3V13H2V11H3V10H4V9H1V8H0ZM1 5H2V6H1ZM2 3H3V5H2ZM3 2H4V3H3ZM4 1H8V2H9V3H10V6H13V7H10V6H9V3H8V2H4ZM5 4H6V6H5ZM13 5H14V6H13ZM14 4H16V13H15V14H14V13H15V5H14Z"/>
+<path fill="#FCC826" fill-rule="evenodd" d="M3 3H4V2H8V3H9V6H10V7H13V6H14V5H15V13H14V14H4V13H3V11H4V10H5V8H4V5H3ZM5 4V6H6V4Z"/>
+<path fill="#FA7415" fill-rule="evenodd" d="M1 6H2V5H4V8H1Z"/>
+</svg>

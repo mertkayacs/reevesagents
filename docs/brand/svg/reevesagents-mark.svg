@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" aria-label="ReevesAgents" role="img" viewBox="0 0 64 64"><path fill="none" stroke="#1A202C" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M19 19 L51 19"/><path fill="none" stroke="#1A202C" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M19 19 L19 51"/><path fill="none" stroke="#1A202C" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" d="M19 19 L47 47"/><circle cx="51" cy="19" r="5.5" fill="#1A202C"/><circle cx="19" cy="51" r="5.5" fill="#1A202C"/><circle cx="47" cy="47" r="5.5" fill="#1A202C"/><circle cx="19" cy="19" r="11" fill="#D26D53"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges">
+<title>ReevesAgents</title>
+<desc>Reeves the rubber duck, 32x32 pixel master</desc>
+<path fill="#1A202C" fill-rule="evenodd" d="M1 9H2V13H8V14H9V16H8V17H7V18H6V23H7V24H8V25H10V26H12V27H23V28H12V27H10V26H8V25H7V24H6V23H5V18H6V17H7V16H8V14H2V13H1ZM2 8H4V9H2ZM4 7H5V8H4ZM5 5H6V7H5ZM6 4H7V5H6ZM7 3H9V4H7ZM9 2H13V3H15V4H16V5H17V7H18V11H17V13H22V14H27V15H22V14H17V13H16V11H17V7H16V5H15V4H13V3H9ZM9 7H11V9H9ZM23 26H26V27H23ZM26 25H28V26H26ZM27 13H28V14H27ZM28 12H29V13H28ZM28 24H29V25H28ZM29 11H31V22H30V24H29V22H30V12H29Z"/>
+<path fill="#FCC826" fill-rule="evenodd" d="M5 7H6V5H7V4H9V3H13V4H15V5H16V7H17V11H16V13H17V14H22V15H27V14H28V13H29V12H30V22H29V24H28V25H26V26H23V27H12V26H10V25H8V24H7V23H6V18H7V17H8V16H9V14H8V13H7V8H5ZM8 7V9H9V10H11V9H12V7H11V6H9V7Z"/>
+<path fill="#FA7415" fill-rule="evenodd" d="M2 9H4V8H7V13H2Z"/>
+<path fill="#FFFFFF" fill-rule="evenodd" d="M8 7H9V9H11V10H9V9H8ZM9 6H11V7H12V9H11V7H9Z"/>
+</svg>
