@@ -11,7 +11,7 @@ overrides:
   esbuild: 0.28.2
   fast-uri: 3.1.9
   hono: 4.13.16
-  ip-address: 10.7.5
+  ip-address: 10.7.6
   qs: 6.16.1
   source-map-js: 1.2.2
 
@@ -1226,8 +1226,8 @@ packages:
       react-devtools-core:
         optional: true
 
-  ip-address@10.7.5:
-    resolution: {integrity: sha512-t2v0rkILYv9WXmSL7TpAaU3HXgaFYOPUcH3QHgwQ++gpJuH3bqyMy4Fvt/DJCTKwzH3Cf+bAp5W/mFL39KPLzA==}
+  ip-address@10.7.6:
+    resolution: {integrity: sha512-00LYkM6byILa9eQIx6qoaXCM40xTLd56AZ4vyaPW3YTyb49VZYPo5xsiAq4tuQ54GH4R7gVdYScJ1B7B77PuTg==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -2672,7 +2672,7 @@ snapshots:
     dependencies:
       debug: 4.4.3
       express: 5.3.0
-      ip-address: 10.7.5
+      ip-address: 10.7.6
     transitivePeerDependencies:
       - supports-color
 
@@ -2872,7 +2872,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  ip-address@10.7.5: {}
+  ip-address@10.7.6: {}
 
   ipaddr.js@1.9.1: {}
 
