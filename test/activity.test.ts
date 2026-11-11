@@ -25,6 +25,22 @@ const HERMES_IDLE = [
   ' ☤ deepseek-v4.1-flash · 282K/1M · [███░░░░░░░] 27% · ◎ 99.0% · ◷ 6.6с · ↑ 167 т/с · ✓ 6m · ~/projects/salon-dashboard (main)',
 ].join('\n')
 
+// Hermes under a non-default profile (`hermes -p dev chat`): the composer glyph carries the profile
+// name. Captured from a live dev pane, where every dispatch was held as `dev_pane_unknown` because
+// the idle marker demanded a bare `❯` at the start of the line.
+const HERMES_PROFILE_IDLE = [
+  'dev ❯ Что недавно изменилось в этом репозитории?',
+  '──────────────────────────────────────────────────────────────────────────────────────────',
+  ' ☤ deepseek-v4.1-flash:1017 · ctx -- · [░░░░░░░░░░] -- · 17m · ⏲ 0s · ~/projects/salon-dashboard (main)',
+].join('\n')
+
+// The same profile pane mid-turn: the box switches to the redirect text and the status row hints.
+const HERMES_PROFILE_BUSY = [
+  'reviewer ❯ пишите, чтобы перенаправить этот ход · Tab ставит в очередь на потом',
+  '──────────────────────────────────────────────────────────────────────────────────────────',
+  ' ☤ glm-5.3-flash · 88K/1M · [██░░░░░░░░] 9% · ◎ 99.0% · ◷ 4.1с · ↑ 12 т/с    enter прервать · tab в очередь · ctrl+c стоп',
+].join('\n')
+
 // Codex, idle: the input box is present, no "esc to interrupt" anywhere.
 const CODEX_IDLE = [
   '› Ask Codex to do anything',
@@ -52,6 +68,10 @@ describe('detectPaneBusy', () => {
     expect(detectPaneBusy(HERMES_IDLE, 'hermes')).toBe('idle')
     expect(detectPaneBusy(CODEX_IDLE, 'codex')).toBe('idle')
     // No input box anywhere: a login screen, an error or a half-drawn frame. Never "free".
+    // A Hermes pane launched with `--profile` is still a Hermes pane: the profile name in front of
+    // the glyph must not turn a free composer into 'unknown'.
+    expect(detectPaneBusy(HERMES_PROFILE_IDLE, 'hermes')).toBe('idle')
+    expect(detectPaneBusy(HERMES_PROFILE_BUSY, 'hermes')).toBe('busy')
     for (const screen of ['Welcome to Codex\nPlease sign in', 'error: connection refused', '▌']) {
       expect(detectPaneBusy(screen, 'codex')).toBe('unknown')
       expect(detectPaneBusy(screen, 'hermes')).toBe('unknown')

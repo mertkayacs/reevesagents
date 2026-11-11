@@ -78,8 +78,11 @@ const SIGNALS: Partial<Record<Provider, ProviderSignals>> = {
     busy: [/enter\s+(?:чтобы\s+)?прервать/i, /esc\s+to\s+interrupt/i],
     // Idle input box, drawn as "❯ <text or placeholder>" above the status line.
     // A bare prompt (no text typed yet) trims to "❯", so the marker allows end of line.
-    idle: [/^\s*❯(?:\s|$)/m],
-    marker: /^\s*❯\s?/,
+    // A non-default Hermes profile prepends its name to the glyph (`dev ❯ …`), so that token is
+    // optional: without it a flow whose dev runs under `--profile` reads as 'unknown' and holds
+    // before every dispatch.
+    idle: [/^\s*(?:[a-z0-9][a-z0-9_-]{0,63}\s+)?❯(?:\s|$)/m],
+    marker: /^\s*(?:[a-z0-9][a-z0-9_-]{0,63}\s+)?❯\s?/,
   },
   codex: {
     // Status line while a turn runs: "◦ Working (8s • esc to interrupt)".
