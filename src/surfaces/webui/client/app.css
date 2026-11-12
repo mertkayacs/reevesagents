@@ -2492,6 +2492,42 @@ button { letter-spacing: 0; }
 .plan-badge[data-status='blocked_owner'],
 .plan-badge[data-status='needs_brief'] { background: rgba(224, 180, 106, 0.2); }
 .plan-badge[data-status='skipped'] { background: rgba(160, 160, 160, 0.14); }
+.plan-badge[data-status='dispatching'] { background: rgba(224, 180, 106, 0.2); }
+.plan-badge[data-status='handed_over'] { background: rgba(160, 160, 160, 0.14); }
+
+/* The rows the flow derived from its spec queue beside the plan's own: the origin label is what keeps a reader from
+   mistaking a derived row for a line the document said. */
+.plan-row--spec { grid-template-columns: 64px 1fr auto auto; }
+.plan-origin {
+  color: var(--muted, #8b95a7);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.plan-current {
+  color: var(--accent, #7eb8f5);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.plan-row.is-current { box-shadow: inset 2px 0 0 var(--accent, #7eb8f5); }
+.plan-derived {
+  color: var(--muted, #8b95a7);
+  font-size: 11px;
+  padding: 0 4px 6px;
+}
+.plan-dispatch-unknown {
+  color: #e0b46a;
+  font-size: 12px;
+  padding: 4px;
+  border-left: 2px solid #e0b46a;
+  margin-bottom: 6px;
+}
+.plan-detail-note {
+  color: #e0b46a;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.flow-badge-plan { opacity: 0.75; }
 
 .plan-detail {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
