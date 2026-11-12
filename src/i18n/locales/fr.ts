@@ -82,7 +82,7 @@ export const fr = {
     'flow.work.unknown': 'envoi non confirmé — tâche inconnue',
     'flow.work.unknown_detail': 'un envoi a été fait sans confirmation et le journal ne nomme pas la tâche — voir `reevesagents flow status`',
     'flow.work.plan_segment': 'plan {{done}}/{{total}}',
-    'flow.work.holder_dev': 'dev : {{agent}}',
+    'flow.work.holder_dev': 'développeur : {{agent}}',
     'flow.work.holder_reviewer': 'relecteur : {{agent}}',
     'flow.status.reviewing': 'revue',
     'history.deleteBody': 'Supprime seulement cette entrée d’historique archivée. Le run est déjà terminé.',

@@ -83,7 +83,7 @@ export const it = {
     'flow.work.unknown': 'invio non confermato — attività sconosciuta',
     'flow.work.unknown_detail': 'un invio è partito senza conferma e il giornale non nomina l\'attività — guarda `reevesagents flow status`',
     'flow.work.plan_segment': 'piano {{done}}/{{total}}',
-    'flow.work.holder_dev': 'agente dev: {{agent}}',
+    'flow.work.holder_dev': 'sviluppatore: {{agent}}',
     'flow.work.holder_reviewer': 'revisore: {{agent}}',
     'flow.status.reviewing': 'revisione',
     'history.deleteBody': 'Rimuove solo questa voce di cronologia archiviata. Il run è già terminato.',

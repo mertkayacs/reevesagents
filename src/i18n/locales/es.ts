@@ -85,7 +85,7 @@ export const es = {
     'flow.work.unknown': 'envío sin confirmar — tarea desconocida',
     'flow.work.unknown_detail': 'se envió algo que nadie confirmó y el diario no nombra la tarea — consulta `reevesagents flow status`',
     'flow.work.plan_segment': 'plan {{done}}/{{total}}',
-    'flow.work.holder_dev': 'agente dev: {{agent}}',
+    'flow.work.holder_dev': 'desarrollador: {{agent}}',
     'flow.work.holder_reviewer': 'agente revisor: {{agent}}',
     'flow.status.reviewing': 'revisión',
     'history.deleteBody': 'Elimina solo esta entrada archivada del historial. El run ya terminó.',
