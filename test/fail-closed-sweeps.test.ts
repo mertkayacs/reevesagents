@@ -69,9 +69,17 @@ function seedLiveRun(id = 'r1', session = 'reeves-live-a1b2c3d4'): void {
   })
 }
 
+// A leftover session — from an earlier case, or because a `kill-session` had not reached the server
+// yet — makes `new-session` exit 1 with `duplicate session`. CI is slow enough to hit that race (it
+// failed on one Node version and passed on the other for the same tree), so the helper clears the
+// name first and retries, instead of asserting on a flaky exit code.
 function startTmuxSession(session: string): void {
-  const result = spawnTmux(['new-session', '-d', '-s', session], { stdio: 'ignore' })
-  expect(result.status).toBe(0)
+  let status = 1
+  for (let attempt = 0; attempt < 3 && status !== 0; attempt += 1) {
+    spawnTmux(['kill-session', '-t', `=${session}`], { stdio: 'ignore' })
+    status = spawnTmux(['new-session', '-d', '-s', session], { stdio: 'ignore' }).status ?? 1
+  }
+  expect(status).toBe(0)
 }
 
 function stopTmuxSession(session: string): void {
