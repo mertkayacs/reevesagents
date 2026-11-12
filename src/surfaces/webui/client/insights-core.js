@@ -28,10 +28,12 @@
     return openRunId !== null && openRunId !== undefined && openRunId === runId ? 'true' : 'false'
   }
 
-  // Is there a plan to open for this card? The badge itself is a label and never a control; the plan icon beside it is drawn
-  // only when the answer is yes, because a button that cannot do anything is worse than no button (T1.6.6).
+  // Is there anything to open for this card? The badge itself is a label and never a control; the icon beside it is drawn
+  // only when the answer is yes, because a button that cannot do anything is worse than no button (T1.6.6). A flow driven
+  // from the spec queue has no plan document and still has work to show — the task in work, who holds it, which commit
+  // closed the last one — so the view's row count opens the tab too.
   function planIconVisible(flow) {
-    return Boolean(flow && flow.plan)
+    return Boolean(flow && (flow.plan || flow.work_total > 0))
   }
 
   // `12/23` plus the percentage the progress bar needs. A plan with no items is `0/0` and a 0 % bar, not a crash.

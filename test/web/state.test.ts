@@ -216,6 +216,34 @@ describe('web flow badge', () => {
     })
   })
 
+  it('names the task in work on the card of a spec-only flow, with the plan absent', () => {
+    writeRun(makeRun('r1'))
+    writeAgent(makeAgent('planner', 'r1', { role: 'root' }))
+    // A flow driven from the flat queue: no plan document, two briefs, the first one dispatched.
+    const flow = {
+      ...createFlowState({
+        run_id: 'r1', repo: '/tmp/work', roles: { dev: 'dev-1', review: 'rev-1' }, head: 'abc1234',
+        at: '2026-01-01T00:00:00.000Z',
+        specs: [
+          { id: 'UI-1', title: 'first', goal: 'g', requirements: [], checks: [], report: [] },
+          { id: 'UI-2', title: 'second', goal: 'g', requirements: [], checks: [], report: [] },
+        ],
+      }),
+      dispatched_specs: ['UI-1'],
+      log: [{ at: '2026-01-01T00:01:00.000Z', event: 'dispatch_spec', detail: 'spec_dispatched UI-1' }],
+    }
+    saveFlow(flow, { root: tmpDir })
+
+    const view = buildWebState({ liveTmuxTarget: () => true, language: 'en', now: Date.parse('2026-01-01T00:02:00.000Z') }).runs[0]!.flow!
+    expect(view.label).toBe('in work: UI-1')
+    expect(view.detail).toBe('dev: dev-1')
+    // The row count is what the run card uses to draw the icon: a spec-only flow has work, so the tab is reachable.
+    expect(view.work_total).toBe(2)
+    // Nothing to show as a separate plan segment — there is no plan document.
+    expect(view.plan).toBeNull()
+    expect(view.plan_label).toBeNull()
+  })
+
   it('carries no badge for a run without a flow', () => {
     writeRun(makeRun('r1'))
     writeAgent(makeAgent('planner', 'r1', { role: 'root' }))

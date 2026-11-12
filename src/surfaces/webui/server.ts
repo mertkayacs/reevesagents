@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { isAllowedHostHeader, isAllowedOrigin, isStateChangingMethod } from './guards.js'
 import { buildWebState, listWebProviders } from './state.js'
 import { planExists, planItemView, planProgress, readPlan } from '../../core/plan.js'
+import { readWorkView } from '../../core/work-items.js'
 import { flowStatusPayload, resolveFlowRunId } from '../../core/flow-view.js'
 import { pauseFlow, resumeFlow } from '../../core/flow-control.js'
 import { flowPath, readFlow } from '../../core/flow-store.js'
@@ -636,8 +637,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
     }
     try {
       const resolved = resolveFlowRunId(runId)
+      // The derived work view always travels with the answer: a flow without a plan document still knows which task is in
+      // work, and the tab would otherwise have nothing to list for the normal spec-queue flow. Read-only — the projection
+      // derives rows from the state, the plan and the notes directory and writes nothing.
+      const work = readWorkView(resolved)
       if (!planExists(resolved)) {
-        sendJson(res, 200, { run_id: resolved, plan: null })
+        sendJson(res, 200, { run_id: resolved, plan: null, work })
         return
       }
       const plan = readPlan(resolved)
@@ -650,6 +655,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Req
           items: plan.items.map(planItemView),
           conflicts: plan.conflicts,
         },
+        work,
       })
     } catch (err) {
       sendJson(res, 404, { error: errMessage(err) })
