@@ -83,6 +83,9 @@ describe('durable flow incidents', () => {
     reconcileFlowIncidents(flow, obs({ tree_clean: false, dev_pane: 'busy' }), hold('tree_dirty'), { root, now: NOW, at: AT })
     reconcileFlowIncidents(flow, obs({ review_pane: 'busy' }), hold('awaiting_verdict'), { root, now: NOW, at: AT })
     reconcileFlowIncidents(flow, obs(), hold('spec_pending'), { root, now: NOW, at: AT })
+    // A finished flow decides `kind: 'none'` with reason `flow_done`; that is a completion, not an unknown
+    // hold. Without this case every accepted flow opened a durable warn incident on its last tick.
+    reconcileFlowIncidents(state({ state: 'done' }), obs(), hold('flow_done'), { root, now: NOW, at: AT })
     expect(listFlowIncidents('run-1', { root })).toEqual([])
   })
 
