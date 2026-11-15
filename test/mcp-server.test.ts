@@ -16,6 +16,13 @@ const execFileSync = vi.hoisted(() => vi.fn((file: string) => {
 const spawnSync = vi.hoisted(() => vi.fn(() => ({ status: 1, stdout: '', stderr: '' })))
 vi.mock('node:child_process', () => ({ execFileSync, spawnSync }))
 
+// The attention sweep is stubbed: `list` must call it (an MCP-only setup has no other tick), and
+// the sweep itself has its own suite in test/attention.test.ts.
+vi.mock('../src/core/attention.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/core/attention.js')>()),
+  sweepAttentionThrottled: vi.fn(() => 0),
+}))
+
 // These tests cover the tool handler paths that do not need a real tmux: input
 // validation, error surfaces, the agent cap, and the filesystem-only approval
 // lifecycle. The spawn/send/read paths that drive tmux are exercised elsewhere.
@@ -276,6 +283,17 @@ describe('handleAgentMcpTool', () => {
   })
 
   describe('discovery', () => {
+    // An MCP-only setup runs neither the TUI tick nor the Web UI server, so `list` is the only
+    // call site that can detect attention and clear a stale badge.
+    it('sweeps attention on list', async () => {
+      const { sweepAttentionThrottled } = await import('../src/core/attention.js')
+      const spy = vi.mocked(sweepAttentionThrottled)
+      spy.mockClear()
+      const result = await call('list', {})
+      expect(result.isError).toBeUndefined()
+      expect(spy).toHaveBeenCalledTimes(1)
+    })
+
     it('list_providers returns the full provider catalog from the registry', async () => {
       const { MCP_TOOLS, buildProviderCatalog } = await import('../src/surfaces/mcp/server.js')
       const { PROVIDERS } = await import('../src/core/providers.js')

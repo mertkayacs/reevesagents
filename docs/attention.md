@@ -63,21 +63,28 @@ Two guards protect the record, because the sweep stores text that comes from a p
   the sweep first checks that the id still belongs to the agent's `tmux_session` (the same
   `paneInSession` rule `peekAgent` uses in `src/core/runtime.ts`) and only then captures it.
   Otherwise a stale id would read another session's pane and persist its command line on
-  this record.
+  this record. The session's pane list is read once per session per sweep
+  (`sessionPaneIds`), not once per agent.
 - **Redaction.** `detail` is raw pane text and an approval prompt carries the command line,
-  so it can hold a key pasted into the agent's own prompt. The sweep runs it through
-  `redactSecrets` before persisting, and `redactAgent` in `src/core/runs.ts` redacts the
-  field again on every write. The MCP `list` output and the Web state therefore never see
-  an unredacted detail.
+  so it can hold a key pasted into the agent's own prompt. Each detector redacts the text
+  and only then truncates it to 140 characters: a token cut at the boundary no longer
+  matches its pattern, so the other 35 visible characters would go out with it.
+  `sweepAttention` runs `redactSecrets` once more before persisting, and `redactAgent` in
+  `src/core/runs.ts` redacts the field again on every write. The MCP `list` output and the
+  Web state therefore never see an unredacted detail.
 
-The sweep runs in two places, both throttled through the same module marker:
+The sweep runs in three places, all throttled through the same module marker:
 
 - the **TUI Runs screen** (`src/surfaces/tui/screens/Runs.tsx`, 2 s tick), so attention is
   kept current even when the browser panel was never opened (the Web UI starts on demand);
 - the **Web UI server** (`startWebServer`, every 2.5 s), with or without a browser
-  attached, because the point is to alert an operator who is **not** looking at that tab.
+  attached, because the point is to alert an operator who is **not** looking at that tab;
+- the **MCP `list` tool** (`src/surfaces/mcp/server.ts`), so an MCP-only setup, which runs
+  neither of the two above, still gets a badge and clears a stale one.
 
-Neither call site is a daemon: both reuse the throttle pattern of `src/core/reaper.ts`.
+None of the call sites is a daemon: all three reuse the throttle pattern of
+`src/core/reaper.ts`. One record that cannot be written (a run archived mid-sweep) is
+caught per agent, so the rest of the fleet is still swept and a UI tick cannot die on it.
 
 ## Where it is shown
 
@@ -92,6 +99,18 @@ Neither call site is a daemon: both reuse the throttle pattern of `src/core/reap
   status slot (`source: "approval"`), so the two channels read the same way.
 - **TUI**: the Runs screen drives the sweep but draws no badge of its own. The state is in
   the record, so the MCP `list` output returns it unchanged.
+
+## What a detector must not rely on
+
+A pane keeps the previous turn in its scrollback, so a marker that survives an answered
+prompt turns into a badge that hangs:
+
+- **The full marker, not part of it.** Codex is keyed on its choice list (selected option,
+  a numbered option and the `Press enter to confirm` footer). The question line alone is
+  not enough: it stays on screen after the operator answers.
+- **The active prompt, not the pane.** The command a prompt is about lies *inside* the
+  dialog: between the question and the choices for Codex, between the title and the button
+  row for OpenCode. A `$ ...` line somewhere above it belongs to the previous turn.
 
 ## Adding a provider
 

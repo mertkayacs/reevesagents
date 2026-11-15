@@ -8,7 +8,7 @@
 // human" state. Hermes, Claude Code and Codex all render a blocking overlay in their own
 // TUI, so the pane is the only surface that is true for every provider.
 
-import { execTmux, paneInSession, realDriver } from './tmux.js'
+import { execTmux, realDriver, sessionPaneIds } from './tmux.js'
 import { redactSecrets } from './redact.js'
 import { listAgents, listRuns, updateAgent } from './runs.js'
 import type { AgentRecord, AttentionReason, AttentionState, Provider } from './types.js'
@@ -62,6 +62,13 @@ function truncate(text: string, max = 140): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
 
+// The detail is raw pane text (an approval prompt carries the command line), so it can hold a key
+// pasted into the agent's own prompt. Redaction runs *before* truncation: a token cut at the
+// boundary no longer matches its pattern, and the rest of it would go out visible.
+function sanitizeDetail(text: string): string {
+  return truncate(redactSecrets(text))
+}
+
 function containsAny(haystack: string, needles: string[]): boolean {
   const lower = haystack.toLowerCase()
   return needles.some(needle => lower.includes(needle))
@@ -111,13 +118,13 @@ export function detectHermesAttention(paneText: string): DetectedAttention | nul
       : containsAny(text, QUESTION_WORDS)
       ? 'input'
       : 'approval'
-    return { reason, detail: truncate(detail) }
+    return { reason, detail: sanitizeDetail(detail) }
   }
 
   // A dangerous command that was refused before any UI could ask: the turn is over and
   // the agent is waiting for a human to re-approve.
   if (/BLOCKED:\s*Command was not approved/i.test(text)) {
-    return { reason: 'approval', detail: truncate('command was blocked, no approval could be delivered') }
+    return { reason: 'approval', detail: sanitizeDetail('command was blocked, no approval could be delivered') }
   }
 
   // Deliberately no heuristic for "the last line ends with a question": a finished turn
@@ -145,19 +152,25 @@ export function detectCodexAttention(paneText: string): DetectedAttention | null
   while (lines.length > 0 && (lines[lines.length - 1] ?? '').trim() === '') lines.pop()
   const tail = lines.slice(-SCAN_LINES)
   const text = tail.join('\n')
-
-  const isChoiceList = tail.some(line => CODEX_SELECTED_OPTION.test(line))
-    && tail.some(line => CODEX_OPTION.test(line))
-    && CODEX_PROMPT_HINT.test(text)
-  if (!CODEX_PROMPT_QUESTION.test(text) && !isChoiceList) return null
-
-  // The command being asked about is the most useful thing to show on the tile; fall back
-  // to the model's stated reason, then to a generic label.
   const trimmed = tail.map(line => line.trim())
-  const command = trimmed.find(line => line.startsWith('$ ') && line.length > 2)
-  const reason = trimmed.find(line => line.startsWith('Reason:'))
+
+  const isChoiceList = trimmed.some(line => CODEX_SELECTED_OPTION.test(line))
+    && trimmed.some(line => CODEX_OPTION.test(line))
+    && CODEX_PROMPT_HINT.test(text)
+  // The choice list is the marker, the question line is not: Codex leaves the question in the
+  // scrollback after the prompt is answered, so keying on it kept a badge on an idle pane.
+  if (!isChoiceList) return null
+
+  // The command being asked about is the most useful thing to show on the tile, and it sits
+  // between the question and the choice list: a `$ ...` line above the dialog is the previous
+  // turn's command. Fall back to the model's stated reason, then to a generic label.
+  const questionAt = trimmed.findIndex(line => CODEX_PROMPT_QUESTION.test(line))
+  const choicesAt = trimmed.findIndex(line => CODEX_SELECTED_OPTION.test(line))
+  const prompt = trimmed.slice(questionAt + 1, choicesAt === -1 ? trimmed.length : choicesAt)
+  const command = prompt.find(line => line.startsWith('$ ') && line.length > 2)
+  const reason = prompt.find(line => line.startsWith('Reason:'))
   const detail = command ?? reason ?? 'codex is waiting for command approval'
-  return { reason: 'approval', detail: truncate(detail) }
+  return { reason: 'approval', detail: sanitizeDetail(detail) }
 }
 
 // OpenCode: "△ Permission required" with a kind line and a button row ("Allow once
@@ -178,11 +191,16 @@ export function detectOpencodeAttention(paneText: string): DetectedAttention | n
 
   if (!OPENCODE_PROMPT_TITLE.test(text) || !OPENCODE_ALLOW_ONCE.test(text) || !OPENCODE_REJECT.test(text)) return null
 
+  // The command sits between the dialog's title and its button row: a `$ ...` line above the
+  // dialog belongs to the previous turn.
   const trimmed = tail.map(line => cleanBoxLine(line))
-  const command = trimmed.find(line => line.startsWith('$ ') && line.length > 2)
-  const kind = trimmed.find(line => line.startsWith('#'))
+  const titleAt = trimmed.findIndex(line => OPENCODE_PROMPT_TITLE.test(line))
+  const buttonsAt = trimmed.findIndex(line => OPENCODE_ALLOW_ONCE.test(line))
+  const dialog = trimmed.slice(titleAt + 1, buttonsAt === -1 ? trimmed.length : buttonsAt)
+  const command = dialog.find(line => line.startsWith('$ ') && line.length > 2)
+  const kind = dialog.find(line => line.startsWith('#'))
   const detail = command ?? kind ?? 'opencode is waiting for permission'
-  return { reason: 'approval', detail: truncate(detail) }
+  return { reason: 'approval', detail: sanitizeDetail(detail) }
 }
 
 // Providers with a detector. Everything else reports no attention for now; adding a
@@ -213,8 +231,12 @@ export function nextAttentionState(
 export interface AttentionSweepOptions {
   // Test seam: capture a pane by id. Defaults to `tmux capture-pane -p`.
   capture?: (_paneId: string) => string
-  // Test seam: is this pane still part of the agent's session? Defaults to the tmux probe.
+  // Test seam: is this pane still part of the agent's session? Defaults to the listing below.
+  // When given it wins over `sessionPanes`, because a predicate cannot be cached per session.
   paneInSession?: (_session: string, _paneId: string) => boolean
+  // Test seam: the pane ids of a session. Defaults to one `tmux list-panes` per session per
+  // sweep, however many agents that session holds.
+  sessionPanes?: (_session: string) => readonly string[]
   now?: () => Date
   throttleMs?: number
   runs?: typeof listRuns
@@ -226,8 +248,8 @@ function defaultCapture(paneId: string): string {
   return execTmux(['capture-pane', '-p', '-S', String(-SCAN_LINES), '-t', paneId])
 }
 
-function defaultPaneInSession(session: string, paneId: string): boolean {
-  return paneInSession(realDriver, session, paneId)
+function defaultSessionPanes(session: string): readonly string[] {
+  return sessionPaneIds(realDriver, session)
 }
 
 let lastSweepAt = 0
@@ -239,17 +261,36 @@ let lastSweepAt = 0
  */
 export function sweepAttention(options: AttentionSweepOptions = {}): number {
   const capture = options.capture ?? defaultCapture
-  const paneBelongsToAgent = options.paneInSession ?? defaultPaneInSession
   const now = options.now ? options.now() : new Date()
   const at = now.toISOString()
   const listRunsFn = options.runs ?? listRuns
   const listAgentsFn = options.agents ?? listAgents
   const update = options.update ?? updateAgent
+  // Membership per session, computed once: an agent-per-agent probe ran `list-panes` again for
+  // every agent of the same session.
+  const panesBySession = new Map<string, readonly string[]>()
+  const paneBelongsToAgent = (session: string, paneId: string): boolean => {
+    if (options.paneInSession) return options.paneInSession(session, paneId)
+    let panes = panesBySession.get(session)
+    if (panes === undefined) {
+      panes = (options.sessionPanes ?? defaultSessionPanes)(session)
+      panesBySession.set(session, panes)
+    }
+    return panes.includes(paneId)
+  }
   let changed = 0
 
   for (const run of listRunsFn()) {
     if (run.ended_at) continue
-    for (const agent of listAgentsFn(run.id)) {
+    let agents: ReturnType<typeof listAgentsFn>
+    try {
+      agents = listAgentsFn(run.id)
+    } catch {
+      // The run can be archived between the run list and the agent read; the rest of the fleet
+      // still has to be swept.
+      continue
+    }
+    for (const agent of agents) {
       const previous = agent.attention ?? null
       let detected: DetectedAttention | null = null
       // Pane ids are reused after a tmux server restart, so a stored id can address another
@@ -265,9 +306,8 @@ export function sweepAttention(options: AttentionSweepOptions = {}): number {
           paneText = ''
         }
         const raw = detectAgentAttention(agent, paneText)
-        // The detail is raw pane text (an approval prompt carries the command line), so it
-        // can hold a pasted key. The field is surfaced by the MCP `list` output and the Web
-        // state as stored, so redaction has to happen before it is persisted.
+        // The detectors redact before they truncate; this second pass covers a detail that
+        // arrives from somewhere else, and costs one regex per changed agent.
         detected = raw ? { reason: raw.reason, detail: redactSecrets(raw.detail) } : null
       }
       const next = nextAttentionState(previous, detected, at)
@@ -275,8 +315,14 @@ export function sweepAttention(options: AttentionSweepOptions = {}): number {
         continue
       }
       if (next === null && previous === null) continue
-      update(run.id, agent.id, { attention: next })
-      changed += 1
+      try {
+        update(run.id, agent.id, { attention: next })
+        changed += 1
+      } catch {
+        // `updateAgent` throws when the record vanished between the read and the write (a run
+        // archived mid-sweep). One unwritable record must not stop the rest of the sweep: this
+        // runs from a UI tick, and an exception here used to take the whole screen down.
+      }
     }
   }
   lastSweepAt = now.getTime()

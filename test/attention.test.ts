@@ -307,6 +307,41 @@ describe('attention sweep', () => {
     expect(detail).toContain('[REDACTED]')
     expect(detail).not.toContain(fakeKey)
   })
+
+  // `updateAgent` throws when a run is archived between the read and the write. The sweep runs
+  // from a UI tick, so one unwritable record must not take the screen down with it.
+  it('keeps sweeping when one record cannot be written', () => {
+    const written: string[] = []
+    const changed = sweepAttention({
+      capture: () => HERMES_APPROVAL_MODAL,
+      paneInSession: () => true,
+      now: () => new Date('2026-10-28T11:00:00.000Z'),
+      runs: () => [{ id: 'r1', ended_at: null } as never],
+      agents: () => [agent({ id: 'a1', tmux_pane_id: '%1' }), agent({ id: 'a2', tmux_pane_id: '%2' })],
+      update: (_runId, agentId) => {
+        if (agentId === 'a1') throw new Error('run archived mid-sweep')
+        written.push(agentId)
+      },
+    })
+    expect(written).toEqual(['a2'])
+    expect(changed).toBe(1)
+  })
+
+  // Two agents of one session share its pane list: listing it per agent ran the same
+  // `tmux list-panes` twice.
+  it('lists the panes of a session once per sweep', () => {
+    const listed: string[] = []
+    const changed = sweepAttention({
+      capture: () => HERMES_APPROVAL_MODAL,
+      sessionPanes: session => { listed.push(session); return ['%1', '%2'] },
+      now: () => new Date('2026-10-28T11:00:00.000Z'),
+      runs: () => [{ id: 'r1', ended_at: null } as never],
+      agents: () => [agent({ id: 'a1', tmux_pane_id: '%1' }), agent({ id: 'a2', tmux_pane_id: '%2' })],
+      update: () => {},
+    })
+    expect(listed).toEqual(['reeves-x-aaaaaaaa'])
+    expect(changed).toBe(2)
+  })
 })
 
 describe('Codex attention detection', () => {
@@ -314,6 +349,39 @@ describe('Codex attention detection', () => {
     const detected = detectCodexAttention(CODEX_APPROVAL_PROMPT)
     expect(detected?.reason).toBe('approval')
     expect(detected?.detail).toBe('$ touch /home/dmytro/codex-approval-probe2')
+  })
+
+  it('takes the command from the active prompt, not an older line above it', () => {
+    // An earlier turn's command sits above the dialog in the same capture.
+    const earlier = ['  $ git status --short', '  • Ran git status, 3 files changed'].join('\n')
+    expect(detectCodexAttention(`${earlier}\n${CODEX_APPROVAL_PROMPT}`)?.detail)
+      .toBe('$ touch /home/dmytro/codex-approval-probe2')
+  })
+
+  // The question line survives in the scrollback after the prompt is answered, so it cannot be
+  // the marker on its own: the badge would outlive the prompt.
+  it('needs the choice list: a question left in the scrollback is not attention', () => {
+    const answered = [
+      '  Would you like to run the following command?',
+      '',
+      '  $ touch /home/dmytro/codex-approval-probe2',
+      '',
+      '• Ran the command, 0 output',
+      '› Ask Codex to do anything',
+    ].join('\n')
+    expect(detectCodexAttention(answered)).toBeNull()
+  })
+
+  // The detail is cut to 140 characters, so a token that straddles the boundary no longer matches
+  // its pattern afterwards: redaction has to run first.
+  it('redacts a token that straddles the truncation boundary', () => {
+    // Assembled at runtime so the repository holds no key-shaped literal.
+    const token = ['ghp', 'A'.repeat(36)].join('_')
+    const long = `$ export GITHUB_TOKEN=${'x'.repeat(100)} ${token}`
+    const pane = CODEX_APPROVAL_PROMPT.replace('$ touch /home/dmytro/codex-approval-probe2', () => long)
+    const detail = detectCodexAttention(pane)?.detail ?? ''
+    expect(detail).toContain('[REDACTED]')
+    expect(detail).not.toContain(token.slice(0, 12))
   })
 
   it('does not mistake a numbered list in ordinary output for a prompt', () => {
@@ -342,6 +410,13 @@ describe('OpenCode attention detection', () => {
     const detected = detectOpencodeAttention(OPENCODE_PERMISSION_PROMPT)
     expect(detected?.reason).toBe('approval')
     expect(detected?.detail).toBe('$ touch /tmp/opencode-probe2')
+  })
+
+  it('takes the command from the dialog, not an older line above it', () => {
+    // An earlier turn's command sits above the dialog in the same capture.
+    const earlier = ['  $ git status --short', '  • 3 files changed'].join('\n')
+    expect(detectOpencodeAttention(`${earlier}\n${OPENCODE_PERMISSION_PROMPT}`)?.detail)
+      .toBe('$ touch /tmp/opencode-probe2')
   })
 
   it('stays quiet on ordinary output that mentions permissions', () => {
