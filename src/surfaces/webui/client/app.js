@@ -216,6 +216,12 @@
     'web.planBlockedOwner': 'blocked',
     'web.planEmptyTitle': 'No plan yet',
     'web.planEmptyBody': 'Import the project document with `reevesagents flow plan import`.',
+    'web.planSpecOrigin': 'from the spec queue',
+    'web.planGated': '{{status}} ({{state}})',
+    'web.planDerivedCaption': 'Rows marked "from the spec queue" are derived from the flow state, not from a plan document.',
+    'web.planDispatchUnknown': 'A dispatch was sent and never confirmed — the task it belongs to cannot be identified.',
+    'web.planStatus_dispatching': 'dispatching',
+    'web.planStatus_handed_over': 'handed over',
     'web.logsEmptyTitle': 'No notifications yet',
     'web.logsEmptyBody': 'Runs, approvals and flow events appear here as they happen.',
     'web.logsMarkRead': 'Mark all read',
@@ -314,6 +320,8 @@
     logsPanel: document.getElementById('logs-panel'),
     planList: document.getElementById('plan-list'),
     planEmpty: document.getElementById('plan-empty'),
+    planDerived: document.getElementById('plan-derived'),
+    planUnknown: document.getElementById('plan-dispatch-unknown'),
     planDetail: document.getElementById('plan-detail'),
     planWaiting: document.getElementById('plan-waiting'),
     planTicks: document.getElementById('plan-ticks'),
@@ -364,6 +372,9 @@
     planFilter: 'all',
     runId: '',
     plan: null,
+    // The derived work view (rows from the flow state, the plan and the notes): a spec-only flow has no plan document and
+    // still knows which task is in work, who holds it and which commit closed the last one.
+    work: null,
     logs: [],
     readSeq: 0,
     latestSeq: 0,
@@ -660,6 +671,8 @@
     el.insightsClose.textContent = t('web.mcpClose')
     document.querySelector('#logs-panel .logs-filter span').textContent = t('web.logsRun')
     document.querySelector('#logs-panel .logs-toggle span').textContent = t('web.logsUnreadOnly')
+    document.querySelector('#plan-derived').textContent = t('web.planDerivedCaption')
+    document.querySelector('#plan-dispatch-unknown').textContent = t('web.planDispatchUnknown')
     document.querySelector('#plan-empty .empty-title').textContent = t('web.planEmptyTitle')
     document.querySelector('#plan-empty .empty-body').textContent = t('web.planEmptyBody')
     document.querySelector('#logs-empty .empty-title').textContent = t('web.logsEmptyTitle')
@@ -1113,6 +1126,14 @@
         const tone = run.flow.tone || 'neutral'
         flow.className = `run-flow flow-badge flow-badge--${tone}${run.flow.pulse ? ' is-pulsing' : ''}`
         flow.textContent = run.flow.label
+        // The plan's progress is a **separate** segment: the label above says which task is in work, and folding the plan's
+        // arithmetic into it is how "flow: plan 3/7" came to stand in for an answer about the work itself.
+        if (run.flow.plan_label) {
+          const planSegment = document.createElement('span')
+          planSegment.className = 'flow-badge-plan'
+          planSegment.textContent = ` · ${run.flow.plan_label}`
+          flow.appendChild(planSegment)
+        }
         if (run.flow.attention) {
           flow.dataset.attention = run.flow.attention
         }
@@ -1306,7 +1327,7 @@
     pulseRemaining: () => 0,
     filterPlanItems: items => items || [],
     planWaiting: () => ({ needsBrief: [], blocked: [], total: 0 }),
-    planIconVisible: flow => Boolean(flow && flow.plan),
+    planIconVisible: flow => Boolean(flow && (flow.plan || flow.work_total > 0)),
   }
 
   // The dialog is run-scoped: the agent the operator has selected decides which run's plan opens.
@@ -1444,12 +1465,16 @@
 
   async function loadPlan(runId) {
     insights.plan = null
+    insights.work = null
     if (!runId) return
     try {
       const data = await api('GET', `/api/plan?run=${encodeURIComponent(runId)}`)
       insights.plan = data && data.plan ? data.plan : null
+      // Always present: `{ plan: null, work: {…} }` is the normal answer for a flow driven from the spec queue.
+      insights.work = data && data.work ? data.work : null
     } catch {
       insights.plan = null
+      insights.work = null
     }
   }
 
@@ -1508,65 +1533,192 @@
     renderPlan()
   }
 
+  // Which parked state takes the owner away. The tab and the card must agree about it, and the flow state is the one fact
+  // both of them already carry (`insights.flowState`, set when the dialog opens).
+  const GATED_FLOW_STATES = ['paused', 'escalated', 'orphaned', 'done']
+  const ACTIVE_WORK_STATUSES = ['in_work', 'reviewing', 'dispatching']
+
+  function currentRowId() {
+    return insights.work && insights.work.current ? insights.work.current.id : null
+  }
+
+  function currentChip() {
+    const chip = document.createElement('span')
+    chip.className = 'plan-current'
+    chip.textContent = t('common.current')
+    return chip
+  }
+
+  // The status as this row must read: a gated row says `reviewing (paused)`, because the stored status is still what the
+  // work was doing and the flow's own state is what took the owner away.
+  function workStatusText(item) {
+    const gated = GATED_FLOW_STATES.indexOf(insights.flowState) !== -1
+      && ACTIVE_WORK_STATUSES.indexOf(item.status) !== -1
+    const status = t(`web.planStatus_${item.status}`)
+    return gated ? t('web.planGated', { status, state: t(`flow.status.${insights.flowState}`) }) : status
+  }
+
+  function planRowNode(item, workRow) {
+    const row = document.createElement('button')
+    row.type = 'button'
+    row.className = 'plan-row'
+    row.dataset.status = item.status
+    row.dataset.origin = 'plan'
+    row.setAttribute('role', 'listitem')
+    const id = document.createElement('span')
+    id.className = 'plan-id'
+    id.textContent = item.id
+    const title = document.createElement('span')
+    title.className = 'plan-title'
+    title.textContent = item.title
+    // A row the document no longer lists keeps its status, but the badge says so explicitly: without it the row looks like
+    // ordinary open work that nobody is picking up. A row the flow still owns reads through the work view, which is what
+    // knows whether the ownership gate took the agent away — `reviewing (paused)`.
+    const badge = workRow && !item.missing_since ? planStatusBadgeFor(workRow) : planStatusBadge(item.missing_since ? 'missing' : item.status)
+    row.append(id, title, badge)
+    if (workRow && workRow.note) row.title = workRow.note
+    if (currentRowId() === item.id) {
+      row.classList.add('is-current')
+      row.appendChild(currentChip())
+    }
+    row.addEventListener('click', () => showPlanDetail(item))
+    return row
+  }
+
+  // A derived row: an item of the flat spec queue, not of the plan document. It carries its origin, so a reader never
+  // mistakes it for a line the document said.
+  function workRowNode(item) {
+    const row = document.createElement('button')
+    row.type = 'button'
+    row.className = 'plan-row plan-row--spec'
+    row.dataset.status = item.status
+    row.dataset.origin = item.origin
+    row.setAttribute('role', 'listitem')
+    const id = document.createElement('span')
+    id.className = 'plan-id'
+    id.textContent = item.id
+    const title = document.createElement('span')
+    title.className = 'plan-title'
+    title.textContent = item.title
+    const origin = document.createElement('span')
+    origin.className = 'plan-origin'
+    origin.textContent = t('web.planSpecOrigin')
+    row.append(id, title, planStatusBadgeFor(item), origin)
+    if (currentRowId() === item.id) {
+      row.classList.add('is-current')
+      row.appendChild(currentChip())
+    }
+    if (item.note) row.title = item.note
+    row.addEventListener('click', () => showWorkItem(item))
+    return row
+  }
+
+  function planStatusBadgeFor(item) {
+    const badge = document.createElement('span')
+    badge.className = 'plan-badge'
+    badge.dataset.status = item.status
+    badge.textContent = workStatusText(item)
+    return badge
+  }
+
   function renderPlan() {
     const plan = insights.plan
-    el.planEmpty.hidden = Boolean(plan)
+    const work = insights.work
+    const rows = work && Array.isArray(work.items) ? work.items : []
+    // The rows the flow derived from its spec queue: never written into the plan document, and labelled as such.
+    const derived = rows.filter(item => item.origin === 'spec')
+    // The empty state is only for a flow with neither a plan nor a single row: a spec-only flow has work to show even
+    // though nobody imported a document.
+    el.planEmpty.hidden = Boolean(plan) || rows.length > 0
     el.planList.replaceChildren()
     el.planWaiting.replaceChildren()
     el.planDetail.hidden = true
-    if (!plan) {
+    el.planDerived.hidden = derived.length === 0
+    el.planUnknown.hidden = !(work && work.dispatch_unknown)
+    if (!plan && rows.length === 0) {
       el.planProgressText.textContent = '0/0'
       el.planProgressFill.style.width = '0%'
       el.planWaiting.hidden = true
       return
     }
-    const progress = core().formatPlanProgress(plan.progress.done, plan.progress.total)
+    // The plan's own arithmetic when a document exists, otherwise how far the flow got through the rows it knows. Two
+    // different questions, never mixed into one number.
+    const closed = rows.filter(item => item.status === 'done' || item.status === 'skipped').length
+    const progress = plan
+      ? core().formatPlanProgress(plan.progress.done, plan.progress.total)
+      : core().formatPlanProgress(closed, rows.length)
     el.planProgressText.textContent = `${progress.text} · ${progress.percent}%`
     el.planProgressFill.style.width = `${progress.percent}%`
     el.planProgressBar.setAttribute('aria-valuenow', String(progress.percent))
 
-    const waiting = core().planWaiting(plan.items)
-    if (waiting.total > 0) {
-      el.planWaiting.hidden = false
-      const title = document.createElement('div')
-      title.className = 'plan-waiting-title'
-      title.textContent = t('web.planWaitingTitle')
-      el.planWaiting.appendChild(title)
-      for (const item of [...waiting.needsBrief.map(entry => [entry, 'needs_brief']), ...waiting.blocked.map(entry => [entry, 'blocked_owner'])]) {
-        const row = document.createElement('div')
-        row.className = 'plan-waiting-row'
-        const id = document.createElement('span')
-        id.className = 'plan-waiting-id'
-        id.textContent = item[0].id
-        const why = document.createElement('span')
-        why.className = 'plan-waiting-why'
-        why.textContent = t(item[1] === 'needs_brief' ? 'web.planNeedsBrief' : 'web.planBlockedOwner')
-        row.append(id, why)
-        el.planWaiting.appendChild(row)
+    if (plan) {
+      const waiting = core().planWaiting(plan.items)
+      if (waiting.total > 0) {
+        el.planWaiting.hidden = false
+        const title = document.createElement('div')
+        title.className = 'plan-waiting-title'
+        title.textContent = t('web.planWaitingTitle')
+        el.planWaiting.appendChild(title)
+        for (const item of [...waiting.needsBrief.map(entry => [entry, 'needs_brief']), ...waiting.blocked.map(entry => [entry, 'blocked_owner'])]) {
+          const row = document.createElement('div')
+          row.className = 'plan-waiting-row'
+          const id = document.createElement('span')
+          id.className = 'plan-waiting-id'
+          id.textContent = item[0].id
+          const why = document.createElement('span')
+          why.className = 'plan-waiting-why'
+          why.textContent = t(item[1] === 'needs_brief' ? 'web.planNeedsBrief' : 'web.planBlockedOwner')
+          row.append(id, why)
+          el.planWaiting.appendChild(row)
+        }
+      } else {
+        el.planWaiting.hidden = true
+      }
+      // The document decides membership and order; the work view answers what each row is doing right now (the gate, the
+      // agent, the note), so the same row cannot say two different things in two places.
+      const byId = new Map(rows.map(row => [row.id, row]))
+      for (const item of core().filterPlanItems(plan.items, insights.planFilter)) {
+        el.planList.appendChild(planRowNode(item, byId.get(item.id) || null))
       }
     } else {
       el.planWaiting.hidden = true
     }
+    // Derived rows are not plan items, so the plan's filter does not apply: they are listed after the document's rows,
+    // with their origin named beside the status.
+    for (const item of derived) el.planList.appendChild(workRowNode(item))
+  }
 
-    const items = core().filterPlanItems(plan.items, insights.planFilter)
-    for (const item of items) {
-      const row = document.createElement('button')
-      row.type = 'button'
-      row.className = 'plan-row'
-      row.dataset.status = item.status
-      row.setAttribute('role', 'listitem')
-      const id = document.createElement('span')
-      id.className = 'plan-id'
-      id.textContent = item.id
-      const title = document.createElement('span')
-      title.className = 'plan-title'
-      title.textContent = item.title
-      // A row the document no longer lists keeps its status, but the badge says so explicitly: without it the row
-      // looks like ordinary open work that nobody is picking up.
-      row.append(id, title, planStatusBadge(item.missing_since ? 'missing' : item.status))
-      row.addEventListener('click', () => showPlanDetail(item))
-      el.planList.appendChild(row)
+  // The detail panel for a derived row: the same shape as a plan item's, minus the plan's own fields (a spec row has no
+  // brief record and no document line), plus the agent that holds it and the note that explains the status.
+  function showWorkItem(item) {
+    el.planDetail.replaceChildren()
+    const holder = item.holder
+      ? t(item.holder.role === 'dev' ? 'flow.work.holder_dev' : 'flow.work.holder_reviewer', { agent: item.holder.agent_id })
+      : '—'
+    const rows = [
+      [t('web.planStatus'), workStatusText(item)],
+      [t('common.agent'), holder],
+      [t('web.planCommit'), item.head || '—'],
+    ]
+    for (const [label, value] of rows) {
+      const row = document.createElement('div')
+      row.className = 'plan-detail-row'
+      const key = document.createElement('span')
+      key.className = 'plan-detail-label'
+      key.textContent = label
+      const val = document.createElement('span')
+      val.className = 'plan-detail-value'
+      val.textContent = value
+      row.append(key, val)
+      el.planDetail.appendChild(row)
     }
+    if (item.note) {
+      const note = document.createElement('div')
+      note.className = 'plan-detail-note'
+      note.textContent = item.note
+      el.planDetail.appendChild(note)
+    }
+    el.planDetail.hidden = false
   }
 
   function showPlanDetail(item) {

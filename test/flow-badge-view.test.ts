@@ -89,3 +89,70 @@ describe('the plan badge', () => {
     expect(view.label).toBe('flow: review (2/3)')
   })
 })
+
+describe('the work badge', () => {
+  // A real view, built the way `workItems` builds it, so `current` is one of the rows.
+  function view(
+    rows: Array<{ id: string, status: string, holder?: { role: 'dev' | 'reviewer', agent_id: string } | null, note?: string | null }>,
+    currentId: string | null,
+    dispatchUnknown = false,
+  ) {
+    const items = rows.map(row => ({
+      id: row.id,
+      title: row.id,
+      origin: 'spec' as const,
+      status: row.status as never,
+      plan_status: null,
+      holder: row.holder ?? null,
+      head: null,
+      note: row.note ?? null,
+    }))
+    return { total: items.length, items, current: items.find(row => row.id === currentId) ?? null, dispatch_unknown: dispatchUnknown }
+  }
+
+  const badgeFor = (status: Parameters<typeof flowBadge>[0]['state'], workView: ReturnType<typeof view>, progress: { done: number, total: number } | null = null) =>
+    flowBadgeView(t as never, flowBadge(state({ state: status }), Date.parse('2026-11-02T12:00:00.000Z'), null, progress), { fresh: true, work: workView })
+
+  it('names the task in work and the agent that holds it', () => {
+    const w = view([{ id: 'UI-143', status: 'in_work', holder: { role: 'dev', agent_id: 'dev-1' } }, { id: 'UI-144', status: 'queued' }], 'UI-143')
+    const badge = badgeFor('idle', w)
+    expect(badge.label).toBe('in work: UI-143')
+    expect(badge.detail).toBe('dev: dev-1')
+    expect(badge.tone).toBe('progress')
+  })
+
+  it('names the review, its reviewer and the plan progress as a separate segment', () => {
+    const w = view([{ id: 'UI-143', status: 'reviewing', holder: { role: 'reviewer', agent_id: 'rev-1' } }], 'UI-143')
+    const badge = badgeFor('reviewing', w, { done: 1, total: 3 })
+    expect(badge.label).toBe('review: UI-143')
+    expect(badge.detail).toBe('reviewer: rev-1')
+    // The plan's arithmetic is its own segment: the label is about the task, never about the plan.
+    expect(badge.plan_label).toBe('plan 1/3')
+  })
+
+  it('says a dispatch is in flight without naming an agent', () => {
+    const w = view([{ id: 'UI-143', status: 'dispatching', note: 'dispatch in flight, not confirmed' }], 'UI-143')
+    const badge = badgeFor('idle', w)
+    expect(badge.label).toBe('dispatching: UI-143')
+    expect(badge.detail).toBe('dispatch in flight, not confirmed')
+  })
+
+  it('keeps the three empty states distinct', () => {
+    // Nothing in work: no current row, and no uncertainty about a dispatch.
+    expect(badgeFor('idle', view([{ id: 'UI-143', status: 'done' }], null)).label).toBe('nothing in work')
+    // Uncertainty: a dispatch was sent and the journal does not name the task. Not the same fact as an idle flow.
+    const unknown = badgeFor('idle', view([{ id: 'UI-143', status: 'handed_over' }], null, true))
+    expect(unknown.label).toBe('dispatch not confirmed — task unknown')
+    expect(unknown.tone).toBe('attention')
+    // Parked: the gate took the owner away, and the badge says which parked state it is.
+    expect(badgeFor('paused', view([{ id: 'UI-143', status: 'in_work', note: 'flow paused: ownership unknown' }], null)).label).toBe('paused')
+    expect(badgeFor('escalated', view([{ id: 'UI-143', status: 'in_work', note: 'flow escalated: ownership unknown' }], null)).label).toBe('escalated')
+  })
+
+  it('leaves a flow with no rows to the status text it always had', () => {
+    const badge = badgeFor('reviewing', view([], null))
+    expect(badge.label).toBe('flow: review (0/3)')
+    expect(badge.plan_label).toBeNull()
+    expect(badge.tone).toBe('neutral')
+  })
+})

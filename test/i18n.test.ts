@@ -121,7 +121,11 @@ describe('insights dialog key parity', () => {
 describe('i18n key parity', () => {
   // A locale may legitimately spell a word exactly as English does; it is listed here with the
   // reason instead of weakening the rule for every key.
-  const SAME_AS_ENGLISH = new Set(['fr.flow.meta.attention'])
+  const SAME_AS_ENGLISH = new Set([
+    'fr.flow.meta.attention',
+    // "plan" is the same noun in these three, and the segment is a bare `plan N/M` label.
+    'fr.flow.work.plan_segment', 'es.flow.work.plan_segment', 'tr.flow.work.plan_segment',
+  ])
 
   it('defines every flow key in all nine translated locales', () => {
     const flowKeys = Object.keys(en).filter(key => key.startsWith('flow.'))
@@ -148,6 +152,52 @@ describe('i18n key parity', () => {
       expect(badge).not.toContain('{{')
       // The bare form drops the ratio, not the language.
       expect(translate(option.code, 'flow.badge.status', { status: 'review' })).toContain('review')
+    }
+  })
+})
+
+// The work-items view: the run-card badge names the current task and its holder, and the Plan tab labels spec rows. Every
+// string a reader sees comes from a key, so the parity rule covers this family too — a locale that only has the English
+// source would silently show English inside a translated UI.
+const WORK_KEYS = [
+  'flow.work.dispatching', 'flow.work.in_work', 'flow.work.reviewing', 'flow.work.nothing',
+  'flow.work.unknown', 'flow.work.unknown_detail', 'flow.work.plan_segment',
+  'flow.work.holder_dev', 'flow.work.holder_reviewer',
+  'web.planSpecOrigin', 'web.planGated', 'web.planDerivedCaption', 'web.planDispatchUnknown',
+  'web.planStatus_dispatching', 'web.planStatus_handed_over',
+]
+
+describe('work-items key parity', () => {
+  // A parenthetical is the same punctuation in these languages: the two halves are translated
+  // separately, and only the brackets around them are shared with the English source.
+  const SAME_PATTERN = new Set(['de.web.planGated', 'fr.web.planGated', 'es.web.planGated', 'pt.web.planGated',
+    'it.web.planGated', 'tr.web.planGated', 'ru.web.planGated', 'ar.web.planGated'])
+  // `plan` is the same noun in these three.
+  const SAME_WORD = new Set(['fr.flow.work.plan_segment', 'es.flow.work.plan_segment', 'tr.flow.work.plan_segment'])
+
+  it('defines every work-item key in all ten locales, and none of them is the English source', () => {
+    for (const key of WORK_KEYS) {
+      expect((en as Record<string, string>)[key], `en is missing ${key}`).toBeTruthy()
+    }
+    for (const [code, keys] of Object.entries(LOCALE_KEYS)) {
+      for (const key of WORK_KEYS) {
+        expect(keys[key], `${code} is missing ${key}`).toBeTruthy()
+        if (SAME_PATTERN.has(`${code}.${key}`) || SAME_WORD.has(`${code}.${key}`)) continue
+        expect(keys[key], `${code}.${key} still holds the English source`).not.toBe((en as Record<string, string>)[key])
+      }
+    }
+  })
+
+  it('keeps the placeholders the badge and the Plan tab fill in', () => {
+    for (const option of LANGUAGE_OPTIONS) {
+      for (const key of ['flow.work.dispatching', 'flow.work.in_work', 'flow.work.reviewing'] as const) {
+        const text = translate(option.code, key, { id: 'UI-143' })
+        expect(text).toContain('UI-143')
+        expect(text).not.toContain('{{')
+      }
+      expect(translate(option.code, 'flow.work.holder_dev', { agent: 'dev-1' })).toContain('dev-1')
+      expect(translate(option.code, 'flow.work.plan_segment', { done: 3, total: 7 })).toContain('3')
+      expect(translate(option.code, 'web.planGated', { status: 'reviewing', state: 'paused' })).toContain('paused')
     }
   })
 })

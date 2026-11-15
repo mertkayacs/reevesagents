@@ -19,6 +19,7 @@ import { readFlowBadge } from '../../core/flow-view.js'
 import { flowIncidentAgeMs, listFlowIncidents } from '../../core/flow-incidents.js'
 import type { FlowIncident } from '../../core/flow-incidents.js'
 import { flowAttentionText, flowBadgeView, type FlowTranslate } from '../../core/flow-label.js'
+import { readWorkView, type WorkView } from '../../core/work-items.js'
 import { loadConfig } from '../../core/config.js'
 import { translate } from '../../i18n/catalog.js'
 import type { LanguageCode, Provider, RunRecord, RunViewStatus, TaskStatus } from '../../core/types.js'
@@ -49,6 +50,11 @@ export interface WebRunFlow {
   tone: 'progress' | 'done' | 'attention' | 'paused' | 'neutral'
   pulse: boolean
   plan: { done: number, total: number } | null
+  // The plan's progress as its own segment (`plan 3/7`), so the label stays about the task in work.
+  plan_label: string | null
+  // How many rows the work view knows for this run. The run card draws its icon when there is a plan **or** a row here, so a
+  // spec-only flow can still open the tab that says which task is in work.
+  work_total: number
   done_kind: 'plan_complete' | 'closed_no_plan' | 'stopped' | null
   detail: string | null
 }
@@ -135,7 +141,11 @@ function monogram(nickname: string, provider: string): string {
   return (alnum.slice(0, 2) || provider.slice(0, 2)).toUpperCase()
 }
 
-function webFlow(badge: FlowBadge, t: FlowTranslate, options: { now?: number, pulseMs?: number } = {}): WebRunFlow {
+function webFlow(
+  badge: FlowBadge,
+  t: FlowTranslate,
+  options: { now?: number, pulseMs?: number, work?: WorkView | null } = {},
+): WebRunFlow {
   // "Still news" is an expiry, not a state: a badge that pulses for ever is ignored within a day. The flow file's own
   // `updated_at` is the clock — no extra timer, and a restart does not restart the pulse.
   const pulseMs = options.pulseMs ?? 15 * 60 * 1000
@@ -143,7 +153,7 @@ function webFlow(badge: FlowBadge, t: FlowTranslate, options: { now?: number, pu
   // in the future) would turn into "fresh" and start a pulse the operator switched off (block 28, MINOR).
   const fresh = pulseMs > 0 && badge.updated_at > 0
     && (options.now ?? Date.now()) - badge.updated_at < pulseMs
-  const view = flowBadgeView(t, badge, { fresh })
+  const view = flowBadgeView(t, badge, { fresh, work: options.work ?? null })
   const doneKind = badge.status !== 'done'
     ? null
     : badge.plan_progress !== null && badge.plan_progress.done >= badge.plan_progress.total
@@ -160,6 +170,8 @@ function webFlow(badge: FlowBadge, t: FlowTranslate, options: { now?: number, pu
     tone: view.tone,
     pulse: view.pulse,
     plan: badge.plan_progress,
+    plan_label: view.plan_label,
+    work_total: options.work?.total ?? 0,
     done_kind: doneKind,
     detail: view.detail,
   }
@@ -178,6 +190,9 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
     // Read once per run per snapshot: the flow file is small and this is the only place the web
     // view learns about it.
     const flow = readFlowBadge(run.id, now)
+    // The work view is what says which task each agent is on. Read-only, derived from the flow state, its plan and the notes
+    // directory — nothing here writes, so a snapshot cannot change the flow it describes.
+    const work = flow ? readWorkView(run.id, { at: now }) : null
     const incidents = listFlowIncidents(run.id, { open_only: true, now }).map(row => ({
       id: row.id,
       spec_id: row.spec_id,
@@ -231,7 +246,7 @@ export function buildWebState(options: WebStateOptions = {}): WebState {
       canStop: run.status === 'running' && !run.ended_at,
       canDelete: run.status === 'ended' || run.ended_at !== null,
       terminals,
-      flow: flow ? webFlow(flow, t, { now, pulseMs: options.agent_pulse_ms }) : null,
+      flow: flow ? webFlow(flow, t, { now, pulseMs: options.agent_pulse_ms, work }) : null,
       incidents,
     }
   })

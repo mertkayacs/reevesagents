@@ -100,7 +100,9 @@ export interface FlowDispatchNote {
 // success, and the entries already say it: `dispatch_unconfirmed` / `dispatch_retry_enter` leave the dispatch open, a
 // settled decision (`request_review`, `dispatch_fix`, `dispatch_spec`) or a refusal closes it. The brief's point is that
 // this fact used to live only in the log, where nobody watching the flow could see it (block 69).
-const SETTLED_DISPATCH_EVENTS = /^(?:request_review|dispatch_fix|dispatch_spec|dispatch_stall_retry|plan_item_dispatched)$/
+// Exported for the work-items projection, which must classify a journal entry exactly as this helper
+// does: a second copy of the list is how two answers about "is that dispatch settled?" start to drift.
+export const SETTLED_DISPATCH_EVENTS = /^(?:request_review|dispatch_fix|dispatch_spec|dispatch_stall_retry|plan_item_dispatched)$/
 export function flowDispatchNote(state: FlowState): FlowDispatchNote | null {
   for (let index = state.log.length - 1; index >= 0; index -= 1) {
     const entry = state.log[index]!
