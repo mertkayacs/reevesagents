@@ -254,7 +254,7 @@ function signalsFor(
   const normal = new Set([
     '', 'head_unchanged', 'tree_dirty', 'dev_busy', 'review_busy', 'dev_pane_unknown', 'review_pane_unknown',
     'awaiting_verdict', 'review_timer_started', 'dispatch_pending', 'dispatch_unresolved',
-    'plan_incomplete', 'plan_in_flight', 'plan_item_requeued', 'fix_refused', 'flow_closed', 'spec_pending', 'agent_question', 'agent_question_answered',
+    'plan_incomplete', 'plan_in_flight', 'plan_item_requeued', 'fix_refused', 'flow_closed', 'flow_done', 'spec_pending', 'agent_question', 'agent_question_answered',
   ])
   if (decision?.kind === 'none' && !normal.has(decision.reason) && decision.reason !== 'dev_stalled'
     && decision.reason !== 'review_timeout' && decision.reason !== 'rounds_exhausted') {
