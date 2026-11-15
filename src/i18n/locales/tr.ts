@@ -81,7 +81,7 @@ export const tr = {
     'flow.work.reviewing': 'inceleme: {{id}}',
     'flow.work.nothing': 'çalışılan iş yok',
     'flow.work.unknown': 'gönderim onaylanmadı — görev bilinmiyor',
-    'flow.work.unknown_detail': 'bir gönderim onaylanmadan gitti ve günlük görevi adlandırmıyor — `reevesagents flow status` bakın',
+    'flow.work.unknown_detail': 'bir gönderim onaylanmadan gitti ve günlükte görev adı yok; `reevesagents flow status` komutunu çalıştırın',
     'flow.work.plan_segment': 'plan {{done}}/{{total}}',
     'flow.work.holder_dev': 'geliştirici: {{agent}}',
     'flow.work.holder_reviewer': 'inceleyici: {{agent}}',

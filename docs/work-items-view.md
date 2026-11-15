@@ -1,13 +1,7 @@
 # Work items as a derived view: one writer, no mirror
 
-Status: **accepted** — revision 9, approved by lead_2 / Codex in review round 9 ("the finding is closed in
-substance … no new blocking findings on the diff 6511ca8..d7d95e8"). Nine rounds total: Rounds 1–2 rejected the mirror
-design; round 3 accepted the read-only model; rounds 4–7 kept sharpening the rules, each time confirming the
-previous fixes ("the risk class of a second writer, migration and dispatch interference is not reintroduced",
-"the unified phase order removes the reviewing/in_work ambiguity", "both round-6 findings closed in substance").
-Round 7 left two wording-level findings about the end of `dispatching` and the empty-state text; this revision
-answers them. Branch `feat/work-items` (worktree `~/projects/reevesagents-work-items`, base `dev/local`
-`8d7f861`, v2.2.0).
+Status: **accepted**. This is the contract for `src/core/work-items.ts`: the rules in §2 and the
+Acceptance list below are what the projection must satisfy, and nothing else in the engine moves.
 
 ## Problem
 
@@ -28,30 +22,12 @@ Plan tab (`GET /api/plan` → `{plan: null}`, `src/surfaces/webui/server.ts:640`
 So a spec-only flow — the normal case when an orchestrator hands over two blocks — can report how many briefs
 wait, never *which* task is in work, who holds it, or which commit closed it.
 
-## How the design got here
-
-Revision 1 mirrored every queued spec into `plan.json`; round 2 showed that two writers of one truth reproduce
-the same defect class (binding restoration, locks, reconciliation). Revision 3 removed the second writer: one
-record (`state.specs` / `state.claim` / the journal), no migration, no locking, one read-only projection feeding
-every surface — accepted in round 3. Revisions 4–7 only sharpen the derivation.
-
-| round-6 finding | answer in this revision |
-| --- | --- |
-| HIGH `:121` `flowDispatchNote` does not cover `pending`: it reads only the journal, skips `dispatch_claimed` and returns a note only for `dispatch_unconfirmed`/`dispatch_retry_enter` (`flow-view.ts:104`), so a first send with `pending A` yields `null` while acceptance demands `dispatching` | §2.3: the predicate is a **disjunction** — `pending.spec_id === row.id` (the first send, and `pending` carries `spec_id`, `flow.ts:136`) **or** an unsettled dispatch note **bound to this row** |
-| MEDIUM `:122` the helper returns whole-flow `{state, reason, at}` without `spec_id`, so "for this row" was not established; for an off-plan unconfirmed dispatch `pending` may already be cleared, `claim.spec_id` stays `null`, and the last confirmed `dispatch_spec` belongs to the previous task | §2.3: the binding rule — recover the id from the journal (nearest preceding `dispatch_claimed`/`dispatch_spec` detail, or the row whose interval contains the `request_review` head), and when it cannot be recovered, degrade explicitly: no row is `dispatching`, `WorkView.dispatch_unknown` is set, and the flow-level `dispatch_unconfirmed` stays the operator's signal |
-
-| round-7 finding | answer in this revision |
-| --- | --- |
-| MEDIUM `:135` "`dispatching` ends only on a settled event" is false for the pending branch: a dispatch can be refused before the paste, `releaseDispatch` clears `pending` and journals `dispatch_refused` (`flow.ts:2671`), so no settled event ever arrives | §2.3: two named endings — **settled** (decision event → next phase) and **refused** (`dispatch_refused` → back to `queued`, note dropped). Clearing `pending` alone decides nothing; the journal entry does |
-| MEDIUM `:180` with `dispatch_unknown` and `current = null` the card claims "nothing in work", although only the absence of a binding is established — the retained `dispatch_unconfirmed` signal next to it does not resolve the contradiction | §3: three separate empty states — `nothing in work` (no current, no uncertainty), `dispatch not confirmed — task unknown` (uncertainty), `paused`/`escalated` (gate). Acceptance asserts the wording for each |
-
-| round-8 finding | answer in this revision |
-| --- | --- |
-| MEDIUM `:147` "back to `queued` and drop the note" is only valid for a refused **first** handover; a refused review/fix dispatch does not cancel a handover that already happened, and a refused later attempt does not clear an earlier unconfirmed signal (`flowDispatchNote` deliberately skips `dispatch_refused`) | §2.3: the refusal rule is scoped **per attempt** with an explicit three-row table (first handover → `queued`; review/fix refusal → task phase untouched; later retry → stays `dispatching` with `attempt refused; handover still unconfirmed`). A warning is never dropped unconditionally |
-
 ## 1. The model: one pure derivation
 
-New module `src/core/work-items.ts`:
+New module `src/core/work-items.ts`. A mirror was rejected: writing every queued spec into `plan.json` makes a
+second writer of one truth, and that defect class (binding restoration, locks, reconciliation) is exactly what a
+read-only projection cannot reproduce. One record (`state.specs` / `state.claim` / the journal), no migration,
+no locking, one projection feeding every surface.
 
 ```ts
 export type WorkItemStatus =
@@ -113,9 +89,19 @@ would otherwise be active keeps its status with a note naming the state (`flow p
 
 ### 2.2 `done`: a chain of rounds inside one dispatch interval
 
-Walk the journal for `dispatch_spec` entries whose detail names the id (the live shape is
-`spec_dispatched <ID>`). A dispatch's **interval** runs from its timestamp to the next `dispatch_spec`,
-`flow_done`, or now — a `dispatch_fix` stays *inside* the interval, because a fix belongs to the same item.
+Walk the journal for the entries that hand a brief to a pane and whose detail names the id: the confirmed
+`dispatch_spec` entry (`spec_dispatched <ID>`, `plan_item_dispatched <ID>` for a plan item), and the two entries
+an unconfirmed paste leaves behind (`dispatch_unconfirmed`, `dispatch_retry_enter`). The unconfirmed path is a real
+run, not an edge: `applyUnconfirmedDispatch` journals `<reason> spec_dispatched <id>`, the id still lands in
+`dispatched_specs`, and no `dispatch_spec` entry ever appears — without an interval here the row would sit at
+`handed_over` through the whole review and never reach `done`. An entry that names a review request or a fix
+round does not open an interval: that round belongs to the interval already open.
+
+The id is the token right after the reason. `logDetail` joins reason, head and spec id and a spec dispatch carries
+no head, so the position is fixed; filtering commit-shaped tokens instead drops ids such as `20261115`, which
+satisfy `SPEC_ID_PATTERN` and `isCommitId` at once. A dispatch's **interval** runs from its entry to the next
+opening entry, `flow_done`, or now — a `dispatch_fix` stays *inside* the interval, because a fix belongs to the
+same item.
 
 Inside the interval, `request_review <head>` and `dispatch_fix <head>` alternate as the item's rounds. The item
 is `done` when the **last** round of the chain holds a valid `ACCEPT`: `readNewestNotes(runId, head)`
@@ -184,7 +170,7 @@ The projection never parks the uncertainty on whichever row looks convenient.
 - a row that resolved to `done` never becomes `current`, and neither does a `queued` one: once the active row
   closes, **`current` is `null`** until a confirmed candidate appears. The card says "nothing in work" rather
   than presenting future work as current;
-- if two non-null source candidates (`pending.spec_id`, `claim.spec_id`, the last `dispatch_spec` id) name
+- if two non-null source candidates (`pending.spec_id`, `claim.spec_id`, the id of the newest interval) name
   different ids, no row is active: every candidate becomes `handed_over` with the note `ambiguous current work`.
 
 The badge and the Plan tab both read `current`, so they can never disagree with the row list.
@@ -244,8 +230,8 @@ Work of agents outside a flow (a bare `reevesagents spawn` run) stays out of sco
 - `nextSpec` (`src/core/flow.ts:1472`), `flow plan next`, `closeItemOnAccept`, `plan-mark.ts`, `flow-notes.ts`
   parsing, `flowDispatchNote`, the import path and every write protocol stay exactly as they are — the projection
   only *reads* them.
-- The attention model, the composer-profile regex and the `reanchor` completion are local features kept on
-  purpose in `dev/local`; this task does not touch them.
+- The attention model, the composer-profile regex and the `reanchor` completion stay out of scope on purpose;
+  this projection does not touch them.
 - No new dependencies, no new CLI flags; `state.specs`, `dispatched_specs` and `pending` keep their meaning.
 
 ## Acceptance
@@ -270,6 +256,11 @@ Work of agents outside a flow (a bare `reevesagents spawn` run) stays out of sco
   `reviewing` (never `in_work`); with `ACCEPT` in notes before the tick transitions, the row is `done`.
 - **Fix cycle**: `dispatch A → request_review H1 → CHANGES_REQUESTED → dispatch_fix → request_review H2 → ACCEPT`
   leaves A `done` (one dispatch, a chain of rounds inside its interval).
+- **Unconfirmed first dispatch**: `dispatch_unconfirmed spec_dispatched A → request_review H1 → ACCEPT` leaves A
+  `done`, with no `dispatch_spec` entry in the journal at all; an unconfirmed `review_requested` does not open a
+  second interval.
+- **Commit-shaped id**: an id that is also a commit id (`20261115`) still gets its interval — the row is `done`,
+  never stuck at `handed_over`.
 - **False close**: `dispatch A → dispatch B → request_review B → ACCEPT B` leaves A `handed_over`, only B `done`.
 - **Notes parsing**: `VERDICT` on the first line is accepted; `r1` and `r2` for one head — the newest round
   decides (through the existing `flow-notes` helpers).
@@ -292,9 +283,3 @@ Work of agents outside a flow (a bare `reevesagents spawn` run) stays out of sco
 - `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm smoke:cli && pnpm check:package` green.
 - Web UI read from the DOM against a second server (`node dist/cli.js web --port <free> --no-open`): icon
   present, badge names the current item and its holder, Plan tab lists both rows and marks the current one.
-
-## Rollout
-
-Install into the dev channel (`reevesagents-dev-update --deploy-verified`) **between** blocks: the script stops
-`reeves-flow-tick.timer` for the swap, and a tick in flight during a running review would lose its round. The
-live panes are separate processes and survive the swap.

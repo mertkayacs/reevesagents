@@ -104,8 +104,15 @@ export interface WorkItemsOptions {
 
 const EMPTY_NOTES: WorkNotesIndex = { answer: () => null }
 
-// One dispatch of the journal and its interval: from the `dispatch_spec` entry to the next
-// `dispatch_spec` or `flow_done`, or to now. `heads` are the rounds the interval holds, in order.
+// Journal events that can open an interval when their detail names a dispatch: the confirmed
+// `dispatch_spec`, and the two entries an unconfirmed paste leaves behind. The unconfirmed path is
+// not exotic — `applyUnconfirmedDispatch` journals `<reason> spec_dispatched <id>` and the spec still
+// lands in `dispatched_specs`, so a run whose first Enter was never confirmed has no `dispatch_spec`
+// entry at all and would otherwise never reach `done`.
+const INTERVAL_OPENING_EVENTS = new Set(['dispatch_spec', 'dispatch_unconfirmed', 'dispatch_retry_enter'])
+
+// One dispatch of the journal and its interval: from the entry that opened it to the next opening
+// entry or `flow_done`, or to now. `heads` are the rounds the interval holds, in order.
 interface DispatchInterval {
   id: string | null
   // Index of the last entry inside the interval (exclusive).
@@ -303,12 +310,17 @@ function pickCurrent(items: readonly WorkItem[], owning: FlowStatus): WorkItem |
 
 // --- the journal ------------------------------------------------------------------------------
 
-// Walk the journal once for the `dispatch_spec` entries; each one opens an interval (§2.2).
+// Walk the journal once for the entries that hand a brief to a pane; each one opens an interval
+// (§2.2). Only an entry whose detail names a dispatch opens one: an unconfirmed *review request* or
+// *fix* round belongs to the interval that is already open, never to a new one.
 function dispatchIntervals(state: FlowState, notes: WorkNotesIndex, now: number): DispatchInterval[] {
   const log = state.log
   const starts: number[] = []
   for (let index = 0; index < log.length; index += 1) {
-    if (log[index]!.event === 'dispatch_spec') starts.push(index)
+    const entry = log[index]!
+    if (!INTERVAL_OPENING_EVENTS.has(entry.event)) continue
+    if (detailSpecId(entry.detail) === null) continue
+    starts.push(index)
   }
   return starts.map((start, position) => {
     const limit = position + 1 < starts.length ? starts[position + 1]! : log.length
@@ -361,13 +373,18 @@ function stamp(iso: string): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-// The id a dispatch entry names: the live shape is `spec_dispatched <ID>` (`plan_item_dispatched
-// <ID>` for a plan item). `logDetail` joins reason, head and spec id, so the id is the token after
-// the reason — never a commit id, which is what tells this apart from a review entry.
+// The dispatch reasons, and the id one names: the live shape is `spec_dispatched <ID>`
+// (`plan_item_dispatched <ID>` for a plan item), and an unconfirmed paste prefixes its own reason
+// (`unconfirmed spec_dispatched <ID>`). `logDetail` joins reason, head and spec id, and a spec
+// dispatch carries no head, so the id is the token right after the reason. Filtering commit-shaped
+// tokens instead dropped ids such as `20261115`: they satisfy `SPEC_ID_PATTERN` and `isCommitId` at
+// once, which left the row with no interval and stuck at `handed_over`.
+const DISPATCH_REASONS = new Set(['spec_dispatched', 'plan_item_dispatched'])
+
 function detailSpecId(detail: string): string | null {
-  const [reason, ...rest] = detail.trim().split(/\s+/)
-  if (reason !== 'spec_dispatched' && reason !== 'plan_item_dispatched') return null
-  return rest.find(token => token.length > 0 && !isCommitId(token)) ?? null
+  const tokens = detail.trim().split(/\s+/)
+  const reason = tokens.findIndex(token => DISPATCH_REASONS.has(token))
+  return reason === -1 ? null : tokens[reason + 1] ?? null
 }
 
 // The head a review/fix/unconfirmed entry names. `dispatch_unconfirmed` prefixes the reason

@@ -196,6 +196,63 @@ describe('the phase pass', () => {
   })
 })
 
+// A first dispatch whose Enter was never confirmed is a real run, not an edge: the engine journals
+// `unconfirmed spec_dispatched <id>` and the spec still lands in `dispatched_specs`, so there is no
+// `dispatch_spec` entry to open an interval with.
+describe('an interval opened by an unconfirmed dispatch', () => {
+  it('closes the row as done when the first dispatch was never confirmed', () => {
+    const state = flow({
+      state: 'reviewing',
+      review_started_at: Date.parse('2026-11-01T00:02:00.000Z'),
+      dispatched_specs: ['A'],
+      claim: { head: H1, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      log: journal(
+        ['dispatch_claimed', 'spec_dispatched A'],
+        ['dispatch_unconfirmed', 'unconfirmed spec_dispatched A'],
+        ['request_review', `review_requested ${H1}`],
+      ),
+    })
+    const view = workItems(state, { notes: notes({ [H1]: 'ACCEPT' }) })
+    expect(item(view, 'A')).toMatchObject({ status: 'done', head: H1, holder: null })
+    expect(view.current).toBeNull()
+  })
+
+  it('does not open a second interval on an unconfirmed review request', () => {
+    const state = flow({
+      state: 'reviewing',
+      review_started_at: Date.parse('2026-11-01T00:01:00.000Z'),
+      dispatched_specs: ['A'],
+      claim: { head: H1, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      log: journal(
+        ['dispatch_spec', 'spec_dispatched A'],
+        ['dispatch_unconfirmed', `unconfirmed review_requested ${H1}`],
+      ),
+    })
+    // The interval is the dispatch's, and the review request that never confirmed is its first round.
+    const view = workItems(state, { notes: notes({ [H1]: 'ACCEPT' }) })
+    expect(item(view, 'A')).toMatchObject({ status: 'done', head: H1 })
+  })
+
+  it('takes the id right after the reason, even when it looks like a commit', () => {
+    // `20261115` satisfies `SPEC_ID_PATTERN` and `isCommitId` at once, so a commit-shaped filter
+    // would drop it and leave the row without an interval, stuck at `handed_over`.
+    const id = '20261115'
+    const state = flow({
+      state: 'reviewing',
+      review_started_at: Date.parse('2026-11-01T00:01:00.000Z'),
+      specs: [spec(id)],
+      dispatched_specs: [id],
+      claim: { head: H1, verdict: null, verdict_count: 0, verdict_applied: false, spec_id: null },
+      log: journal(
+        ['dispatch_spec', `plan_item_dispatched ${id}`],
+        ['request_review', `review_requested ${H1}`],
+      ),
+    })
+    const view = workItems(state, { notes: notes({ [H1]: 'ACCEPT' }) })
+    expect(statuses(view)).toEqual({ [id]: 'done' })
+  })
+})
+
 describe('dispatching: the paste is not the handover', () => {
   it('shows the row from the moment the engine claims the paste, with no journal entry', () => {
     const state = flow({
