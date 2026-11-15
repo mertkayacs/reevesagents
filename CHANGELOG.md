@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.2.1](https://github.com/mertkayacs/reevesagents/compare/v2.2.0...v2.2.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **activity:** read a Hermes composer that carries a profile name ([#199](https://github.com/mertkayacs/reevesagents/issues/199)) ([54b0d80](https://github.com/mertkayacs/reevesagents/commit/54b0d801cc2c0e964030bca5acbd1ff7cc294495))
+* **deps:** override minimatch to 11.0.5 for the globparts DoS advisory ([#193](https://github.com/mertkayacs/reevesagents/issues/193)) ([ef1a0c9](https://github.com/mertkayacs/reevesagents/commit/ef1a0c9985114bd9f17c911c89bf59a7a50167a4))
+* **flow:** treat flow_done as a completion, not an unknown hold ([#202](https://github.com/mertkayacs/reevesagents/issues/202)) ([eca5bb1](https://github.com/mertkayacs/reevesagents/commit/eca5bb1024e04a81b823c74b2f3b62a9699492a7))
+
 ## [2.2.0](https://github.com/mertkayacs/reevesagents/compare/v2.1.0...v2.2.0) (2026-11-07)
 
 
