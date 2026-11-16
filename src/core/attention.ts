@@ -134,13 +134,25 @@ export function detectHermesAttention(paneText: string): DetectedAttention | nul
   return null
 }
 
-// Codex CLI: its approval prompt is a flat choice list, no box frame. Matched on the
-// question line plus the "Press enter to confirm" hint, so a numbered list in ordinary
-// agent output cannot be mistaken for a prompt.
+// Codex CLI: its approval prompt is a flat choice list, no box frame. Matched on the choice
+// list itself (a caret on any numbered option, a numbered option, and the "Press enter to
+// confirm" hint), so a numbered list in ordinary agent output cannot be mistaken for a prompt
+// and a question line left in the scrollback cannot keep a badge alive.
 const CODEX_PROMPT_QUESTION = /Would you like to run the following command\?/i
 const CODEX_PROMPT_HINT = /Press enter to confirm or esc to cancel/i
-const CODEX_SELECTED_OPTION = /^\s*[›>]\s*1\.\s+\S/
+// The caret follows the selection, so it lands on whichever option the operator is on: keying it
+// to option 1 cleared the badge as soon as somebody pressed Down while still blocked.
+const CODEX_SELECTED_OPTION = /^\s*[›>]\s*\d+\.\s+\S/
 const CODEX_OPTION = /^\s*\d+\.\s+\S/
+
+// The index of the last line matching `pattern` before `limit` (exclusive), or -1. A capture keeps
+// the previous, already answered prompt, so "the first question in the tail" is the wrong one.
+function lastIndexOfLine(lines: readonly string[], pattern: RegExp, limit = lines.length): number {
+  for (let index = Math.min(limit, lines.length) - 1; index >= 0; index -= 1) {
+    if (pattern.test(lines[index] ?? '')) return index
+  }
+  return -1
+}
 
 /**
  * Codex CLI (`codex`): its approval prompt ("Would you like to run the following
@@ -162,11 +174,15 @@ export function detectCodexAttention(paneText: string): DetectedAttention | null
   if (!isChoiceList) return null
 
   // The command being asked about is the most useful thing to show on the tile, and it sits
-  // between the question and the choice list: a `$ ...` line above the dialog is the previous
-  // turn's command. Fall back to the model's stated reason, then to a generic label.
-  const questionAt = trimmed.findIndex(line => CODEX_PROMPT_QUESTION.test(line))
-  const choicesAt = trimmed.findIndex(line => CODEX_SELECTED_OPTION.test(line))
-  const prompt = trimmed.slice(questionAt + 1, choicesAt === -1 ? trimmed.length : choicesAt)
+  // between the prompt's own question and its choice list. Both ends are taken from the *last*
+  // prompt in the capture: an answered prompt above it is scrollback, and its command is the
+  // previous turn's. Without a question line above the choices there is nothing to attribute a
+  // `$ ...` line to, so the label stays generic rather than borrowing a stranger's command.
+  const choicesAt = lastIndexOfLine(trimmed, CODEX_SELECTED_OPTION)
+  const questionAt = lastIndexOfLine(trimmed, CODEX_PROMPT_QUESTION, choicesAt)
+  if (questionAt === -1) return { reason: 'approval', detail: 'codex is waiting for command approval' }
+
+  const prompt = trimmed.slice(questionAt + 1, choicesAt)
   const command = prompt.find(line => line.startsWith('$ ') && line.length > 2)
   const reason = prompt.find(line => line.startsWith('Reason:'))
   const detail = command ?? reason ?? 'codex is waiting for command approval'
@@ -191,12 +207,15 @@ export function detectOpencodeAttention(paneText: string): DetectedAttention | n
 
   if (!OPENCODE_PROMPT_TITLE.test(text) || !OPENCODE_ALLOW_ONCE.test(text) || !OPENCODE_REJECT.test(text)) return null
 
-  // The command sits between the dialog's title and its button row: a `$ ...` line above the
-  // dialog belongs to the previous turn.
+  // The command sits between the dialog's title and its button row, and both ends come from the
+  // *last* dialog in the capture: an answered dialog above it is scrollback, and its command is
+  // the previous turn's. No title above the buttons means nothing to attribute a `$ ...` line to.
   const trimmed = tail.map(line => cleanBoxLine(line))
-  const titleAt = trimmed.findIndex(line => OPENCODE_PROMPT_TITLE.test(line))
-  const buttonsAt = trimmed.findIndex(line => OPENCODE_ALLOW_ONCE.test(line))
-  const dialog = trimmed.slice(titleAt + 1, buttonsAt === -1 ? trimmed.length : buttonsAt)
+  const buttonsAt = lastIndexOfLine(trimmed, OPENCODE_ALLOW_ONCE)
+  const titleAt = lastIndexOfLine(trimmed, OPENCODE_PROMPT_TITLE, buttonsAt)
+  if (titleAt === -1) return { reason: 'approval', detail: 'opencode is waiting for permission' }
+
+  const dialog = trimmed.slice(titleAt + 1, buttonsAt)
   const command = dialog.find(line => line.startsWith('$ ') && line.length > 2)
   const kind = dialog.find(line => line.startsWith('#'))
   const detail = command ?? kind ?? 'opencode is waiting for permission'

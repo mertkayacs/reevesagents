@@ -384,6 +384,49 @@ describe('Codex attention detection', () => {
     expect(detail).not.toContain(token.slice(0, 12))
   })
 
+  // A capture keeps the answered prompt above the live one. Both ends of the region come from the
+  // last prompt, so the detail is the command being asked about now.
+  it('reads the last prompt in the capture, not the answered one above it', () => {
+    const answered = [
+      '  Would you like to run the following command?',
+      '',
+      '  $ touch /tmp/previous-probe',
+      '',
+      '› 1. Yes, proceed (y)',
+      "  2. Yes, and don't ask again (p)",
+      '  3. No, and tell Codex what to do differently (esc)',
+      '',
+      '  Press enter to confirm or esc to cancel',
+      '',
+      '• Ran the command, 0 output',
+    ].join('\n')
+    expect(detectCodexAttention(`${answered}\n\n${CODEX_APPROVAL_PROMPT}`)?.detail)
+      .toBe('$ touch /home/dmytro/codex-approval-probe2')
+  })
+
+  // The caret follows the selection: an operator who pressed Down is still blocked on the prompt.
+  it('keeps the badge when the selection is not on the first option', () => {
+    const moved = CODEX_APPROVAL_PROMPT
+      .replace('› 1. Yes, proceed (y)', '  1. Yes, proceed (y)')
+      .replace("  2. Yes, and don't ask again", "› 2. Yes, and don't ask again")
+    expect(detectCodexAttention(moved)?.reason).toBe('approval')
+  })
+
+  // Without its own question line the choice list cannot be attributed a command, so the detail
+  // stays generic instead of borrowing the previous turn's.
+  it('uses the generic label when no question line precedes the choices', () => {
+    const orphan = [
+      '  $ touch /tmp/previous-probe',
+      '',
+      '› 1. Yes, proceed (y)',
+      "  2. Yes, and don't ask again (p)",
+      '  3. No, and tell Codex what to do differently (esc)',
+      '',
+      '  Press enter to confirm or esc to cancel',
+    ].join('\n')
+    expect(detectCodexAttention(orphan)?.detail).toBe('codex is waiting for command approval')
+  })
+
   it('does not mistake a numbered list in ordinary output for a prompt', () => {
     const output = [
       '• Plan:',
@@ -416,6 +459,21 @@ describe('OpenCode attention detection', () => {
     // An earlier turn's command sits above the dialog in the same capture.
     const earlier = ['  $ git status --short', '  • 3 files changed'].join('\n')
     expect(detectOpencodeAttention(`${earlier}\n${OPENCODE_PERMISSION_PROMPT}`)?.detail)
+      .toBe('$ touch /tmp/opencode-probe2')
+  })
+
+  // An answered dialog above the live one is scrollback: both ends of the region come from the
+  // last dialog, so its command is the one being asked about.
+  it('reads the last dialog in the capture, not the answered one above it', () => {
+    const answered = [
+      '  ┃  △ Permission required',
+      '  ┃    # Shell command',
+      '  ┃  $ touch /tmp/previous-probe',
+      '  ┃   Allow once   Allow always   Reject',
+      '',
+      '  • allowed once, 0 output',
+    ].join('\n')
+    expect(detectOpencodeAttention(`${answered}\n${OPENCODE_PERMISSION_PROMPT}`)?.detail)
       .toBe('$ touch /tmp/opencode-probe2')
   })
 

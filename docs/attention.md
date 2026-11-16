@@ -111,6 +111,13 @@ prompt turns into a badge that hangs:
 - **The active prompt, not the pane.** The command a prompt is about lies *inside* the
   dialog: between the question and the choices for Codex, between the title and the button
   row for OpenCode. A `$ ...` line somewhere above it belongs to the previous turn.
+- **The last prompt in the capture.** A pane keeps the answered prompt above the live one,
+  so both ends of that region come from the last question row and the last choice row:
+  reading the first of each showed the previous turn's command. No question line above the
+  choices means nothing to attribute a command to, and the detail stays generic.
+- **The whole marker, including its selection.** The caret follows the operator's choice,
+  so the selected-option row is matched on any number, not on option 1: pressing Down left
+  the agent blocked and the badge gone.
 
 ## Adding a provider
 
