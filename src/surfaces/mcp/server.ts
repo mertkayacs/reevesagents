@@ -75,6 +75,7 @@ import { detectAvailable, isProvider, coerceExtraArgs } from '../../core/provide
 import { PROVIDER_DEFS } from '../../core/provider-registry.js'
 import { detectToolStatuses } from '../../core/tool-registry.js'
 import { sweepAgents, sweepAgentsThrottled, sweepOrphanSessions, sweepOrphanSessionsThrottled } from '../../core/reaper.js'
+import { sweepAttentionThrottled } from '../../core/attention.js'
 import { runDoctor } from '../../core/doctor.js'
 import { hostStatus, attach, attachAll, detach } from './installer.js'
 import { installSkills, skillsStatus } from '../../core/skills.js'
@@ -384,6 +385,9 @@ const TOOLS: ToolDef[] = [
       // not linger in the results. Throttled, so a chatty caller cannot spam sweeps.
       sweepAgentsThrottled()
       sweepOrphanSessionsThrottled()
+      // Attention too: an MCP-only setup has no TUI tick and no Web UI server, so without this
+      // call `attention` would never be detected and a stale badge would never be cleared.
+      sweepAttentionThrottled()
       return ok(listRuns().map(run => ({ ...run, agents: listAgents(run.id) })))
     },
   },

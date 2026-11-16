@@ -307,12 +307,19 @@ export function windowInSession(driver: RuntimeDriver, session: string, windowId
   }
 }
 
-export function paneInSession(driver: RuntimeDriver, session: string, paneId: string): boolean {
-  if (!session || !paneId) return false
+// The pane ids of a session, as one list: a caller that checks many agents of the same session
+// must not run `list-panes` once per agent.
+export function sessionPaneIds(driver: RuntimeDriver, session: string): string[] {
+  if (!session) return []
   try {
     return driver.tmux(['list-panes', '-s', '-t', exactSession(session), '-F', '#{pane_id}'])
-      .split('\n').some(line => line.trim() === paneId)
+      .split('\n').map(line => line.trim()).filter(line => line.length > 0)
   } catch {
-    return false
+    return []
   }
+}
+
+export function paneInSession(driver: RuntimeDriver, session: string, paneId: string): boolean {
+  if (!session || !paneId) return false
+  return sessionPaneIds(driver, session).includes(paneId)
 }

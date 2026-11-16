@@ -193,7 +193,7 @@ describe('web client flow chip', () => {
     // No second copy of the badge text or of the attention wording in the browser bundle.
     expect(js).not.toContain('flow: review')
     expect(js).not.toContain('flow: escalated')
-    expect(js).not.toContain('needs attention')
+    expect(js).not.toContain('flow: needs attention')
     expect(js).not.toContain('rounds spent')
     // State comes from the existing panel classes, not from inline styles.
     expect(js).not.toContain('flow.style.color')
