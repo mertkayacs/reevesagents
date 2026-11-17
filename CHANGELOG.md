@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.3.0](https://github.com/mertkayacs/reevesagents/compare/v2.2.1...v2.3.0) (2026-11-16)
+
+
+### Features
+
+* **flow:** show which task each agent is on, derived on read ([#200](https://github.com/mertkayacs/reevesagents/issues/200)) ([c9e7bb9](https://github.com/mertkayacs/reevesagents/commit/c9e7bb902d8cc820f4feba1936b09706589858bd))
+* **web:** show agents waiting on a human in the Web UI ([#178](https://github.com/mertkayacs/reevesagents/issues/178)) ([97cb2cc](https://github.com/mertkayacs/reevesagents/commit/97cb2cc55966b71defd2e5944618d43ff9e9e326))
+
+
+### Bug Fixes
+
+* **i18n:** one term per language for the flow and its queue ([#201](https://github.com/mertkayacs/reevesagents/issues/201)) ([21ee11f](https://github.com/mertkayacs/reevesagents/commit/21ee11fd0fb5563a258b7dd7e2191e0155ee2b81))
+
 ## [2.2.1](https://github.com/mertkayacs/reevesagents/compare/v2.2.0...v2.2.1) (2026-11-15)
 
 
