@@ -50,7 +50,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@hono/node-server": "2.1.9",
+      "@hono/node-server": "2.1.11",
       "body-parser": "2.4.0",
       "brace-expansion": "5.0.13",
       "esbuild": "0.28.2",
