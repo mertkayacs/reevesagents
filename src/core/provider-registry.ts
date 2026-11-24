@@ -69,6 +69,17 @@ export interface ProviderDef {
   buildArgs: (_opts: BuildArgsOptions) => string[]
   // Args for the --help inspection, after the binary. Defaults to ['--help'].
   helpArgs?: readonly string[]
+  // Startup gate for TUIs that show a blocking dialog before the input box (e.g. a
+  // folder-trust prompt). Absent means the generic "pane looks ready" heuristic.
+  // readyPattern: the idle input box; the task is sent only once it matches and no
+  //   prompt is visible. Set it only when the footer is a reliable idle marker.
+  // prompts: dialogs that must be answered first. With autoWhen 'skip' the key is
+  //   sent once when the run is launched with permissions 'skip'; otherwise the task
+  //   waits and the user answers the dialog in the pane.
+  startup?: {
+    readyPattern?: RegExp
+    prompts?: readonly { pattern: RegExp; key: string; autoWhen?: 'skip' }[]
+  }
 }
 
 // Hermes addresses a model as `provider:model`. Only a known provider prefix is
@@ -313,6 +324,12 @@ export const PROVIDER_REGISTRY: Record<Provider, ProviderDef> = {
       { feature: 'reasoning effort', tokens: ['--effort'] },
     ],
     supportsEffort: true,
+    // An untrusted folder shows a static trust dialog that looks "stable" to the generic
+    // heuristic and would swallow the pasted task. Yes is preselected, so Enter accepts it.
+    startup: {
+      readyPattern: /\? for shortcuts/,
+      prompts: [{ pattern: /Do you trust the contents of this project\?/, key: 'Enter', autoWhen: 'skip' }],
+    },
     buildArgs: ({ permissions, model, effort }) => {
       // Interactive TUI launch. The task is pasted after readiness, like other providers.
       const args: string[] = []

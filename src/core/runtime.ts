@@ -35,6 +35,7 @@ import { emitNotification } from './notifications.js'
 import { loadConfig } from './config.js'
 import { loadPreset } from './store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
+import { PROVIDER_REGISTRY, type ProviderDef } from './provider-registry.js'
 import { resolveWorkingDir, shellQuote } from './provider-launch.js'
 import { paneInSession, realDriver, sessionInGroup, STALE_WINDOW_ERROR, VIEWER_SESSION_PATTERN, windowInSession, type RuntimeDriver } from './tmux.js'
 import { reapPaneProcess } from './process.js'
@@ -106,6 +107,8 @@ export type AllowedKey = typeof ALLOWED_KEYS[number]
 const POST_PASTE_ENTER_DELAY_MS = 1000
 const STARTUP_READY_POLL_MS = 1000
 const STARTUP_READY_TIMEOUT_MS = 20_000
+// A startup gate holds the task while a dialog is up. The user may answer it in the pane, so this is far longer.
+const STARTUP_GATE_TIMEOUT_MS = 5 * 60_000
 const lastPasteAtByPane = new Map<string, number>()
 
 function sleepSync(ms: number): void {
@@ -138,6 +141,26 @@ function waitAfterPaste(driver: RuntimeDriver): void {
 
 function normalizePaneOutput(output: string): string {
   return stripAnsi(output).replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+type StartupGate = NonNullable<ProviderDef['startup']>
+
+// Gate patterns match visible text as-is (ANSI stripped, whitespace collapsed), so their case is significant.
+function visiblePaneText(output: string): string {
+  return stripAnsi(output).replace(/\s+/g, ' ').trim()
+}
+
+// A visible prompt blocks readiness even when the provider's ready marker is also on screen.
+function startupPaneState(output: string, previousOutput: string, gate: StartupGate) {
+  const text = visiblePaneText(output)
+  const prompts = gate.prompts ?? []
+  const index = prompts.findIndex(prompt => prompt.pattern.test(text))
+  if (index >= 0) {
+    const prompt = prompts[index]!
+    return { prompt: { index, key: prompt.key, autoWhen: prompt.autoWhen }, ready: false }
+  }
+  const ready = gate.readyPattern ? gate.readyPattern.test(text) : paneLooksReady(output, previousOutput)
+  return { prompt: undefined, ready }
 }
 
 function paneLooksReady(output: string, previousOutput: string): boolean {
@@ -289,11 +312,36 @@ function sendDelayedStartupInput(
     }
   }
 
+  const gate = PROVIDER_REGISTRY[config.provider].startup
+  const answeredPrompts = new Set<number>()
+
+  // Gated providers: a visible dialog is answered (once, and only when auto-accepting) and never
+  // bypassed with the task. Without a dialog, the task goes out on readiness or the usual timeout.
+  function advanceGatedStartup(gate: StartupGate, output: string, previousOutput: string, waitedMs: number): boolean {
+    const state = startupPaneState(output, previousOutput, gate)
+    if (state.prompt) {
+      const { index, key, autoWhen } = state.prompt
+      if (autoWhen === 'skip' && agent.permissions === 'skip' && !answeredPrompts.has(index)) {
+        answeredPrompts.add(index)
+        driver.tmux(['send-keys', '-t', agent.tmux_pane_id, key])
+      }
+      return waitedMs >= STARTUP_GATE_TIMEOUT_MS
+    }
+    if (state.ready || waitedMs >= STARTUP_READY_TIMEOUT_MS) {
+      sendStartupTask()
+      return true
+    }
+    return false
+  }
+
   function waitForReadyThenSend(previousOutput = '', waitedMs = 0): void {
     try {
       if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return
       const output = driver.tmux(['capture-pane', '-p', '-e', '-S', '-80', '-t', agent.tmux_pane_id])
-      if (paneLooksReady(output, previousOutput) || waitedMs >= STARTUP_READY_TIMEOUT_MS) {
+      if (gate) {
+        // Returns true when the startup is finished, either sent or given up on.
+        if (advanceGatedStartup(gate, output, previousOutput, waitedMs)) return
+      } else if (paneLooksReady(output, previousOutput) || waitedMs >= STARTUP_READY_TIMEOUT_MS) {
         sendStartupTask()
         return
       }
