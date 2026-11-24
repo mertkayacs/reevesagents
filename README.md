@@ -221,7 +221,11 @@ Use the id in a spawn spec such as `codex:tests`. Aliases like `claude` work the
 | Cursor CLI | `cursor` |  |
 | Rovo Dev CLI | `rovo` |  |
 
-<sub>Antigravity CLI (`agy`) is the successor to Gemini CLI, and `gemini` is being superseded by it; `gemini` stays supported for now. Antigravity has no fixed model list: `reevesagents providers` and `agy models` discover the models at run time, and any id you pick is passed to `agy` with `--model`.</sub>
+<sub>Antigravity CLI (`agy`) is the successor to Gemini CLI, and `gemini` is being superseded by it; `gemini` stays supported for now. Antigravity has no fixed model catalog: pick any id printed by `agy models` and it is forwarded with `--model`.</sub>
+
+<sub>With permissions `skip`, ReevesAgents auto-accepts agy's folder-trust dialog, and agy remembers the folder as trusted afterwards. With `ask` it waits for you to answer the dialog in the pane.</sub>
+
+<sub>agy rejects `--effort` for models that do not support it, and `--model` conflicts with `--effort` for models whose id already encodes an effort level, so set one or the other.</sub>
 
 <sub>The binary on your PATH matches the id, except `claude` (cc), `kiro-cli` (kiro), `qodercli` (qoder), `cursor-agent` (cursor) and `acli` (rovo). `reevesagents providers` shows which of them it finds, with their aliases and suggested models.</sub>
 

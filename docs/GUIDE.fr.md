@@ -33,8 +33,7 @@ commande et chaque option, tout est recensé dans le [guide en ligne](https://re
 - Node.js 22.12 ou plus récent.
 - tmux 3.0 ou plus récent.
 - Au moins une CLI de fournisseur installée et authentifiée : Claude Code,
-  Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI,
-  Antigravity CLI,
+  Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Antigravity CLI,
   Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build,
   Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI,
   Cursor CLI ou Rovo Dev CLI.

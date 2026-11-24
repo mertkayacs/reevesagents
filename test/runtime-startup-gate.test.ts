@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import type { Provider, Permissions } from '../src/core/types.js'
 import { PROVIDERS } from '../src/core/providers.js'
 import type { RuntimeDriver } from '../src/core/runtime.js'
+import { readDiagnostics } from '../src/core/diagnostics.js'
 
 let tmpDir: string
 let savedTmux: string | undefined
@@ -118,16 +119,119 @@ describe('startup gate for providers with a blocking dialog (agy)', () => {
     expect(driver.captures).toBeGreaterThanOrEqual(10)
   })
 
-  it('sends the dialog key once under skip even if the dialog stays, and gives up at the gate deadline without pasting', async () => {
-    const driver = new ScreenDriver(TRUST_DIALOG)
+  it('retries a lost dialog key 3s apart, at most three times, and keeps the task held', async () => {
+    const driver = new ScreenDriver(TRUST_DIALOG, (key, d) => {
+      if (key === 'Enter') keyCaptures.push(d.captures)
+    })
+    const keyCaptures: number[] = []
     await launchAgy(driver, 'skip')
 
-    expect(driver.events.filter(event => event === 'key:Enter')).toHaveLength(1)
+    // Poll n happens at n-1 seconds. Keys: first after two stable polls, then every 3s.
+    expect(keyCaptures).toEqual([2, 5, 8])
+    expect(driver.events.filter(event => event === 'key:Enter')).toHaveLength(3)
     expect(driver.events).not.toContain('paste')
-    // The task is still held after the gate deadline (five minutes of one-second polls), so it is
-    // not sent into the dialog.
-    expect(driver.captures).toBeGreaterThanOrEqual(300)
-    expect(driver.captures).toBeLessThanOrEqual(310)
+  }, 30_000)
+
+  it('keeps polling past five minutes, logs the wait once, and gives up at 60 minutes without pasting', async () => {
+    const driver = new ScreenDriver(TRUST_DIALOG)
+    await launchAgy(driver, 'ask')
+
+    // One-second polls for the first five minutes (301 captures), then one every 10s up to the 60-minute cap.
+    expect(driver.captures).toBe(631)
+    // delays[0] is the launch delay before the first poll; the poll delays follow it.
+    const pollDelays = driver.delays.slice(1)
+    expect(pollDelays).toHaveLength(630)
+    expect(pollDelays.slice(0, 300).every(ms => ms === 1000)).toBe(true)
+    expect(pollDelays.slice(300).every(ms => ms === 10_000)).toBe(true)
+    expect(driver.events).not.toContain('paste')
+
+    const entries = readDiagnostics(1000)
+    const waiting = entries.filter(entry => entry.event === 'startup-gate-waiting')
+    const gaveUp = entries.filter(entry => entry.event === 'startup-gate-gave-up')
+    expect(waiting).toHaveLength(1)
+    expect(JSON.parse(waiting[0]!.detail)).toEqual({ agent_id: expect.any(String), provider: 'agy' })
+    expect(gaveUp).toHaveLength(1)
+    expect(JSON.parse(gaveUp[0]!.detail)).toEqual({ agent_id: expect.any(String), provider: 'agy' })
+  }, 30_000)
+
+  it('does not treat a single flash of the dialog as a prompt', async () => {
+    const driver = new ScreenDriver(TRUST_DIALOG)
+    driver.onCapture = d => {
+      d.screen = d.captures === 1 ? TRUST_DIALOG : IDLE_INPUT
+    }
+    await launchAgy(driver, 'skip')
+
+    expect(driver.pastedOn).toEqual([IDLE_INPUT])
+    expect(driver.events).toEqual(['paste', 'key:Enter'])
+  })
+
+  it('holds the task when the dialog reappears after being accepted, and pastes once', async () => {
+    const driver = new ScreenDriver(TRUST_DIALOG, (key, d) => {
+      // Accepting clears the dialog but the footer is not back yet.
+      if (key === 'Enter') d.screen = BUSY
+    })
+    driver.onCapture = d => {
+      if (d.captures === 4) d.screen = TRUST_DIALOG
+      if (d.captures === 8) d.screen = IDLE_INPUT
+    }
+    await launchAgy(driver, 'skip')
+
+    // The reappeared dialog is answered again after the 3s retry gap; the task never goes in beside it.
+    expect(driver.pastedOn).toEqual([IDLE_INPUT])
+    expect(driver.events).toEqual(['key:Enter', 'key:Enter', 'paste', 'key:Enter'])
+  })
+
+  it('ignores dialog text that only sits in scrollback above the last 20 lines', async () => {
+    const filler = Array.from({ length: 18 }, (_, i) => `output line ${i}`).join('\n')
+    const screen = `${TRUST_DIALOG}\n${filler}\n${IDLE_INPUT}`
+    const driver = new ScreenDriver(screen)
+    await launchAgy(driver, 'skip')
+
+    expect(driver.pastedOn).toEqual([screen])
+    expect(driver.events).toEqual(['paste', 'key:Enter'])
+  })
+
+  it('holds the task while the footer and the dialog are both visible', async () => {
+    const both = `${IDLE_INPUT}\n${TRUST_DIALOG}`
+    const driver = new ScreenDriver(both)
+    driver.onCapture = d => {
+      if (d.captures >= 30) d.screen = IDLE_INPUT
+    }
+    await launchAgy(driver, 'ask')
+
+    expect(driver.captures).toBeGreaterThanOrEqual(30)
+    expect(driver.pastedOn).toEqual([IDLE_INPUT])
+    expect(driver.events).toEqual(['paste', 'key:Enter'])
+  })
+
+  it('waits 20s after the dialog was last seen before sending when the footer never shows', async () => {
+    const driver = new ScreenDriver(TRUST_DIALOG)
+    // The dialog is visible on polls 1-21 (0-20s) and gone from poll 22 on, with no footer.
+    driver.onCapture = d => {
+      d.screen = d.captures > 21 ? BUSY : TRUST_DIALOG
+    }
+    await launchAgy(driver, 'ask')
+
+    expect(driver.pastedOn).toEqual([BUSY])
+    // Sent on the poll at 40s: 20s after the dialog was last seen at 20s.
+    expect(driver.captures).toBe(41)
+    expect(driver.events).toEqual(['paste', 'key:Enter'])
+  })
+
+  it('treats a run without an explicit permission as ask: no key is sent for the dialog', async () => {
+    const driver = new ScreenDriver(TRUST_DIALOG)
+    driver.onCapture = d => {
+      if (d.captures >= 10) d.screen = IDLE_INPUT
+    }
+    const { startRun } = await import('../src/core/runtime.js')
+    startRun({
+      name: 'agy no permission',
+      working_dir: '/tmp',
+      root: { provider: 'agy', model: '', task: 'build the thing' },
+    }, { driver, available })
+
+    expect(driver.pastedOn).toEqual([IDLE_INPUT])
+    expect(driver.events).toEqual(['paste', 'key:Enter'])
   })
 
   it('pastes at once when the footer is already visible, without answering any dialog', async () => {

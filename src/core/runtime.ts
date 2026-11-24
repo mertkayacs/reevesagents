@@ -32,6 +32,7 @@ import {
   writeRun,
 } from './runs.js'
 import { emitNotification } from './notifications.js'
+import { logDiagnostic } from './diagnostics.js'
 import { loadConfig } from './config.js'
 import { loadPreset } from './store.js'
 import { buildCommand, detectAvailable, isProvider } from './providers.js'
@@ -107,8 +108,20 @@ export type AllowedKey = typeof ALLOWED_KEYS[number]
 const POST_PASTE_ENTER_DELAY_MS = 1000
 const STARTUP_READY_POLL_MS = 1000
 const STARTUP_READY_TIMEOUT_MS = 20_000
+// Gated startup (ProviderDef.startup). Detection looks only at the last STARTUP_DETECT_LINES non-empty
+// lines, so dialog text left in scrollback cannot block readiness.
+const STARTUP_DETECT_LINES = 20
+// A dialog must be visible on this many consecutive polls before a key is sent (it may be a flash).
+const STARTUP_PROMPT_STABLE_POLLS = 2
+// A sent key that does not clear the dialog is retried after this long, at most this many times.
+const STARTUP_KEY_RETRY_MS = 3000
+const STARTUP_KEY_MAX_ATTEMPTS = 3
 // A startup gate holds the task while a dialog is up. The user may answer it in the pane, so this is far longer.
 const STARTUP_GATE_TIMEOUT_MS = 5 * 60_000
+// After STARTUP_GATE_TIMEOUT_MS the gate keeps polling, but less often.
+const STARTUP_GATE_SLOW_POLL_MS = 10_000
+// Past this the gate stops and logs it. The task stays queued and is not pasted.
+const STARTUP_GATE_HARD_CAP_MS = 60 * 60_000
 const lastPasteAtByPane = new Map<string, number>()
 
 function sleepSync(ms: number): void {
@@ -148,6 +161,16 @@ type StartupGate = NonNullable<ProviderDef['startup']>
 // Gate patterns match visible text as-is (ANSI stripped, whitespace collapsed), so their case is significant.
 function visiblePaneText(output: string): string {
   return stripAnsi(output).replace(/\s+/g, ' ').trim()
+}
+
+// The gate looks only at the bottom of the pane: the last STARTUP_DETECT_LINES non-empty lines.
+// Older lines are scrollback and may show a dialog that is already gone.
+function recentPaneOutput(output: string): string {
+  return output
+    .split('\n')
+    .filter(line => stripAnsi(line).trim() !== '')
+    .slice(-STARTUP_DETECT_LINES)
+    .join('\n')
 }
 
 // A visible prompt blocks readiness even when the provider's ready marker is also on screen.
@@ -313,21 +336,39 @@ function sendDelayedStartupInput(
   }
 
   const gate = PROVIDER_REGISTRY[config.provider].startup
-  const answeredPrompts = new Set<number>()
+  // Gated startup state. Keys are counted per prompt index; the dialog must be seen on consecutive polls.
+  const keyAttempts = new Map<number, { count: number, lastKeyAtMs: number }>()
+  let consecutivePromptPolls = 0
+  let promptSeenAtMs: number | undefined
+  let waitingLogged = false
 
-  // Gated providers: a visible dialog is answered (once, and only when auto-accepting) and never
-  // bypassed with the task. Without a dialog, the task goes out on readiness or the usual timeout.
-  function advanceGatedStartup(gate: StartupGate, output: string, previousOutput: string, waitedMs: number): boolean {
-    const state = startupPaneState(output, previousOutput, gate)
+  // Gated providers never send the task while a dialog is visible. A dialog is answered only when it has
+  // been stable for STARTUP_PROMPT_STABLE_POLLS polls, the run auto-accepts, and fewer than
+  // STARTUP_KEY_MAX_ATTEMPTS keys went out (retried every STARTUP_KEY_RETRY_MS). With no dialog visible,
+  // the task goes out on the footer, or STARTUP_READY_TIMEOUT_MS after the dialog was last seen.
+  // Returns true when the startup is finished (sent).
+  function advanceGatedStartup(gate: StartupGate, recent: string, previousRecent: string, waitedMs: number): boolean {
+    const state = startupPaneState(recent, previousRecent, gate)
     if (state.prompt) {
       const { index, key, autoWhen } = state.prompt
-      if (autoWhen === 'skip' && agent.permissions === 'skip' && !answeredPrompts.has(index)) {
-        answeredPrompts.add(index)
+      consecutivePromptPolls++
+      promptSeenAtMs = waitedMs
+      const attempts = keyAttempts.get(index) ?? { count: 0, lastKeyAtMs: 0 }
+      const retryDue = attempts.count === 0 || waitedMs - attempts.lastKeyAtMs >= STARTUP_KEY_RETRY_MS
+      if (
+        autoWhen === 'skip'
+        && agent.permissions === 'skip'
+        && consecutivePromptPolls >= STARTUP_PROMPT_STABLE_POLLS
+        && attempts.count < STARTUP_KEY_MAX_ATTEMPTS
+        && retryDue
+      ) {
         driver.tmux(['send-keys', '-t', agent.tmux_pane_id, key])
+        keyAttempts.set(index, { count: attempts.count + 1, lastKeyAtMs: waitedMs })
       }
-      return waitedMs >= STARTUP_GATE_TIMEOUT_MS
+      return false
     }
-    if (state.ready || waitedMs >= STARTUP_READY_TIMEOUT_MS) {
+    consecutivePromptPolls = 0
+    if (state.ready || waitedMs - (promptSeenAtMs ?? 0) >= STARTUP_READY_TIMEOUT_MS) {
       sendStartupTask()
       return true
     }
@@ -339,9 +380,23 @@ function sendDelayedStartupInput(
       if (!paneInSession(driver, agent.tmux_session, agent.tmux_pane_id)) return
       const output = driver.tmux(['capture-pane', '-p', '-e', '-S', '-80', '-t', agent.tmux_pane_id])
       if (gate) {
-        // Returns true when the startup is finished, either sent or given up on.
-        if (advanceGatedStartup(gate, output, previousOutput, waitedMs)) return
-      } else if (paneLooksReady(output, previousOutput) || waitedMs >= STARTUP_READY_TIMEOUT_MS) {
+        const recent = recentPaneOutput(output)
+        if (advanceGatedStartup(gate, recent, previousOutput, waitedMs)) return
+        if (waitedMs >= STARTUP_GATE_HARD_CAP_MS) {
+          // Still queued, never pasted into a dialog. Logged so the stall is visible.
+          logDiagnostic('startup-gate-gave-up', { agent_id: agent.id, provider: agent.provider })
+          return
+        }
+        const slow = waitedMs >= STARTUP_GATE_TIMEOUT_MS
+        if (slow && !waitingLogged) {
+          waitingLogged = true
+          logDiagnostic('startup-gate-waiting', { agent_id: agent.id, provider: agent.provider })
+        }
+        const intervalMs = slow ? STARTUP_GATE_SLOW_POLL_MS : STARTUP_READY_POLL_MS
+        driver.delay(() => waitForReadyThenSend(recent, waitedMs + intervalMs), intervalMs)
+        return
+      }
+      if (paneLooksReady(output, previousOutput) || waitedMs >= STARTUP_READY_TIMEOUT_MS) {
         sendStartupTask()
         return
       }

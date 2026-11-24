@@ -32,8 +32,7 @@ e de cada opção, está tudo no [guia online](https://reevesagents.mertkayacs.c
 - Node.js 22.12 ou mais recente.
 - tmux 3.0 ou mais recente.
 - Pelo menos uma CLI de fornecedor instalada e com sessão iniciada: Claude Code,
-  Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI,
-  Antigravity CLI,
+  Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Antigravity CLI,
   Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build,
   Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI,
   Cursor CLI ou Rovo Dev CLI.

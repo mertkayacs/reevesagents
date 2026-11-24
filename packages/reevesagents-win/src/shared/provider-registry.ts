@@ -74,7 +74,8 @@ export interface ProviderDef {
   // readyPattern: the idle input box; the task is sent only once it matches and no
   //   prompt is visible. Set it only when the footer is a reliable idle marker.
   // prompts: dialogs that must be answered first. With autoWhen 'skip' the key is
-  //   sent once when the run is launched with permissions 'skip'; otherwise the task
+  //   sent when the run is launched with permissions 'skip' (retried up to 3 times if the
+  //   dialog stays up); otherwise the task
   //   waits and the user answers the dialog in the pane.
   startup?: {
     readyPattern?: RegExp
