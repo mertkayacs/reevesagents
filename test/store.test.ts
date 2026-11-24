@@ -145,15 +145,16 @@ describe('store', () => {
         { nickname_template: 'copilot-w', provider: 'copilot', model: 'auto', auth_mode: 'default', effort: 'default', initial_prompt: 'copilot prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
         { nickname_template: 'cursor-w', provider: 'cursor', model: 'gpt-5', auth_mode: 'default', effort: 'default', initial_prompt: 'cursor prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
         { nickname_template: 'rovo-w', provider: 'rovo', model: '', auth_mode: 'default', effort: 'default', initial_prompt: 'rovo prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
+        { nickname_template: 'agy-w', provider: 'agy', model: 'gemini-3.5-flash', auth_mode: 'default', effort: 'default', initial_prompt: 'agy prompt', working_dir: '/tmp', permissions: 'skip', rc_enabled: false },
       ],
     })
     savePreset(tree)
     const loaded = loadPreset(testName)
-    expect(loaded?.workers).toHaveLength(25)
-    expect(loaded?.workers.map(w => w.provider)).toEqual(['cc', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider', 'gemini', 'cline', 'crush', 'goose', 'kilo', 'letta', 'vibe', 'grok', 'kiro', 'droid', 'qoder', 'warp', 'junie', 'copilot', 'cursor', 'rovo'])
-    expect(loaded?.workers.map(w => w.nickname_template)).toEqual(['claude-w', 'codex-w', 'opencode-w', 'hermes-w', 'kimi-w', 'deepseek-w', 'pi-w', 'qwen-w', 'aider-w', 'gemini-w', 'cline-w', 'crush-w', 'goose-w', 'kilo-w', 'letta-w', 'vibe-w', 'grok-w', 'kiro-w', 'droid-w', 'qoder-w', 'warp-w', 'junie-w', 'copilot-w', 'cursor-w', 'rovo-w'])
-    expect(loaded?.workers.map(w => w.initial_prompt)).toEqual(['cc prompt', 'codex prompt', 'opencode prompt', 'hermes prompt', 'kimi prompt', 'deepseek prompt', 'pi prompt', 'qwen prompt', 'aider prompt', 'gemini prompt', 'cline prompt', 'crush prompt', 'goose prompt', 'kilo prompt', 'letta prompt', 'vibe prompt', 'grok prompt', 'kiro prompt', 'droid prompt', 'qoder prompt', 'warp prompt', 'junie prompt', 'copilot prompt', 'cursor prompt', 'rovo prompt'])
-    expect(loaded?.workers.map(w => w.model)).toEqual(['sonnet', 'gpt-5', 'pro', 'haiku', 'kimi-code/kimi-for-coding', 'deepseek-coder:6.7b', 'sonnet', 'qwen3-coder-plus', 'deepseek/deepseek-chat', 'gemini-3.5-flash', 'anthropic/claude-sonnet-4-6', '', 'claude-sonnet-4-6', 'kilo/~anthropic/claude-sonnet-latest', 'zai-org/GLM-5.3-max', '', 'grok-4.6', 'claude-sonnet-4.6', 'gpt-6-sol', 'auto', '', 'sonnet', 'auto', 'gpt-5', ''])
+    expect(loaded?.workers).toHaveLength(26)
+    expect(loaded?.workers.map(w => w.provider)).toEqual(['cc', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider', 'gemini', 'cline', 'crush', 'goose', 'kilo', 'letta', 'vibe', 'grok', 'kiro', 'droid', 'qoder', 'warp', 'junie', 'copilot', 'cursor', 'rovo', 'agy'])
+    expect(loaded?.workers.map(w => w.nickname_template)).toEqual(['claude-w', 'codex-w', 'opencode-w', 'hermes-w', 'kimi-w', 'deepseek-w', 'pi-w', 'qwen-w', 'aider-w', 'gemini-w', 'cline-w', 'crush-w', 'goose-w', 'kilo-w', 'letta-w', 'vibe-w', 'grok-w', 'kiro-w', 'droid-w', 'qoder-w', 'warp-w', 'junie-w', 'copilot-w', 'cursor-w', 'rovo-w', 'agy-w'])
+    expect(loaded?.workers.map(w => w.initial_prompt)).toEqual(['cc prompt', 'codex prompt', 'opencode prompt', 'hermes prompt', 'kimi prompt', 'deepseek prompt', 'pi prompt', 'qwen prompt', 'aider prompt', 'gemini prompt', 'cline prompt', 'crush prompt', 'goose prompt', 'kilo prompt', 'letta prompt', 'vibe prompt', 'grok prompt', 'kiro prompt', 'droid prompt', 'qoder prompt', 'warp prompt', 'junie prompt', 'copilot prompt', 'cursor prompt', 'rovo prompt', 'agy prompt'])
+    expect(loaded?.workers.map(w => w.model)).toEqual(['sonnet', 'gpt-5', 'pro', 'haiku', 'kimi-code/kimi-for-coding', 'deepseek-coder:6.7b', 'sonnet', 'qwen3-coder-plus', 'deepseek/deepseek-chat', 'gemini-3.5-flash', 'anthropic/claude-sonnet-4-6', '', 'claude-sonnet-4-6', 'kilo/~anthropic/claude-sonnet-latest', 'zai-org/GLM-5.3-max', '', 'grok-4.6', 'claude-sonnet-4.6', 'gpt-6-sol', 'auto', '', 'sonnet', 'auto', 'gpt-5', '', 'gemini-3.5-flash'])
     // permissions/rc per-worker should not leak between slots
     expect(loaded?.workers[2]?.permissions).toBe('skip')
     expect(loaded?.workers[0]?.rc_enabled).toBe(true)

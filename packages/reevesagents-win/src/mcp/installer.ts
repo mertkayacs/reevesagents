@@ -102,6 +102,12 @@ const HOSTS: HostCli[] = [
     list: ['mcp', 'list'],
   },
   {
+    provider: 'agy',
+    add: cmd => ['mcp', 'add', SERVER_NAME, '--', cmd.command, ...cmd.args],
+    remove: ['mcp', 'remove', SERVER_NAME],
+    list: ['mcp', 'list'],
+  },
+  {
     provider: 'hermes',
     add: cmd => ['mcp', 'add', SERVER_NAME, '--command', cmd.command, '--args', ...cmd.args],
     remove: ['mcp', 'remove', SERVER_NAME],

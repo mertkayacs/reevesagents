@@ -11,9 +11,13 @@ import type { Provider } from '../../core/types.js'
 
 // Reverse of the BIN map (binary name -> Provider). Built once; first match wins
 // if two providers ever share a binary name, which they do not today.
-const PROVIDER_BY_BIN: Record<string, Provider> = Object.fromEntries(
-  (Object.entries(BIN) as [Provider, string][]).map(([provider, bin]) => [bin, provider]),
-)
+// agy's wrapper execs a process named `antigravity`, so that comm maps to agy too.
+const PROVIDER_BY_BIN: Record<string, Provider> = {
+  ...Object.fromEntries(
+    (Object.entries(BIN) as [Provider, string][]).map(([provider, bin]) => [bin, provider]),
+  ),
+  antigravity: 'agy',
+}
 
 // Map a parent process to a provider. claude/kimi/qwen are Node CLIs whose comm
 // is usually "node", so the comm lookup misses; fall back to the argv basenames

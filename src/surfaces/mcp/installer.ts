@@ -245,6 +245,12 @@ const HOSTS: HostCli[] = [
     list: ['mcp', 'list'],
   },
   {
+    provider: 'agy',
+    add: cmd => ['mcp', 'add', SERVER_NAME, '--', cmd.command, ...cmd.args],
+    remove: ['mcp', 'remove', SERVER_NAME],
+    list: ['mcp', 'list'],
+  },
+  {
     provider: 'hermes',
     // hermes takes --command and a variadic --args, so the entry path and `mcp`
     // both ride on one --args.

@@ -17,6 +17,11 @@ describe('providerFromParent', () => {
     expect(providerFromParent('codex', [])).toBe('codex')
   })
 
+  it('maps the antigravity process to the agy provider', () => {
+    expect(providerFromParent('antigravity', [])).toBe('agy')
+    expect(providerFromParent('antigravity', ['antigravity', '--model', 'x'])).toBe('agy')
+  })
+
   it('returns null for an unrelated shell', () => {
     expect(providerFromParent('bash', ['bash', '-c', 'x'])).toBeNull()
   })

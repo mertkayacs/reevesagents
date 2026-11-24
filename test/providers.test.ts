@@ -25,6 +25,8 @@ describe('providers', () => {
       expect(normalizeProvider('Claude Code')).toBe('cc')
       expect(normalizeProvider('codex-cli')).toBe('codex')
       expect(normalizeProvider('qwen-code')).toBe('qwen')
+      expect(normalizeProvider('antigravity')).toBe('agy')
+      expect(normalizeProvider('Google Antigravity')).toBe('agy')
       expect(normalizeProvider('not-real')).toBeNull()
     })
   })
@@ -152,6 +154,7 @@ describe('providers', () => {
       expect(buildCommand({ provider: 'copilot', permissions: 'ask', model: '' })[0]).toBe('copilot')
       expect(buildCommand({ provider: 'cursor', permissions: 'ask', model: '' })[0]).toBe('cursor-agent')
       expect(buildCommand({ provider: 'rovo', permissions: 'ask', model: '' })[0]).toBe('acli')
+      expect(buildCommand({ provider: 'agy', permissions: 'ask', model: '' })[0]).toBe('agy')
     })
 
     it('always returns an array for all providers', () => {
@@ -438,6 +441,7 @@ describe('providers', () => {
       expect(skip('copilot', 'auto')).toEqual(['copilot', '--allow-all', '--model', 'auto'])
       expect(skip('cursor', 'gpt-5')).toEqual(['cursor-agent', '--force', '--model', 'gpt-5'])
       expect(skip('rovo', 'auto')).toEqual(['acli', 'rovodev', 'run', '--yolo'])
+      expect(skip('agy', 'gemini-3.5-flash')).toEqual(['agy', '--dangerously-skip-permissions', '--effort', 'high', '--model', 'gemini-3.5-flash'])
     })
 
     it('ask permissions add no approval flag', () => {
@@ -452,10 +456,11 @@ describe('providers', () => {
       expect(ask('copilot')).toEqual(['copilot'])
       expect(ask('cursor')).toEqual(['cursor-agent'])
       expect(ask('rovo')).toEqual(['acli', 'rovodev', 'run'])
+      expect(ask('agy')).toEqual(['agy'])
     })
 
     it('never pass the task at launch', () => {
-      for (const provider of ['vibe', 'grok', 'kiro', 'droid', 'qoder', 'warp', 'junie', 'copilot', 'cursor', 'rovo'] as const) {
+      for (const provider of ['vibe', 'grok', 'kiro', 'droid', 'qoder', 'warp', 'junie', 'copilot', 'cursor', 'rovo', 'agy'] as const) {
         const cmd = buildCommand({ provider, permissions: 'skip', model: '' })
         for (const bad of ['-p', '--print', '--prompt', '-i', '--single', '--no-interactive', '--task']) {
           expect(cmd, `${provider} ${bad}`).not.toContain(bad)
@@ -529,6 +534,7 @@ describe('providers', () => {
       expect(helpCommand('copilot')).toEqual(['copilot', '--help'])
       expect(helpCommand('cursor')).toEqual(['cursor-agent', '--help'])
       expect(helpCommand('rovo')).toEqual(['acli', 'rovodev', 'run', '--help'])
+      expect(helpCommand('agy')).toEqual(['agy', '--help'])
     })
 
     it('detects missing opencode prompt and model support', () => {
@@ -603,6 +609,8 @@ describe('providers', () => {
       expect(missingHelpFeatures('cursor', 'usage: agent --model x --force')).toEqual([])
       expect(missingHelpFeatures('rovo', 'usage: acli rovodev run')).toEqual(['skip permissions'])
       expect(missingHelpFeatures('rovo', 'usage: acli rovodev run --yolo')).toEqual([])
+      expect(missingHelpFeatures('agy', 'usage: agy --model x')).toEqual(['skip permissions', 'reasoning effort'])
+      expect(missingHelpFeatures('agy', 'usage: agy --model x --dangerously-skip-permissions --effort')).toEqual([])
     })
   })
 })

@@ -163,7 +163,7 @@ function installFakeRuntimeBins(): void {
     '',
   ].join('\n'))
 
-  for (const bin of ['claude', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider', 'gemini', 'cline', 'crush', 'goose', 'kilo', 'letta', 'vibe', 'grok', 'kiro-cli', 'droid', 'qodercli', 'warp', 'junie', 'copilot', 'cursor-agent', 'acli']) {
+  for (const bin of ['claude', 'codex', 'opencode', 'hermes', 'kimi', 'deepseek', 'pi', 'qwen', 'aider', 'gemini', 'cline', 'crush', 'goose', 'kilo', 'letta', 'vibe', 'grok', 'kiro-cli', 'droid', 'qodercli', 'warp', 'junie', 'copilot', 'cursor-agent', 'acli', 'agy']) {
     writeExecutable(join(binDir, bin), [
       '#!/bin/sh',
       'if [ "$1" = "--help" ]; then echo "--model"; exit 0; fi',

@@ -346,4 +346,32 @@ describe('buildCommand: extended providers', () => {
       expect(buildCommand({ provider: 'rovo', permissions: 'ask', model: 'auto' })).toEqual(buildCommand({ provider: 'rovo', permissions: 'ask', model: '' }))
     })
   })
+
+  describe('agy', () => {
+    it('launch command starts with agy', () => {
+      expect(buildCommand({ provider: 'agy', permissions: 'ask', model: '' })).toEqual(['agy'])
+    })
+
+    it('forwards any model id via --model (no fixed list to validate against)', () => {
+      expect(buildCommand({ provider: 'agy', permissions: 'ask', model: 'gemini-3.5-flash' })).toEqual(['agy', '--model', 'gemini-3.5-flash'])
+      expect(buildCommand({ provider: 'agy', permissions: 'ask', model: 'Gemini 3.5 Flash' })).toEqual(['agy', '--model', 'Gemini 3.5 Flash'])
+    })
+
+    it('skip permissions uses --dangerously-skip-permissions, not --approval-mode', () => {
+      const cmd = buildCommand({ provider: 'agy', permissions: 'skip', model: '' })
+      expect(cmd).toEqual(['agy', '--dangerously-skip-permissions'])
+      expect(cmd).not.toContain('--approval-mode')
+    })
+
+    it('effort maps to --effort and default adds nothing', () => {
+      expect(buildCommand({ provider: 'agy', permissions: 'ask', model: '', effort: 'max' })).toEqual(['agy', '--effort', 'max'])
+      expect(buildCommand({ provider: 'agy', permissions: 'ask', model: '', effort: 'default' })).toEqual(['agy'])
+    })
+
+    it('stays on the interactive TUI: no print or input flags', () => {
+      const cmd = buildCommand({ provider: 'agy', permissions: 'skip', model: 'x', effort: 'high' })
+      expect(cmd).not.toContain('-p')
+      expect(cmd).not.toContain('-i')
+    })
+  })
 })

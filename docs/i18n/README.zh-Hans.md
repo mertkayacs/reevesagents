@@ -29,6 +29,7 @@
 </p>
 <p align="center">
   <img src="../assets/providers/gemini.svg" width="40" height="40" alt="Gemini CLI" title="Gemini CLI">
+  <img src="../assets/providers/agy.svg" width="40" height="40" alt="Antigravity CLI" title="Antigravity CLI">
   <img src="../assets/providers/cline.svg" width="40" height="40" alt="Cline CLI" title="Cline CLI">
   <img src="../assets/providers/crush.svg" width="40" height="40" alt="Crush" title="Crush">
   <img src="../assets/providers/goose.svg" width="40" height="40" alt="Goose" title="Goose">
@@ -56,7 +57,7 @@
 
 [English](../../README.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [Русский](README.ru.md) · **简体中文** · [العربية](README.ar.md)
 
-ReevesAgents 是一个面向 AI 编码 CLI 的本地工作区。它把 Claude Code、Codex、OpenCode、Hermes、Kimi、DeepSeek、Qwen、Pi、Aider、Gemini CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI、Rovo Dev CLI 等提供方 CLI 并排放在 tmux 里运行。你可以把它当作普通的 CLI、TUI 或 Web UI 来用，也可以附加它那个需要手动开启的 MCP，让一个智能体去生成、读取、操控和停止其余的智能体。
+ReevesAgents 是一个面向 AI 编码 CLI 的本地工作区。它把 Claude Code、Codex、OpenCode、Hermes、Kimi、DeepSeek、Qwen、Pi、Aider、Gemini CLI、Antigravity CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI、Rovo Dev CLI 等提供方 CLI 并排放在 tmux 里运行。你可以把它当作普通的 CLI、TUI 或 Web UI 来用，也可以附加它那个需要手动开启的 MCP，让一个智能体去生成、读取、操控和停止其余的智能体。
 
 提供方的登录始终留在各自的 CLI 里。ReevesAgents 把自己的状态存成 `~/.reeves` 下几个普通的 JSON 文件，只在你或已附加的 CLI 使用它时运行。
 

@@ -17,7 +17,11 @@ describe('model catalog', () => {
     for (const provider of PROVIDERS) {
       const values = modelValuesForProvider(provider)
       expect(values[0]).toBe('')
-      if ((NO_LAUNCH_MODEL_FLAG as readonly string[]).includes(provider)) {
+      if (provider === 'agy') {
+        // agy has no fixed list: ids are discovered with `agy models` and forwarded via --model.
+        expect(values).toEqual([''])
+        expect(modelSourceForProvider(provider)).toMatch(/agy models/)
+      } else if ((NO_LAUNCH_MODEL_FLAG as readonly string[]).includes(provider)) {
         expect(values).toEqual([''])
         expect(modelSourceForProvider(provider)).toMatch(/no model flag$/)
       } else {
@@ -53,6 +57,7 @@ describe('model catalog', () => {
     expect(MODEL_CATALOG.copilot.models).toEqual(['auto', 'gpt-5.4', 'claude-opus-4.8'])
     expect(MODEL_CATALOG.cursor.models).toEqual(['gpt-5', 'sonnet-4-thinking', 'claude-opus-4-8'])
     expect(MODEL_CATALOG.rovo.models).toEqual([])
+    expect(MODEL_CATALOG.agy.models).toEqual([])
   })
 
   it('renders an empty model as the provider default label', () => {

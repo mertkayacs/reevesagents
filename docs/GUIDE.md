@@ -9,7 +9,7 @@ that lives in the [online user guide](https://reevesagents.mertkayacs.com/docs/)
 ## What ReevesAgents is
 
 - A free, local workspace where your AI coding agents (Claude Code, Codex,
-  Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code,
+  Hermes, DeepSeek, Kimi, Gemini CLI, Antigravity CLI, Cline CLI, Crush, Goose, Kilo Code,
   Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI,
   Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI, and more) work
   side by side on your machine.
@@ -30,7 +30,7 @@ that lives in the [online user guide](https://reevesagents.mertkayacs.com/docs/)
 - Node.js 22.12 or newer.
 - tmux 3.0 or newer (not needed on native Windows; winmux ships with reevesagents).
 - At least one provider CLI installed and logged in: Claude Code, Codex,
-  OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Cline CLI,
+  OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Antigravity CLI, Cline CLI,
   Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
   Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, or
   Rovo Dev CLI.
@@ -117,7 +117,7 @@ A worked example: attach to Claude Code, restart it, and from inside one Claude
 Code session you can spawn a Codex agent on one issue and a second Claude Code
 agent on another, then watch and steer both.
 
-- CLIs that can host this today: cc (Claude Code), codex, kimi, qwen, opencode, hermes.
+- CLIs that can host this today: cc (Claude Code), codex, kimi, qwen, opencode, hermes, agy.
   OpenCode is attached by hand, since its own add step is interactive.
 - Workers do not get these tools by default, so a worker cannot spawn more
   agents. To let a worker drive its own sub-agents, attach the MCP to that

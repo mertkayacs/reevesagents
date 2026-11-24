@@ -9,14 +9,14 @@
 
 <p align="center">
   Open-source workspace that runs AI coding CLIs side by side on your machine.<br>
-  <b>25 CLIs, each in its own tmux window. One of them can drive the rest over MCP.</b>
+  <b>26 CLIs, each in its own tmux window. One of them can drive the rest over MCP.</b>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/reevesagents"><img alt="npm version" src="https://img.shields.io/npm/v/reevesagents?style=flat-square&logo=npm&label=npm&color=006D77"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-3b82f6?style=flat-square"></a>
   <img alt="Node.js 22.12 or newer and tmux" src="https://img.shields.io/badge/Node.js%2022.12%2B%20and%20tmux-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white">
-  <img alt="25 supported coding CLIs" src="https://img.shields.io/badge/CLIs-25%20supported-1A202C?style=flat-square">
+  <img alt="26 supported coding CLIs" src="https://img.shields.io/badge/CLIs-26%20supported-1A202C?style=flat-square">
   <a href="https://github.com/mertkayacs/reevesagents"><img alt="GitHub stars" src="https://img.shields.io/github/stars/mertkayacs/reevesagents?style=flat-square&logo=github&color=8A6D3B"></a>
 </p>
 
@@ -36,7 +36,7 @@
   </picture>
 </p>
 
-ReevesAgents is a free, open-source workspace for AI coding agents. It runs Claude Code, Codex, Kimi, OpenCode, Gemini CLI and 20 other coding CLIs side by side, each in its own tmux window, and gives you a terminal UI, a browser UI and a scriptable CLI over the same runs. Attach its MCP server to one CLI and that agent can spawn, read, steer and stop the others. Every CLI keeps its own login, and ReevesAgents keeps its state in a few JSON files under `~/.reeves`.
+ReevesAgents is a free, open-source workspace for AI coding agents. It runs Claude Code, Codex, Kimi, OpenCode, Gemini CLI, Antigravity CLI and 20 other coding CLIs side by side, each in its own tmux window, and gives you a terminal UI, a browser UI and a scriptable CLI over the same runs. Attach its MCP server to one CLI and that agent can spawn, read, steer and stop the others. Every CLI keeps its own login, and ReevesAgents keeps its state in a few JSON files under `~/.reeves`.
 
 ---
 
@@ -46,7 +46,7 @@ You already use these CLIs, and you are already signed in to them. ReevesAgents 
 
 |  |  |
 |---|---|
-| <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/icons/layers.svg" width="18" height="18" alt=""> **25 CLIs, one workspace** | Claude Code, Codex, Kimi, OpenCode, Hermes, Gemini CLI and [19 more](#supported-clis) start from one command. Each runs as the real CLI in its own tmux window, so agents keep running after you close the UI. |
+| <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/icons/layers.svg" width="18" height="18" alt=""> **26 CLIs, one workspace** | Claude Code, Codex, Kimi, OpenCode, Hermes, Gemini CLI, Antigravity CLI and [19 more](#supported-clis) start from one command. Each runs as the real CLI in its own tmux window, so agents keep running after you close the UI. |
 | <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/icons/network.svg" width="18" height="18" alt=""> **One agent drives the rest** | `reevesagents attach cc` gives Claude Code the MCP tools to spawn, read, steer and stop other agents. Codex, Kimi Code, Qwen Code, Hermes and OpenCode can host it too, and it stays off until you attach it ([details](docs/mcp.md)). |
 | <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/icons/key-round.svg" width="18" height="18" alt=""> **Your logins stay put** | Each CLI signs in the way it always does. ReevesAgents stores no API keys, adds no proxy, and redacts token-like text in tasks, notes and approvals before it writes state. |
 | <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/icons/app-window.svg" width="18" height="18" alt=""> **Four ways in** | A terminal UI, a Web UI with a live pane per agent, a CLI with `--json` output for scripts, and the MCP. All four read and write the same runs. |
@@ -75,7 +75,7 @@ You already use these CLIs, and you are already signed in to them. ReevesAgents 
         <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/new-run-light.webp" alt="The New run dialog with a run name field and a grid of coding CLIs with their install state">
       </picture>
       <h3>Start a run from the browser</h3>
-      Choose one of the 25 CLIs, a model and a permission mode. CLIs that are not installed are marked.
+      Choose one of the 26 CLIs, a model and a permission mode. CLIs that are not installed are marked.
     </td>
   </tr>
   <tr>
@@ -85,7 +85,7 @@ You already use these CLIs, and you are already signed in to them. ReevesAgents 
         <img src="https://raw.githubusercontent.com/mertkayacs/reevesagents/master/docs/assets/readme/agent-control-light.webp" alt="The Agent control dialog listing six host CLIs, with Claude Code, Codex and OpenCode attached">
       </picture>
       <h3>Let one agent drive the rest</h3>
-      Attach the MCP to Claude Code, Codex, Kimi Code, Qwen Code, Hermes or OpenCode, then restart that CLI to load the tools.
+      Attach the MCP to Claude Code, Codex, Kimi Code, Qwen Code, Hermes, OpenCode or Antigravity CLI, then restart that CLI to load the tools.
     </td>
     <td width="50%" valign="top">
       <picture>
@@ -98,7 +98,7 @@ You already use these CLIs, and you are already signed in to them. ReevesAgents 
   </tr>
 </table>
 
-<p align="center"><sub>The Web UI screenshots show a demo run of four Kilo Code agents on a sample repository. Any of the 25 CLIs works the same way.</sub></p>
+<p align="center"><sub>The Web UI screenshots show a demo run of four Kilo Code agents on a sample repository. Any of the 26 CLIs works the same way.</sub></p>
 
 ## Features
 
@@ -121,7 +121,7 @@ You already use these CLIs, and you are already signed in to them. ReevesAgents 
 
 **Agent Control (MCP)**
 
-- `reevesagents attach` connects every installed host CLI, or one by its id: `cc`, `codex`, `kimi`, `qwen`, `hermes` or `opencode`. `hosts` shows the state and `detach <id>` removes it.
+- `reevesagents attach` connects every installed host CLI, or one by its id: `cc`, `codex`, `kimi`, `qwen`, `hermes`, `opencode` or `agy`. `hosts` shows the state and `detach <id>` removes it.
 - The host gets tools to spawn agents, read their output, send text and keys, interrupt, stop, and handle approvals and presets. Workers get none of them unless you attach their CLI too.
 - A Claude Code plugin ships in this repository, and the server is listed in the official MCP Registry as io.github.mertkayacs/reevesagents.
 
@@ -204,6 +204,7 @@ Use the id in a spawn spec such as `codex:tests`. Aliases like `claude` work the
 | Qwen Code | `qwen` | yes |
 | Aider | `aider` |  |
 | Gemini CLI | `gemini` |  |
+| Antigravity CLI | `agy` | yes |
 | Cline CLI | `cline` |  |
 | Crush | `crush` |  |
 | Goose | `goose` |  |
@@ -219,6 +220,8 @@ Use the id in a spawn spec such as `codex:tests`. Aliases like `claude` work the
 | GitHub Copilot CLI | `copilot` |  |
 | Cursor CLI | `cursor` |  |
 | Rovo Dev CLI | `rovo` |  |
+
+<sub>Antigravity CLI (`agy`) is the successor to Gemini CLI, and `gemini` is being superseded by it; `gemini` stays supported for now. Antigravity has no fixed model list: `reevesagents providers` and `agy models` discover the models at run time, and any id you pick is passed to `agy` with `--model`.</sub>
 
 <sub>The binary on your PATH matches the id, except `claude` (cc), `kiro-cli` (kiro), `qodercli` (qoder), `cursor-agent` (cursor) and `acli` (rovo). `reevesagents providers` shows which of them it finds, with their aliases and suggested models.</sub>
 

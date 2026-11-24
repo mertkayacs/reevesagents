@@ -73,6 +73,17 @@ describe('win installer', () => {
     expect(argv).not.toContain('--')
   })
 
+  it('uses the -- separator and no scope for agy (Antigravity CLI)', async () => {
+    wireEnv({ installed: new Set(['agy']), listOutput: {} })
+    const { attach } = await loadInstaller()
+    expect(attach('agy').ok).toBe(true)
+    const argv = execFileSync.mock.calls.find(c => c[0] === 'agy' && c[1]?.[1] === 'add')![1]
+    expect(argv.slice(0, 3)).toEqual(['mcp', 'add', 'reevesagents-win'])
+    expect(argv).toContain('--')
+    expect(argv).not.toContain('-s')
+    expect(argv[argv.length - 1]).toBe('mcp')
+  })
+
   it('uses --command / --args for hermes', async () => {
     wireEnv({ installed: new Set(['hermes']), listOutput: {} })
     const { attach } = await loadInstaller()

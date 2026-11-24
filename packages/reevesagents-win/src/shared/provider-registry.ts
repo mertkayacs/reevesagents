@@ -17,6 +17,7 @@ import {
   QWEN_MODELS, QWEN_MODEL_SOURCE,
   AIDER_MODELS, AIDER_MODEL_SOURCE,
   GEMINI_MODELS, GEMINI_MODEL_SOURCE,
+  AGY_MODELS, AGY_MODEL_SOURCE,
   CLINE_MODELS, CLINE_MODEL_SOURCE,
   CRUSH_MODELS, CRUSH_MODEL_SOURCE,
   GOOSE_MODELS, GOOSE_MODEL_SOURCE,
@@ -294,6 +295,29 @@ export const PROVIDER_REGISTRY: Record<Provider, ProviderDef> = {
     buildArgs: ({ permissions, model }) => {
       const args: string[] = []
       if (permissions === 'skip') args.push('--approval-mode', 'yolo')
+      if (model) args.push('--model', model)
+      return args
+    },
+  },
+  agy: {
+    id: 'agy',
+    bin: 'agy',
+    displayName: 'Antigravity CLI',
+    color: '#4285f4', // Google blue
+    aliases: ['agy', 'antigravity', 'antigravity cli', 'antigravity-cli', 'google antigravity'],
+    models: AGY_MODELS,
+    modelSource: AGY_MODEL_SOURCE,
+    helpRequirements: [
+      { feature: 'model selection', tokens: ['--model'] },
+      { feature: 'skip permissions', tokens: ['--dangerously-skip-permissions'] },
+      { feature: 'reasoning effort', tokens: ['--effort'] },
+    ],
+    supportsEffort: true,
+    buildArgs: ({ permissions, model, effort }) => {
+      // Interactive TUI launch. The task is pasted after readiness, like other providers.
+      const args: string[] = []
+      if (permissions === 'skip') args.push('--dangerously-skip-permissions')
+      if (effort !== 'default') args.push('--effort', effort)
       if (model) args.push('--model', model)
       return args
     },

@@ -102,6 +102,7 @@ machine). N'importe quel alias peut tenir lieu de fournisseur dans un spec de
 | `aider`    | Aider              |                                                |
 | `deepseek` | DeepSeek CLI       | `deepseek-cli`                                 |
 | `gemini`   | Gemini CLI         | `gemini cli`, `gemini-cli`                     |
+| `agy`      | Antigravity CLI    | `antigravity`, `antigravity cli`, `antigravity-cli`, `google antigravity` |
 | `cline`    | Cline CLI          | `cline cli`, `cline-cli`                       |
 | `crush`    | Crush              | `charm crush`, `charm-crush`                   |
 | `goose`    | Goose              |                                                |

@@ -29,6 +29,7 @@
 </p>
 <p align="center">
   <img src="../assets/providers/gemini.svg" width="40" height="40" alt="Gemini CLI" title="Gemini CLI">
+  <img src="../assets/providers/agy.svg" width="40" height="40" alt="Antigravity CLI" title="Antigravity CLI">
   <img src="../assets/providers/cline.svg" width="40" height="40" alt="Cline CLI" title="Cline CLI">
   <img src="../assets/providers/crush.svg" width="40" height="40" alt="Crush" title="Crush">
   <img src="../assets/providers/goose.svg" width="40" height="40" alt="Goose" title="Goose">
@@ -58,7 +59,7 @@
 
 ReevesAgents è uno spazio di lavoro locale per le CLI di coding AI. Fa girare
 Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Qwen, Pi, Aider,
-Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe,
+Gemini CLI, Antigravity CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe,
 Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI,
 GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI e altre CLI di provider fianco a
 fianco in tmux. Puoi usarlo come una normale CLI/TUI/Web UI, oppure collegare il

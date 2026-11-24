@@ -9,7 +9,7 @@ commande et chaque option, tout est recensé dans le [guide en ligne](https://re
 ## Qu'est-ce que ReevesAgents
 
 - Un espace de travail libre et local où vos agents de programmation d'IA
-  (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI, Crush,
+  (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Antigravity CLI, Cline CLI, Crush,
   Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
   Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
   Rovo Dev CLI et d'autres) travaillent côte à côte sur votre machine.
@@ -34,6 +34,7 @@ commande et chaque option, tout est recensé dans le [guide en ligne](https://re
 - tmux 3.0 ou plus récent.
 - Au moins une CLI de fournisseur installée et authentifiée : Claude Code,
   Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI,
+  Antigravity CLI,
   Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build,
   Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI,
   Cursor CLI ou Rovo Dev CLI.
@@ -131,7 +132,7 @@ session Claude Code vous pouvez lancer un agent Codex sur une issue et un second
 agent Claude Code sur une autre, puis observer et diriger les deux.
 
 - Les CLI qui peuvent héberger cela aujourd'hui : claude, codex, kimi, qwen,
-  opencode, hermes. OpenCode s'attache à la main, car son étape d'ajout est
+  opencode, hermes, agy. OpenCode s'attache à la main, car son étape d'ajout est
   interactive.
 - Les workers ne reçoivent pas ces outils par défaut ; un worker ne peut donc pas
   lancer d'autres agents. Pour qu'un worker pilote ses propres sous-agents,
