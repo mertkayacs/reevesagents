@@ -252,7 +252,7 @@ export function registerSpawn(program: Command): void {
 Agent spec: provider[:nickname[:model]]  (nickname and model are optional)
   The first agent leads the run; the rest join it as workers.
   Provider ids and aliases come from "reevesagents providers"
-  (e.g. cc or claude, codex, kimi, qwen, opencode, hermes, pi, aider).
+  (e.g. cc or claude, codex, kimi, qwen, opencode, hermes, pi, aider, agy).
 
 Example: a Claude Code lead with two Codex and one Kimi worker
   reevesagents spawn cc:lead cc:review codex:api codex:tests kimi:docs \\
