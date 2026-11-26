@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.0](https://github.com/mertkayacs/reevesagents/compare/v2.3.0...v2.4.0) (2026-11-26)
+
+
+### Features
+
+* **providers:** add Google Antigravity CLI (agy) provider and MCP host ([#217](https://github.com/mertkayacs/reevesagents/issues/217)) ([abeede6](https://github.com/mertkayacs/reevesagents/commit/abeede67a361a1feb83d66b17b3469063337c439))
+
 ## [2.3.0](https://github.com/mertkayacs/reevesagents/compare/v2.2.1...v2.3.0) (2026-11-16)
 
 
