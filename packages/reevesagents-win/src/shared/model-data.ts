@@ -79,6 +79,11 @@ export const GEMINI_MODELS = [
   'gemini-3.1-flash-lite',
 ] as const
 
+// agy has no fixed list: pick any id printed by `agy models`; whatever id is given
+// is forwarded verbatim via --model.
+export const AGY_MODEL_SOURCE = 'no fixed list; pick any id from `agy models`, forwarded via --model'
+export const AGY_MODELS = [] as const
+
 export const CLINE_MODEL_SOURCE = 'curated Cline CLI model ids'
 export const CLINE_MODELS = [
   'anthropic/claude-sonnet-4-6',

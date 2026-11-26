@@ -277,7 +277,7 @@ const TOOLS: ToolDef[] = [
       type: 'object',
       properties: {
         run_id: { type: 'string', description: 'Add to this run. Omit to start a new run.' },
-        provider: { type: 'string', description: 'Provider key, e.g. cc, codex, kimi, qwen, opencode, hermes.' },
+        provider: { type: 'string', description: 'Provider key, e.g. cc, codex, kimi, qwen, opencode, hermes, agy.' },
         model: { type: 'string', description: 'Model id. Blank keeps the provider default.' },
         task: { type: 'string', description: 'Initial prompt pasted into the agent on startup.' },
         nickname: { type: 'string' },
@@ -677,7 +677,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'install_skills',
-    description: 'Install the reevesagents Agent Skill so skill-aware CLIs (Claude Code, Codex, Kimi, OpenCode) learn to drive reevesagents on their own. Writes one SKILL.md to the two shared skill directories under the home dir. Pass no arguments; call with status omitted to install, or read the returned rows to see where it landed. The user must restart their CLIs to pick it up.',
+    description: 'Install the reevesagents Agent Skill so skill-aware CLIs (Claude Code, Codex, Kimi, OpenCode, Antigravity) learn to drive reevesagents on their own. Writes one SKILL.md to each of the three shared skill directories under the home dir. Pass no arguments; call with status omitted to install, or read the returned rows to see where it landed. The user must restart their CLIs to pick it up.',
     inputSchema: {
       type: 'object',
       properties: {

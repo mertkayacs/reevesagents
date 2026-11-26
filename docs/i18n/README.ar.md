@@ -29,6 +29,7 @@
 </p>
 <p align="center">
   <img src="../assets/providers/gemini.svg" width="40" height="40" alt="Gemini CLI" title="Gemini CLI">
+  <img src="../assets/providers/agy.svg" width="40" height="40" alt="Antigravity CLI" title="Antigravity CLI">
   <img src="../assets/providers/cline.svg" width="40" height="40" alt="Cline CLI" title="Cline CLI">
   <img src="../assets/providers/crush.svg" width="40" height="40" alt="Crush" title="Crush">
   <img src="../assets/providers/goose.svg" width="40" height="40" alt="Goose" title="Goose">
@@ -58,7 +59,7 @@
 
 ReevesAgents مساحة عمل محلية لأدوات CLI للبرمجة بالذكاء الاصطناعي. يشغّل
 Claude Code وCodex وOpenCode وHermes وKimi وDeepSeek وQwen وPi وAider
-وGemini CLI وCline CLI وCrush وGoose وKilo Code وLetta Code وMistral Vibe
+وGemini CLI وAntigravity CLI وCline CLI وCrush وGoose وKilo Code وLetta Code وMistral Vibe
 وGrok Build وKiro CLI وFactory Droid وQoder CLI وWarp وJunie CLI
 وGitHub Copilot CLI وCursor CLI وRovo Dev CLI وغيرها من أدوات CLI للمزوّدين
 جنبًا إلى جنب داخل tmux. تستطيع استخدامه أداة CLI/TUI/Web UI عادية، أو ربط خادم

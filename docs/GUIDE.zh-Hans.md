@@ -6,7 +6,7 @@
 
 ## ReevesAgents 是什么
 
-- 一个免费的本地工作区，你的 AI 编码智能体（Claude Code、Codex、Hermes、DeepSeek、Kimi、Gemini CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI、Rovo Dev CLI 等）在你的机器上并肩干活。
+- 一个免费的本地工作区，你的 AI 编码智能体（Claude Code、Codex、Hermes、DeepSeek、Kimi、Gemini CLI、Antigravity CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI、Rovo Dev CLI 等）在你的机器上并肩干活。
 - 一个智能体可以通过 MCP 创建并驱动其他智能体。例如，一个 Claude Code 会话可以让 Codex 和 Claude Code 智能体分别处理不同任务。
 - 你也可以把 ReevesAgents 当成普通工作区：生成你想要的智能体，再用 `reevesagents add` 不断往里加。它们并排运行，谁也不控制谁，直到你主动开启 MCP。
 - 它架在你已有的 CLI 之上，所以每一份登录信息都待在原来的地方。ReevesAgents 从不持有 API 密钥，也从不碰你的模型流量。
@@ -17,7 +17,7 @@
 - macOS、Linux 或 WSL（原生 Windows 不是目标；请使用 WSL）。
 - Node.js 22.12 或更新版本。
 - tmux 3.0 或更新版本。
-- 至少一个已安装并登录的提供方 CLI：Claude Code、Codex、OpenCode、Hermes、Kimi、DeepSeek、Pi、Qwen、Aider、Gemini CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI 或 Rovo Dev CLI。
+- 至少一个已安装并登录的提供方 CLI：Claude Code、Codex、OpenCode、Hermes、Kimi、DeepSeek、Pi、Qwen、Aider、Gemini CLI、Antigravity CLI、Cline CLI、Crush、Goose、Kilo Code、Letta Code、Mistral Vibe、Grok Build、Kiro CLI、Factory Droid、Qoder CLI、Warp、Junie CLI、GitHub Copilot CLI、Cursor CLI 或 Rovo Dev CLI。
 
 ## 工具
 
@@ -75,7 +75,7 @@ reevesagents add codex:worker
 
 举个完整的例子：附加到 Claude Code，重启，然后在这一个 Claude Code 会话里生成一个 Codex 智能体去处理某个议题，再生成第二个 Claude Code 智能体处理另一个，接着就可以同时观察和调度它们俩。
 
-- 目前能托管它的 CLI：claude、codex、kimi、qwen、opencode、hermes。OpenCode 要手动附加，因为它自己的添加步骤是交互式的。
+- 目前能托管它的 CLI：claude、codex、kimi、qwen、opencode、hermes、agy。OpenCode 要手动附加，因为它自己的添加步骤是交互式的。
 - 工作者默认拿不到这些工具，所以工作者没法再生成智能体。想让某个工作者驱动自己的子智能体，把 MCP 也附加到那个工作者的 CLI 上。
 - 以后想断开：`reevesagents detach cc`。
 

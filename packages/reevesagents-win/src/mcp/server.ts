@@ -175,7 +175,7 @@ const TOOLS: ToolDef[] = [
       type: 'object',
       properties: {
         run_id: { type: 'string', description: 'Add to this run. Omit to start a new run.' },
-        provider: { type: 'string', description: 'Provider key, e.g. cc, codex, kimi, qwen, opencode, hermes.' },
+        provider: { type: 'string', description: 'Provider key, e.g. cc, codex, kimi, qwen, opencode, hermes, agy.' },
         model: { type: 'string', description: 'Model id. Blank keeps the provider default.' },
         task: { type: 'string', description: 'Initial prompt pasted into the agent on startup.' },
         nickname: { type: 'string' },

@@ -74,7 +74,7 @@ describe('onboarding state', () => {
 
     expect(result.attached).toEqual([])
     expect(result.verify).toBeNull()
-    expect(result.skills.length).toBe(2)
+    expect(result.skills.length).toBe(3)
     expect(result.skills.every(skill => skill.ok)).toBe(true)
 
     const { skillsStatus } = await import('../src/core/skills.js')

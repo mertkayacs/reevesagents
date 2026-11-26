@@ -30,6 +30,7 @@ const CONFIG_PATHS = {
   qwen: '~/.qwen/settings.json',
   aider: '~/.aider.conf.yml',
   gemini: '~/.gemini/settings.json',
+  agy: '~/.gemini/antigravity-cli/settings.json',
   cline: '~/.cline',
   crush: '~/.config/crush',
   goose: '~/.config/goose/config.yaml',

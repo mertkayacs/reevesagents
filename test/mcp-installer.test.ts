@@ -224,6 +224,18 @@ describe('mcp installer', () => {
       expect(argv[argv.length - 1]).toBe('mcp')
     })
 
+    it('uses the -- separator and no scope flag for agy (Antigravity CLI)', async () => {
+      wireEnv({ installed: new Set(['agy']), listOutput: {} })
+      const { attach } = await loadInstaller()
+
+      expect(attach('agy').ok).toBe(true)
+      const argv = addArgv('agy')
+      expect(argv.slice(0, 3)).toEqual(['mcp', 'add', 'reevesagents'])
+      expect(argv).toContain('--')
+      expect(argv).not.toContain('-s')
+      expect(argv[argv.length - 1]).toBe('mcp')
+    })
+
     it('uses --command / --args for hermes', async () => {
       wireEnv({ installed: new Set(['hermes']), listOutput: {} })
       const { attach } = await loadInstaller()

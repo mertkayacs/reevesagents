@@ -9,7 +9,7 @@ e de cada opção, está tudo no [guia online](https://reevesagents.mertkayacs.c
 ## O que é o ReevesAgents
 
 - Um espaço de trabalho livre e local onde os seus agentes de código de IA
-  (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI, Crush,
+  (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Antigravity CLI, Cline CLI, Crush,
   Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
   Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
   Rovo Dev CLI e outros) trabalham lado a lado na sua máquina.
@@ -32,7 +32,7 @@ e de cada opção, está tudo no [guia online](https://reevesagents.mertkayacs.c
 - Node.js 22.12 ou mais recente.
 - tmux 3.0 ou mais recente.
 - Pelo menos uma CLI de fornecedor instalada e com sessão iniciada: Claude Code,
-  Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI,
+  Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Antigravity CLI,
   Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build,
   Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI,
   Cursor CLI ou Rovo Dev CLI.
@@ -124,7 +124,7 @@ dentro de uma sessão Claude Code, consegue criar um agente Codex numa issue e
 um segundo agente Claude Code noutra, e depois observar e orientar ambos.
 
 - As CLIs que hoje conseguem alojar isto: claude, codex, kimi, qwen, opencode,
-  hermes. O OpenCode liga-se à mão, porque o passo de adição dele é interativo.
+  hermes, agy. O OpenCode liga-se à mão, porque o passo de adição dele é interativo.
 - Os trabalhadores não recebem estas ferramentas por defeito, por isso um
   trabalhador não consegue criar mais agentes. Para deixar um trabalhador
   conduzir os seus próprios subagentes, ligue o MCP também à CLI desse

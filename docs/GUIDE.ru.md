@@ -9,7 +9,7 @@
 ## Что такое ReevesAgents
 
 - Бесплатное локальное рабочее пространство, где ваши AI-агенты для работы с
-  кодом (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI,
+  кодом (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Antigravity CLI, Cline CLI,
   Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI,
   Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI,
   Rovo Dev CLI и другие) работают бок о бок на вашей машине.
@@ -32,7 +32,7 @@
 - tmux версии 3.0 или новее.
 - Хотя бы один провайдерский CLI, установленный и с выполненным входом:
   Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider,
-  Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe,
+  Gemini CLI, Antigravity CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe,
   Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI,
   GitHub Copilot CLI, Cursor CLI или Rovo Dev CLI.
 
@@ -128,7 +128,7 @@ reevesagents add codex:worker
 агента Claude Code на другую, а затем наблюдать за обоими и направлять их.
 
 - CLI, которые сегодня могут размещать эти инструменты: claude, codex, kimi,
-  qwen, opencode, hermes. OpenCode подключается вручную, так как его собственный
+  qwen, opencode, hermes, agy. OpenCode подключается вручную, так как его собственный
   шаг добавления интерактивен.
 - Исполнители по умолчанию эти инструменты не получают, так что породить новых
   агентов исполнитель не может. Если хотите, чтобы он вёл собственных

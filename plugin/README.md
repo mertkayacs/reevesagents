@@ -1,6 +1,6 @@
 # reevesagents plugin for Claude Code
 
-This plugin lets Claude Code run and steer other AI coding tools: Claude Code, Codex, Kimi, Qwen, OpenCode, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI and any other CLI that reevesagents supports. Each tool runs in its own tmux window. Claude can start them with a task, read their output, send follow-up instructions and stop them.
+This plugin lets Claude Code run and steer other AI coding tools: Claude Code, Codex, Kimi, Qwen, OpenCode, Gemini CLI, Antigravity CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI and any other CLI that reevesagents supports. Each tool runs in its own tmux window. Claude can start them with a task, read their output, send follow-up instructions and stop them.
 
 The plugin contains two parts:
 

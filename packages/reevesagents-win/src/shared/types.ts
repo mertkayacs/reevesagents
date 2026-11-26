@@ -1,7 +1,7 @@
 // Core type definitions for agent-run state, presets, and config.
 // TUI routing types (ScreenName, RouterContextValue) live in tui/types.ts.
 
-export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes' | 'kimi' | 'deepseek' | 'pi' | 'qwen' | 'aider' | 'gemini' | 'cline' | 'crush' | 'goose' | 'kilo' | 'letta' | 'vibe' | 'grok' | 'kiro' | 'droid' | 'qoder' | 'warp' | 'junie' | 'copilot' | 'cursor' | 'rovo'
+export type Provider = 'cc' | 'codex' | 'opencode' | 'hermes' | 'kimi' | 'deepseek' | 'pi' | 'qwen' | 'aider' | 'gemini' | 'cline' | 'crush' | 'goose' | 'kilo' | 'letta' | 'vibe' | 'grok' | 'kiro' | 'droid' | 'qoder' | 'warp' | 'junie' | 'copilot' | 'cursor' | 'rovo' | 'agy'
 
 export type LanguageCode = 'en' | 'de' | 'fr' | 'es' | 'pt' | 'it' | 'tr' | 'ru' | 'zh-Hans' | 'ar'
 

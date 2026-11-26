@@ -6,7 +6,7 @@ Questa guida ti porta da un'installazione pulita fino al punto in cui è un agen
 
 ## Cos'è ReevesAgents
 
-- Uno spazio di lavoro gratuito e locale dove i tuoi agenti di codifica IA (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI e altri) lavorano fianco a fianco sulla tua macchina.
+- Uno spazio di lavoro gratuito e locale dove i tuoi agenti di codifica IA (Claude Code, Codex, Hermes, DeepSeek, Kimi, Gemini CLI, Antigravity CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI, Rovo Dev CLI e altri) lavorano fianco a fianco sulla tua macchina.
 - Un agente può creare e guidare gli altri tramite MCP. Per esempio, una sessione Claude Code può far lavorare agenti Codex e Claude Code su compiti separati.
 - Puoi anche usare ReevesAgents come un normale spazio di lavoro: genera gli agenti che vuoi e continua ad aggiungerne altri con `reevesagents add`. Restano fianco a fianco, e nessuno guida nessuno finché non colleghi l'MCP.
 - Si appoggia alle CLI che hai già, quindi ogni login resta esattamente dov'è sempre stato. ReevesAgents non custodisce mai una chiave API e non tocca mai il tuo traffico verso i modelli.
@@ -17,7 +17,7 @@ Questa guida ti porta da un'installazione pulita fino al punto in cui è un agen
 - macOS, Linux o WSL (Windows nativo non è il target; usa WSL).
 - Node.js 22.12 o più recente.
 - tmux 3.0 o più recente.
-- Almeno una CLI di provider installata e loggata: Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI o Rovo Dev CLI.
+- Almeno una CLI di provider installata e loggata: Claude Code, Codex, OpenCode, Hermes, Kimi, DeepSeek, Pi, Qwen, Aider, Gemini CLI, Antigravity CLI, Cline CLI, Crush, Goose, Kilo Code, Letta Code, Mistral Vibe, Grok Build, Kiro CLI, Factory Droid, Qoder CLI, Warp, Junie CLI, GitHub Copilot CLI, Cursor CLI o Rovo Dev CLI.
 
 ## Strumenti
 
@@ -75,7 +75,7 @@ Agli stessi run arrivi da cinque superfici. Scegli quella che si adatta al momen
 
 Un esempio concreto: collega Claude Code, riavvialo, e da dentro una sola sessione Claude Code puoi lanciare un agente Codex su una issue e un secondo agente Claude Code su un'altra, e poi seguirli e pilotarli entrambi.
 
-- CLI che oggi possono ospitarlo: claude, codex, kimi, qwen, opencode, hermes. OpenCode si collega a mano, perché il suo passaggio di aggiunta è interattivo.
+- CLI che oggi possono ospitarlo: claude, codex, kimi, qwen, opencode, hermes, agy. OpenCode si collega a mano, perché il suo passaggio di aggiunta è interattivo.
 - I worker questi strumenti di default non li ricevono, quindi un worker non può generare altri agenti. Se vuoi che uno guidi dei sub-agenti suoi, collega l'MCP anche alla sua CLI.
 - Per scollegarti più avanti: `reevesagents detach cc`.
 

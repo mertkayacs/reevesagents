@@ -19,6 +19,7 @@ import { join } from 'node:path'
 import stripAnsi from 'strip-ansi'
 import type { AgentRole, AuthMode, Effort, Permissions, Provider } from '../shared/types.js'
 import { buildCommand } from '../shared/provider-build.js'
+import { PROVIDER_REGISTRY, type ProviderDef } from '../shared/provider-registry.js'
 import { redactSecrets } from '../shared/redact.js'
 import { resolveBin } from './availability.js'
 import { RingBuffer, type OutputBuffer } from './buffer.js'
@@ -63,6 +64,17 @@ const READY_DELAY_MS = 5000
 const POST_PASTE_ENTER_DELAY_MS = 1000
 const STARTUP_READY_POLL_MS = 1000
 const STARTUP_READY_TIMEOUT_MS = 20_000
+// Startup gate (providers with a registry `startup` block, e.g. agy): a visible
+// blocking prompt is answered or waited on, never pasted over. The gate keeps polling
+// while the agent is live: slow polls after STARTUP_GATE_TIMEOUT_MS, and a silent
+// stop (task left queued) at STARTUP_GATE_HARD_CAP_MS.
+const STARTUP_GATE_TIMEOUT_MS = 5 * 60_000
+const STARTUP_GATE_SLOW_POLL_MS = 10_000
+const STARTUP_GATE_HARD_CAP_MS = 60 * 60_000
+const STARTUP_PROMPT_MIN_POLLS = 2
+const STARTUP_PROMPT_MAX_ATTEMPTS = 3
+const STARTUP_PROMPT_RETRY_MS = 3_000
+const STARTUP_DETECT_LINES = 20
 const PTY_COLS = 120
 const PTY_ROWS = 30
 
@@ -230,26 +242,116 @@ function createAgent(runId: string, role: AgentRole, config: WinAgentConfig, inh
     ended_at: null,
   }
   reg.writeAgent(record)
-  void injectStartupTask(id, runId, config.task)
+  void injectStartupTask(id, runId, config.task, config.provider, permissions)
   return record
 }
 
-// After the ready delay, poll our buffer for a ready marker, then paste the task and
+export type StartupGate = NonNullable<ProviderDef['startup']>
+
+export interface StartupGateState {
+  promptSeenAtMs?: number
+  consecutivePromptPolls: number
+  attempts: Record<number, number>
+  lastKeyAtMs?: number
+}
+
+export interface StartupGateAction {
+  sendKey?: AllowedKey
+  sendTask?: boolean
+  done?: boolean
+}
+
+export function createStartupGateState(): StartupGateState {
+  return { consecutivePromptPolls: 0, attempts: {} }
+}
+
+// Detection text for the gate: the last 20 non-empty lines of the buffer tail,
+// ANSI-stripped and whitespace-collapsed. Case-sensitive on purpose (registry
+// patterns are written against the TUI's exact text).
+export function startupDetectionText(raw: string): string {
+  const lines = stripAnsi(raw).split('\n').filter(l => l.trim() !== '')
+  return lines.slice(-STARTUP_DETECT_LINES).join(' ').replace(/\s+/g, ' ').trim()
+}
+
+// One poll of the startup gate. Mutates `state` (plain bookkeeping, no I/O) and says
+// what the caller should do: write a key, paste the task, or stop. waitedMs is the
+// elapsed time since the gate started polling.
+export function advanceStartupGate(
+  state: StartupGateState,
+  text: string,
+  waitedMs: number,
+  permissions: Permissions,
+  gate: StartupGate,
+): StartupGateAction {
+  if (waitedMs >= STARTUP_GATE_HARD_CAP_MS) return { done: true }
+
+  const prompts = gate.prompts ?? []
+  const promptIndex = prompts.findIndex(p => p.pattern.test(text))
+  if (promptIndex >= 0) {
+    const prompt = prompts[promptIndex]!
+    state.promptSeenAtMs = waitedMs
+    state.consecutivePromptPolls += 1
+    const attempts = state.attempts[promptIndex] ?? 0
+    const retryDue = attempts === 0 || waitedMs - (state.lastKeyAtMs ?? 0) >= STARTUP_PROMPT_RETRY_MS
+    const answer = prompt.autoWhen === 'skip'
+      && permissions === 'skip'
+      && state.consecutivePromptPolls >= STARTUP_PROMPT_MIN_POLLS
+      && attempts < STARTUP_PROMPT_MAX_ATTEMPTS
+      && retryDue
+    if (!answer) return {}
+    state.attempts[promptIndex] = attempts + 1
+    state.lastKeyAtMs = waitedMs
+    return { sendKey: prompt.key.toLowerCase() as AllowedKey }
+  }
+
+  // No prompt visible: never paste over one, so a prompt-free poll resets the streak.
+  state.consecutivePromptPolls = 0
+  if (gate.readyPattern?.test(text)) return { sendTask: true }
+  if (waitedMs - (state.promptSeenAtMs ?? 0) >= STARTUP_READY_TIMEOUT_MS) return { sendTask: true }
+  return {}
+}
+
+// Polls the gate until it releases the task (true), or the agent ends / the hard cap
+// is reached (false). Keys are written straight to the pty: sendKey's post-paste delay
+// and working-state bump belong to the paste path, not to dismissing a dialog.
+async function runStartupGate(agentId: string, gate: StartupGate, permissions: Permissions): Promise<boolean> {
+  const state = createStartupGateState()
+  let waited = 0
+  for (;;) {
+    const l = live.get(agentId)
+    if (!l) return false
+    const action = advanceStartupGate(state, startupDetectionText(l.buf.tail(400)), waited, permissions, gate)
+    if (action.sendKey) l.term.write(keyBytes(action.sendKey))
+    if (action.sendTask) return true
+    if (action.done) return false
+    const interval = waited >= STARTUP_GATE_TIMEOUT_MS ? STARTUP_GATE_SLOW_POLL_MS : STARTUP_READY_POLL_MS
+    await delay(interval)
+    waited += interval
+  }
+}
+
+// After the ready delay, hold the task behind the provider's startup gate when it has
+// one, else poll our buffer for a ready marker (legacy path). Then paste the task and
 // press Enter. Async waits replace the unix sync-sleep (Atomics.wait) hack since the
 // MCP handlers are async. Bails out quietly if the agent ends mid-startup.
-async function injectStartupTask(agentId: string, runId: string, task: string): Promise<void> {
+async function injectStartupTask(agentId: string, runId: string, task: string, provider: Provider, permissions: Permissions): Promise<void> {
   const trimmed = task.trim()
   if (!trimmed) return
   try {
     await delay(READY_DELAY_MS)
-    let previous = ''
-    for (let waited = 0; waited < STARTUP_READY_TIMEOUT_MS; waited += STARTUP_READY_POLL_MS) {
-      const l = live.get(agentId)
-      if (!l) return
-      const current = l.buf.tail(80)
-      if (paneLooksReady(current, previous)) break
-      previous = current
-      await delay(STARTUP_READY_POLL_MS)
+    const gate = PROVIDER_REGISTRY[provider].startup
+    if (gate) {
+      if (!await runStartupGate(agentId, gate, permissions)) return
+    } else {
+      let previous = ''
+      for (let waited = 0; waited < STARTUP_READY_TIMEOUT_MS; waited += STARTUP_READY_POLL_MS) {
+        const l = live.get(agentId)
+        if (!l) return
+        const current = l.buf.tail(80)
+        if (paneLooksReady(current, previous)) break
+        previous = current
+        await delay(STARTUP_READY_POLL_MS)
+      }
     }
     const pasteTarget = live.get(agentId)
     if (!pasteTarget) return

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { fileURLToPath, URL } from 'node:url'
 import {
+  advanceStartupGate,
+  createStartupGateState,
   interrupt,
   isAgentLive,
   killAgent,
@@ -11,9 +13,11 @@ import {
   setPlanSpawn,
   setSpawnPty,
   startRun,
+  startupDetectionText,
   type SpawnPty,
 } from '../src/core/pty-runtime.js'
 import { listRuns, readAgent as readAgentRecord } from '../src/core/registry.js'
+import { PROVIDER_REGISTRY } from '../src/shared/provider-registry.js'
 
 const STUB = fileURLToPath(new URL('./fixtures/stub-cli.mjs', import.meta.url))
 
@@ -153,5 +157,107 @@ describe('pty-runtime (fake IPty)', () => {
     spawned[0]!.emitExit(0)
     expect(isAgentLive(id)).toBe(false)
     expect(listRuns().map(r => r.id)).not.toContain(run.id)
+  })
+})
+
+// Startup gate (registry `startup`, provider agy). Pure helper cases: the poll
+// sequence is driven by hand with waitedMs, so no timers are involved.
+describe('startup gate (advanceStartupGate)', () => {
+  const gate = PROVIDER_REGISTRY.agy.startup!
+  const DIALOG = 'Do you trust the contents of this project?'
+  const FOOTER = '? for shortcuts'
+
+  function run(
+    polls: Array<{ at: number; text: string }>,
+    permissions: 'skip' | 'ask' = 'skip',
+  ) {
+    const state = createStartupGateState()
+    return polls.map(p => ({ at: p.at, action: advanceStartupGate(state, p.text, p.at, permissions, gate) }))
+  }
+
+  it('dialog + skip: key only after 2 stable polls, retried after 3s, at most 3 attempts', () => {
+    const polls = [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000]
+      .map(at => ({ at, text: DIALOG }))
+    const keys = run(polls).filter(r => r.action.sendKey).map(r => [r.at, r.action.sendKey])
+    expect(keys).toEqual([[1000, 'enter'], [4000, 'enter'], [7000, 'enter']])
+    expect(run(polls).some(r => r.action.sendTask)).toBe(false)
+  })
+
+  it('dialog + skip: a single poll never answers', () => {
+    const [first] = run([{ at: 0, text: DIALOG }])
+    expect(first!.action).toEqual({})
+  })
+
+  it('dialog + ask: no key and no task, even past the fallback window', () => {
+    const polls = Array.from({ length: 40 }, (_, i) => ({ at: i * 1000, text: DIALOG }))
+    const actions = run(polls, 'ask').map(r => r.action)
+    expect(actions.every(a => !a.sendKey && !a.sendTask)).toBe(true)
+  })
+
+  it('dialog + permissions undefined-equivalent (ask default) never answers', () => {
+    const polls = [0, 1000, 2000, 3000].map(at => ({ at, text: DIALOG }))
+    expect(run(polls, 'ask').some(r => r.action.sendKey)).toBe(false)
+  })
+
+  it('footer visible releases the task', () => {
+    const [only] = run([{ at: 0, text: `Welcome ${FOOTER}` }])
+    expect(only!.action).toEqual({ sendTask: true })
+  })
+
+  it('dialog closes but footer not yet visible: hold until footer, or 20s after last dialog sight', () => {
+    // Dialog last seen at 20s, gone at 21s. No footer yet.
+    const visible = Array.from({ length: 21 }, (_, i) => ({ at: i * 1000, text: DIALOG }))
+    const polls = [
+      ...visible,
+      { at: 21_000, text: '' },
+      { at: 30_000, text: '' },
+      { at: 39_999, text: '' },
+      { at: 40_000, text: '' },
+    ]
+    const acts = run(polls, 'ask')
+    expect(acts.filter(r => r.action.sendTask).map(r => r.at)).toEqual([40_000])
+
+    // Footer arriving inside the window releases the task early.
+    const early = run([...visible, { at: 21_000, text: '' }, { at: 25_000, text: FOOTER }], 'ask')
+    expect(early.at(-1)!.action).toEqual({ sendTask: true })
+  })
+
+  it('dialog only in scrollback beyond the last 20 lines does not block: ready', () => {
+    const scrollback = [DIALOG, ...Array.from({ length: 25 }, (_, i) => `line ${i}`)].join('\n')
+    const text = startupDetectionText(`\x1b[31m${scrollback}\x1b[0m\n${FOOTER}`)
+    expect(text).not.toContain('trust')
+    const [only] = run([{ at: 0, text }])
+    expect(only!.action).toEqual({ sendTask: true })
+  })
+
+  it('startupDetectionText keeps the last 20 non-empty lines, stripped and collapsed', () => {
+    const raw = ['\x1b[1mone\x1b[0m', '', '  two   words  ', ...Array.from({ length: 19 }, (_, i) => `n${i}`)].join('\n')
+    const text = startupDetectionText(raw)
+    expect(text.startsWith('one')).toBe(false)
+    expect(text.startsWith('two words n0')).toBe(true)
+    expect(text.endsWith('n18')).toBe(true)
+  })
+
+  it('gives up silently at the 60 minute hard cap', () => {
+    const [capped] = run([{ at: 60 * 60_000, text: DIALOG }], 'skip')
+    expect(capped!.action).toEqual({ done: true })
+  })
+
+  it('providers without a startup block keep the legacy path', () => {
+    expect(PROVIDER_REGISTRY.cc.startup).toBeUndefined()
+  })
+})
+
+describe('pty-runtime non-gated paste path (fake IPty)', () => {
+  it('a provider without startup pastes once the legacy ready marker shows, then presses Enter', async () => {
+    const term = new FakeTerm()
+    setPlanSpawn(() => ({ file: 'stub', args: [] }))
+    setSpawnPty((() => term) as unknown as SpawnPty)
+    const { agents } = startRun({ name: 't', working_dir: process.cwd(), root: { provider: 'cc', model: '', task: 'do it' } })
+    term.feed('ready')
+    await waitUntil(() => term.writes.some(w => w === '\r'), 20_000)
+    expect(term.writes).toContain('\x1b[200~do it\x1b[201~')
+    expect(term.writes.indexOf('\x1b[200~do it\x1b[201~')).toBeLessThan(term.writes.indexOf('\r'))
+    expect(agents).toHaveLength(1)
   })
 })

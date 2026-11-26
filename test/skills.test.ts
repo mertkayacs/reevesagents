@@ -58,11 +58,12 @@ describe('reevesagents skill', () => {
     expect(committed).toBe(REEVESAGENTS_SKILL)
   })
 
-  it('targets the two convergent skill directories under the home dir', () => {
+  it('targets the three convergent skill directories under the home dir', () => {
     const targets = skillTargets()
-    expect(targets.map(t => t.key)).toEqual(['claude', 'agents'])
+    expect(targets.map(t => t.key)).toEqual(['claude', 'agents', 'antigravity'])
     expect(targets[0]!.file).toBe(join(tmpHome, '.claude', 'skills', 'reevesagents', 'SKILL.md'))
     expect(targets[1]!.file).toBe(join(tmpHome, '.agents', 'skills', 'reevesagents', 'SKILL.md'))
+    expect(targets[2]!.file).toBe(join(tmpHome, '.gemini', 'config', 'skills', 'reevesagents', 'SKILL.md'))
   })
 
   it('installs the skill to both locations, reports status, then removes it', () => {

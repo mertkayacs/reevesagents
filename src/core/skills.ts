@@ -1,8 +1,9 @@
 // Install the reevesagents Agent Skill so any skill-aware AI CLI picks it up. The
-// four target CLIs converge on two SKILL.md locations, so writing the same file to
-// both global dirs covers every one at once:
-//   ~/.claude/skills/reevesagents/SKILL.md   Claude Code, OpenCode, legacy Kimi CLI
-//   ~/.agents/skills/reevesagents/SKILL.md    Codex, Kimi Code, OpenCode
+// target CLIs converge on three SKILL.md locations, so writing the same file to
+// each global dir covers every one at once:
+//   ~/.claude/skills/reevesagents/SKILL.md          Claude Code, OpenCode, legacy Kimi CLI
+//   ~/.agents/skills/reevesagents/SKILL.md          Codex, Kimi Code, OpenCode
+//   ~/.gemini/config/skills/reevesagents/SKILL.md   Antigravity CLI (agy)
 // The skill teaches the model to drive reevesagents through its MCP tools; it does
 // not configure the MCP server itself (that stays `reevesagents attach`).
 
@@ -105,7 +106,7 @@ function skillsHome(): string {
 }
 
 export interface SkillTarget {
-  key: string    // 'claude' | 'agents'
+  key: string    // 'claude' | 'agents' | 'antigravity'
   label: string  // the CLIs this location covers
   dir: string    // absolute skill dir
   file: string   // absolute SKILL.md path
@@ -125,6 +126,12 @@ export function skillTargets(): SkillTarget[] {
       label: 'Codex, Kimi, OpenCode',
       dir: join(home, '.agents', 'skills', SKILL_NAME),
       file: join(home, '.agents', 'skills', SKILL_NAME, 'SKILL.md'),
+    },
+    {
+      key: 'antigravity',
+      label: 'Antigravity CLI',
+      dir: join(home, '.gemini', 'config', 'skills', SKILL_NAME),
+      file: join(home, '.gemini', 'config', 'skills', SKILL_NAME, 'SKILL.md'),
     },
   ]
 }
