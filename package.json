@@ -1,6 +1,6 @@
 {
   "name": "reevesagents",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Local tmux-first workspace manager for AI CLI agents",
   "mcpName": "io.github.mertkayacs/reevesagents",
   "type": "module",
@@ -55,7 +55,7 @@
       "brace-expansion": "5.0.13",
       "esbuild": "0.28.2",
       "fast-uri": "3.1.9",
-      "hono": "4.13.21",
+      "hono": "4.13.20",
       "ip-address": "10.7.6",
       "minimatch": "11.0.9",
       "qs": "6.16.1",

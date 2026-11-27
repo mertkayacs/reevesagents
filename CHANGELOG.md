@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/mertkayacs/reevesagents/compare/v2.4.0...v2.4.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @lydell/node-pty to v1.2.0-beta.18 ([#224](https://github.com/mertkayacs/reevesagents/issues/224)) ([a88cb6a](https://github.com/mertkayacs/reevesagents/commit/a88cb6a492fc2e6b5cf2d8784113b1500bfd0d7f))
+
 ## [2.4.0](https://github.com/mertkayacs/reevesagents/compare/v2.3.0...v2.4.0) (2026-11-26)
 
 
