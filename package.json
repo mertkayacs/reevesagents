@@ -44,7 +44,7 @@
     "strip-ansi": "^7.1.0"
   },
   "optionalDependencies": {
-    "@lydell/node-pty": "1.2.0-beta.15",
+    "@lydell/node-pty": "1.2.0-beta.18",
     "@xterm/headless": "6.0.0",
     "ws": "^8.22.0"
   },
